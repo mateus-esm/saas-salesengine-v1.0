@@ -1,0 +1,49 @@
+project_id = "egxzsivzqlqadoqpgfby"
+
+[functions.gpt-maker-webhook]
+verify_jwt = false
+
+[functions.crm-webhook]
+verify_jwt = false
+
+[functions.process-automations]
+verify_jwt = false
+
+[functions.send-chat-message]
+verify_jwt = true
+
+[api]
+enabled = true
+port = 64321           # Mudamos de 54321 para 64321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+port = 6432            # Mudamos de 5432 para 6432
+shadow_port = 6433     # Mudamos de 54320 para 6433
+
+[studio]
+enabled = true
+port = 64323           # Mudamos de 54323 para 64323 (só garantindo)
+api_url = "http://127.0.0.1:64321"
+
+[inbucket]
+enabled = true
+port = 64324           # Mudamos de 54324 para 64324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+inspector_port = 64325 # Porta de inspeção também movida
