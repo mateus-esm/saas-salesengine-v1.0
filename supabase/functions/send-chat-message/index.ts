@@ -50,7 +50,16 @@ serve(async (req) => {
 
     if (dbError) throw dbError
 
-    // Agora enviamos para a API Oficial
+    // Se não tiver chat_id, apenas salva localmente (lead sem conversa GPT Maker ativa)
+    if (!chat_id) {
+      console.log('Mensagem salva localmente - lead sem chat_id GPT Maker')
+      return new Response(JSON.stringify(msg), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      })
+    }
+
+    // Enviar para a API GPT Maker
     const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`
     const gptResponse = await fetch(url, {
       method: 'POST',
@@ -62,8 +71,10 @@ serve(async (req) => {
     })
 
     if (!gptResponse.ok) {
-      console.error('GPT Maker error:', await gptResponse.text())
-      throw new Error('Erro ao enviar mensagem para GPT Maker')
+      const errorText = await gptResponse.text()
+      console.error('GPT Maker error:', errorText)
+      // Não lançar erro - mensagem já foi salva localmente
+      console.log('Mensagem salva localmente mas falhou no GPT Maker')
     }
 
     return new Response(JSON.stringify(msg), {
