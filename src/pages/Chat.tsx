@@ -52,8 +52,8 @@ const Chat = () => {
   // O componente espera 'sessions', mas temos 'leads'. Vamos adaptar.
   const sessionsAdapter = leads?.map(lead => ({
     id: lead.id,
-    customerName: lead.nome || lead.name || "Sem Nome", // Fallback para tipos diferentes
-    customerPhone: lead.plataforma_origem || 'WhatsApp',
+    customerName: lead.name || "Sem Nome",
+    customerPhone: lead.origem || lead.source || 'WhatsApp',
     leadId: lead.id,
     lastMessage: "Clique para ver", // Idealmente viria do banco
     lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
@@ -62,7 +62,7 @@ const Chat = () => {
     crmData: {
       value: lead.opportunity_value || 0,
       stage: 'Novo',
-      company: lead.nome
+      company: lead.name
     },
     messages: []
   })) || [];

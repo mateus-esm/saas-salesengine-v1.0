@@ -57,6 +57,7 @@ serve(async (req) => {
         .single();
 
       if (createError) throw createError;
+      if (!newLead) throw new Error('Failed to create lead');
       lead = newLead;
     } else {
       // Se existe, atualiza o timestamp
@@ -65,7 +66,7 @@ serve(async (req) => {
 
     // 4. Salvar a Mensagem no Chat (CRUCIAL PARA O REALTIME)
     const messageContent = payload.mensagem || payload.message;
-    if (messageContent) {
+    if (messageContent && lead) {
       const { error: msgError } = await supabase.from('messages').insert({
         lead_id: lead.id,
         content: messageContent,
@@ -75,14 +76,14 @@ serve(async (req) => {
       if (msgError) console.error('Erro ao salvar mensagem:', msgError);
     }
 
-    return new Response(JSON.stringify({ success: true, lead_id: lead.id }), {
+    return new Response(JSON.stringify({ success: true, lead_id: lead?.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
 
   } catch (error) {
     console.error('Webhook Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
