@@ -43,8 +43,7 @@ serve(async (req) => {
       .insert({
         lead_id,
         content,
-        sender_type: 'agent', // Mensagem enviada por nós
-        status: 'sending'
+        sender_type: 'agent'
       })
       .select()
       .single()
@@ -59,17 +58,13 @@ serve(async (req) => {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ message: content }) // Payload conforme documentação
+      body: JSON.stringify({ message: content })
     })
 
     if (!gptResponse.ok) {
-      // Se falhar, atualiza status no banco para erro
-      await supabase.from('messages').update({ status: 'error' }).eq('id', msg.id)
-      throw new Error(`Erro no envio: ${await gptResponse.text()}`)
+      console.error('GPT Maker error:', await gptResponse.text())
+      throw new Error('Erro ao enviar mensagem para GPT Maker')
     }
-
-    // Sucesso: atualiza status
-    await supabase.from('messages').update({ status: 'sent' }).eq('id', msg.id)
 
     return new Response(JSON.stringify(msg), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
