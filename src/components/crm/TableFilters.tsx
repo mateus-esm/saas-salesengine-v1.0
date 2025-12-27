@@ -133,7 +133,7 @@ export const TableFilters = ({
 
           {/* Source Filter */}
           <div className="space-y-2">
-            <Label>Origem</Label>
+            <Label>Fonte de Captação</Label>
             <Select
               value={filters.source || "__all__"}
               onValueChange={(value) =>
@@ -141,14 +141,13 @@ export const TableFilters = ({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Todas as origens" />
+                <SelectValue placeholder="Todas as fontes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Todas as origens</SelectItem>
+                <SelectItem value="__all__">Todas as fontes</SelectItem>
                 <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="agente_sdr">Agente SDR</SelectItem>
-                <SelectItem value="csv_import">Importação CSV</SelectItem>
-                <SelectItem value="webhook">Webhook</SelectItem>
+                <SelectItem value="ia">IA (Agente)</SelectItem>
+                <SelectItem value="ads">Ads (Tráfego Pago)</SelectItem>
               </SelectContent>
             </Select>
           </div>

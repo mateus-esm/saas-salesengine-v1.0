@@ -196,7 +196,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
           </div>
 
           <div>
-            <Label htmlFor="add-source">Fonte</Label>
+            <Label htmlFor="add-source">Fonte de Captação</Label>
             <Select
               value={formData.source}
               onValueChange={(value) =>
@@ -208,10 +208,8 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="indicacao">Indicação</SelectItem>
-                <SelectItem value="agente_sdr">Agente SDR</SelectItem>
-                <SelectItem value="site">Site</SelectItem>
-                <SelectItem value="redes_sociais">Redes Sociais</SelectItem>
+                <SelectItem value="ia">IA (Agente)</SelectItem>
+                <SelectItem value="ads">Ads (Tráfego Pago)</SelectItem>
               </SelectContent>
             </Select>
           </div>

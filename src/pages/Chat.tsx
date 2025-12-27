@@ -9,17 +9,22 @@ import { ChatInput } from "@/components/inbox/ChatInput";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Loader2, PanelRight } from "lucide-react";
+import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ChatSession, Task } from "@/types/chat";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const Chat = () => {
   // 1. Busca Leads Reais do Supabase
   const { leads, isLoading: loadingLeads, refetch: refetchLeads } = useLeads();
   const { stages } = usePipelineStages();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+
+  // Toggle states for panels
+  const [showInbox, setShowInbox] = useState(true);
+  const [showCRM, setShowCRM] = useState(true);
 
   // 2. Busca Mensagens do Lead Selecionado (Com Realtime)
   const { messages, loading: loadingMessages } = useMessages(selectedLeadId || undefined);
@@ -207,18 +212,46 @@ const Chat = () => {
 
   return (
     <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background">
+      {/* Toggle Inbox Button (when collapsed) */}
+      {!showInbox && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-background border shadow-sm"
+          onClick={() => setShowInbox(true)}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* Coluna 1: Inbox (Sidebar de Leads) */}
-      <div className="w-1/4 min-w-[280px] max-w-[360px] border-r flex-shrink-0">
-        {loadingLeads ? (
-          <div className="flex justify-center items-center h-full">
-            <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
-          </div>
-        ) : (
-          <InboxSidebar
-            sessions={sessionsAdapter as any}
-            selectedSessionId={selectedLeadId}
-            onSelectSession={setSelectedLeadId}
-          />
+      <div className={cn(
+        "border-r flex-shrink-0 transition-all duration-300 relative",
+        showInbox ? "w-1/4 min-w-[280px] max-w-[360px]" : "w-0 min-w-0 overflow-hidden"
+      )}>
+        {showInbox && (
+          <>
+            {/* Toggle button inside inbox */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-2 z-10 h-7 w-7"
+              onClick={() => setShowInbox(false)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {loadingLeads ? (
+              <div className="flex justify-center items-center h-full">
+                <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+              </div>
+            ) : (
+              <InboxSidebar
+                sessions={sessionsAdapter as any}
+                selectedSessionId={selectedLeadId}
+                onSelectSession={setSelectedLeadId}
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -234,17 +267,33 @@ const Chat = () => {
                   onToggleHandoff={handleToggleHandoff}
                 />
               </div>
-              {/* Botão CRM mobile */}
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="lg:hidden mr-2">
-                    <PanelRight className="h-5 w-5" />
+              {/* Toggle buttons */}
+              <div className="flex items-center gap-1 mr-2">
+                {!showInbox && (
+                  <Button variant="ghost" size="icon" onClick={() => setShowInbox(true)}>
+                    <PanelLeft className="h-5 w-5" />
                   </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-80 p-0">
-                  <CRMPanelContent />
-                </SheetContent>
-              </Sheet>
+                )}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="hidden lg:flex"
+                  onClick={() => setShowCRM(!showCRM)}
+                >
+                  <PanelRight className="h-5 w-5" />
+                </Button>
+                {/* Botão CRM mobile */}
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="lg:hidden">
+                      <PanelRight className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-80 p-0">
+                    <CRMPanelContent />
+                  </SheetContent>
+                </Sheet>
+              </div>
             </div>
 
             {/* Mensagens */}
@@ -294,9 +343,37 @@ const Chat = () => {
         )}
       </div>
 
+      {/* Toggle CRM Button (when collapsed on desktop) */}
+      {!showCRM && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-background border shadow-sm hidden lg:flex"
+          onClick={() => setShowCRM(true)}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* Coluna 3: Painel CRM (Desktop) */}
-      <div className="w-80 border-l hidden lg:block flex-shrink-0 overflow-hidden">
-        <CRMPanelContent />
+      <div className={cn(
+        "border-l hidden lg:block flex-shrink-0 overflow-hidden transition-all duration-300 relative",
+        showCRM ? "w-80" : "w-0"
+      )}>
+        {showCRM && (
+          <>
+            {/* Toggle button inside CRM panel */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-2 top-2 z-10 h-7 w-7"
+              onClick={() => setShowCRM(false)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <CRMPanelContent />
+          </>
+        )}
       </div>
     </div>
   );

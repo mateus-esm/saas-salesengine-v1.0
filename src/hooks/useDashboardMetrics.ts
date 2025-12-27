@@ -11,6 +11,8 @@ export interface DashboardMetrics {
   noShowCount: number;
   meetingsToday: number;
   totalPipelineValue: number;
+  closedDealsCount: number;
+  closedDealsValue: number;
   conversionRate: number;
   noShowRate: number;
   leadsByResponsible: { responsible_id: string; responsible_name: string; count: number }[];
@@ -57,6 +59,9 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
 
       if (stagesError) throw stagesError;
 
+      // Find the "won" category stage (Fechado)
+      const wonStage = stages?.find(s => (s as any).category === 'won');
+
       // Fetch team members for responsible names
       const { data: teamMembers, error: teamError } = await supabase
         .from("profiles")
@@ -95,8 +100,14 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
         return meetingDate >= new Date(todayStart) && meetingDate <= new Date(todayEnd);
       }).length || 0;
 
-      // Total pipeline value
-      const totalPipelineValue = leads?.reduce((sum, l) => sum + (Number(l.opportunity_value) || 0), 0) || 0;
+      // Total pipeline value (leads NOT in won stage)
+      const totalPipelineValue = leads?.filter(l => !wonStage || l.stage_id !== wonStage.id)
+        .reduce((sum, l) => sum + (Number(l.opportunity_value) || 0), 0) || 0;
+
+      // Closed deals (leads in won stage)
+      const closedDeals = leads?.filter(l => wonStage && l.stage_id === wonStage.id) || [];
+      const closedDealsCount = closedDeals.length;
+      const closedDealsValue = closedDeals.reduce((sum, l) => sum + (Number(l.opportunity_value) || 0), 0);
 
       // Conversion rate (meetings scheduled / total leads)
       const conversionRate = totalLeads > 0 ? (meetingsScheduled / totalLeads) * 100 : 0;
@@ -140,6 +151,8 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
         noShowCount,
         meetingsToday,
         totalPipelineValue,
+        closedDealsCount,
+        closedDealsValue,
         conversionRate,
         noShowRate,
         leadsByResponsible,
