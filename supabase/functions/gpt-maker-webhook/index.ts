@@ -18,116 +18,114 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook Payload:', JSON.stringify(payload));
 
-    // 1. MAPEAMENTO INTELIGENTE DE CAMPOS
-    // Tenta pegar o ID do Agente em qualquer variação possível
+    // --- 1. FILTRAGEM DE RUÍDO (Resolvendo o "Treinamento na Tela") ---
+    const role = payload.role || 'customer';
+    
+    // Ignora mensagens de sistema, logs ou instruções internas
+    if (role === 'system' || role === 'tool' || payload.type === 'log') {
+        return new Response(JSON.stringify({ skipped: true, reason: 'System message ignored' }), { headers: corsHeaders });
+    }
+
+    // --- 2. MAPEAMENTO ---
     const agentId = payload.agent_id || payload.assistantId || payload.agentId;
-    
-    // Tenta pegar o Telefone
     const phone = payload.telefone || payload.phone || payload.remoteJid || payload.contactPhone;
-    
-    // Tenta pegar o Nome
     const name = payload.nome || payload.name || payload.pushName || payload.contactName || 'Lead WhatsApp';
-    
-    // Tenta pegar o Chat ID (Context ID)
     const chatId = payload.chat_id || payload.chatId || payload.id || payload.contextId;
-
-    // Tenta pegar o ID da Mensagem
     const msgId = payload.message_id || payload.id || payload.key?.id || payload.messageId;
-
-    // Tenta pegar o Role (quem mandou)
-    const role = payload.role || 'customer'; // assistant, system, user
-
-    // Tenta pegar o Conteúdo
+    
     let messageContent = payload.mensagem || payload.message || payload.text?.body || '';
 
-    // VALIDAÇÃO BLINDADA
-    if (!agentId) throw new Error('agent_id (or assistantId) is required - Payload received: ' + JSON.stringify(payload));
-    if (!phone) throw new Error('Phone number not found in payload');
-
-    // 2. Identificar a Equipe
-    // ATENÇÃO: Verifique se o ID '3DF0B5F10DF2C09007869A6EC31B5F97' está na tabela equipes!
-    const { data: equipe } = await supabase
-      .from('equipes')
-      .select('id, nome')
-      .eq('gpt_maker_agent_id', agentId)
-      .single();
-
-    if (!equipe) {
-        throw new Error(`Agent ID '${agentId}' não encontrado na tabela 'equipes'. Cadastre este ID no banco.`);
+    // Validação
+    if (!agentId || !phone) {
+       // Retorna 200 para o GPT Maker não ficar tentando reenviar erro, mas loga o problema
+       console.error("Payload incompleto ignorado:", payload);
+       return new Response(JSON.stringify({ error: 'Missing data' }), { headers: corsHeaders });
     }
 
-    // 3. Identificar ou Criar o Lead (UPSERT)
-    let { data: lead } = await supabase
-      .from('leads')
-      .select('id, gpt_maker_chat_id')
-      .eq('phone', phone)
-      .maybeSingle();
+    // Identificar Equipe
+    const { data: equipe } = await supabase.from('equipes').select('id').eq('gpt_maker_agent_id', agentId).maybeSingle();
+    if (!equipe) throw new Error(`Agent ID '${agentId}' não encontrado.`);
+
+    // Identificar/Criar Lead
+    let { data: lead } = await supabase.from('leads').select('id, gpt_maker_chat_id').eq('phone', phone).maybeSingle();
 
     if (!lead) {
-      // Cria novo lead
-      const { data: newLead, error: createError } = await supabase
-        .from('leads')
-        .insert({
-          equipe_id: equipe.id,
-          name: name,
-          phone: phone,
-          email: payload.email || null,
-          source: 'whatsapp_bot',
+      const { data: newLead, error } = await supabase.from('leads').insert({
+          equipe_id: equipe.id, name: name, phone: phone, 
           last_message_at: new Date().toISOString(),
-          gpt_maker_chat_id: chatId || null,
-          unread_count: 0
-        })
-        .select()
-        .single();
-
-      if (createError) throw createError;
+          gpt_maker_chat_id: chatId || null, unread_count: 0
+      }).select().single();
+      if (error) throw error;
       lead = newLead;
     } else {
-      // Atualiza existente
-      const updates: any = { last_message_at: new Date().toISOString() };
-      if (!lead.gpt_maker_chat_id && chatId) updates.gpt_maker_chat_id = chatId;
-      
-      await supabase.from('leads').update(updates).eq('id', lead.id);
+       // Atualiza timestamp e chat_id
+       const updates: any = { last_message_at: new Date().toISOString() };
+       if (!lead.gpt_maker_chat_id && chatId) updates.gpt_maker_chat_id = chatId;
+       await supabase.from('leads').update(updates).eq('id', lead.id);
     }
 
-    // 4. Salvar a Mensagem
+    // --- 3. SALVAR MENSAGEM (Com Lógica Anti-Duplicidade do Efeito Eco) ---
     const senderType = (role === 'assistant' || role === 'system') ? 'agent' : 'customer';
 
-    // Tratamento para mídias se texto vier vazio
+    // Tratamento de mídia
     if (!messageContent && (payload.images?.length > 0 || payload.audios?.length > 0)) {
-        if (payload.images?.length > 0) messageContent = '[Imagem Recebida]';
-        else if (payload.audios?.length > 0) messageContent = '[Áudio Recebido]';
+        if (payload.images?.length > 0) messageContent = '[Imagem]';
+        else if (payload.audios?.length > 0) messageContent = '[Áudio]';
     }
 
     if (messageContent && lead) {
-      const { error: msgError } = await supabase.from('messages').insert({
-        lead_id: lead.id,
-        content: messageContent,
-        sender_type: senderType, 
-        gpt_message_id: msgId,   
-        // status: 'delivered' <-- Removido pois sua tabela não tem essa coluna ainda
-      });
-      
-      if (msgError) console.error('Erro ao salvar mensagem:', msgError);
+        let messageSaved = false;
 
-      // Incrementa contador APENAS se for Cliente
-      if (senderType === 'customer') {
-          const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
-            row_id: lead.id 
-          });
-          if (rpcError) console.error('Erro RPC:', rpcError);
-      }
+        // SE FOR MENSAGEM DO AGENTE (ECO): Tenta achar a original que o SaaS enviou
+        if (senderType === 'agent') {
+            // Procura mensagem igual enviada nos últimos 60 segundos
+            const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+            
+            const { data: existingMsg } = await supabase
+                .from('messages')
+                .select('id')
+                .eq('lead_id', lead.id)
+                .eq('content', messageContent)
+                .eq('sender_type', 'agent')
+                .gt('created_at', oneMinuteAgo)
+                .is('gpt_message_id', null) // Só as que ainda não tem ID externo
+                .limit(1)
+                .maybeSingle();
+
+            if (existingMsg) {
+                // ACHOU! É a mesma mensagem. Vamos apenas "carimbar" o ID nela.
+                // Isso evita criar a duplicata.
+                await supabase.from('messages').update({ 
+                    gpt_message_id: msgId,
+                    status: 'delivered' 
+                }).eq('id', existingMsg.id);
+                console.log('Mensagem fundida com sucesso (Anti-Eco).');
+                messageSaved = true;
+            }
+        }
+
+        // Se não achou duplicata (ou é cliente), insere nova
+        if (!messageSaved) {
+             const { error: msgError } = await supabase.from('messages').insert({
+                lead_id: lead.id,
+                content: messageContent,
+                sender_type: senderType, 
+                gpt_message_id: msgId,   
+            });
+            if (msgError) console.error('Erro ao salvar:', msgError);
+
+            // Incrementa contador só se for Cliente
+            if (senderType === 'customer') {
+                await supabase.rpc('increment_unread_count', { row_id: lead.id });
+            }
+        }
     }
 
-    return new Response(JSON.stringify({ success: true, lead_id: lead?.id }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
-    });
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error('Webhook Error:', error);
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    // Retorna 200 mesmo com erro para evitar loop de retentativa do GPT Maker se for erro de lógica nossa
+    return new Response(JSON.stringify({ error: (error as Error).message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
