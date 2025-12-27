@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -9,8 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Phone, Mail, MessageCircle, Calendar, FileText, Plus, Trash2, Loader2 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { Phone, Mail, MessageCircle, Calendar as CalendarIcon, FileText, Plus, Trash2, Loader2 } from "lucide-react";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useTouchpoints, CreateTouchpointData } from "@/hooks/useTouchpoints";
 
@@ -22,7 +24,7 @@ const TOUCHPOINT_TYPES = [
   { value: 'call', label: 'Ligação', icon: Phone, color: 'bg-blue-500/10 text-blue-600' },
   { value: 'email', label: 'Email', icon: Mail, color: 'bg-purple-500/10 text-purple-600' },
   { value: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: 'bg-green-500/10 text-green-600' },
-  { value: 'meeting', label: 'Reunião', icon: Calendar, color: 'bg-orange-500/10 text-orange-600' },
+  { value: 'meeting', label: 'Reunião', icon: CalendarIcon, color: 'bg-orange-500/10 text-orange-600' },
   { value: 'note', label: 'Nota', icon: FileText, color: 'bg-gray-500/10 text-gray-600' },
 ] as const;
 
@@ -30,6 +32,7 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
   const { touchpoints, isLoading, createTouchpoint, deleteTouchpoint } = useTouchpoints(leadId);
   const [newContent, setNewContent] = useState("");
   const [newType, setNewType] = useState<CreateTouchpointData['touchpoint_type']>('note');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const handleAdd = () => {
     if (!newContent.trim()) return;
@@ -38,9 +41,11 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
       lead_id: leadId,
       touchpoint_type: newType,
       content: newContent.trim(),
+      contact_date: format(selectedDate, 'yyyy-MM-dd'),
     });
     
     setNewContent("");
+    setSelectedDate(new Date());
   };
 
   const getTypeConfig = (type: string) => {
@@ -61,7 +66,7 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
       <div className="space-y-2">
         <div className="flex gap-2">
           <Select value={newType} onValueChange={(v) => setNewType(v as CreateTouchpointData['touchpoint_type'])}>
-            <SelectTrigger className="w-32 h-9">
+            <SelectTrigger className="w-28 h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -78,6 +83,25 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
               })}
             </SelectContent>
           </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 w-28 justify-start text-left font-normal">
+                <CalendarIcon className="mr-1 h-3 w-3" />
+                {format(selectedDate, "dd/MM", { locale: ptBR })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                locale={ptBR}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="flex gap-2">
           <Input
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
@@ -121,10 +145,7 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground">{tp.content}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatDistanceToNow(new Date(tp.contact_date), { 
-                      addSuffix: true, 
-                      locale: ptBR 
-                    })}
+                    {format(new Date(tp.contact_date), "dd/MM/yyyy", { locale: ptBR })}
                   </p>
                 </div>
                 <Button

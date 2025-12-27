@@ -161,14 +161,14 @@ export const LeadDetailsModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-        <DialogHeader className="p-6 pb-0">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col">
+        <DialogHeader className="p-6 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             Detalhes do Lead
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid md:grid-cols-3 gap-0 h-[60vh]">
+        <div className="grid md:grid-cols-3 gap-0 flex-1 min-h-0 overflow-hidden">
           {/* Left Column - Data & Actions (2/3) */}
           <div className="md:col-span-2 border-r border-border">
             <ScrollArea className="h-full">

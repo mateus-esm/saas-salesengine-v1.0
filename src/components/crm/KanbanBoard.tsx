@@ -98,15 +98,14 @@ export const KanbanBoard = () => {
     grouped["no_stage"] = [];
     
     // Only show leads with lead_type = 'lead' or null (for backwards compatibility)
+    // and that have a valid stage_id (no stage = goes to database only)
     const filteredLeads = leads.filter(lead => 
-      !lead.lead_type || lead.lead_type === 'lead'
+      (!lead.lead_type || lead.lead_type === 'lead') && lead.stage_id
     );
     
     filteredLeads.forEach((lead) => {
       if (lead.stage_id && grouped[lead.stage_id]) {
         grouped[lead.stage_id].push(lead);
-      } else {
-        grouped["no_stage"].push(lead);
       }
     });
     
@@ -345,24 +344,6 @@ export const KanbanBoard = () => {
                   />
                 ))}
             </SortableContext>
-
-            {/* No Stage Column */}
-            {leadsByStage["no_stage"]?.length > 0 && (
-              <KanbanColumn
-                stage={{
-                  id: "no_stage",
-                  equipe_id: profile?.equipe_id || "",
-                  name: "Sem Etapa",
-                  position: 999,
-                  color: "#6b7280",
-                  is_default: false,
-                  category: null,
-                  created_at: new Date().toISOString(),
-                }}
-                leads={leadsByStage["no_stage"]}
-                onLeadClick={handleLeadClick}
-              />
-            )}
           </div>
 
           <DragOverlay>
