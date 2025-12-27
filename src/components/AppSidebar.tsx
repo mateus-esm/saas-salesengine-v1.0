@@ -1,7 +1,6 @@
 import { Home, MessageCircle, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTenant } from "@/contexts/TenantContext";
 import { TenantLogo } from "@/components/TenantLogo";
 import icon from "@/assets/solo-ventures-icon.png";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
@@ -9,14 +8,13 @@ import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGrou
 export function AppSidebar() {
   const { open } = useSidebar();
   const { signOut, profile } = useAuth();
-  const { tenant } = useTenant();
   const chatHref = profile?.chat_link_base || "/chat";
   const isExternalChatLink = chatHref.startsWith("http");
 
   const menuItems = [
     { title: "Início", url: "/home", icon: Home, external: false },
     { title: "Dashboard", url: "/dashboard", icon: BarChart3, external: false },
-    { title: `Chat ${tenant.name}`, url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
+    { title: "Chat", url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
     { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false },
     { title: "Billing", url: "/billing", icon: CreditCard, external: false },
@@ -29,9 +27,9 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-border p-4">
         <div className="flex items-center justify-center">
           {open ? (
-            <TenantLogo className="h-10" showName />
+            <TenantLogo className="h-10" />
           ) : (
-            <img src={icon} alt={tenant.name} className="h-8 w-8 shrink-0" />
+            <img src={icon} alt="Solo Ventures" className="h-8 w-8 shrink-0" />
           )}
         </div>
       </SidebarHeader>
