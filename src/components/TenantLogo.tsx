@@ -21,7 +21,7 @@ export function TenantLogo({ className, showName = false }: TenantLogoProps) {
       <img
         src={logoSrc}
         alt="Solo Ventures Logo"
-        className="h-8 w-auto object-contain"
+        className="h-10 w-auto object-contain max-w-[180px]"
       />
       {showName && (
         <span className="text-lg font-semibold text-foreground">
