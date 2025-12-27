@@ -24,6 +24,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Lead, PipelineStage } from "@/types/crm";
 
+// Separate stages into active and negative categories
+const NEGATIVE_CATEGORIES = ['lost', 'disqualified', 'recycled'];
+
 export const KanbanBoard = () => {
   const { profile, equipe, loading: authLoading } = useAuth();
   const { 
@@ -85,7 +88,7 @@ export const KanbanBoard = () => {
     };
   }, [profile?.equipe_id, refetchLeads]);
 
-  // Group leads by stage
+  // Group leads by stage - filter out contacts and spam
   const leadsByStage = useMemo(() => {
     const grouped: Record<string, Lead[]> = {};
     
@@ -94,7 +97,12 @@ export const KanbanBoard = () => {
     });
     grouped["no_stage"] = [];
     
-    leads.forEach((lead) => {
+    // Only show leads with lead_type = 'lead' or null (for backwards compatibility)
+    const filteredLeads = leads.filter(lead => 
+      !lead.lead_type || lead.lead_type === 'lead'
+    );
+    
+    filteredLeads.forEach((lead) => {
       if (lead.stage_id && grouped[lead.stage_id]) {
         grouped[lead.stage_id].push(lead);
       } else {
@@ -298,12 +306,14 @@ export const KanbanBoard = () => {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
+          {/* Active Stages */}
           <div className="flex gap-4 h-full min-h-[500px]">
             <SortableContext
               items={stages.map((s) => s.id)}
               strategy={horizontalListSortingStrategy}
             >
               {stages
+                .filter(s => !NEGATIVE_CATEGORIES.includes(s.category || ''))
                 .sort((a, b) => a.position - b.position)
                 .map((stage) => (
                   <KanbanColumn
@@ -311,6 +321,27 @@ export const KanbanBoard = () => {
                     stage={stage}
                     leads={leadsByStage[stage.id] || []}
                     onLeadClick={handleLeadClick}
+                  />
+                ))}
+              
+              {/* Divider for negative stages */}
+              {stages.some(s => NEGATIVE_CATEGORIES.includes(s.category || '')) && (
+                <div className="flex items-center px-2">
+                  <div className="h-full w-px bg-border" />
+                </div>
+              )}
+              
+              {/* Negative Stages */}
+              {stages
+                .filter(s => NEGATIVE_CATEGORIES.includes(s.category || ''))
+                .sort((a, b) => a.position - b.position)
+                .map((stage) => (
+                  <KanbanColumn
+                    key={stage.id}
+                    stage={stage}
+                    leads={leadsByStage[stage.id] || []}
+                    onLeadClick={handleLeadClick}
+                    isNegative
                   />
                 ))}
             </SortableContext>
@@ -325,6 +356,7 @@ export const KanbanBoard = () => {
                   position: 999,
                   color: "#6b7280",
                   is_default: false,
+                  category: null,
                   created_at: new Date().toISOString(),
                 }}
                 leads={leadsByStage["no_stage"]}
