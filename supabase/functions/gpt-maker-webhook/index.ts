@@ -18,29 +18,34 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook Payload:', JSON.stringify(payload));
 
-    // 1. TRADUÇÃO DOS CAMPOS (O Segredo da Compatibilidade)
-    // O código agora tenta todas as variações possíveis que o GPT Maker manda
-    
+    // 1. MAPEAMENTO INTELIGENTE DE CAMPOS
+    // Tenta pegar o ID do Agente em qualquer variação possível
     const agentId = payload.agent_id || payload.assistantId || payload.agentId;
     
+    // Tenta pegar o Telefone
     const phone = payload.telefone || payload.phone || payload.remoteJid || payload.contactPhone;
     
+    // Tenta pegar o Nome
     const name = payload.nome || payload.name || payload.pushName || payload.contactName || 'Lead WhatsApp';
     
+    // Tenta pegar o Chat ID (Context ID)
     const chatId = payload.chat_id || payload.chatId || payload.id || payload.contextId;
 
+    // Tenta pegar o ID da Mensagem
     const msgId = payload.message_id || payload.id || payload.key?.id || payload.messageId;
 
+    // Tenta pegar o Role (quem mandou)
     const role = payload.role || 'customer'; // assistant, system, user
 
-    // Conteúdo da mensagem
+    // Tenta pegar o Conteúdo
     let messageContent = payload.mensagem || payload.message || payload.text?.body || '';
 
-    // Validação
-    if (!agentId) throw new Error('agent_id (or assistantId) is required');
+    // VALIDAÇÃO BLINDADA
+    if (!agentId) throw new Error('agent_id (or assistantId) is required - Payload received: ' + JSON.stringify(payload));
     if (!phone) throw new Error('Phone number not found in payload');
 
     // 2. Identificar a Equipe
+    // ATENÇÃO: Verifique se o ID '3DF0B5F10DF2C09007869A6EC31B5F97' está na tabela equipes!
     const { data: equipe } = await supabase
       .from('equipes')
       .select('id, nome')
@@ -48,8 +53,7 @@ serve(async (req) => {
       .single();
 
     if (!equipe) {
-        console.error(`Agent ID ${agentId} não encontrado nas equipes.`);
-        throw new Error('Agent ID não vinculado a nenhuma equipe');
+        throw new Error(`Agent ID '${agentId}' não encontrado na tabela 'equipes'. Cadastre este ID no banco.`);
     }
 
     // 3. Identificar ou Criar o Lead (UPSERT)
@@ -87,38 +91,32 @@ serve(async (req) => {
     }
 
     // 4. Salvar a Mensagem
-    // IMPORTANTE: Definir quem mandou (Cliente ou Robô?)
-    // Se role for 'assistant', é o robô ('agent'). Se for 'user', é o cliente ('customer').
     const senderType = (role === 'assistant' || role === 'system') ? 'agent' : 'customer';
 
-    // Se a mensagem veio vazia, mas tem anexos (lógica extra)
+    // Tratamento para mídias se texto vier vazio
     if (!messageContent && (payload.images?.length > 0 || payload.audios?.length > 0)) {
         if (payload.images?.length > 0) messageContent = '[Imagem Recebida]';
         else if (payload.audios?.length > 0) messageContent = '[Áudio Recebido]';
     }
 
-    // Só salva se tiver conteúdo (ignora eventos de status vazios)
     if (messageContent && lead) {
       const { error: msgError } = await supabase.from('messages').insert({
         lead_id: lead.id,
         content: messageContent,
-        sender_type: senderType, // Dinâmico!
-        gpt_message_id: msgId,   // Vacina anti-duplicidade
-        status: 'delivered'      // Você pode ajustar isso se quiser
+        sender_type: senderType, 
+        gpt_message_id: msgId,   
+        // status: 'delivered' <-- Removido pois sua tabela não tem essa coluna ainda
       });
       
       if (msgError) console.error('Erro ao salvar mensagem:', msgError);
 
-      // Incrementa contador (apenas se for mensagem do CLIENTE)
-      // Se for mensagem do robô (agent), não precisa notificar como não lida.
+      // Incrementa contador APENAS se for Cliente
       if (senderType === 'customer') {
           const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
             row_id: lead.id 
           });
           if (rpcError) console.error('Erro RPC:', rpcError);
       }
-    } else {
-        console.log('Mensagem vazia ignorada.');
     }
 
     return new Response(JSON.stringify({ success: true, lead_id: lead?.id }), {
