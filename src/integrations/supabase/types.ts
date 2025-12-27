@@ -231,6 +231,7 @@ export type Database = {
           source: string | null
           stage_id: string | null
           tags: string[] | null
+          unread_count: number | null
           updated_at: string
         }
         Insert: {
@@ -258,6 +259,7 @@ export type Database = {
           source?: string | null
           stage_id?: string | null
           tags?: string[] | null
+          unread_count?: number | null
           updated_at?: string
         }
         Update: {
@@ -285,6 +287,7 @@ export type Database = {
           source?: string | null
           stage_id?: string | null
           tags?: string[] | null
+          unread_count?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -316,6 +319,7 @@ export type Database = {
           content: string | null
           created_at: string | null
           external_id: string | null
+          gpt_message_id: string | null
           id: string
           lead_id: string
           media_type: string | null
@@ -328,6 +332,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           external_id?: string | null
+          gpt_message_id?: string | null
           id?: string
           lead_id: string
           media_type?: string | null
@@ -340,6 +345,7 @@ export type Database = {
           content?: string | null
           created_at?: string | null
           external_id?: string | null
+          gpt_message_id?: string | null
           id?: string
           lead_id?: string
           media_type?: string | null
@@ -695,7 +701,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_unread_count: { Args: { row_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

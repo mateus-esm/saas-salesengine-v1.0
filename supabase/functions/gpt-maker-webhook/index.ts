@@ -91,7 +91,6 @@ serve(async (req) => {
         lead_id: lead.id,
         content: messageContent,
         sender_type: 'customer', // Veio do cliente
-        status: 'delivered',
         gpt_message_id: msgId // <-- A VACINA CONTRA DUPLICIDADE
       });
       
