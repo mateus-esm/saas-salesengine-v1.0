@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChatSession, Task } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { pipelineStages } from "@/data/mockChatData";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 
 interface CRMContextPanelProps {
   session: ChatSession | null;
@@ -44,6 +44,12 @@ export function CRMContextPanel({
 }: CRMContextPanelProps) {
   const [newTask, setNewTask] = useState("");
   const [notes, setNotes] = useState(session?.crmData.notes || "");
+  const { stages } = usePipelineStages();
+
+  // Atualiza notes quando session muda
+  useEffect(() => {
+    setNotes(session?.crmData.notes || "");
+  }, [session?.crmData.notes]);
 
   if (!session) {
     return (
@@ -186,9 +192,9 @@ export function CRMContextPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {pipelineStages.map((stage) => (
-                <SelectItem key={stage} value={stage}>
-                  {stage}
+              {stages.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>
+                  {stage.name}
                 </SelectItem>
               ))}
             </SelectContent>
