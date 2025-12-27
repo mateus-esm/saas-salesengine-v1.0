@@ -72,9 +72,8 @@ serve(async (req) => {
                 lead_id: lead_id,
                 content: content,
                 sender_type: senderType,
-                status: 'delivered', // Histórico passado já foi entregue
-                gpt_message_id: externalId, // A chave anti-duplicidade
-                created_at: messageDate     // Mantém a ordem cronológica original
+                gpt_message_id: externalId,
+                created_at: messageDate
             }, { 
                 onConflict: 'gpt_message_id', 
                 ignoreDuplicates: true 

@@ -40,8 +40,7 @@ serve(async (req) => {
       .insert({
         lead_id,
         content,
-        sender_type: 'agent',
-        status: 'sent'
+        sender_type: 'agent'
       })
       .select()
       .single()
