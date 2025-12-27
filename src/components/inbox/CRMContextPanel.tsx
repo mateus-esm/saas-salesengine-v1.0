@@ -229,14 +229,21 @@ export function CRMContextPanel({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="notes" className="flex-1 p-3 pt-2 m-0">
+        <TabsContent value="notes" className="flex-1 p-3 pt-2 m-0 flex flex-col">
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            onBlur={handleNotesBlur}
             placeholder="Adicione anotações sobre este lead..."
-            className="h-full min-h-[150px] resize-none"
+            className="flex-1 min-h-[120px] resize-none"
           />
+          <Button
+            size="sm"
+            className="mt-2"
+            onClick={handleNotesBlur}
+            disabled={notes === session.crmData.notes}
+          >
+            Salvar Notas
+          </Button>
         </TabsContent>
 
         <TabsContent value="tasks" className="flex-1 p-3 pt-2 m-0 overflow-auto">
