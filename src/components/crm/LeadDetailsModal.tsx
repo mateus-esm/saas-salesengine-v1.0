@@ -217,11 +217,11 @@ export const LeadDetailsModal = ({
                   <div>
                     <Label htmlFor="responsible">Responsável</Label>
                     <Select
-                      value={formData.responsible_id || ""}
+                      value={formData.responsible_id || "__none__"}
                       onValueChange={(value) =>
                         setFormData((prev) => ({ 
                           ...prev, 
-                          responsible_id: value || null 
+                          responsible_id: value === "__none__" ? null : value 
                         }))
                       }
                     >
@@ -229,7 +229,7 @@ export const LeadDetailsModal = ({
                         <SelectValue placeholder={isLoadingMembers ? "Carregando..." : "Selecionar responsável"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Sem responsável</SelectItem>
+                        <SelectItem value="__none__">Sem responsável</SelectItem>
                         {teamMembers.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
                             <div className="flex items-center gap-2">

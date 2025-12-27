@@ -89,16 +89,16 @@ export const TableFilters = ({
           <div className="space-y-2">
             <Label>Etapa</Label>
             <Select
-              value={filters.stage}
+              value={filters.stage || "__all__"}
               onValueChange={(value) =>
-                onFiltersChange({ ...filters, stage: value })
+                onFiltersChange({ ...filters, stage: value === "__all__" ? "" : value })
               }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Todas as etapas" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas as etapas</SelectItem>
+                <SelectItem value="__all__">Todas as etapas</SelectItem>
                 {stages.map((stage) => (
                   <SelectItem key={stage.id} value={stage.id}>
                     {stage.name}
@@ -112,16 +112,16 @@ export const TableFilters = ({
           <div className="space-y-2">
             <Label>Responsável</Label>
             <Select
-              value={filters.responsible}
+              value={filters.responsible || "__all__"}
               onValueChange={(value) =>
-                onFiltersChange({ ...filters, responsible: value })
+                onFiltersChange({ ...filters, responsible: value === "__all__" ? "" : value })
               }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="__all__">Todos</SelectItem>
                 {members.map((member) => (
                   <SelectItem key={member.id} value={member.id}>
                     {member.nome_completo || member.email}
@@ -135,16 +135,16 @@ export const TableFilters = ({
           <div className="space-y-2">
             <Label>Origem</Label>
             <Select
-              value={filters.source}
+              value={filters.source || "__all__"}
               onValueChange={(value) =>
-                onFiltersChange({ ...filters, source: value })
+                onFiltersChange({ ...filters, source: value === "__all__" ? "" : value })
               }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Todas as origens" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas as origens</SelectItem>
+                <SelectItem value="__all__">Todas as origens</SelectItem>
                 <SelectItem value="manual">Manual</SelectItem>
                 <SelectItem value="agente_sdr">Agente SDR</SelectItem>
                 <SelectItem value="csv_import">Importação CSV</SelectItem>
