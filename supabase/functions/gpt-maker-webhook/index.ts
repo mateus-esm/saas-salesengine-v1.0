@@ -32,10 +32,10 @@ serve(async (req) => {
     if (!equipe) throw new Error('Agent ID não vinculado a nenhuma equipe');
 
     // 3. Identificar ou Criar o Lead (UPSERT Inteligente)
-    // GPT Maker pode mandar 'phone', 'telefone' ou 'remoteJid'
+    // GPT Maker pode mandar 'phone', 'telefone', 'remoteJid'
     const phone = payload.telefone || payload.phone || payload.remoteJid; 
     const name = payload.nome || payload.name || payload.pushName || 'Lead WhatsApp';
-    // O chat_id geralmente vem como 'id' ou 'chatId' no payload da conversa
+    // O chat_id geralmente vem como 'id' ou 'chatId' no payload da conversa/contato
     const chatId = payload.chat_id || payload.chatId || payload.id; 
 
     if (!phone) throw new Error('Phone number not found in payload');
@@ -55,7 +55,7 @@ serve(async (req) => {
           equipe_id: equipe.id,
           name: name,
           phone: phone,
-          email: payload.email || null, // Se vier email
+          email: payload.email || null,
           source: 'whatsapp_bot',
           last_message_at: new Date().toISOString(),
           gpt_maker_chat_id: chatId || null, // Salva o Chat ID importante para envio
@@ -79,19 +79,27 @@ serve(async (req) => {
       await supabase.from('leads').update(updates).eq('id', lead.id);
     }
 
-    // 4. Salvar a Mensagem e Incrementar Contador (O Pulo do Gato)
+    // 4. Salvar a Mensagem e Incrementar Contador
     const messageContent = payload.mensagem || payload.message || payload.text?.body;
+    
+    // Tenta pegar o ID ÚNICO que vem no payload do webhook (Variável conforme versão da API)
+    const msgId = payload.message_id || payload.id || payload.key?.id || payload.messageId;
 
     if (messageContent && lead) {
-      // A) Salva a mensagem na tabela messages
+      // A) Salva a mensagem (com gpt_message_id para evitar duplicidade futura)
       const { error: msgError } = await supabase.from('messages').insert({
         lead_id: lead.id,
         content: messageContent,
         sender_type: 'customer', // Veio do cliente
-        status: 'delivered'
+        status: 'delivered',
+        gpt_message_id: msgId // <-- A VACINA CONTRA DUPLICIDADE
       });
       
-      if (msgError) console.error('Erro ao salvar mensagem:', msgError);
+      if (msgError) {
+        console.error('Erro ao salvar mensagem (possível duplicidade ou erro de banco):', msgError);
+        // Não damos throw aqui para garantir que o contador seja incrementado mesmo se o insert falhar (ex: edge case)
+        // Ou se preferir rigor, pode parar aqui. Mas geralmente em webhook tentamos processar o resto.
+      }
 
       // B) Incrementa o contador de não lidas (Badge Vermelho)
       // Chama a função RPC segura que criamos no SQL
