@@ -20,16 +20,18 @@ export interface TenantConfig {
   customFields?: CustomFieldDefinition[];
 }
 
+// All tenants share the Solo Ventures design system (orange gradient)
+// Only name, nicho, domain and custom fields differ
 export const tenants: Record<TenantId, TenantConfig> = {
   advai: {
     id: 'advai',
     name: 'AdvAI',
     nicho: 'juridico',
     domain: 'advai.soloventures.com.br',
-    logo: '/tenants/advai/logo.png',
-    logoLight: '/tenants/advai/logo-light.png',
-    primaryColor: '220 70% 50%', // Blue
-    description: 'Agente SDR para Escritórios de Advocacia',
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
+    description: 'Assistente Jurídico Inteligente',
     customFields: [
       { key: 'numero_processo', label: 'Número do Processo', type: 'text', placeholder: '0000000-00.0000.0.00.0000' },
       { key: 'area_atuacao', label: 'Área de Atuação', type: 'select', options: ['Trabalhista', 'Cível', 'Criminal', 'Tributário', 'Empresarial', 'Família', 'Outros'] },
@@ -40,9 +42,9 @@ export const tenants: Record<TenantId, TenantConfig> = {
     name: 'Solon',
     nicho: 'energia_solar',
     domain: 'solon.soloventures.com.br',
-    logo: '/tenants/solon/logo.png',
-    logoLight: '/tenants/solon/logo-light.png',
-    primaryColor: '45 100% 50%', // Solar Yellow/Orange
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
     description: 'Agente SDR para Energia Solar',
     customFields: [
       { key: 'consumo_medio', label: 'Consumo Médio (kWh)', type: 'number', placeholder: 'Ex: 500' },
@@ -52,12 +54,12 @@ export const tenants: Record<TenantId, TenantConfig> = {
   },
   cb: {
     id: 'cb',
-    name: 'CB',
-    nicho: 'cinemas benfica',
+    name: 'Cinemas Benfica',
+    nicho: 'cinema',
     domain: 'cb.soloventures.com.br',
-    logo: '/tenants/cb/logo.png',
-    logoLight: '/tenants/cb/logo-light.png',
-    primaryColor: '160 60% 45%', // Green
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
     description: 'Agente de Suporte do Cinemas Benfica',
     customFields: [
       { key: 'filme_interesse', label: 'Filme de Interesse', type: 'text', placeholder: 'Nome do filme' },
@@ -69,9 +71,9 @@ export const tenants: Record<TenantId, TenantConfig> = {
     name: 'NutriA',
     nicho: 'nutricao',
     domain: 'nutria.soloventures.com.br',
-    logo: '/tenants/nutria/logo.png',
-    logoLight: '/tenants/nutria/logo-light.png',
-    primaryColor: '140 70% 45%', // Healthy Green
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
     description: 'Agente SDR para Nutricionistas',
     customFields: [
       { key: 'objetivo', label: 'Objetivo', type: 'select', options: ['Emagrecimento', 'Ganho de Massa', 'Reeducação Alimentar', 'Saúde Geral', 'Outro'] },
@@ -83,9 +85,9 @@ export const tenants: Record<TenantId, TenantConfig> = {
     name: 'Imob',
     nicho: 'imobiliario',
     domain: 'imob.soloventures.com.br',
-    logo: '/tenants/imob/logo.png',
-    logoLight: '/tenants/imob/logo-light.png',
-    primaryColor: '200 80% 50%', // Real Estate Blue
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
     description: 'Agente SDR para Mercado Imobiliário',
     customFields: [
       { key: 'tipo_imovel', label: 'Tipo de Imóvel', type: 'select', options: ['Apartamento', 'Casa', 'Terreno', 'Comercial', 'Rural'] },
@@ -95,12 +97,12 @@ export const tenants: Record<TenantId, TenantConfig> = {
   },
   default: {
     id: 'default',
-    name: 'Solo Ventures',
+    name: 'Solo SaaS',
     nicho: 'geral',
     domain: 'soloventures.com.br',
     logo: '/solo-ventures-icon-512.png',
     logoLight: '/solo-ventures-icon-512.png',
-    primaryColor: '262 83% 58%', // Original Purple
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
     description: 'Plataforma SoloAI SaaS',
     customFields: [],
   },
@@ -121,7 +123,7 @@ export function getTenantByHostname(hostname: string): TenantConfig {
   const found = Object.values(tenants).find(t => t.domain === cleanHostname);
   if (found) return found;
   
-  // Default fallback
+  // Default to Solo SaaS
   return tenants.default;
 }
 

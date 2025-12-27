@@ -37,11 +37,17 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
   const handleAdd = () => {
     if (!newContent.trim()) return;
     
+    // Use local date to avoid timezone issues
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const localDateString = `${year}-${month}-${day}`;
+    
     createTouchpoint.mutate({
       lead_id: leadId,
       touchpoint_type: newType,
       content: newContent.trim(),
-      contact_date: format(selectedDate, 'yyyy-MM-dd'),
+      contact_date: localDateString,
     });
     
     setNewContent("");
@@ -145,7 +151,8 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground">{tp.content}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {format(new Date(tp.contact_date), "dd/MM/yyyy", { locale: ptBR })}
+                    {/* Parse date as local to avoid timezone shift */}
+                    {tp.contact_date.split('T')[0].split('-').reverse().join('/')}
                   </p>
                 </div>
                 <Button

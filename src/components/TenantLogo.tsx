@@ -1,6 +1,8 @@
 import { useTenant } from '@/contexts/TenantContext';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import soloLogoLight from '@/assets/solo-ventures-logo-light.png';
+import soloLogoDark from '@/assets/solo-ventures-logo.png';
 
 interface TenantLogoProps {
   className?: string;
@@ -11,31 +13,16 @@ export function TenantLogo({ className, showName = false }: TenantLogoProps) {
   const { tenant } = useTenant();
   const { resolvedTheme } = useTheme();
   
-  const logoSrc = resolvedTheme === 'dark' ? tenant.logoLight : tenant.logo;
-  
-  // Fallback to text if logo not found
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    e.currentTarget.style.display = 'none';
-    const textFallback = e.currentTarget.nextElementSibling;
-    if (textFallback) {
-      (textFallback as HTMLElement).style.display = 'flex';
-    }
-  };
+  // Use Solo Ventures logo for all tenants - light version for dark mode
+  const logoSrc = resolvedTheme === 'dark' ? soloLogoLight : soloLogoDark;
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
       <img
         src={logoSrc}
-        alt={`${tenant.name} Logo`}
+        alt="Solo Ventures Logo"
         className="h-8 w-auto object-contain"
-        onError={handleImageError}
       />
-      <span 
-        className="hidden items-center text-xl font-bold text-foreground"
-        style={{ display: 'none' }}
-      >
-        {tenant.name}
-      </span>
       {showName && (
         <span className="text-lg font-semibold text-foreground">
           {tenant.name}
