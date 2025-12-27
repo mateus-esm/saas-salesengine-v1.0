@@ -7,7 +7,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Tratamento de CORS
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -19,28 +18,41 @@ serve(async (req) => {
     const payload = await req.json();
     console.log('Webhook Payload:', JSON.stringify(payload));
 
-    // 1. Validação Básica
-    if (!payload.agent_id) throw new Error('agent_id is required');
+    // 1. TRADUÇÃO DOS CAMPOS (O Segredo da Compatibilidade)
+    // O código agora tenta todas as variações possíveis que o GPT Maker manda
+    
+    const agentId = payload.agent_id || payload.assistantId || payload.agentId;
+    
+    const phone = payload.telefone || payload.phone || payload.remoteJid || payload.contactPhone;
+    
+    const name = payload.nome || payload.name || payload.pushName || payload.contactName || 'Lead WhatsApp';
+    
+    const chatId = payload.chat_id || payload.chatId || payload.id || payload.contextId;
 
-    // 2. Identificar a Equipe pelo Agente
+    const msgId = payload.message_id || payload.id || payload.key?.id || payload.messageId;
+
+    const role = payload.role || 'customer'; // assistant, system, user
+
+    // Conteúdo da mensagem
+    let messageContent = payload.mensagem || payload.message || payload.text?.body || '';
+
+    // Validação
+    if (!agentId) throw new Error('agent_id (or assistantId) is required');
+    if (!phone) throw new Error('Phone number not found in payload');
+
+    // 2. Identificar a Equipe
     const { data: equipe } = await supabase
       .from('equipes')
       .select('id, nome')
-      .eq('gpt_maker_agent_id', payload.agent_id)
+      .eq('gpt_maker_agent_id', agentId)
       .single();
 
-    if (!equipe) throw new Error('Agent ID não vinculado a nenhuma equipe');
+    if (!equipe) {
+        console.error(`Agent ID ${agentId} não encontrado nas equipes.`);
+        throw new Error('Agent ID não vinculado a nenhuma equipe');
+    }
 
-    // 3. Identificar ou Criar o Lead (UPSERT Inteligente)
-    // GPT Maker pode mandar 'phone', 'telefone', 'remoteJid'
-    const phone = payload.telefone || payload.phone || payload.remoteJid; 
-    const name = payload.nome || payload.name || payload.pushName || 'Lead WhatsApp';
-    // O chat_id geralmente vem como 'id' ou 'chatId' no payload da conversa/contato
-    const chatId = payload.chat_id || payload.chatId || payload.id; 
-
-    if (!phone) throw new Error('Phone number not found in payload');
-
-    // Tenta buscar lead existente
+    // 3. Identificar ou Criar o Lead (UPSERT)
     let { data: lead } = await supabase
       .from('leads')
       .select('id, gpt_maker_chat_id')
@@ -48,7 +60,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!lead) {
-      // A) Se não existe, CRIA NOVO
+      // Cria novo lead
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
@@ -58,55 +70,55 @@ serve(async (req) => {
           email: payload.email || null,
           source: 'whatsapp_bot',
           last_message_at: new Date().toISOString(),
-          gpt_maker_chat_id: chatId || null, // Salva o Chat ID importante para envio
-          unread_count: 0 // Começa com 0, vamos incrementar abaixo
+          gpt_maker_chat_id: chatId || null,
+          unread_count: 0
         })
         .select()
         .single();
 
       if (createError) throw createError;
-      if (!newLead) throw new Error('Failed to create lead');
       lead = newLead;
     } else {
-      // B) Se existe, ATUALIZA (Timestamp e ChatID se faltar)
+      // Atualiza existente
       const updates: any = { last_message_at: new Date().toISOString() };
-      
-      // Se o lead antigo não tinha chat_id e agora veio, atualiza
-      if (!lead.gpt_maker_chat_id && chatId) {
-        updates.gpt_maker_chat_id = chatId;
-      }
+      if (!lead.gpt_maker_chat_id && chatId) updates.gpt_maker_chat_id = chatId;
       
       await supabase.from('leads').update(updates).eq('id', lead.id);
     }
 
-    // 4. Salvar a Mensagem e Incrementar Contador
-    const messageContent = payload.mensagem || payload.message || payload.text?.body;
-    
-    // Tenta pegar o ID ÚNICO que vem no payload do webhook (Variável conforme versão da API)
-    const msgId = payload.message_id || payload.id || payload.key?.id || payload.messageId;
+    // 4. Salvar a Mensagem
+    // IMPORTANTE: Definir quem mandou (Cliente ou Robô?)
+    // Se role for 'assistant', é o robô ('agent'). Se for 'user', é o cliente ('customer').
+    const senderType = (role === 'assistant' || role === 'system') ? 'agent' : 'customer';
 
+    // Se a mensagem veio vazia, mas tem anexos (lógica extra)
+    if (!messageContent && (payload.images?.length > 0 || payload.audios?.length > 0)) {
+        if (payload.images?.length > 0) messageContent = '[Imagem Recebida]';
+        else if (payload.audios?.length > 0) messageContent = '[Áudio Recebido]';
+    }
+
+    // Só salva se tiver conteúdo (ignora eventos de status vazios)
     if (messageContent && lead) {
-      // A) Salva a mensagem (com gpt_message_id para evitar duplicidade futura)
       const { error: msgError } = await supabase.from('messages').insert({
         lead_id: lead.id,
         content: messageContent,
-        sender_type: 'customer', // Veio do cliente
-        gpt_message_id: msgId // <-- A VACINA CONTRA DUPLICIDADE
+        sender_type: senderType, // Dinâmico!
+        gpt_message_id: msgId,   // Vacina anti-duplicidade
+        status: 'delivered'      // Você pode ajustar isso se quiser
       });
       
-      if (msgError) {
-        console.error('Erro ao salvar mensagem (possível duplicidade ou erro de banco):', msgError);
-        // Não damos throw aqui para garantir que o contador seja incrementado mesmo se o insert falhar (ex: edge case)
-        // Ou se preferir rigor, pode parar aqui. Mas geralmente em webhook tentamos processar o resto.
-      }
+      if (msgError) console.error('Erro ao salvar mensagem:', msgError);
 
-      // B) Incrementa o contador de não lidas (Badge Vermelho)
-      // Chama a função RPC segura que criamos no SQL
-      const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
-        row_id: lead.id 
-      });
-      
-      if (rpcError) console.error('Erro ao incrementar badge:', rpcError);
+      // Incrementa contador (apenas se for mensagem do CLIENTE)
+      // Se for mensagem do robô (agent), não precisa notificar como não lida.
+      if (senderType === 'customer') {
+          const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
+            row_id: lead.id 
+          });
+          if (rpcError) console.error('Erro RPC:', rpcError);
+      }
+    } else {
+        console.log('Mensagem vazia ignorada.');
     }
 
     return new Response(JSON.stringify({ success: true, lead_id: lead?.id }), {
