@@ -18,56 +18,73 @@ serve(async (req) => {
     const { lead_id, chat_id } = await req.json()
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
-    // 1. Busca histórico (Limite maior para garantir)
-    const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/messages?limit=100`
+    // 1. Busca histórico na API do GPT Maker
+    // O endpoint deve retornar a lista que você mandou (Array de objetos)
+    const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/messages?limit=50`
     
     const response = await fetch(url, {
       method: 'GET',
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
     })
 
-    if (!response.ok) throw new Error('Failed to fetch history')
+    if (!response.ok) {
+       console.error("Erro API GPT Maker:", await response.text());
+       throw new Error('Failed to fetch history');
+    }
 
-    const data = await response.json()
-    // Ajuste conforme o retorno da API do GPT Maker (verifique se é data.messages ou data direto)
-    const externalMessages = Array.isArray(data) ? data : (data.messages || [])
+    const externalMessages = await response.json();
+    
+    // Validação: Garante que é um array (conforme seu payload mostra [ ... ])
+    const messagesArray = Array.isArray(externalMessages) ? externalMessages : (externalMessages.messages || []);
 
     let savedCount = 0
 
-    // 2. Loop Inteligente (UPSERT)
-    for (const msg of externalMessages) {
-        // Mapeamento Seguro
-        const content = msg.message || msg.content || msg.body || '';
-        if (!content) continue; // Pula mensagens vazias
+    // 2. Loop Adaptado ao seu Payload Real
+    for (const msg of messagesArray) {
+        
+        // Mapeamento baseado no seu JSON:
+        // "text": "<string>"
+        // "imageUrl": "<string>"
+        // "audioUrl": "<string>"
+        
+        let content = msg.text;
+        
+        // Tratamento para Mídia (se o texto vier vazio, mas tiver imagem/audio)
+        if (!content && msg.imageUrl) content = '[Imagem] ' + msg.imageUrl;
+        else if (!content && msg.audioUrl) content = '[Áudio] ' + msg.audioUrl;
+        else if (!content && msg.documentUrl) content = '[Documento] ' + msg.documentUrl;
+        
+        if (!content) continue; // Pula se realmente não tiver nada
 
-        const senderType = (msg.role === 'user' || msg.fromMe === false) ? 'customer' : 'agent';
+        // "role": "<string>" -> Definir quem enviou
+        // Geralmente 'user' ou 'customer' é o cliente. Todo o resto assumimos que é o sistema/agente.
+        const senderType = (msg.role === 'user' || msg.role === 'customer') ? 'customer' : 'agent';
         
-        // O PULO DO GATO: Usamos o ID original da mensagem
-        const externalId = msg.id || msg.key?.id || msg.messageId; 
+        // "id": "<string>" -> ID Único para evitar duplicidade
+        const externalId = msg.id; 
         
-        // DATA CORRETA: Usamos a data da mensagem, não a de "agora"
-        // Isso garante a ORDEM CORRETA no chat
-        const messageDate = msg.createdAt || msg.timestamp || msg.date || new Date().toISOString();
+        // "time": 123 -> Converter Timestamp para Data ISO do Supabase
+        // Assumindo que o timestamp é milissegundos (padrão JS). Se for segundos, multiplicar por 1000.
+        const messageDate = msg.time ? new Date(msg.time).toISOString() : new Date().toISOString();
 
         if (externalId) {
-            // Tenta inserir usando UPSERT (Ignora se já existir graças ao onConflict)
             const { error } = await supabase.from('messages').upsert({
                 lead_id: lead_id,
                 content: content,
                 sender_type: senderType,
-                status: 'delivered',
+                status: 'delivered', // Histórico passado já foi entregue
                 gpt_message_id: externalId, // A chave anti-duplicidade
-                created_at: messageDate     // A chave da ordem correta
+                created_at: messageDate     // Mantém a ordem cronológica original
             }, { 
-                onConflict: 'gpt_message_id', // Se bater esse ID...
-                ignoreDuplicates: true        // ...não faz nada (preserva o que já existe)
+                onConflict: 'gpt_message_id', 
+                ignoreDuplicates: true 
             })
             
             if (!error) savedCount++
         }
     }
 
-    return new Response(JSON.stringify({ success: true, new_messages: savedCount }), {
+    return new Response(JSON.stringify({ success: true, synced: savedCount }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
