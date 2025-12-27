@@ -31,9 +31,10 @@ export const useMessages = (leadId: string | undefined) => {
         if (data) setMessages(data);
 
         // 2. Zera o contador de não lidas (Badge) ao abrir o chat
+        // Usando type assertion para contornar limitação do types.ts gerado
         const { error: updateError } = await supabase
           .from('leads')
-          .update({ unread_count: 0 })
+          .update({ unread_count: 0 } as any)
           .eq('id', leadId);
 
         if (updateError) {
@@ -68,7 +69,7 @@ export const useMessages = (leadId: string | undefined) => {
           // Opcional: Se o chat já está aberto, garante que o contador continue zerado
           // (Isso evita que o badge suba enquanto você está lendo)
           if (leadId) {
-             supabase.from('leads').update({ unread_count: 0 }).eq('id', leadId);
+             supabase.from('leads').update({ unread_count: 0 } as any).eq('id', leadId);
           }
         }
       )
