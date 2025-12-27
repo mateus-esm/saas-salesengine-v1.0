@@ -8,6 +8,7 @@ import { Lead } from "@/types/crm";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { SLAIndicator } from "./SLAIndicator";
 
 interface LeadCardProps {
   lead: Lead;
@@ -182,16 +183,18 @@ export const LeadCard = ({ lead, onClick }: LeadCardProps) => {
         </div>
       )}
 
-      {/* Next Contact */}
-      {lead.next_contact && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t border-border">
-          <Clock className="h-3 w-3" />
-          <span>
-            Próximo:{" "}
-            {format(new Date(lead.next_contact), "dd/MM", { locale: ptBR })}
-          </span>
-        </div>
-      )}
+      {/* SLA + Next Contact */}
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+        <SLAIndicator stageEnteredAt={lead.stage_entered_at} compact />
+        {lead.next_contact && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>
+              {format(new Date(lead.next_contact), "dd/MM", { locale: ptBR })}
+            </span>
+          </div>
+        )}
+      </div>
     </Card>
   );
 };

@@ -76,15 +76,17 @@ const Chat = () => {
       leadId: lead.id,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
-      status: 'bot_handling' as const,
+      status: (lead as any).atendido_por_agente ? 'human_handling' as const : 'bot_handling' as const,
       unreadCount: (lead as any).unread_count || 0,
+      leadType: lead.lead_type,
+      responsibleId: lead.responsible_id,
       crmData: {
         value: lead.opportunity_value || 0,
-        stage: 'Novo',
+        stage: lead.stage_id || 'Novo',
         company: lead.name,
-        notes: '',
+        notes: lead.observations || '',
       },
-      tags: [],
+      tags: lead.tags || [],
       messages: []
     })) || [];
   }, [leads]);

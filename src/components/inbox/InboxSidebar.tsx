@@ -4,21 +4,28 @@ import { ChatListItem } from "./ChatListItem";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Inbox, Bot, User, MessageCircle } from "lucide-react";
+import { Search, Inbox, Bot, User, MessageCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface InboxSidebarProps {
-  sessions: ChatSession[];
-  selectedSessionId: string | null;
-  onSelectSession: (sessionId: string) => void;
+interface ExtendedChatSession extends ChatSession {
+  leadType?: 'lead' | 'contact' | 'spam' | null;
+  responsibleId?: string | null;
 }
 
-type FilterType = "all" | "mine" | "unread" | "bot";
+interface InboxSidebarProps {
+  sessions: ExtendedChatSession[];
+  selectedSessionId: string | null;
+  onSelectSession: (sessionId: string) => void;
+  currentUserId?: string;
+}
+
+type FilterType = "all" | "mine" | "unread" | "bot" | "contacts";
 
 export function InboxSidebar({
   sessions,
   selectedSessionId,
   onSelectSession,
+  currentUserId,
 }: InboxSidebarProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
@@ -28,8 +35,10 @@ export function InboxSidebar({
     { id: "mine", label: "Meus", icon: User },
     { id: "unread", label: "Não Lidos", icon: MessageCircle },
     { id: "bot", label: "Bot", icon: Bot },
+    { id: "contacts", label: "Contatos", icon: Users },
   ];
 
+  // Filter sessions - exclude contacts/spam from "all" unless specifically viewing "contacts"
   const filteredSessions = sessions.filter((session) => {
     // Search filter
     const matchesSearch =
@@ -40,14 +49,25 @@ export function InboxSidebar({
     // Status filter
     let matchesFilter = true;
     switch (filter) {
+      case "all":
+        // Show only leads (not contacts/spam) in "all"
+        matchesFilter = !session.leadType || session.leadType === 'lead';
+        break;
       case "mine":
-        matchesFilter = session.status === "human_handling";
+        // Show sessions where user is responsible or handling
+        matchesFilter = 
+          session.status === "human_handling" || 
+          session.responsibleId === currentUserId;
         break;
       case "unread":
         matchesFilter = session.unreadCount > 0;
         break;
       case "bot":
         matchesFilter = session.status === "bot_handling";
+        break;
+      case "contacts":
+        // Show only contacts (not leads)
+        matchesFilter = session.leadType === 'contact' || session.leadType === 'spam';
         break;
     }
 

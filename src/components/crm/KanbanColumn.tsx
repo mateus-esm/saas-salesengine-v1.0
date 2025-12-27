@@ -9,9 +9,10 @@ interface KanbanColumnProps {
   stage: PipelineStage;
   leads: Lead[];
   onLeadClick: (lead: Lead) => void;
+  isNegative?: boolean;
 }
 
-export const KanbanColumn = ({ stage, leads, onLeadClick }: KanbanColumnProps) => {
+export const KanbanColumn = ({ stage, leads, onLeadClick, isNegative = false }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
   });
@@ -31,7 +32,8 @@ export const KanbanColumn = ({ stage, leads, onLeadClick }: KanbanColumnProps) =
     <div
       className={cn(
         "flex flex-col min-w-[300px] max-w-[300px] rounded-lg bg-card border border-border transition-all duration-200",
-        isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+        isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        isNegative && "opacity-75 bg-muted/50"
       )}
     >
       {/* Column Header */}

@@ -10,6 +10,7 @@ export interface PipelineStage {
   position: number;
   color: string;
   is_default: boolean;
+  category: string | null;
   created_at: string;
 }
 

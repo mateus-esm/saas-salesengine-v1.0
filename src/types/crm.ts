@@ -26,6 +26,11 @@ export interface Lead {
   // GPT Maker integration fields
   gpt_maker_chat_id: string | null;
   last_message_at: string | null;
+  // v3.0 fields
+  lead_type: 'lead' | 'contact' | 'spam' | null;
+  stage_entered_at: string | null;
+  assigned_to: string | null;
+  unread_count: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +42,7 @@ export interface PipelineStage {
   position: number;
   color: string;
   is_default: boolean;
+  category: string | null; // 'active' | 'won' | 'lost' | 'disqualified' | 'recycled'
   created_at: string;
 }
 
@@ -47,6 +53,16 @@ export interface LeadActivity {
   tipo: string;
   descricao: string | null;
   metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface Touchpoint {
+  id: string;
+  lead_id: string;
+  user_id: string | null;
+  touchpoint_type: 'call' | 'email' | 'whatsapp' | 'meeting' | 'note';
+  content: string;
+  contact_date: string;
   created_at: string;
 }
 
@@ -63,6 +79,7 @@ export interface CreateLeadData {
   meeting_date?: string;
   meeting_notes?: string;
   custom_fields?: Record<string, unknown>;
+  lead_type?: 'lead' | 'contact' | 'spam';
 }
 
 export interface UpdateLeadData {
@@ -83,6 +100,7 @@ export interface UpdateLeadData {
   responsible_id?: string | null;
   meeting_date?: string | null;
   meeting_notes?: string | null;
+  lead_type?: 'lead' | 'contact' | 'spam';
 }
 
 export interface WebhookConfig {

@@ -23,9 +23,12 @@ import {
   Briefcase,
   Plus,
   X,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
+import { TouchpointsList } from "@/components/crm/TouchpointsList";
+import { SLAIndicator } from "@/components/crm/SLAIndicator";
 
 interface CRMContextPanelProps {
   session: ChatSession | null;
@@ -33,6 +36,7 @@ interface CRMContextPanelProps {
   onUpdateCRM: (data: Partial<ChatSession["crmData"]>) => void;
   onAddTask: (title: string) => void;
   onToggleTask: (taskId: string) => void;
+  stageEnteredAt?: string | null;
 }
 
 export function CRMContextPanel({
@@ -41,6 +45,7 @@ export function CRMContextPanel({
   onUpdateCRM,
   onAddTask,
   onToggleTask,
+  stageEnteredAt,
 }: CRMContextPanelProps) {
   const [newTask, setNewTask] = useState("");
   const [notes, setNotes] = useState(session?.crmData.notes || "");
@@ -106,9 +111,18 @@ export function CRMContextPanel({
                 </p>
               )}
             </div>
-            <Button variant="outline" size="sm" className="gap-1">
-              <ExternalLink className="h-3 w-3" />
-              Ver no Kanban
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-1"
+              onClick={() => {
+                const phone = session.customerPhone.replace(/\D/g, '');
+                const phoneWithCountry = phone.startsWith('55') ? phone : `55${phone}`;
+                window.open(`https://wa.me/${phoneWithCountry}`, '_blank');
+              }}
+            >
+              <MessageCircle className="h-3 w-3" />
+              WhatsApp
             </Button>
           </div>
         </CardHeader>
@@ -202,7 +216,6 @@ export function CRMContextPanel({
         </div>
       </div>
 
-      {/* Notes & Tasks Tabs */}
       <Tabs defaultValue="notes" className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="mx-3 mt-3 w-auto">
           <TabsTrigger value="notes" className="flex-1">
@@ -210,6 +223,9 @@ export function CRMContextPanel({
           </TabsTrigger>
           <TabsTrigger value="tasks" className="flex-1">
             Tarefas
+          </TabsTrigger>
+          <TabsTrigger value="touchpoints" className="flex-1">
+            Histórico
           </TabsTrigger>
         </TabsList>
 
@@ -266,6 +282,10 @@ export function CRMContextPanel({
               )}
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="touchpoints" className="flex-1 p-3 pt-2 m-0 overflow-auto">
+          {session?.leadId && <TouchpointsList leadId={session.leadId} />}
         </TabsContent>
       </Tabs>
     </div>
