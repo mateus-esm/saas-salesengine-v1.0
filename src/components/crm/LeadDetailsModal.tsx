@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -34,13 +34,19 @@ import {
   Clock,
   MessageSquare,
   Send,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  PhoneCall,
+  Video,
+  FileText
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Lead, PipelineStage } from "@/types/crm";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useLeadActivities } from "@/hooks/useLeadActivities";
+import { useTouchpoints } from "@/hooks/useTouchpoints";
+import { useTasks } from "@/hooks/useTasks";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -68,7 +74,62 @@ export const LeadDetailsModal = ({
   
   const { teamMembers, isLoading: isLoadingMembers } = useTeamMembers();
   const { activities, isLoading: isLoadingActivities, createActivity } = useLeadActivities(lead?.id);
+  const { touchpoints, isLoading: isLoadingTouchpoints } = useTouchpoints(lead?.id);
+  const { tasks, isLoading: isLoadingTasks } = useTasks(lead?.id || null);
   const { tenant } = useTenant();
+
+  // Combine all activities for unified timeline
+  const combinedActivities = useMemo(() => {
+    const items: Array<{
+      id: string;
+      type: 'note' | 'touchpoint' | 'task';
+      title: string;
+      description?: string;
+      date: Date;
+      icon: 'note' | 'call' | 'email' | 'whatsapp' | 'meeting' | 'task';
+      status?: string;
+    }> = [];
+
+    // Add activities (notes)
+    activities.forEach(activity => {
+      items.push({
+        id: activity.id,
+        type: 'note',
+        title: activity.tipo,
+        description: activity.descricao || undefined,
+        date: new Date(activity.created_at),
+        icon: 'note',
+      });
+    });
+
+    // Add touchpoints
+    touchpoints.forEach(tp => {
+      items.push({
+        id: tp.id,
+        type: 'touchpoint',
+        title: tp.touchpoint_type || 'note',
+        description: tp.content,
+        date: new Date(tp.contact_date),
+        icon: (tp.touchpoint_type as 'call' | 'email' | 'whatsapp' | 'meeting' | 'note') || 'note',
+      });
+    });
+
+    // Add tasks
+    tasks.forEach(task => {
+      items.push({
+        id: task.id,
+        type: 'task',
+        title: task.title,
+        description: task.description || undefined,
+        date: new Date(task.created_at),
+        icon: 'task',
+        status: task.status,
+      });
+    });
+
+    // Sort by date descending
+    return items.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [activities, touchpoints, tasks]);
 
   useEffect(() => {
     if (lead) {
@@ -144,14 +205,22 @@ export const LeadDetailsModal = ({
     return parseInt(numericValue, 10) / 100;
   };
 
-  const getActivityIcon = (tipo: string) => {
-    switch (tipo) {
+  const getActivityIcon = (iconType: string) => {
+    switch (iconType) {
       case "nota":
-        return <MessageSquare className="h-3 w-3" />;
+      case "note":
+        return <FileText className="h-3 w-3" />;
       case "ligacao":
-        return <Phone className="h-3 w-3" />;
+      case "call":
+        return <PhoneCall className="h-3 w-3" />;
       case "email":
         return <Mail className="h-3 w-3" />;
+      case "whatsapp":
+        return <MessageSquare className="h-3 w-3" />;
+      case "meeting":
+        return <Video className="h-3 w-3" />;
+      case "task":
+        return <CheckCircle2 className="h-3 w-3" />;
       default:
         return <Clock className="h-3 w-3" />;
     }
@@ -161,7 +230,7 @@ export const LeadDetailsModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-6 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             Detalhes do Lead
@@ -170,8 +239,8 @@ export const LeadDetailsModal = ({
 
         <div className="grid md:grid-cols-3 gap-0 flex-1 min-h-0 overflow-hidden">
           {/* Left Column - Data & Actions (2/3) */}
-          <div className="md:col-span-2 border-r border-border">
-            <ScrollArea className="h-full">
+          <div className="md:col-span-2 border-r border-border overflow-hidden">
+            <ScrollArea className="h-[calc(90vh-180px)]">
               <div className="p-6 space-y-6">
                 {/* Basic Info */}
                 <div className="grid grid-cols-2 gap-4">
@@ -572,8 +641,8 @@ export const LeadDetailsModal = ({
           </div>
 
           {/* Right Column - Timeline & Notes (1/3) */}
-          <div className="flex flex-col h-full">
-            <div className="p-4 border-b border-border">
+          <div className="flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-border shrink-0">
               <h3 className="font-medium text-sm flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Histórico de Atividades
@@ -581,36 +650,54 @@ export const LeadDetailsModal = ({
             </div>
 
             {/* Activities List */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 max-h-[calc(90vh-300px)]">
               <div className="p-4 space-y-3">
-                {isLoadingActivities ? (
+                {(isLoadingActivities || isLoadingTouchpoints || isLoadingTasks) ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
-                ) : activities.length === 0 ? (
+                ) : combinedActivities.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-8">
                     Nenhuma atividade registrada
                   </p>
                 ) : (
-                  activities.map((activity) => (
+                  combinedActivities.map((item) => (
                     <div
-                      key={activity.id}
+                      key={`${item.type}-${item.id}`}
                       className="flex gap-3 p-3 rounded-lg bg-muted/50 border border-border"
                     >
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                        {getActivityIcon(activity.tipo)}
+                      <div className={cn(
+                        "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center",
+                        item.type === 'task' && item.status === 'done' 
+                          ? "bg-green-500/10 text-green-600" 
+                          : "bg-primary/10 text-primary"
+                      )}>
+                        {getActivityIcon(item.icon)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium capitalize">
-                          {activity.tipo}
-                        </p>
-                        {activity.descricao && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {activity.descricao}
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-medium capitalize">
+                            {item.type === 'task' ? 'Tarefa' : 
+                             item.type === 'touchpoint' ? 
+                               (item.icon === 'call' ? 'Ligação' : 
+                                item.icon === 'email' ? 'Email' : 
+                                item.icon === 'whatsapp' ? 'WhatsApp' : 
+                                item.icon === 'meeting' ? 'Reunião' : 'Nota') :
+                             item.title}
+                          </p>
+                          {item.type === 'task' && item.status === 'done' && (
+                            <Badge variant="outline" className="text-[10px] h-4 bg-green-500/10 text-green-600 border-green-500/30">
+                              Concluída
+                            </Badge>
+                          )}
+                        </div>
+                        {(item.description || (item.type === 'task' && item.title)) && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {item.type === 'task' ? item.title : item.description}
                           </p>
                         )}
                         <p className="text-xs text-muted-foreground/70 mt-1">
-                          {format(new Date(activity.created_at), "dd/MM 'às' HH:mm", {
+                          {format(item.date, "dd/MM/yyyy 'às' HH:mm", {
                             locale: ptBR,
                           })}
                         </p>
