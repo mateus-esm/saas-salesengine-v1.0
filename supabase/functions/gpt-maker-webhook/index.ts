@@ -73,7 +73,8 @@ serve(async (req) => {
         phone: phone,
         last_message_at: new Date().toISOString(),
         gpt_maker_chat_id: chatId || null,
-        lead_type: 'lead' // New leads start as 'lead', AI will reclassify if needed
+        lead_type: 'lead', // New leads start as 'lead', AI will reclassify if needed
+        creation_source: 'ai_agent' // Track that this lead was created by AI agent
       }).select().single();
       if (error) throw error;
       lead = newLead;

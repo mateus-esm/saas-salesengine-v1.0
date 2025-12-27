@@ -36,20 +36,20 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
 
   const handleAdd = () => {
     if (!newContent.trim()) return;
-    
+
     // Use local date to avoid timezone issues
     const year = selectedDate.getFullYear();
     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const day = String(selectedDate.getDate()).padStart(2, '0');
     const localDateString = `${year}-${month}-${day}`;
-    
+
     createTouchpoint.mutate({
       lead_id: leadId,
       touchpoint_type: newType,
       content: newContent.trim(),
       contact_date: localDateString,
     });
-    
+
     setNewContent("");
     setSelectedDate(new Date());
   };
@@ -115,9 +115,9 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
             className="h-9 flex-1"
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           />
-          <Button 
-            size="sm" 
-            onClick={handleAdd} 
+          <Button
+            size="sm"
+            onClick={handleAdd}
             disabled={!newContent.trim() || createTouchpoint.isPending}
           >
             {createTouchpoint.isPending ? (
@@ -139,7 +139,7 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
           touchpoints.map((tp) => {
             const config = getTypeConfig(tp.touchpoint_type);
             const Icon = config.icon;
-            
+
             return (
               <div
                 key={tp.id}
@@ -148,8 +148,8 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
                 <Badge variant="outline" className={`${config.color} shrink-0`}>
                   <Icon className="h-3 w-3" />
                 </Badge>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground">{tp.content}</p>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-sm text-foreground break-words whitespace-pre-wrap">{tp.content}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {/* Parse date as local to avoid timezone shift */}
                     {tp.contact_date.split('T')[0].split('-').reverse().join('/')}

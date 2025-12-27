@@ -21,6 +21,8 @@ import Dashboard from "./pages/Dashboard";
 import Billing from "./pages/Billing";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
+import { ToolkitPage, ClubePage } from "./pages/ComingSoon";
 import { WhatsAppButton } from "./components/WhatsAppButton";
 
 const queryClient = new QueryClient();
@@ -28,7 +30,7 @@ const queryClient = new QueryClient();
 const AuthenticatedLayout = ({ children }: { children: React.ReactNode }) => {
   const { tenant } = useTenant();
   useTenantTheme();
-  
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -62,94 +64,124 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-            <Routes>
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/home"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Home />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Dashboard />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/chat"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Chat />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/crm"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <CRM />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/webhooks"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Webhooks />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/billing"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Billing />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/suporte"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Suporte />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/tutorial"
-              element={
-                <ProtectedRoute>
-                  <AuthenticatedLayout>
-                    <Tutorial />
-                  </AuthenticatedLayout>
-                </ProtectedRoute>
-              }
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+              <Routes>
+                <Route path="/" element={<Navigate to="/login" replace />} />
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/home"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Home />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Dashboard />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Chat />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/crm"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <CRM />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/webhooks"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Webhooks />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/billing"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Billing />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/suporte"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Suporte />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/tutorial"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Tutorial />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Admin />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/toolkit"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <ToolkitPage />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/clube"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <ClubePage />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
         </ThemeProvider>
       </AuthProvider>
     </TenantProvider>

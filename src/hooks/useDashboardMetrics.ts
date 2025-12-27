@@ -17,6 +17,13 @@ export interface DashboardMetrics {
   noShowRate: number;
   leadsByResponsible: { responsible_id: string; responsible_name: string; count: number }[];
   leadsOverTime: { date: string; count: number }[];
+  // New KPIs from PRD v3.5
+  closingRate: number; // Won leads / Total leads * 100
+  avgTicket: number; // Average opportunity value of won deals
+  avgSLADays: number; // Average days to close
+  totalTouchpoints: number;
+  avgTouchpointsPerLead: number;
+  closingRatePostMeeting: number; // Won leads with meeting / Total meetings done * 100
 }
 
 interface UseDashboardMetricsOptions {
@@ -72,7 +79,7 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
 
       // Calculate metrics
       const totalLeads = leads?.length || 0;
-      
+
       // Leads by stage
       const stageCountMap = new Map<string, number>();
       leads?.forEach(lead => {
@@ -143,6 +150,52 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
         .map(([date, count]) => ({ date, count }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
+      // New KPIs: Calculate closing rate properly
+      const closingRate = totalLeads > 0 ? (closedDealsCount / totalLeads) * 100 : 0;
+
+      // Average ticket (won deals with value > 0)
+      const dealsWithValue = closedDeals.filter(l => (Number(l.opportunity_value) || 0) > 0);
+      const avgTicket = dealsWithValue.length > 0
+        ? closedDealsValue / dealsWithValue.length
+        : 0;
+
+      // Closing rate post meeting
+      const wonWithMeeting = closedDeals.filter(l => l.meeting_done).length;
+      const closingRatePostMeeting = meetingsDone > 0
+        ? (wonWithMeeting / meetingsDone) * 100
+        : 0;
+
+      // Fetch touchpoints for KPIs (using RPC if available, fallback to direct query)
+      let totalTouchpoints = 0;
+      try {
+        // Try RPC function first
+        const { data: kpiData, error: kpiError } = await supabase
+          .rpc('get_dashboard_kpis', {
+            p_equipe_id: equipeId,
+            p_start_date: startStr,
+            p_end_date: endStr
+          });
+
+        if (!kpiError && kpiData) {
+          totalTouchpoints = kpiData.total_touchpoints || 0;
+        }
+      } catch {
+        // RPC not available, fallback to direct count
+        const { count } = await supabase
+          .from('touchpoints')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', startStr)
+          .lte('created_at', endStr);
+        totalTouchpoints = count || 0;
+      }
+
+      const avgTouchpointsPerLead = totalLeads > 0
+        ? totalTouchpoints / totalLeads
+        : 0;
+
+      // Placeholder for SLA (would need more data)
+      const avgSLADays = 0; // TODO: Implement when we have proper resolution dates
+
       return {
         totalLeads,
         leadsByStage,
@@ -157,6 +210,13 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
         noShowRate,
         leadsByResponsible,
         leadsOverTime,
+        // New KPIs
+        closingRate,
+        avgTicket,
+        avgSLADays,
+        totalTouchpoints,
+        avgTouchpointsPerLead,
+        closingRatePostMeeting,
       };
     },
     enabled: !!equipeId,

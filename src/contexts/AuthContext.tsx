@@ -11,6 +11,7 @@ interface Profile {
   telefone: string | null;
   cpf: string | null;
   cargo: string | null;
+  role: 'user' | 'admin' | 'owner' | 'super_admin';
 }
 
 interface Equipe {
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         if (session?.user) {
           setTimeout(() => {
             fetchProfile(session.user.id);
@@ -95,7 +96,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
       } else {

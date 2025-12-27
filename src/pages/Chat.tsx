@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useLeads } from "@/hooks/useLeads";
 import { useMessages } from "@/hooks/useMessages";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
+import { useTasks } from "@/hooks/useTasks";
 import { supabase } from "@/integrations/supabase/client";
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
@@ -29,8 +30,8 @@ const Chat = () => {
   // 2. Busca Mensagens do Lead Selecionado (Com Realtime)
   const { messages, loading: loadingMessages } = useMessages(selectedLeadId || undefined);
 
-  // 3. Estado de Tasks local (por lead)
-  const [tasksByLead, setTasksByLead] = useState<Record<string, Task[]>>({});
+  // 3. Busca Tasks do Lead Selecionado (Com Realtime e Persistência)
+  const { tasks, createTask, toggleTask, isLoading: loadingTasks } = useTasks(selectedLeadId);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -172,32 +173,23 @@ const Chat = () => {
     }
   };
 
-  // Tasks handlers
-  const currentTasks = tasksByLead[selectedLeadId || ""] || [];
-
-  const handleAddTask = (title: string) => {
+  // Tasks handlers - now using the useTasks hook for persistence
+  const handleAddTask = async (title: string) => {
     if (!selectedLeadId) return;
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      title,
-      completed: false,
-      createdAt: new Date()
-    };
-    setTasksByLead(prev => ({
-      ...prev,
-      [selectedLeadId]: [...(prev[selectedLeadId] || []), newTask]
-    }));
+    await createTask(title);
   };
 
-  const handleToggleTask = (taskId: string) => {
-    if (!selectedLeadId) return;
-    setTasksByLead(prev => ({
-      ...prev,
-      [selectedLeadId]: (prev[selectedLeadId] || []).map(t =>
-        t.id === taskId ? { ...t, completed: !t.completed } : t
-      )
-    }));
+  const handleToggleTask = async (taskId: string) => {
+    await toggleTask(taskId);
   };
+
+  // Adapt tasks to CRMContextPanel format
+  const currentTasks = tasks.map(t => ({
+    id: t.id,
+    title: t.title,
+    completed: t.status === 'done',
+    createdAt: new Date(t.created_at)
+  }));
 
   // CRM Panel Component (para reutilizar em mobile sheet)
   const CRMPanelContent = () => (
@@ -274,9 +266,9 @@ const Chat = () => {
                     <PanelLeft className="h-5 w-5" />
                   </Button>
                 )}
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="hidden lg:flex"
                   onClick={() => setShowCRM(!showCRM)}
                 >

@@ -1,26 +1,48 @@
-import { Home, MessageCircle, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook } from "lucide-react";
+import { Home, MessageCircle, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/hooks/useRole";
 import { TenantLogo } from "@/components/TenantLogo";
+import { Badge } from "@/components/ui/badge";
 import icon from "@/assets/solo-ventures-icon.png";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
+
+interface MenuItem {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  external: boolean;
+  badge?: string;
+  requiredRole?: 'user' | 'admin' | 'owner' | 'super_admin';
+}
 
 export function AppSidebar() {
   const { open } = useSidebar();
   const { signOut, profile } = useAuth();
+  const { hasRole, isSuperAdmin } = useRole();
   const chatHref = profile?.chat_link_base || "/chat";
   const isExternalChatLink = chatHref.startsWith("http");
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { title: "Início", url: "/home", icon: Home, external: false },
     { title: "Dashboard", url: "/dashboard", icon: BarChart3, external: false },
     { title: "Chat", url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
     { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false },
-    { title: "Billing", url: "/billing", icon: CreditCard, external: false },
+    { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'owner' },
+    { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve" },
+    { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve" },
     { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false },
     { title: "Tutorial", url: "/tutorial", icon: BookOpen, external: false },
   ];
+
+  // Filter menu items based on role
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.requiredRole) {
+      return hasRole(item.requiredRole);
+    }
+    return true;
+  });
 
   return (
     <Sidebar className={open ? "w-64" : "w-16"} collapsible="icon">
@@ -38,18 +60,32 @@ export function AppSidebar() {
           <SidebarGroupLabel className={!open ? "sr-only" : ""}>Menu Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {visibleMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     {item.external ? (
                       <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
                         <item.icon className="h-5 w-5 shrink-0" />
-                        {open && <span className="flex items-center gap-1">{item.title}<ExternalLink className="h-3 w-3" /></span>}
+                        {open && (
+                          <span className="flex items-center gap-1">
+                            {item.title}
+                            <ExternalLink className="h-3 w-3" />
+                          </span>
+                        )}
                       </a>
                     ) : (
                       <NavLink to={item.url} end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors" activeClassName="bg-primary/10 text-primary font-medium">
                         <item.icon className="h-5 w-5 shrink-0" />
-                        {open && <span>{item.title}</span>}
+                        {open && (
+                          <span className="flex items-center gap-2">
+                            {item.title}
+                            {item.badge && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                {item.badge}
+                              </Badge>
+                            )}
+                          </span>
+                        )}
                       </NavLink>
                     )}
                   </SidebarMenuButton>
@@ -58,12 +94,36 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Admin Section - Only visible to super_admin */}
+        {isSuperAdmin() && (
+          <SidebarGroup>
+            <SidebarGroupLabel className={!open ? "sr-only" : ""}>Administração</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/admin" end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors" activeClassName="bg-primary/10 text-primary font-medium">
+                      <Shield className="h-5 w-5 shrink-0" />
+                      {open && <span>Admin Panel</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t border-border p-4">
         {open && profile && (
           <div className="mb-3 px-2">
             <p className="text-sm font-medium text-foreground truncate">{profile.nome_completo}</p>
             <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
+            {profile.role && profile.role !== 'user' && (
+              <Badge variant="outline" className="mt-1 text-[10px] capitalize">
+                {profile.role.replace('_', ' ')}
+              </Badge>
+            )}
           </div>
         )}
         <SidebarMenuButton onClick={signOut} className="w-full">
