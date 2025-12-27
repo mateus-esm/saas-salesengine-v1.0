@@ -12,6 +12,9 @@ verify_jwt = false
 [functions.send-chat-message]
 verify_jwt = false
 
+[functions.sync-chat-history]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 64321           # Mudamos de 54321 para 64321
