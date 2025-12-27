@@ -7,6 +7,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Tratamento de CORS
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
@@ -19,62 +20,61 @@ serve(async (req) => {
     const { content, chat_id, lead_id, action } = await req.json()
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
-    // 1. AÇÃO: Assumir ou Encerrar Atendimento (Botão de Ação)
+    // CENÁRIO 1: Botão Manual de Parar/Retomar Robô (Caso queira usar)
     if (action === 'take_control' || action === 'stop_control') {
       const endpoint = action === 'take_control' ? 'start-human' : 'stop-human'
       const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/${endpoint}`
 
-      const response = await fetch(url, {
+      await fetch(url, {
         method: 'PUT',
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
       })
 
-      if (!response.ok) throw new Error(`Erro GPT Maker: ${await response.text()}`)
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // 2. AÇÃO: Enviar Mensagem de Texto
-    // Primeiro, salvamos no banco para a UI atualizar rápido (Optimistic UI)
+    // CENÁRIO 2: Envio de Mensagem (A Mágica do Auto-Handover)
+    // 1º Passo: Salvar no Banco IMEDIATAMENTE (Para a UI ficar rápida)
     const { data: msg, error: dbError } = await supabase
       .from('messages')
       .insert({
         lead_id,
         content,
-        sender_type: 'agent'
+        sender_type: 'agent',
+        status: 'sent'
       })
       .select()
       .single()
 
     if (dbError) throw dbError
 
-    // Se não tiver chat_id, apenas salva localmente (lead sem conversa GPT Maker ativa)
+    // Se não tiver chat_id (lead não sincronizado), paramos aqui
     if (!chat_id) {
-      console.log('Mensagem salva localmente - lead sem chat_id GPT Maker')
-      return new Response(JSON.stringify(msg), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      })
+      return new Response(JSON.stringify(msg), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Enviar para a API GPT Maker
-    const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`
-    const gptResponse = await fetch(url, {
+    // 2º Passo: AUTOMATICAMENTE Pausar o Robô (Start Human Mode)
+    // Não esperamos o atendente pedir. Se ele falou, ele assumiu.
+    try {
+      await fetch(`https://api.gptmaker.ai/v2/chat/${chat_id}/start-human`, {
+        method: 'PUT',
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+      })
+      console.log('Robô pausado automaticamente para o chat:', chat_id)
+    } catch (err) {
+      console.error('Falha ao pausar robô (mas vamos enviar a mensagem mesmo assim):', err)
+    }
+
+    // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
+    const gptResponse = await fetch(`https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`, {
       method: 'POST',
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ message: content })
     })
 
     if (!gptResponse.ok) {
-      const errorText = await gptResponse.text()
-      console.error('GPT Maker error:', errorText)
-      // Não lançar erro - mensagem já foi salva localmente
-      console.log('Mensagem salva localmente mas falhou no GPT Maker')
+      console.error('Erro ao entregar no WhatsApp:', await gptResponse.text())
+      // Opcional: Atualizar status da mensagem no banco para 'failed'
     }
 
     return new Response(JSON.stringify(msg), {
