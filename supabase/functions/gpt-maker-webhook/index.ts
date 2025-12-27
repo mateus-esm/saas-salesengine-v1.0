@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Tratamento de CORS
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -30,28 +31,35 @@ serve(async (req) => {
 
     if (!equipe) throw new Error('Agent ID não vinculado a nenhuma equipe');
 
-    // 3. Identificar ou Criar o Lead (UPSERT pelo Telefone)
-    const phone = payload.telefone || payload.phone;
-    const name = payload.nome || payload.name || 'Lead WhatsApp';
+    // 3. Identificar ou Criar o Lead (UPSERT Inteligente)
+    // GPT Maker pode mandar 'phone', 'telefone' ou 'remoteJid'
+    const phone = payload.telefone || payload.phone || payload.remoteJid; 
+    const name = payload.nome || payload.name || payload.pushName || 'Lead WhatsApp';
+    // O chat_id geralmente vem como 'id' ou 'chatId' no payload da conversa
+    const chatId = payload.chat_id || payload.chatId || payload.id; 
+
+    if (!phone) throw new Error('Phone number not found in payload');
 
     // Tenta buscar lead existente
     let { data: lead } = await supabase
       .from('leads')
-      .select('id')
+      .select('id, gpt_maker_chat_id')
       .eq('phone', phone)
       .maybeSingle();
 
     if (!lead) {
-      // Se não existe, cria
+      // A) Se não existe, CRIA NOVO
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
           equipe_id: equipe.id,
           name: name,
           phone: phone,
-          email: payload.email || null,
+          email: payload.email || null, // Se vier email
           source: 'whatsapp_bot',
-          last_message_at: new Date().toISOString()
+          last_message_at: new Date().toISOString(),
+          gpt_maker_chat_id: chatId || null, // Salva o Chat ID importante para envio
+          unread_count: 0 // Começa com 0, vamos incrementar abaixo
         })
         .select()
         .single();
@@ -60,20 +68,38 @@ serve(async (req) => {
       if (!newLead) throw new Error('Failed to create lead');
       lead = newLead;
     } else {
-      // Se existe, atualiza o timestamp
-      await supabase.from('leads').update({ last_message_at: new Date().toISOString() }).eq('id', lead.id);
+      // B) Se existe, ATUALIZA (Timestamp e ChatID se faltar)
+      const updates: any = { last_message_at: new Date().toISOString() };
+      
+      // Se o lead antigo não tinha chat_id e agora veio, atualiza
+      if (!lead.gpt_maker_chat_id && chatId) {
+        updates.gpt_maker_chat_id = chatId;
+      }
+      
+      await supabase.from('leads').update(updates).eq('id', lead.id);
     }
 
-    // 4. Salvar a Mensagem no Chat (CRUCIAL PARA O REALTIME)
-    const messageContent = payload.mensagem || payload.message;
+    // 4. Salvar a Mensagem e Incrementar Contador (O Pulo do Gato)
+    const messageContent = payload.mensagem || payload.message || payload.text?.body;
+
     if (messageContent && lead) {
+      // A) Salva a mensagem na tabela messages
       const { error: msgError } = await supabase.from('messages').insert({
         lead_id: lead.id,
         content: messageContent,
         sender_type: 'customer', // Veio do cliente
         status: 'delivered'
       });
+      
       if (msgError) console.error('Erro ao salvar mensagem:', msgError);
+
+      // B) Incrementa o contador de não lidas (Badge Vermelho)
+      // Chama a função RPC segura que criamos no SQL
+      const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
+        row_id: lead.id 
+      });
+      
+      if (rpcError) console.error('Erro ao incrementar badge:', rpcError);
     }
 
     return new Response(JSON.stringify({ success: true, lead_id: lead?.id }), {
