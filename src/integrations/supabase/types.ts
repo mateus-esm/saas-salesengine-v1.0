@@ -207,6 +207,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_to: string | null
           atendido_por_agente: boolean | null
           created_at: string
           custom_fields: Json | null
@@ -216,6 +217,7 @@ export type Database = {
           id: string
           interaction_id: string | null
           last_message_at: string | null
+          lead_type: string | null
           meeting_date: string | null
           meeting_done: boolean | null
           meeting_notes: string | null
@@ -229,12 +231,14 @@ export type Database = {
           phone: string | null
           responsible_id: string | null
           source: string | null
+          stage_entered_at: string | null
           stage_id: string | null
           tags: string[] | null
           unread_count: number | null
           updated_at: string
         }
         Insert: {
+          assigned_to?: string | null
           atendido_por_agente?: boolean | null
           created_at?: string
           custom_fields?: Json | null
@@ -244,6 +248,7 @@ export type Database = {
           id?: string
           interaction_id?: string | null
           last_message_at?: string | null
+          lead_type?: string | null
           meeting_date?: string | null
           meeting_done?: boolean | null
           meeting_notes?: string | null
@@ -257,12 +262,14 @@ export type Database = {
           phone?: string | null
           responsible_id?: string | null
           source?: string | null
+          stage_entered_at?: string | null
           stage_id?: string | null
           tags?: string[] | null
           unread_count?: number | null
           updated_at?: string
         }
         Update: {
+          assigned_to?: string | null
           atendido_por_agente?: boolean | null
           created_at?: string
           custom_fields?: Json | null
@@ -272,6 +279,7 @@ export type Database = {
           id?: string
           interaction_id?: string | null
           last_message_at?: string | null
+          lead_type?: string | null
           meeting_date?: string | null
           meeting_done?: boolean | null
           meeting_notes?: string | null
@@ -285,12 +293,20 @@ export type Database = {
           phone?: string | null
           responsible_id?: string | null
           source?: string | null
+          stage_entered_at?: string | null
           stage_id?: string | null
           tags?: string[] | null
           unread_count?: number | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leads_equipe_id_fkey"
             columns: ["equipe_id"]
@@ -373,6 +389,7 @@ export type Database = {
       }
       pipeline_stages: {
         Row: {
+          category: string | null
           color: string
           created_at: string
           equipe_id: string
@@ -382,6 +399,7 @@ export type Database = {
           position: number
         }
         Insert: {
+          category?: string | null
           color?: string
           created_at?: string
           equipe_id: string
@@ -391,6 +409,7 @@ export type Database = {
           position?: number
         }
         Update: {
+          category?: string | null
           color?: string
           created_at?: string
           equipe_id?: string
@@ -601,6 +620,51 @@ export type Database = {
           },
         ]
       }
+      touchpoints: {
+        Row: {
+          contact_date: string
+          content: string
+          created_at: string | null
+          id: string
+          lead_id: string
+          touchpoint_type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          contact_date?: string
+          content: string
+          created_at?: string | null
+          id?: string
+          lead_id: string
+          touchpoint_type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          contact_date?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string
+          touchpoint_type?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "touchpoints_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "touchpoints_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_configs: {
         Row: {
           active: boolean | null
@@ -701,6 +765,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_negative_stages: { Args: never; Returns: undefined }
       increment_unread_count: { Args: { row_id: string }; Returns: undefined }
     }
     Enums: {
