@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { MessageCircle, LayoutDashboard, Headphones } from "lucide-react";
+import { MessageCircle, LayoutDashboard, Headphones, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
@@ -15,12 +15,13 @@ const Home = () => {
   return (
     <div className="flex-1 flex flex-col bg-background">
       <div className="border-b border-border bg-header-bg">
-        <div className="container mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-foreground text-center">
-            {tenant.name} <span className="text-primary">— {equipe?.nome || 'Assistente'}</span>
+        <div className="container mx-auto px-4 py-8">
+          <h1 className="text-3xl font-bold text-center">
+            <span className="text-gradient-solo">{tenant.name}</span>
+            <span className="text-foreground"> — {equipe?.nome || 'Assistente'}</span>
           </h1>
-          <p className="text-sm text-foreground/70 mt-2 text-center font-medium">
-            {profile?.nome_completo} • Powered by Solo Ventures ⚡
+          <p className="text-sm text-muted-foreground mt-2 text-center flex items-center justify-center gap-1.5">
+            {profile?.nome_completo} • Powered by Solo Ventures <Zap className="h-4 w-4 text-primary fill-primary" />
           </p>
         </div>
       </div>

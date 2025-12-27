@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { TenantLogo } from "@/components/TenantLogo";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantTheme } from "@/hooks/useTenantTheme";
+import { Zap } from "lucide-react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -53,59 +54,65 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-soft-gray to-background p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,hsl(28_100%_50%/0.1),transparent_50%)]" />
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      {/* Subtle gradient overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(28_100%_50%/0.08),transparent_60%)]" />
       
-      <Card className="w-full max-w-md relative shadow-[var(--shadow-elegant)] border-primary/20">
-        <CardHeader className="space-y-6 text-center">
+      <Card className="w-full max-w-md relative bg-card/95 backdrop-blur border-border/50 shadow-2xl">
+        <CardHeader className="space-y-6 text-center pb-4">
+          {/* Logo */}
           <div className="flex justify-center">
-            <div className="relative">
-              <TenantLogo className="h-12" />
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent blur-xl" />
+            <TenantLogo className="h-10" />
+          </div>
+          
+          {/* Tenant Portal Title */}
+          <div className="space-y-2">
+            <CardTitle className="text-2xl font-bold text-foreground">
+              {tenant.name} Portal
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              {tenant.description}
+            </CardDescription>
+            <div className="flex items-center justify-center gap-1.5 text-primary text-sm font-medium">
+              <span>Powered by Solo Ventures</span>
+              <Zap className="h-4 w-4 fill-primary" />
             </div>
           </div>
-          <div>
-            <CardTitle className="text-2xl font-bold">{tenant.name} Portal</CardTitle>
-            <CardDescription className="text-muted-foreground mt-2">
-              {tenant.description}
-              <br />
-              <span className="text-xs text-primary font-medium">Powered by Solo Ventures ⚡</span>
-            </CardDescription>
-          </div>
         </CardHeader>
-        <CardContent>
+        
+        <CardContent className="pt-0">
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-foreground font-medium">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="border-border focus:border-primary focus:ring-primary"
+                className="bg-secondary/50 border-border focus:border-primary focus:ring-primary"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="password" className="text-foreground font-medium">Senha</Label>
               <Input
                 id="password"
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="border-border focus:border-primary focus:ring-primary"
+                className="bg-secondary/50 border-border focus:border-primary focus:ring-primary"
               />
             </div>
             <Button 
               type="submit" 
-              className="w-full bg-gradient-to-r from-primary to-[hsl(45_100%_60%)] hover:opacity-90 text-primary-foreground font-medium shadow-[var(--shadow-elegant)]"
+              className="w-full gradient-solo hover:opacity-90 text-white font-semibold h-11 shadow-lg"
               disabled={isLoading}
             >
               {isLoading ? "Entrando..." : "Acessar Portal"}
             </Button>
           </form>
-          <p className="text-xs text-center text-muted-foreground mt-4">
+          <p className="text-xs text-center text-muted-foreground mt-6">
             Ao acessar, você concorda com nossos termos de uso
           </p>
         </CardContent>
