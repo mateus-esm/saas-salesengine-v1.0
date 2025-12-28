@@ -11,7 +11,8 @@ import { ptBR } from "date-fns/locale";
 
 const Dashboard = () => {
   const { profile, loading: authLoading } = useAuth();
-  const currentDate = new Date();
+  // Keep the date stable per mount to avoid changing react-query keys on every render
+  const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const [selectedPeriod, setSelectedPeriod] = useState<string>("all"); // Default to 'all' (Geral)
 
@@ -139,7 +140,14 @@ const Dashboard = () => {
                   <SelectItem value="year">Este Ano</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={() => refetch()} variant="outline" size="icon">
+              <Button
+                onClick={() => {
+                  setCurrentDate(new Date());
+                  refetch();
+                }}
+                variant="outline"
+                size="icon"
+              >
                 <RefreshCcw className="h-4 w-4" />
               </Button>
               <Button onClick={exportToCSV} variant="outline" size="sm">
