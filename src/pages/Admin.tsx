@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Building2, Users, Key, Plus, Edit, Coins, Shield, Loader2 } from "lucide-react";
+import { Building2, Users, Edit, Coins, Shield, Loader2 } from "lucide-react";
 
 interface Equipe {
     id: string;
@@ -27,22 +27,36 @@ interface Equipe {
 
 interface Profile {
     id: string;
+    user_id: string;
     email: string | null;
     nome_completo: string | null;
     equipe_id: string | null;
-    role: string | null;
+}
+
+interface UserRole {
+    id: string;
+    user_id: string;
+    role: 'user' | 'admin' | 'owner' | 'super_admin';
+}
+
+interface ProfileWithRole extends Profile {
+    role: string;
 }
 
 const Admin = () => {
     const navigate = useNavigate();
     const { isSuperAdmin } = useRole();
     const [equipes, setEquipes] = useState<Equipe[]>([]);
-    const [profiles, setProfiles] = useState<Profile[]>([]);
+    const [profiles, setProfiles] = useState<ProfileWithRole[]>([]);
+    const [userRoles, setUserRoles] = useState<UserRole[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingEquipe, setEditingEquipe] = useState<Equipe | null>(null);
     const [addCreditsEquipe, setAddCreditsEquipe] = useState<Equipe | null>(null);
     const [creditsToAdd, setCreditsToAdd] = useState("");
-    const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+    const [editingProfile, setEditingProfile] = useState<ProfileWithRole | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [equipeDialogOpen, setEquipeDialogOpen] = useState(false);
+    const [creditsDialogOpen, setCreditsDialogOpen] = useState(false);
 
     // Redirect if not super_admin
     useEffect(() => {
@@ -56,13 +70,28 @@ const Admin = () => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [equipesRes, profilesRes] = await Promise.all([
+                const [equipesRes, profilesRes, rolesRes] = await Promise.all([
                     supabase.from("equipes").select("*").order("nome"),
-                    supabase.from("profiles").select("*").order("email"),
+                    supabase.from("profiles").select("id, user_id, email, nome_completo, equipe_id").order("email"),
+                    supabase.from("user_roles").select("*") as any,
                 ]);
 
                 if (equipesRes.data) setEquipes(equipesRes.data);
-                if (profilesRes.data) setProfiles(profilesRes.data as Profile[]);
+                
+                const roles = (rolesRes.data || []) as UserRole[];
+                setUserRoles(roles);
+                
+                // Merge profiles with roles
+                if (profilesRes.data) {
+                    const profilesWithRoles = profilesRes.data.map((profile: any) => {
+                        const userRole = roles.find(r => r.user_id === profile.user_id);
+                        return {
+                            ...profile,
+                            role: userRole?.role || 'user'
+                        } as ProfileWithRole;
+                    });
+                    setProfiles(profilesWithRoles);
+                }
             } catch (error) {
                 console.error("Error fetching admin data:", error);
                 toast.error("Erro ao carregar dados");
@@ -96,6 +125,7 @@ const Admin = () => {
                 prev.map(e => (e.id === editingEquipe.id ? editingEquipe : e))
             );
             setEditingEquipe(null);
+            setEquipeDialogOpen(false);
             toast.success("Equipe atualizada!");
         } catch (error) {
             console.error("Error updating equipe:", error);
@@ -125,6 +155,7 @@ const Admin = () => {
             );
             setAddCreditsEquipe(null);
             setCreditsToAdd("");
+            setCreditsDialogOpen(false);
             toast.success(`${creditsToAdd} créditos adicionados!`);
         } catch (error) {
             console.error("Error adding credits:", error);
@@ -136,23 +167,37 @@ const Admin = () => {
         if (!editingProfile) return;
 
         try {
-            // Note: Role updates should ideally be done via a separate user_roles table
-            // For now, updating the role field in profiles (if it exists)
-            const { error } = await supabase
-                .from("profiles")
-                .update({ role: editingProfile.role } as any)
-                .eq("id", editingProfile.id);
+            const existingRole = userRoles.find(r => r.user_id === editingProfile.user_id);
+            
+            if (existingRole) {
+                // Update existing role
+                const { error } = await supabase
+                    .from("user_roles")
+                    .update({ role: editingProfile.role } as any)
+                    .eq("user_id", editingProfile.user_id);
 
-            if (error) throw error;
+                if (error) throw error;
+            } else {
+                // Insert new role
+                const { error } = await supabase
+                    .from("user_roles")
+                    .insert({ 
+                        user_id: editingProfile.user_id, 
+                        role: editingProfile.role 
+                    } as any);
+
+                if (error) throw error;
+            }
 
             setProfiles(prev =>
                 prev.map(p => (p.id === editingProfile.id ? editingProfile : p))
             );
             setEditingProfile(null);
-            toast.success("Perfil atualizado!");
+            setDialogOpen(false);
+            toast.success("Role atualizada!");
         } catch (error) {
-            console.error("Error updating profile:", error);
-            toast.error("Erro ao atualizar perfil");
+            console.error("Error updating profile role:", error);
+            toast.error("Erro ao atualizar role");
         }
     };
 
@@ -225,12 +270,18 @@ const Admin = () => {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right space-x-2">
-                                                <Dialog>
+                                                <Dialog open={equipeDialogOpen && editingEquipe?.id === equipe.id} onOpenChange={(open) => {
+                                                    setEquipeDialogOpen(open);
+                                                    if (!open) setEditingEquipe(null);
+                                                }}>
                                                     <DialogTrigger asChild>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => setEditingEquipe(equipe)}
+                                                            onClick={() => {
+                                                                setEditingEquipe(equipe);
+                                                                setEquipeDialogOpen(true);
+                                                            }}
                                                         >
                                                             <Edit className="h-4 w-4" />
                                                         </Button>
@@ -303,12 +354,21 @@ const Admin = () => {
                                                     </DialogContent>
                                                 </Dialog>
 
-                                                <Dialog>
+                                                <Dialog open={creditsDialogOpen && addCreditsEquipe?.id === equipe.id} onOpenChange={(open) => {
+                                                    setCreditsDialogOpen(open);
+                                                    if (!open) {
+                                                        setAddCreditsEquipe(null);
+                                                        setCreditsToAdd("");
+                                                    }
+                                                }}>
                                                     <DialogTrigger asChild>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => setAddCreditsEquipe(equipe)}
+                                                            onClick={() => {
+                                                                setAddCreditsEquipe(equipe);
+                                                                setCreditsDialogOpen(true);
+                                                            }}
                                                         >
                                                             <Coins className="h-4 w-4" />
                                                         </Button>
@@ -336,13 +396,12 @@ const Admin = () => {
                                                                     type="number"
                                                                     value={creditsToAdd}
                                                                     onChange={e => setCreditsToAdd(e.target.value)}
-                                                                    placeholder="100"
+                                                                    placeholder="Ex: 100"
                                                                 />
                                                             </div>
                                                         </div>
                                                         <DialogFooter>
                                                             <Button onClick={handleAddCredits}>
-                                                                <Plus className="h-4 w-4 mr-2" />
                                                                 Adicionar Créditos
                                                             </Button>
                                                         </DialogFooter>
@@ -398,12 +457,18 @@ const Admin = () => {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Dialog>
+                                                    <Dialog open={dialogOpen && editingProfile?.id === profile.id} onOpenChange={(open) => {
+                                                        setDialogOpen(open);
+                                                        if (!open) setEditingProfile(null);
+                                                    }}>
                                                         <DialogTrigger asChild>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => setEditingProfile(profile)}
+                                                                onClick={() => {
+                                                                    setEditingProfile(profile);
+                                                                    setDialogOpen(true);
+                                                                }}
                                                             >
                                                                 <Edit className="h-4 w-4" />
                                                             </Button>
