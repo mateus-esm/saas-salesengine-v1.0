@@ -10,7 +10,7 @@ import { startOfMonth, endOfMonth, subMonths, subYears, format } from "date-fns"
 import { ptBR } from "date-fns/locale";
 
 const Dashboard = () => {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const currentDate = new Date();
 
   const [selectedPeriod, setSelectedPeriod] = useState<string>("all"); // Default to 'all' (Geral)
@@ -73,6 +73,15 @@ const Dashboard = () => {
     link.download = `dashboard_${format(dateRange.start, "yyyy-MM")}.csv`;
     link.click();
   };
+
+  // Wait for auth to load before checking team
+  if (authLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!profile?.equipe_id) {
     return (
