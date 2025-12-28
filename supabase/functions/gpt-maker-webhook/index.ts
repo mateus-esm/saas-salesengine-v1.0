@@ -166,12 +166,10 @@ serve(async (req) => {
 
       // Fire and forget - don't wait for analysis
       // Using EdgeRuntime.waitUntil pattern
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
       // Schedule async analysis
       setTimeout(() => {
-        triggerAnalysis(supabaseUrl, serviceRoleKey, lead.id, messageContent, conversationHistory);
+        triggerAnalysis(supabase, lead.id, messageContent, conversationHistory);
       }, 100);
     }
 

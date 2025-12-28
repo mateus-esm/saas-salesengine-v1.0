@@ -22,14 +22,14 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { 
-  CalendarIcon, 
-  Trash2, 
-  X, 
-  Plus, 
-  Phone, 
-  Mail, 
-  DollarSign, 
+import {
+  CalendarIcon,
+  Trash2,
+  X,
+  Plus,
+  Phone,
+  Mail,
+  DollarSign,
   User,
   Clock,
   MessageSquare,
@@ -71,7 +71,7 @@ export const LeadDetailsModal = ({
   const [formData, setFormData] = useState<Partial<Lead>>({});
   const [newTag, setNewTag] = useState("");
   const [noteText, setNoteText] = useState("");
-  
+
   const { teamMembers, isLoading: isLoadingMembers } = useTeamMembers();
   const { activities, isLoading: isLoadingActivities, createActivity } = useLeadActivities(lead?.id);
   const { touchpoints, isLoading: isLoadingTouchpoints } = useTouchpoints(lead?.id);
@@ -288,9 +288,9 @@ export const LeadDetailsModal = ({
                     <Select
                       value={formData.responsible_id || "__none__"}
                       onValueChange={(value) =>
-                        setFormData((prev) => ({ 
-                          ...prev, 
-                          responsible_id: value === "__none__" ? null : value 
+                        setFormData((prev) => ({
+                          ...prev,
+                          responsible_id: value === "__none__" ? null : value
                         }))
                       }
                     >
@@ -419,42 +419,28 @@ export const LeadDetailsModal = ({
 
                 {/* Meeting Date */}
                 <div>
-                  <Label>Data da Reunião</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full mt-1.5 justify-start text-left font-normal"
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.meeting_date
-                          ? format(new Date(formData.meeting_date), "PPP 'às' HH:mm", {
-                              locale: ptBR,
-                            })
-                          : "Selecionar data e hora"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={
-                          formData.meeting_date
-                            ? new Date(formData.meeting_date)
-                            : undefined
-                        }
-                        onSelect={(date) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            meeting_date: date?.toISOString() || null,
-                            meeting_scheduled: !!date,
-                          }))
-                        }
-                        locale={ptBR}
-                        initialFocus
-                        className={cn("p-3 pointer-events-auto")}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Label htmlFor="meeting_date">Data e Hora da Reunião</Label>
+                  <div className="relative mt-1.5">
+                    <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="meeting_date"
+                      type="datetime-local"
+                      className="pl-9"
+                      value={
+                        formData.meeting_date
+                          ? format(new Date(formData.meeting_date), "yyyy-MM-dd'T'HH:mm")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const date = e.target.value ? new Date(e.target.value) : null;
+                        setFormData((prev) => ({
+                          ...prev,
+                          meeting_date: date?.toISOString() || null,
+                          meeting_scheduled: !!date,
+                        }));
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* Meeting Notes */}
@@ -578,8 +564,8 @@ export const LeadDetailsModal = ({
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {formData.next_contact
                           ? format(new Date(formData.next_contact), "PPP", {
-                              locale: ptBR,
-                            })
+                            locale: ptBR,
+                          })
                           : "Selecionar data"}
                       </Button>
                     </PopoverTrigger>
@@ -668,8 +654,8 @@ export const LeadDetailsModal = ({
                     >
                       <div className={cn(
                         "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center",
-                        item.type === 'task' && item.status === 'done' 
-                          ? "bg-green-500/10 text-green-600" 
+                        item.type === 'task' && item.status === 'done'
+                          ? "bg-green-500/10 text-green-600"
                           : "bg-primary/10 text-primary"
                       )}>
                         {getActivityIcon(item.icon)}
@@ -677,13 +663,13 @@ export const LeadDetailsModal = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-xs font-medium capitalize">
-                            {item.type === 'task' ? 'Tarefa' : 
-                             item.type === 'touchpoint' ? 
-                               (item.icon === 'call' ? 'Ligação' : 
-                                item.icon === 'email' ? 'Email' : 
-                                item.icon === 'whatsapp' ? 'WhatsApp' : 
-                                item.icon === 'meeting' ? 'Reunião' : 'Nota') :
-                             item.title}
+                            {item.type === 'task' ? 'Tarefa' :
+                              item.type === 'touchpoint' ?
+                                (item.icon === 'call' ? 'Ligação' :
+                                  item.icon === 'email' ? 'Email' :
+                                    item.icon === 'whatsapp' ? 'WhatsApp' :
+                                      item.icon === 'meeting' ? 'Reunião' : 'Nota') :
+                                item.title}
                           </p>
                           {item.type === 'task' && item.status === 'done' && (
                             <Badge variant="outline" className="text-[10px] h-4 bg-green-500/10 text-green-600 border-green-500/30">
