@@ -56,7 +56,7 @@ export const LeadCard = ({ lead, onClick }: LeadCardProps) => {
   };
 
   const cleanPhoneNumber = (phone: string): string => {
-    return phone.replace(/[\s\-\(\)\.]/g, "");
+    return phone.replace(/[\s\-().]/g, "");
   };
 
   const isValidPhoneNumber = (phone: string): boolean => {

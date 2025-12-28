@@ -55,7 +55,7 @@ export const ImportModal = ({
   members,
 }: ImportModalProps) => {
   const { createLead } = useLeads();
-  
+
   const [step, setStep] = useState<"upload" | "mapping" | "preview" | "importing">("upload");
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -135,9 +135,9 @@ export const ImportModal = ({
 
     for (let i = 0; i < csvData.length; i++) {
       const row = csvData[i];
-      
+
       try {
-        const leadData: any = {
+        const leadData: Partial<import("@/types/crm").CreateLeadData> = {
           name: row[columnMapping.name]?.trim(),
           source: "csv_import",
         };
@@ -190,7 +190,7 @@ export const ImportModal = ({
     }
 
     toast.success(`Importação concluída: ${success} leads importados, ${errors} erros`);
-    
+
     setTimeout(() => {
       resetState();
       onClose();

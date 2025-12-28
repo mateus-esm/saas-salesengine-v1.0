@@ -9,6 +9,7 @@ interface LogoProps {
 }
 
 export const Logo = ({ className = "h-8", alt = "Solo Ventures" }: LogoProps) => {
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   const { theme, systemTheme, resolvedTheme } = useTheme() as any;
   const [mounted, setMounted] = useState(false);
 

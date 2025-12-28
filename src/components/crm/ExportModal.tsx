@@ -52,7 +52,7 @@ export const ExportModal = ({
 }: ExportModalProps) => {
   const { stages } = usePipelineStages();
   const { teamMembers: members } = useTeamMembers();
-  
+
   const [exportScope, setExportScope] = useState<"selected" | "all">(
     selectedCount > 0 ? "selected" : "all"
   );
@@ -66,15 +66,15 @@ export const ExportModal = ({
 
   const handleExport = () => {
     const dataToExport = exportScope === "selected" ? leads : allLeads;
-    
+
     if (dataToExport.length === 0) {
       toast.error("Nenhum lead para exportar");
       return;
     }
 
     const exportData = dataToExport.map((lead) => {
-      const row: Record<string, any> = {};
-      
+      const row: Record<string, unknown> = {};
+
       if (selectedFields.name) row["Nome"] = lead.name;
       if (selectedFields.email) row["Email"] = lead.email || "";
       if (selectedFields.phone) row["Telefone"] = lead.phone || "";
@@ -111,7 +111,7 @@ export const ExportModal = ({
       if (selectedFields.updated_at) {
         row["Última Atualização"] = format(new Date(lead.updated_at), "dd/MM/yyyy HH:mm");
       }
-      
+
       return row;
     });
 

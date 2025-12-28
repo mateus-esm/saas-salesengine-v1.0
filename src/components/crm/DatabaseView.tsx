@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -80,20 +80,20 @@ export const DatabaseView = () => {
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [responsibleFilter, setResponsibleFilter] = useState<string>("all");
 
-  const getStageById = (id: string | null) => stages.find(s => s.id === id);
-  const getMemberById = (id: string | null) => members.find(m => m.id === id);
+  const getStageById = useCallback((id: string | null) => stages.find(s => s.id === id), [stages]);
+  const getMemberById = useCallback((id: string | null) => members.find(m => m.id === id), [members]);
 
   const filteredLeads = useMemo(() => {
     let result = leads;
-    
+
     if (stageFilter && stageFilter !== "all") {
       result = result.filter(lead => lead.stage_id === stageFilter);
     }
-    
+
     if (responsibleFilter && responsibleFilter !== "all") {
       result = result.filter(lead => lead.responsible_id === responsibleFilter);
     }
-    
+
     return result;
   }, [leads, stageFilter, responsibleFilter]);
 
@@ -144,10 +144,10 @@ export const DatabaseView = () => {
       cell: ({ row }) => {
         const phone = row.getValue("phone") as string;
         if (!phone) return "-";
-        
+
         const cleanPhone = phone.replace(/\D/g, "");
         const canWhatsApp = cleanPhone.length >= 10;
-        
+
         return (
           <div className="flex items-center gap-2">
             <span>{phone}</span>
@@ -248,7 +248,7 @@ export const DatabaseView = () => {
         const scheduled = row.getValue("meeting_scheduled") as boolean;
         const done = row.original.meeting_done;
         const noShow = row.original.no_show;
-        
+
         if (noShow) return <Badge variant="destructive">No Show</Badge>;
         if (done) return <Badge className="bg-green-600">Realizada</Badge>;
         if (scheduled) return <Badge className="bg-blue-600">Agendada</Badge>;
@@ -272,7 +272,7 @@ export const DatabaseView = () => {
         return format(date, "dd/MM/yyyy", { locale: ptBR });
       },
     },
-  ], [stages, members]);
+  ], [stages, members, getStageById, getMemberById]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -420,15 +420,15 @@ export const DatabaseView = () => {
                     onCheckedChange={(value) => col.toggleVisibility(!!value)}
                   >
                     {col.id === "name" ? "Nome" :
-                     col.id === "email" ? "Email" :
-                     col.id === "phone" ? "Telefone" :
-                     col.id === "stage_id" ? "Etapa" :
-                     col.id === "responsible_id" ? "Responsável" :
-                     col.id === "opportunity_value" ? "Valor" :
-                     col.id === "source" ? "Origem" :
-                     col.id === "tags" ? "Tags" :
-                     col.id === "meeting_scheduled" ? "Reunião" :
-                     col.id === "created_at" ? "Criado em" : col.id}
+                      col.id === "email" ? "Email" :
+                        col.id === "phone" ? "Telefone" :
+                          col.id === "stage_id" ? "Etapa" :
+                            col.id === "responsible_id" ? "Responsável" :
+                              col.id === "opportunity_value" ? "Valor" :
+                                col.id === "source" ? "Origem" :
+                                  col.id === "tags" ? "Tags" :
+                                    col.id === "meeting_scheduled" ? "Reunião" :
+                                      col.id === "created_at" ? "Criado em" : col.id}
                   </DropdownMenuCheckboxItem>
                 ))}
             </DropdownMenuContent>
@@ -458,9 +458,9 @@ export const DatabaseView = () => {
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                     </TableHead>
                   ))}
                 </TableRow>

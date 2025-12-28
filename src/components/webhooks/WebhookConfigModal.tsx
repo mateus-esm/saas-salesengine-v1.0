@@ -69,7 +69,7 @@ export const WebhookConfigModal = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.url || !formData.trigger_event) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
@@ -147,8 +147,8 @@ export const WebhookConfigModal = ({
       } else {
         toast.error(`Erro: ${response.status} ${response.statusText}`);
       }
-    } catch (error: any) {
-      toast.error(`Erro ao testar: ${error.message}`);
+    } catch (error: unknown) {
+      toast.error(`Erro ao testar: ${(error as Error).message}`);
     } finally {
       setIsTesting(false);
     }
