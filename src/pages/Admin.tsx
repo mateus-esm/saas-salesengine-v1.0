@@ -136,9 +136,11 @@ const Admin = () => {
         if (!editingProfile) return;
 
         try {
+            // Note: Role updates should ideally be done via a separate user_roles table
+            // For now, updating the role field in profiles (if it exists)
             const { error } = await supabase
                 .from("profiles")
-                .update({ role: editingProfile.role })
+                .update({ role: editingProfile.role } as any)
                 .eq("id", editingProfile.id);
 
             if (error) throw error;

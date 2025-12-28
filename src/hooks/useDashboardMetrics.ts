@@ -170,14 +170,15 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
       try {
         // Try RPC function first
         const { data: kpiData, error: kpiError } = await supabase
-          .rpc('get_dashboard_kpis', {
+          .rpc('get_dashboard_kpis' as any, {
             p_equipe_id: equipeId,
             p_start_date: startStr,
             p_end_date: endStr
           });
 
         if (!kpiError && kpiData) {
-          totalTouchpoints = kpiData.total_touchpoints || 0;
+          const kpis = kpiData as unknown as { total_touchpoints?: number };
+          totalTouchpoints = kpis.total_touchpoints || 0;
         }
       } catch {
         // RPC not available, fallback to direct count
