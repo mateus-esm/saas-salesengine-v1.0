@@ -1,11 +1,11 @@
 {
-  "name": "SoloAI Portal",
+  "name": "Solo Ventures - Máquina de Vendas",
   "short_name": "SoloAI",
-  "description": "Agente SDR Inteligente - Solo Ventures",
+  "description": "Máquina de Vendas Automatizada - Solo Ventures",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#8b5cf6",
+  "theme_color": "#f97316",
   "orientation": "portrait-primary",
   "icons": [
     {

@@ -45,7 +45,7 @@ export const tenants: Record<TenantId, TenantConfig> = {
     logo: '/solo-ventures-icon-512.png',
     logoLight: '/solo-ventures-icon-512.png',
     primaryColor: '28 100% 50%', // Solo Ventures Orange
-    description: 'Agente SDR para Energia Solar',
+    description: 'Máquina de Vendas para Energia Solar',
     customFields: [
       { key: 'consumo_medio', label: 'Consumo Médio (kWh)', type: 'number', placeholder: 'Ex: 500' },
       { key: 'valor_conta', label: 'Valor da Conta (R$)', type: 'number', placeholder: 'Ex: 350' },
@@ -74,7 +74,7 @@ export const tenants: Record<TenantId, TenantConfig> = {
     logo: '/solo-ventures-icon-512.png',
     logoLight: '/solo-ventures-icon-512.png',
     primaryColor: '28 100% 50%', // Solo Ventures Orange
-    description: 'Agente SDR para Nutricionistas',
+    description: 'Máquina de Vendas para Nutricionistas',
     customFields: [
       { key: 'objetivo', label: 'Objetivo', type: 'select', options: ['Emagrecimento', 'Ganho de Massa', 'Reeducação Alimentar', 'Saúde Geral', 'Outro'] },
       { key: 'restricao_alimentar', label: 'Restrição Alimentar', type: 'text', placeholder: 'Ex: Intolerância a lactose' },
@@ -88,7 +88,7 @@ export const tenants: Record<TenantId, TenantConfig> = {
     logo: '/solo-ventures-icon-512.png',
     logoLight: '/solo-ventures-icon-512.png',
     primaryColor: '28 100% 50%', // Solo Ventures Orange
-    description: 'Agente SDR para Mercado Imobiliário',
+    description: 'Máquina de Vendas para Imobiliárias',
     customFields: [
       { key: 'tipo_imovel', label: 'Tipo de Imóvel', type: 'select', options: ['Apartamento', 'Casa', 'Terreno', 'Comercial', 'Rural'] },
       { key: 'bairro_interesse', label: 'Bairro de Interesse', type: 'text', placeholder: 'Ex: Centro' },
@@ -103,7 +103,7 @@ export const tenants: Record<TenantId, TenantConfig> = {
     logo: '/solo-ventures-icon-512.png',
     logoLight: '/solo-ventures-icon-512.png',
     primaryColor: '28 100% 50%', // Solo Ventures Orange
-    description: 'Plataforma SoloAI SaaS',
+    description: 'Máquina de Vendas Automatizada',
     customFields: [],
   },
 };

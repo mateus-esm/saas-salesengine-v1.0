@@ -10,7 +10,7 @@ const Home = () => {
   const chatHref = profile?.chat_link_base || "/chat";
   const isExternalChatLink = chatHref.startsWith("http");
 
-  const defaultExplanation = `O ${tenant.name} é a inteligência proprietária da Solo Ventures projetada para escalar sua operação. Monitore os atendimentos do agente, gerencie seu pipeline e potencialize seus resultados com nossa tecnologia.`;
+  const defaultExplanation = `${tenant.description} — A inteligência proprietária da Solo Ventures projetada para escalar sua operação. Sua máquina de vendas automatizada funciona 24/7, gerando leads qualificados e fechando negócios no piloto automático.`;
 
   return (
     <div className="flex-1 flex flex-col bg-background">
