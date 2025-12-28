@@ -44,45 +44,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    // Try fetching by user_id first (new schema), then by id (old schema)
-    let { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    // If not found by user_id, try by id (backwards compatibility)
-    if (!profileData && !profileError) {
-      const result = await supabase
+    setLoading(true);
+    try {
+      // Try fetching by user_id first (new schema), then by id (old schema)
+      let { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
+        .eq("user_id", userId)
         .maybeSingle();
-      profileData = result.data;
-      profileError = result.error;
-    }
 
-    if (profileError) {
-      console.error("Erro ao buscar perfil:", profileError);
-      return;
-    }
-
-    if (profileData) {
-      setProfile(profileData as Profile);
-
-      if (profileData?.equipe_id) {
-        const { data: equipeData, error: equipeError } = await supabase
-          .from("equipes")
+      // If not found by user_id, try by id (backwards compatibility)
+      if (!profileData && !profileError) {
+        const result = await supabase
+          .from("profiles")
           .select("*")
-          .eq("id", profileData.equipe_id)
+          .eq("id", userId)
           .maybeSingle();
+        profileData = result.data;
+        profileError = result.error;
+      }
 
-        if (equipeError) {
-          console.error("Erro ao buscar equipe:", equipeError);
-        } else if (equipeData) {
-          setEquipe(equipeData as Equipe);
+      if (profileError) {
+        console.error("Erro ao buscar perfil:", profileError);
+        return;
+      }
+
+      if (profileData) {
+        setProfile(profileData as Profile);
+
+        if (profileData?.equipe_id) {
+          const { data: equipeData, error: equipeError } = await supabase
+            .from("equipes")
+            .select("*")
+            .eq("id", profileData.equipe_id)
+            .maybeSingle();
+
+          if (equipeError) {
+            console.error("Erro ao buscar equipe:", equipeError);
+          } else if (equipeData) {
+            setEquipe(equipeData as Equipe);
+          }
         }
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -110,7 +115,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
+        fetchProfile(session.user.id);
       } else {
         setLoading(false);
       }
