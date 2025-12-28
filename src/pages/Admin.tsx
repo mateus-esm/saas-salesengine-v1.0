@@ -45,7 +45,7 @@ interface ProfileWithRole extends Profile {
 
 const Admin = () => {
     const navigate = useNavigate();
-    const { isSuperAdmin, loadingRole } = useRole();
+    const { role, isSuperAdmin, loadingRole } = useRole();
     const [equipes, setEquipes] = useState<Equipe[]>([]);
     const [profiles, setProfiles] = useState<ProfileWithRole[]>([]);
     const [userRoles, setUserRoles] = useState<UserRole[]>([]);
@@ -61,17 +61,17 @@ const Admin = () => {
     // Redirect if not super_admin (wait role to load first)
     useEffect(() => {
         if (loadingRole) return;
-        if (!isSuperAdmin()) {
+        if (role !== 'super_admin') {
             navigate("/home");
         }
-    }, [loadingRole, isSuperAdmin, navigate]);
+    }, [loadingRole, role, navigate]);
 
-    // Fetch data
+    // Fetch data - only run once when role is loaded and user is super_admin
     useEffect(() => {
         if (loadingRole) return;
 
         // If user is not super_admin, don't keep the page "stuck" loading
-        if (!isSuperAdmin()) {
+        if (role !== 'super_admin') {
             setLoading(false);
             return;
         }
@@ -110,7 +110,7 @@ const Admin = () => {
         };
 
         fetchData();
-    }, [loadingRole, isSuperAdmin]);
+    }, [loadingRole, role]); // Use role value, not function reference
 
     const handleUpdateEquipe = async () => {
         if (!editingEquipe) return;
@@ -175,7 +175,7 @@ const Admin = () => {
 
         try {
             const existingRole = userRoles.find(r => r.user_id === editingProfile.user_id);
-            
+
             if (existingRole) {
                 // Update existing role
                 const { error } = await supabase
@@ -188,9 +188,9 @@ const Admin = () => {
                 // Insert new role
                 const { error } = await supabase
                     .from("user_roles")
-                    .insert({ 
-                        user_id: editingProfile.user_id, 
-                        role: editingProfile.role 
+                    .insert({
+                        user_id: editingProfile.user_id,
+                        role: editingProfile.role
                     } as any);
 
                 if (error) throw error;
@@ -208,7 +208,7 @@ const Admin = () => {
         }
     };
 
-    if (loading) {
+    if (loading || loadingRole) {
         return (
             <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
