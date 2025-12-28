@@ -671,6 +671,24 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       webhook_configs: {
         Row: {
           active: boolean | null
@@ -780,10 +798,17 @@ export type Database = {
         }
         Returns: Json
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       increment_unread_count: { Args: { row_id: string }; Returns: undefined }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "user" | "admin" | "owner" | "super_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -910,6 +935,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["user", "admin", "owner", "super_admin"],
+    },
   },
 } as const
