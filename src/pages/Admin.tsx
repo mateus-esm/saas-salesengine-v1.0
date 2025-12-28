@@ -45,7 +45,7 @@ interface ProfileWithRole extends Profile {
 
 const Admin = () => {
     const navigate = useNavigate();
-    const { isSuperAdmin } = useRole();
+    const { isSuperAdmin, loadingRole } = useRole();
     const [equipes, setEquipes] = useState<Equipe[]>([]);
     const [profiles, setProfiles] = useState<ProfileWithRole[]>([]);
     const [userRoles, setUserRoles] = useState<UserRole[]>([]);
@@ -58,15 +58,24 @@ const Admin = () => {
     const [equipeDialogOpen, setEquipeDialogOpen] = useState(false);
     const [creditsDialogOpen, setCreditsDialogOpen] = useState(false);
 
-    // Redirect if not super_admin
+    // Redirect if not super_admin (wait role to load first)
     useEffect(() => {
+        if (loadingRole) return;
         if (!isSuperAdmin()) {
             navigate("/home");
         }
-    }, [isSuperAdmin, navigate]);
+    }, [loadingRole, isSuperAdmin, navigate]);
 
     // Fetch data
     useEffect(() => {
+        if (loadingRole) return;
+
+        // If user is not super_admin, don't keep the page "stuck" loading
+        if (!isSuperAdmin()) {
+            setLoading(false);
+            return;
+        }
+
         const fetchData = async () => {
             setLoading(true);
             try {
@@ -77,17 +86,17 @@ const Admin = () => {
                 ]);
 
                 if (equipesRes.data) setEquipes(equipesRes.data);
-                
+
                 const roles = (rolesRes.data || []) as UserRole[];
                 setUserRoles(roles);
-                
+
                 // Merge profiles with roles
                 if (profilesRes.data) {
                     const profilesWithRoles = profilesRes.data.map((profile: any) => {
                         const userRole = roles.find(r => r.user_id === profile.user_id);
                         return {
                             ...profile,
-                            role: userRole?.role || 'user'
+                            role: userRole?.role || 'user',
                         } as ProfileWithRole;
                     });
                     setProfiles(profilesWithRoles);
@@ -100,10 +109,8 @@ const Admin = () => {
             }
         };
 
-        if (isSuperAdmin()) {
-            fetchData();
-        }
-    }, [isSuperAdmin]);
+        fetchData();
+    }, [loadingRole, isSuperAdmin]);
 
     const handleUpdateEquipe = async () => {
         if (!editingEquipe) return;
