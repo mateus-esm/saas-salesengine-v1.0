@@ -31,22 +31,28 @@ export const LeadCard = ({ lead, onClick }: LeadCardProps) => {
   };
 
   const formatCurrency = (value: number | null) => {
-    if (!value) return null;
+    if (!value || value === 0) return null;
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(value);
   };
 
-  const getOrigemBadge = (origem: string | null) => {
-    switch (origem) {
-      case "agente_sdr":
-        return <Badge variant="default" className="bg-primary/90 text-xs">SDR</Badge>;
-      case "indicacao":
-        return <Badge variant="secondary" className="text-xs">Indicação</Badge>;
-      default:
-        return <Badge variant="outline" className="text-xs">Manual</Badge>;
+  const getSourceIcon = (source: string | null) => {
+    if (source === 'ai_agent') {
+      return <Badge variant="default" className="bg-violet-500/90 text-xs flex items-center gap-1">
+        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        IA
+      </Badge>;
     }
+    return <Badge variant="outline" className="text-xs flex items-center gap-1">
+      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+      Manual
+    </Badge>;
   };
 
   const cleanPhoneNumber = (phone: string): string => {
@@ -60,22 +66,22 @@ export const LeadCard = ({ lead, onClick }: LeadCardProps) => {
 
   const handleWhatsAppClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!lead.phone) {
       toast.error("Lead sem telefone cadastrado");
       return;
     }
 
     const cleanedPhone = cleanPhoneNumber(lead.phone);
-    
+
     if (!isValidPhoneNumber(lead.phone)) {
       toast.error("Número de telefone inválido");
       return;
     }
 
     // Add Brazil country code if not present
-    const phoneWithCountry = cleanedPhone.startsWith("55") 
-      ? cleanedPhone 
+    const phoneWithCountry = cleanedPhone.startsWith("55")
+      ? cleanedPhone
       : `55${cleanedPhone}`;
 
     window.open(`https://wa.me/${phoneWithCountry}`, "_blank");
@@ -111,7 +117,7 @@ export const LeadCard = ({ lead, onClick }: LeadCardProps) => {
               <MessageCircle className="h-4 w-4" />
             </Button>
           )}
-          {getOrigemBadge(lead.origem)}
+          {getSourceIcon(lead.creation_source)}
         </div>
       </div>
 
