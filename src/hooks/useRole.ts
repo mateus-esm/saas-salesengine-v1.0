@@ -1,4 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export type UserRole = 'user' | 'admin' | 'owner' | 'super_admin';
 
@@ -11,8 +13,34 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
 };
 
 export function useRole() {
-    const { profile } = useAuth();
-    const currentRole = (profile?.role || 'user') as UserRole;
+    const { user } = useAuth();
+
+    // Fetch role from user_roles table
+    const { data: roleData } = useQuery({
+        queryKey: ['user_role', user?.id],
+        queryFn: async () => {
+            if (!user?.id) return null;
+            
+            const { data, error } = await supabase
+                .from('user_roles')
+                .select('role')
+                .eq('user_id', user.id)
+                .order('role')
+                .limit(1)
+                .maybeSingle();
+            
+            if (error) {
+                console.error('Error fetching user role:', error);
+                return null;
+            }
+            
+            return data?.role as UserRole | null;
+        },
+        enabled: !!user?.id,
+        staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    });
+
+    const currentRole: UserRole = (roleData as UserRole) || 'user';
 
     const isSuperAdmin = () => currentRole === 'super_admin';
     const isOwner = () => currentRole === 'owner' || isSuperAdmin();
