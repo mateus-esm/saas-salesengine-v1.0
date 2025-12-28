@@ -11,7 +11,7 @@ interface Profile {
   telefone: string | null;
   cpf: string | null;
   cargo: string | null;
-  role: 'user' | 'admin' | 'owner' | 'super_admin';
+  role?: string | null;
 }
 
 interface Equipe {
