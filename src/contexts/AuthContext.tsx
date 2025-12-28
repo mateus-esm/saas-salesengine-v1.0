@@ -44,11 +44,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data: profileData, error: profileError } = await supabase
+    // Try fetching by user_id first (new schema), then by id (old schema)
+    let { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", userId)
+      .eq("user_id", userId)
       .maybeSingle();
+
+    // If not found by user_id, try by id (backwards compatibility)
+    if (!profileData && !profileError) {
+      const result = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
+      profileData = result.data;
+      profileError = result.error;
+    }
 
     if (profileError) {
       console.error("Erro ao buscar perfil:", profileError);
