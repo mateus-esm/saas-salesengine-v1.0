@@ -7,16 +7,24 @@ const corsHeaders = {
 };
 
 // Helper to trigger analyze-message in background
-async function triggerAnalysis(supabaseUrl: string, lead_id: string, message_content: string, conversation_history: string) {
+async function triggerAnalysis(supabaseUrl: string, serviceRoleKey: string, lead_id: string, message_content: string, conversation_history: string) {
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'apikey': serviceRoleKey
       },
       body: JSON.stringify({ lead_id, message_content, conversation_history })
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[gpt-maker-webhook] Analysis HTTP error:', response.status, errorText);
+      return;
+    }
+
     const result = await response.json();
     console.log('[gpt-maker-webhook] Analysis result:', result);
   } catch (err) {
@@ -159,10 +167,11 @@ serve(async (req) => {
       // Fire and forget - don't wait for analysis
       // Using EdgeRuntime.waitUntil pattern
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
       // Schedule async analysis
       setTimeout(() => {
-        triggerAnalysis(supabaseUrl, lead.id, messageContent, conversationHistory);
+        triggerAnalysis(supabaseUrl, serviceRoleKey, lead.id, messageContent, conversationHistory);
       }, 100);
     }
 

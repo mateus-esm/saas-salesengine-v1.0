@@ -31,6 +31,7 @@ export interface Lead {
   stage_entered_at: string | null;
   assigned_to: string | null;
   unread_count: number | null;
+  creation_source: 'ai_agent' | 'manual' | null;
   created_at: string;
   updated_at: string;
 }
