@@ -170,7 +170,7 @@ export const StageManagerModal = ({
                 <Label className="text-sm font-medium">Integração via Webhook</Label>
               </div>
               <p className="text-xs text-muted-foreground mb-3">
-                Use esta URL para integrar seu agente SDR ou outras ferramentas.
+                Use esta URL para integrar sua máquina de vendas ou outras ferramentas.
                 Envie um POST com os dados do lead em JSON.
               </p>
               <div className="flex items-center gap-2">
@@ -199,7 +199,7 @@ export const StageManagerModal = ({
   "name": "João Silva",
   "email": "joao@email.com",
   "phone": "(11) 99999-0000",
-  "source": "agente_sdr",
+  "source": "maquina_vendas",
   "opportunity_value": 5000,
   "observations": "Interessado em..."
 }`}
