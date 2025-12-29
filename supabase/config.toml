@@ -18,6 +18,9 @@ verify_jwt = false
 [functions.fetch-gpt-credits]
 verify_jwt = false
 
+[functions.analyze-message]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 64321           # Mudamos de 54321 para 64321
