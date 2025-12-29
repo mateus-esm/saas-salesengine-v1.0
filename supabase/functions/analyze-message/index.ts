@@ -180,6 +180,8 @@ serve(async (req) => {
       });
     }
 
+    // CRITICAL FIX: Use service role key for internal edge function calls
+    // This allows the function to write to the database even if called without a user session
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -326,14 +328,15 @@ serve(async (req) => {
           break;
       }
 
-      // 2. AUDIT TRAIL (NEW)
-      // Save the decision to ai_decisions table
+      // 2. AUDIT TRAIL (Salvar na tabela de auditoria)
       const { error: auditError } = await supabase.from('ai_decisions').insert({
         lead_id,
-        decision_type: functionName,
-        input_summary: `Message: ${message_content.substring(0, 100)}...`,
-        output_action: functionArgs,
-        confidence_score: 1.0 // Placeholder, as OpenAI function call doesn't return confidence directly in this mode
+        intent_detected: functionName, // Mapeando decision_type para intent_detected ou vice versa (ajuste conforme seu schema)
+        // Se sua tabela usa 'decision_type', mude aqui. Se usa 'intent_detected', mantenha.
+        // O SQL anterior criou `intent_detected`. Vou adaptar para o seu SQL:
+        raw_response: responseMessage,
+        action_taken: functionArgs,
+        confidence_score: 1.0
       });
 
       if (auditError) {
