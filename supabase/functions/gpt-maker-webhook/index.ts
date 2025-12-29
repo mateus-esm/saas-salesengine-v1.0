@@ -6,8 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Helper to trigger analyze-message in background
+// Declare EdgeRuntime for TypeScript
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<any>): void;
+};
+
+// Helper to trigger analyze-message in background with proper Authorization
+// This function returns a Promise that we will pass to waitUntil
 async function triggerAnalysis(supabaseUrl: string, serviceRoleKey: string, lead_id: string, message_content: string, conversation_history: string) {
+  console.log(`[gpt-maker-webhook] Triggering background analysis for lead ${lead_id}...`);
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
       method: 'POST',
@@ -22,13 +29,12 @@ async function triggerAnalysis(supabaseUrl: string, serviceRoleKey: string, lead
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[gpt-maker-webhook] Analysis HTTP error:', response.status, errorText);
-      return;
+    } else {
+      const result = await response.json();
+      console.log('[gpt-maker-webhook] Analysis triggered successfully. Result:', result);
     }
-
-    const result = await response.json();
-    console.log('[gpt-maker-webhook] Analysis result:', result);
   } catch (err) {
-    console.error('[gpt-maker-webhook] Analysis failed:', err);
+    console.error('[gpt-maker-webhook] Analysis trigger failed:', err);
   }
 }
 
@@ -75,14 +81,15 @@ serve(async (req) => {
     let { data: lead } = await supabase.from('leads').select('id, gpt_maker_chat_id').eq('phone', phone).maybeSingle();
 
     if (!lead) {
+      // NEW: Enforce creation_source: 'ai_agent'
       const { data: newLead, error } = await supabase.from('leads').insert({
         equipe_id: equipe.id,
         name: name,
         phone: phone,
         last_message_at: new Date().toISOString(),
         gpt_maker_chat_id: chatId || null,
-        lead_type: 'lead', // New leads start as 'lead', AI will reclassify if needed
-        creation_source: 'ai_agent' // Track that this lead was created by AI agent
+        lead_type: 'lead',
+        creation_source: 'ai_agent' // CRITICAL: Identify source as AI
       }).select().single();
       if (error) throw error;
       lead = newLead;
@@ -102,15 +109,13 @@ serve(async (req) => {
       else if (payload.audios?.length > 0) messageContent = '[Áudio]';
     }
 
-    let shouldTriggerAnalysis = false;
+    const shouldTriggerAnalysis = (senderType === 'customer' && messageContent);
 
     if (messageContent && lead) {
+      // Check for duplicates (anti-echo)
       let messageSaved = false;
-
-      // SE FOR MENSAGEM DO AGENTE (ECO): Tenta achar a original
       if (senderType === 'agent') {
         const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
-
         const { data: existingMsg } = await supabase
           .from('messages')
           .select('id')
@@ -123,16 +128,12 @@ serve(async (req) => {
           .maybeSingle();
 
         if (existingMsg) {
-          // Mensagem já existe, apenas atualiza o ID externo
-          await supabase.from('messages').update({
-            gpt_message_id: msgId
-          }).eq('id', existingMsg.id);
+          await supabase.from('messages').update({ gpt_message_id: msgId }).eq('id', existingMsg.id);
           console.log('[gpt-maker-webhook] Mensagem fundida (Anti-Eco).');
           messageSaved = true;
         }
       }
 
-      // Se não achou duplicata (ou é cliente), insere nova
       if (!messageSaved) {
         const { error: msgError } = await supabase.from('messages').insert({
           lead_id: lead.id,
@@ -141,17 +142,12 @@ serve(async (req) => {
           gpt_message_id: msgId,
         });
         if (msgError) console.error('[gpt-maker-webhook] Erro ao salvar:', msgError);
-
-        // Só analisa mensagens de CLIENTES
-        if (senderType === 'customer') {
-          shouldTriggerAnalysis = true;
-        }
       }
     }
 
-    // --- 4. TRIGGER ANALYSIS (ASYNC) ---
+    // --- 4. TRIGGER ANALYSIS (ROBUST ASYNC) ---
     if (shouldTriggerAnalysis && lead) {
-      // Get recent conversation for context
+      // Context
       const { data: recentMessages } = await supabase
         .from('messages')
         .select('content, sender_type, created_at')
@@ -164,13 +160,18 @@ serve(async (req) => {
         .map(m => `[${m.sender_type}]: ${m.content}`)
         .join('\n') || '';
 
-      // Fire and forget - don't wait for analysis
-      // Using EdgeRuntime.waitUntil pattern
-
-      // Schedule async analysis
-      setTimeout(() => {
-        triggerAnalysis(supabase, lead.id, messageContent, conversationHistory);
-      }, 100);
+      // CRITICAL FIX: Use EdgeRuntime.waitUntil instead of setTimeout
+      // This ensures the background task completes even after response is sent
+      console.log('[gpt-maker-webhook] Scheduling analysis with EdgeRuntime.waitUntil');
+      EdgeRuntime.waitUntil(
+        triggerAnalysis(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          lead.id,
+          messageContent,
+          conversationHistory
+        )
+      );
     }
 
     return new Response(JSON.stringify({ success: true, lead_id: lead?.id }), {

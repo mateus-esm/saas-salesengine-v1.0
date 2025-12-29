@@ -166,6 +166,7 @@ serve(async (req) => {
 
   try {
     const { lead_id, message_content, conversation_history } = await req.json();
+    console.log(`[analyze-message] START processing for lead_id: ${lead_id}`);
 
     if (!lead_id || !message_content) {
       throw new Error("lead_id and message_content are required");
@@ -195,7 +196,7 @@ serve(async (req) => {
       }
     ];
 
-    console.log('[analyze-message] Calling OpenAI for lead:', lead_id);
+    console.log('[analyze-message] Calling OpenAI...');
 
     // Call OpenAI with function calling
     const completion = await openai.chat.completions.create({
@@ -214,9 +215,9 @@ serve(async (req) => {
       const functionName = responseMessage.function_call.name;
       const functionArgs = JSON.parse(responseMessage.function_call.arguments);
 
-      console.log(`[analyze-message] AI called: ${functionName}`, functionArgs);
+      console.log(`[analyze-message] AI DECISION: ${functionName}`, JSON.stringify(functionArgs));
 
-      // Execute the function
+      // 1. EXECUTE ACTION
       switch (functionName) {
         case 'classify_contact':
           await supabase
@@ -224,22 +225,16 @@ serve(async (req) => {
             .update({ lead_type: functionArgs.lead_type })
             .eq('id', lead_id);
 
-          // Add system message for audit
           await supabase.from('messages').insert({
             lead_id,
             content: `[Sistema] Lead classificado como: ${functionArgs.lead_type}. Motivo: ${functionArgs.reason}`,
             sender_type: 'system'
           });
-
-          actions.push({ action: 'classify_contact', ...functionArgs });
           break;
 
         case 'update_lead_field':
           const fieldUpdates: any = {};
-
-          // Map field names to database columns
           if (functionArgs.field === 'company' || functionArgs.field === 'position') {
-            // Store in custom_fields for company and position
             const { data: currentLead } = await supabase
               .from('leads')
               .select('custom_fields')
@@ -251,7 +246,6 @@ serve(async (req) => {
               [functionArgs.field]: functionArgs.value
             };
           } else {
-            // Direct field mapping for name, email, phone
             fieldUpdates[functionArgs.field] = functionArgs.value;
           }
 
@@ -259,42 +253,29 @@ serve(async (req) => {
             .from('leads')
             .update(fieldUpdates)
             .eq('id', lead_id);
-
-          console.log(`[analyze-message] Updated field: ${functionArgs.field} = ${functionArgs.value}`);
-          actions.push({ action: 'update_lead_field', ...functionArgs });
           break;
 
         case 'create_note':
-          // Create automatic note from AI
           await supabase.from('messages').insert({
             lead_id,
             content: `[IA - Nota] ${functionArgs.summary}`,
             sender_type: 'system'
           });
-
-          console.log(`[analyze-message] Created note: ${functionArgs.summary}`);
-          actions.push({ action: 'create_note', ...functionArgs });
           break;
 
         case 'schedule_meeting':
-          // Combine date and time into ISO datetime
           const meetingDateTime = `${functionArgs.date}T${functionArgs.time}:00`;
-
           const meetingUpdates: any = {
             meeting_date: meetingDateTime,
             meeting_scheduled: true
           };
-
-          if (functionArgs.link) {
-            meetingUpdates.meeting_notes = functionArgs.link;
-          }
+          if (functionArgs.link) meetingUpdates.meeting_notes = functionArgs.link;
 
           await supabase
             .from('leads')
             .update(meetingUpdates)
             .eq('id', lead_id);
 
-          // Automatically move to "Reunião Agendada" stage
           const { data: meetingStages } = await supabase
             .from('pipeline_stages')
             .select('id')
@@ -313,13 +294,9 @@ serve(async (req) => {
             content: `[Sistema] Reunião agendada para ${functionArgs.date} às ${functionArgs.time}${functionArgs.link ? '. Link: ' + functionArgs.link : ''}`,
             sender_type: 'system'
           });
-
-          console.log(`[analyze-message] Meeting scheduled: ${meetingDateTime}`);
-          actions.push({ action: 'schedule_meeting', ...functionArgs });
           break;
 
         case 'update_stage':
-          // Find stage ID by name
           const { data: stages } = await supabase
             .from('pipeline_stages')
             .select('id')
@@ -338,8 +315,6 @@ serve(async (req) => {
               sender_type: 'system'
             });
           }
-
-          actions.push({ action: 'update_stage', ...functionArgs });
           break;
 
         case 'request_handoff':
@@ -348,12 +323,31 @@ serve(async (req) => {
             content: `[Sistema] Solicitação de atendimento humano. Motivo: ${functionArgs.reason}. Prioridade: ${functionArgs.priority || 'medium'}`,
             sender_type: 'system'
           });
-
-          // Could also set a flag or send notification here
-          actions.push({ action: 'request_handoff', ...functionArgs });
           break;
       }
+
+      // 2. AUDIT TRAIL (NEW)
+      // Save the decision to ai_decisions table
+      const { error: auditError } = await supabase.from('ai_decisions').insert({
+        lead_id,
+        decision_type: functionName,
+        input_summary: `Message: ${message_content.substring(0, 100)}...`,
+        output_action: functionArgs,
+        confidence_score: 1.0 // Placeholder, as OpenAI function call doesn't return confidence directly in this mode
+      });
+
+      if (auditError) {
+        console.error('[analyze-message] FAILED to save audit log:', auditError);
+      } else {
+        console.log('[analyze-message] Audit log saved successfully.');
+      }
+
+      actions.push({ action: functionName, ...functionArgs });
+    } else {
+      console.log('[analyze-message] No function called by AI.');
     }
+
+    console.log('[analyze-message] END processing.');
 
     return new Response(JSON.stringify({
       success: true,
