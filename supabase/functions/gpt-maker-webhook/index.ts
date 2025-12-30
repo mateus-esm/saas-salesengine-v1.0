@@ -35,8 +35,18 @@ serve(async (req) => {
     const assistantId = payload.assistantId || null
     const messageId = payload.messageId || null
 
-    // 3. Ignorar mensagens vazias
-    if (!senderPhone || !messageContent) {
+    // 3. Extrair dados de mídia do payload
+    // GPT Maker pode enviar mídia em diferentes formatos
+    const mediaUrl = payload.mediaUrl || payload.media?.url || payload.fileUrl || payload.audioUrl || payload.imageUrl || null
+    const mediaType = normalizeMediaType(
+      payload.mediaType || payload.media?.type || payload.type || payload.messageType || null,
+      mediaUrl
+    )
+    
+    console.log('[Webhook] Mídia detectada:', { mediaUrl, mediaType })
+
+    // 4. Ignorar mensagens vazias (mas permitir mensagens com mídia)
+    if (!senderPhone || (!messageContent && !mediaUrl)) {
       console.log('[Webhook] Ignorando mensagem vazia ou sem telefone')
       return new Response(JSON.stringify({ ignored: true, reason: 'empty_message' }), { 
         headers: corsHeaders, 
@@ -44,7 +54,7 @@ serve(async (req) => {
       })
     }
 
-    // 4. Mapear sender_type corretamente baseado no role
+    // 5. Mapear sender_type corretamente baseado no role
     let senderType = 'customer'
     if (payload.role === 'assistant') {
       senderType = 'agent'
@@ -53,13 +63,13 @@ serve(async (req) => {
       console.log('[Webhook] Mensagem do cliente')
     }
 
-    // 5. Inicializa Supabase Admin
+    // 6. Inicializa Supabase Admin
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // 6. Buscar equipe pelo assistantId (gpt_maker_agent_id)
+    // 7. Buscar equipe pelo assistantId (gpt_maker_agent_id)
     let equipeId: string | null = null
     if (assistantId) {
       const { data: equipe, error: equipeError } = await supabase
@@ -86,7 +96,7 @@ serve(async (req) => {
       })
     }
 
-    // 7. Buscar lead existente pelo telefone E equipe_id
+    // 8. Buscar lead existente pelo telefone E equipe_id
     let { data: lead, error: leadError } = await supabase
       .from('leads')
       .select('id, gpt_maker_chat_id')
@@ -99,7 +109,7 @@ serve(async (req) => {
       throw leadError
     }
 
-    // 8. Criar novo lead se não existir
+    // 9. Criar novo lead se não existir
     if (!lead) {
       console.log('[Webhook] Lead não encontrado, criando novo...')
       const { data: newLead, error: createError } = await supabase
@@ -137,22 +147,24 @@ serve(async (req) => {
       console.log('[Webhook] Lead existente atualizado:', lead.id)
     }
 
-    // 9. Salvar mensagem
+    // 10. Salvar mensagem com dados de mídia
     const { error: msgError } = await supabase.from('messages').insert({
       lead_id: lead.id,
       content: messageContent,
       sender_type: senderType,
       gpt_message_id: messageId,
+      media_url: mediaUrl,
+      media_type: mediaType,
       created_at: messageDate
     })
 
     if (msgError) {
       console.error('[Webhook] Erro ao salvar mensagem:', msgError)
     } else {
-      console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType)
+      console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType, 'media_type:', mediaType)
     }
 
-    // 10. Incrementar contador de não lidos (apenas para mensagens do cliente)
+    // 11. Incrementar contador de não lidos (apenas para mensagens do cliente)
     if (senderType === 'customer') {
       const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
         row_id: lead.id 
@@ -162,7 +174,7 @@ serve(async (req) => {
       }
     }
 
-    // 11. Disparar IA em background (apenas para mensagens do cliente)
+    // 12. Disparar IA em background (apenas para mensagens do cliente)
     if (lead && senderType === 'customer') {
       const aiUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/analyze-message`
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -204,3 +216,30 @@ serve(async (req) => {
     })
   }
 })
+
+/**
+ * Normaliza o tipo de mídia para valores conhecidos
+ */
+function normalizeMediaType(type: string | null, url: string | null): string | null {
+  if (!type && !url) return null
+  
+  // Se tem tipo definido, normaliza
+  if (type) {
+    const lowerType = type.toLowerCase()
+    if (lowerType.includes('image') || lowerType === 'photo') return 'image'
+    if (lowerType.includes('audio') || lowerType === 'voice' || lowerType === 'ptt') return 'audio'
+    if (lowerType.includes('video')) return 'video'
+    if (lowerType.includes('document') || lowerType.includes('file')) return 'document'
+  }
+  
+  // Tenta inferir pelo URL
+  if (url) {
+    const lowerUrl = url.toLowerCase()
+    if (/\.(jpg|jpeg|png|gif|webp|svg)/.test(lowerUrl)) return 'image'
+    if (/\.(mp3|wav|ogg|opus|m4a|aac)/.test(lowerUrl)) return 'audio'
+    if (/\.(mp4|webm|mov|avi)/.test(lowerUrl)) return 'video'
+    if (/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt)/.test(lowerUrl)) return 'document'
+  }
+  
+  return null
+}

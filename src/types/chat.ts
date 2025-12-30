@@ -13,6 +13,8 @@ export interface Message {
   sender: SenderType;
   senderName?: string;
   timestamp: Date;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'audio' | 'video' | 'document';
 }
 
 export interface ChatSession {

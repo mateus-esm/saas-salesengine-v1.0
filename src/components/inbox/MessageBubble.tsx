@@ -2,7 +2,9 @@ import { Message } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bot, User } from "lucide-react";
+import { Bot, User, Image as ImageIcon, FileAudio } from "lucide-react";
+import { formatWhatsAppText } from "@/lib/whatsappFormatter";
+import { useState } from "react";
 
 interface MessageBubbleProps {
   message: Message;
@@ -10,6 +12,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const time = format(message.timestamp, "HH:mm", { locale: ptBR });
+  const [imageError, setImageError] = useState(false);
 
   // System message (centered)
   if (message.sender === "system") {
@@ -25,6 +28,84 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isCustomer = message.sender === "customer";
   const isAI = message.sender === "ai";
   const isAgent = message.sender === "agent";
+
+  // Renderiza mídia se existir
+  const renderMedia = () => {
+    if (!message.mediaUrl || !message.mediaType) return null;
+
+    if (message.mediaType === 'image' && !imageError) {
+      return (
+        <div className="mb-2">
+          <img
+            src={message.mediaUrl}
+            alt="Imagem"
+            className="rounded-lg max-w-full max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => window.open(message.mediaUrl, '_blank')}
+            onError={() => setImageError(true)}
+          />
+        </div>
+      );
+    }
+
+    if (message.mediaType === 'image' && imageError) {
+      return (
+        <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+          <ImageIcon className="h-4 w-4" />
+          <a 
+            href={message.mediaUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm hover:underline"
+          >
+            Ver imagem
+          </a>
+        </div>
+      );
+    }
+
+    if (message.mediaType === 'audio') {
+      return (
+        <div className="mb-2">
+          <audio controls className="w-full max-w-[250px]">
+            <source src={message.mediaUrl} />
+            Seu navegador não suporta áudio.
+          </audio>
+        </div>
+      );
+    }
+
+    if (message.mediaType === 'video') {
+      return (
+        <div className="mb-2">
+          <video 
+            controls 
+            className="rounded-lg max-w-full max-h-64"
+          >
+            <source src={message.mediaUrl} />
+            Seu navegador não suporta vídeo.
+          </video>
+        </div>
+      );
+    }
+
+    if (message.mediaType === 'document') {
+      return (
+        <div className="mb-2 flex items-center gap-2">
+          <FileAudio className="h-4 w-4" />
+          <a 
+            href={message.mediaUrl} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm hover:underline"
+          >
+            Baixar documento
+          </a>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div
@@ -55,10 +136,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </p>
         )}
 
-        {/* Message content */}
-        <p className="text-sm whitespace-pre-wrap break-words">
-          {message.content}
-        </p>
+        {/* Media content */}
+        {renderMedia()}
+
+        {/* Message content with WhatsApp formatting */}
+        {message.content && (
+          <div className="text-sm whitespace-pre-wrap break-words">
+            {formatWhatsAppText(message.content)}
+          </div>
+        )}
 
         {/* Timestamp */}
         <p
