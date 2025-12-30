@@ -180,7 +180,7 @@ export const ImportModal = ({
           leadData.responsible_id = defaultResponsible;
         }
 
-        await createLead.mutateAsync(leadData);
+        await createLead.mutateAsync(leadData as import("@/types/crm").CreateLeadData);
         success++;
       } catch (error) {
         errors++;

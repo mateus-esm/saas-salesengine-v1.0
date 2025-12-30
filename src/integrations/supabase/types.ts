@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_decisions: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          decision_type: string
+          id: string
+          input_summary: string | null
+          lead_id: string | null
+          output_action: Json
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          decision_type: string
+          id?: string
+          input_summary?: string | null
+          lead_id?: string | null
+          output_action: Json
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          decision_type?: string
+          id?: string
+          input_summary?: string | null
+          lead_id?: string | null
+          output_action?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_decisions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consumo_creditos: {
         Row: {
           created_at: string | null
