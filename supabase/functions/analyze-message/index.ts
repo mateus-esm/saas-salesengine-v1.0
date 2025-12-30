@@ -1,11 +1,11 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import OpenAI from "https://esm.sh/openai@4.28.0";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import OpenAI from "https://esm.sh/openai@4.28.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+}
 
 // OpenAI Function Definitions
 const AI_FUNCTIONS = [
@@ -168,26 +168,13 @@ serve(async (req) => {
     const { lead_id, message_content, conversation_history } = await req.json();
     console.log(`[analyze-message] START processing for lead_id: ${lead_id}`);
 
-    if (!lead_id || !message_content) {
-      throw new Error("lead_id and message_content are required");
-    }
-
-    const openaiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiKey) {
-      console.log('[analyze-message] OPENAI_API_KEY not set, skipping analysis');
-      return new Response(JSON.stringify({ skipped: true, reason: 'No API key' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // CRITICAL FIX: Use service role key for internal edge function calls
-    // This allows the function to write to the database even if called without a user session
+    // Inicializa Supabase com SERVICE ROLE (Isso ignora RLS para escrita)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const openai = new OpenAI({ apiKey: openaiKey });
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
     // Build conversation context
     const messages = [
@@ -331,11 +318,9 @@ serve(async (req) => {
       // 2. AUDIT TRAIL (Salvar na tabela de auditoria)
       const { error: auditError } = await supabase.from('ai_decisions').insert({
         lead_id,
-        intent_detected: functionName, // Mapeando decision_type para intent_detected ou vice versa (ajuste conforme seu schema)
-        // Se sua tabela usa 'decision_type', mude aqui. Se usa 'intent_detected', mantenha.
-        // O SQL anterior criou `intent_detected`. Vou adaptar para o seu SQL:
-        raw_response: responseMessage,
-        action_taken: functionArgs,
+        decision_type: functionName,
+        input_summary: `Message: ${message_content.substring(0, 100)}...`,
+        output_action: functionArgs,
         confidence_score: 1.0
       });
 
@@ -361,9 +346,10 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('[analyze-message] Error:', error);
+    const err = error as Error;
+    console.error('[Analyze] Erro:', err.message);
     return new Response(JSON.stringify({
-      error: (error as Error).message
+      error: err.message
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
