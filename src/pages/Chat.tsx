@@ -301,18 +301,20 @@ const Chat = () => {
                     <p>Nenhuma mensagem ainda</p>
                   </div>
                 ) : (
-                  messages.map((msg) => (
-                    <MessageBubble
-                      key={msg.id}
-                      message={{
-                        id: msg.id,
-                        content: msg.content || '',
-                        sender: (msg.sender_type === 'agent' ? 'agent' : 'customer') as any,
-                        timestamp: new Date(msg.created_at || new Date()),
-                        type: 'text'
-                      }}
-                    />
-                  ))
+                  messages
+                    .filter(msg => msg.sender_type !== 'system')
+                    .map((msg) => (
+                      <MessageBubble
+                        key={msg.id}
+                        message={{
+                          id: msg.id,
+                          content: msg.content || '',
+                          sender: msg.sender_type as 'customer' | 'agent' | 'ai',
+                          timestamp: new Date(msg.created_at || new Date()),
+                          type: 'text'
+                        }}
+                      />
+                    ))
                 )}
                 <div ref={messagesEndRef} />
               </div>

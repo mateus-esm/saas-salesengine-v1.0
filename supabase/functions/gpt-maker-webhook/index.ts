@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-// 1. Correção de Build: Declaração Global
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<any>) => void;
 };
@@ -16,71 +15,164 @@ serve(async (req) => {
 
   try {
     const payload = await req.json()
-    console.log('[Webhook] Recebido:', payload)
+    console.log('[Webhook] Recebido:', JSON.stringify(payload, null, 2))
 
-    // Normalização de Dados
+    // 1. Ignorar mensagens de ferramentas (logs internos do agente)
+    if (payload.role === 'tool') {
+      console.log('[Webhook] Ignorando mensagem tool (log interno)')
+      return new Response(JSON.stringify({ ignored: true, reason: 'tool_message' }), { 
+        headers: corsHeaders, 
+        status: 200 
+      })
+    }
+
+    // 2. Normalização de Dados
     const messageContent = payload.message || payload.content || payload.text || ''
     const senderPhone = payload.contactPhone || payload.phone || payload.from || ''
     const senderName = payload.contactName || payload.pushName || 'Desconhecido'
     const messageDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
+    const chatId = payload.contextId || null
+    const assistantId = payload.assistantId || null
+    const messageId = payload.messageId || null
 
+    // 3. Ignorar mensagens vazias
     if (!senderPhone || !messageContent) {
-      return new Response(JSON.stringify({ ignored: true }), { headers: corsHeaders, status: 200 })
+      console.log('[Webhook] Ignorando mensagem vazia ou sem telefone')
+      return new Response(JSON.stringify({ ignored: true, reason: 'empty_message' }), { 
+        headers: corsHeaders, 
+        status: 200 
+      })
     }
 
-    // Inicializa Supabase Admin
+    // 4. Mapear sender_type corretamente baseado no role
+    let senderType = 'customer'
+    if (payload.role === 'assistant') {
+      senderType = 'agent'
+      console.log('[Webhook] Mensagem do agente IA')
+    } else {
+      console.log('[Webhook] Mensagem do cliente')
+    }
+
+    // 5. Inicializa Supabase Admin
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Upsert Lead
+    // 6. Buscar equipe pelo assistantId (gpt_maker_agent_id)
+    let equipeId: string | null = null
+    if (assistantId) {
+      const { data: equipe, error: equipeError } = await supabase
+        .from('equipes')
+        .select('id')
+        .eq('gpt_maker_agent_id', assistantId)
+        .maybeSingle()
+      
+      if (equipeError) {
+        console.error('[Webhook] Erro ao buscar equipe:', equipeError)
+      }
+      equipeId = equipe?.id || null
+      console.log('[Webhook] Equipe encontrada:', equipeId)
+    }
+
+    if (!equipeId) {
+      console.error('[Webhook] Equipe não encontrada para assistantId:', assistantId)
+      return new Response(JSON.stringify({ 
+        error: 'Equipe não encontrada',
+        assistantId: assistantId 
+      }), { 
+        headers: corsHeaders, 
+        status: 400 
+      })
+    }
+
+    // 7. Buscar lead existente pelo telefone E equipe_id
     let { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id')
+      .select('id, gpt_maker_chat_id')
       .eq('phone', senderPhone)
+      .eq('equipe_id', equipeId)
       .maybeSingle()
 
-    if (leadError) throw leadError
+    if (leadError) {
+      console.error('[Webhook] Erro ao buscar lead:', leadError)
+      throw leadError
+    }
 
+    // 8. Criar novo lead se não existir
     if (!lead) {
+      console.log('[Webhook] Lead não encontrado, criando novo...')
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
           phone: senderPhone,
           name: senderName,
+          equipe_id: equipeId,
+          gpt_maker_chat_id: chatId,
           lead_type: 'lead',
           creation_source: 'ai_agent',
           last_message_at: messageDate
         })
-        .select('id')
+        .select('id, gpt_maker_chat_id')
         .single()
 
-      if (createError) throw createError
+      if (createError) {
+        console.error('[Webhook] Erro ao criar lead:', createError)
+        throw createError
+      }
       lead = newLead
+      console.log('[Webhook] Novo lead criado:', lead.id)
+    } else {
+      // Atualizar chat_id e last_message_at se necessário
+      const updates: Record<string, any> = { last_message_at: messageDate }
+      if (chatId && !lead.gpt_maker_chat_id) {
+        updates.gpt_maker_chat_id = chatId
+      }
+      
+      await supabase
+        .from('leads')
+        .update(updates)
+        .eq('id', lead.id)
+      
+      console.log('[Webhook] Lead existente atualizado:', lead.id)
     }
 
-    // Salva Mensagem
+    // 9. Salvar mensagem
     const { error: msgError } = await supabase.from('messages').insert({
       lead_id: lead.id,
       content: messageContent,
-      sender_type: 'customer',
+      sender_type: senderType,
+      gpt_message_id: messageId,
       created_at: messageDate
     })
-    if (msgError) console.error('[Webhook] Erro msg:', msgError)
 
-    // DISPARO DA IA (Background)
-    if (lead) {
+    if (msgError) {
+      console.error('[Webhook] Erro ao salvar mensagem:', msgError)
+    } else {
+      console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType)
+    }
+
+    // 10. Incrementar contador de não lidos (apenas para mensagens do cliente)
+    if (senderType === 'customer') {
+      const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
+        row_id: lead.id 
+      })
+      if (rpcError) {
+        console.error('[Webhook] Erro ao incrementar unread_count:', rpcError)
+      }
+    }
+
+    // 11. Disparar IA em background (apenas para mensagens do cliente)
+    if (lead && senderType === 'customer') {
       const aiUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/analyze-message`
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-      // O waitUntil garante que este fetch rode mesmo após o return
       EdgeRuntime.waitUntil(
         fetch(aiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${serviceKey}` // <--- A CHAVE DO SUCESSO
+            'Authorization': `Bearer ${serviceKey}`
           },
           body: JSON.stringify({
             lead_id: lead.id,
@@ -98,13 +190,12 @@ serve(async (req) => {
       )
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, lead_id: lead.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
 
   } catch (error) {
-    // 2. Correção de Build: Tipagem do Erro
     const errorMessage = (error as Error).message
     console.error('[Webhook] Erro Fatal:', errorMessage)
     return new Response(JSON.stringify({ error: errorMessage }), {
