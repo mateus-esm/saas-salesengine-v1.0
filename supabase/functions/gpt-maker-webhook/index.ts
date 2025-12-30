@@ -7,151 +7,94 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
     const payload = await req.json()
-    console.log('[Webhook] Payload recebido:', JSON.stringify(payload))
+    console.log('[Webhook] Recebido:', payload) // Log 1
 
-    // 1. Extração de Dados (Compatível com GPT Maker / Evolution / Z-API)
-    // Adapte estes campos conforme o payload real do seu gateway
+    // 1. DADOS
     const messageContent = payload.message || payload.content || payload.text || ''
-    const senderName = payload.contactName || payload.pushName || 'Desconhecido'
     const senderPhone = payload.contactPhone || payload.phone || payload.from || ''
-    const chatId = payload.contextId || payload.chatId || payload.id || ''
+    const senderName = payload.contactName || payload.pushName || 'Desconhecido'
     
-    // Normalização da data (Usa a data da mensagem ou agora)
-    const messageDate = payload.date || payload.timestamp 
-      ? new Date(payload.date || payload.timestamp).toISOString() 
-      : new Date().toISOString()
-
-    // Validação básica
     if (!senderPhone || !messageContent) {
-      console.log('[Webhook] Payload ignorado: Sem telefone ou mensagem.')
-      return new Response(JSON.stringify({ message: 'Ignored' }), { headers: corsHeaders, status: 200 })
+      return new Response(JSON.stringify({ error: 'No data' }), { status: 200, headers: corsHeaders })
     }
 
-    // Inicializa Supabase Admin (Service Role)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // 2. Gestão de Identidade do Lead (Upsert)
-    // Busca ou Cria o Lead
-    let { data: lead, error: leadError } = await supabase
-      .from('leads')
-      .select('*')
-      .eq('phone', senderPhone)
-      .maybeSingle()
-
-    if (leadError) {
-      console.error('[Webhook] Erro ao buscar lead:', leadError)
-      throw leadError
-    }
-
-    if (!lead) {
-      console.log('[Webhook] Criando novo Lead (Source: AI Agent)...')
-      const { data: newLead, error: createError } = await supabase
-        .from('leads')
-        .insert({
-          name: senderName,
-          phone: senderPhone,
-          lead_type: 'lead', // Padrão inicial
-          creation_source: 'ai_agent', // <--- FORÇA A IDENTIDADE CORRETA
-          last_message_at: messageDate,
-          gpt_maker_chat_id: chatId // Salva ID externo para referência
-        })
-        .select()
-        .single()
-
-      if (createError) {
-        console.error('[Webhook] Erro ao criar lead:', createError)
-        throw createError
-      }
-      lead = newLead
-    } else {
-      // Atualiza timestamp se lead já existe
-      await supabase
-        .from('leads')
-        .update({ 
-          last_message_at: messageDate,
-          name: lead.name === 'Desconhecido' ? senderName : lead.name // Atualiza nome se possível
-        })
-        .eq('id', lead.id)
-    }
-
-    // 3. Salvar Mensagem no Histórico
-    const { error: msgError } = await supabase
-      .from('messages')
-      .insert({
-        lead_id: lead.id,
-        content: messageContent,
-        sender_type: 'customer', // Sempre customer aqui
-        created_at: messageDate, // <--- DATA CORRETA (Corrige ordem do chat)
-        gpt_maker_id: payload.messageId || null
-      })
-
-    if (msgError) console.error('[Webhook] Erro ao salvar mensagem:', msgError)
-
-    // 4. Buscar Histórico Recente para Contexto da IA
-    // Pegamos as últimas 10 mensagens para dar contexto
-    const { data: historyData } = await supabase
-      .from('messages')
-      .select('sender_type, content, created_at')
-      .eq('lead_id', lead.id)
-      .order('created_at', { ascending: false })
-      .limit(10)
-
-    // Formata histórico cronológico (mais antigo -> mais novo)
-    const conversationHistory = historyData
-      ? historyData.reverse().map(m => `${m.sender_type === 'customer' ? 'Cliente' : 'Atendente'}: ${m.content}`).join('\n')
-      : ''
-
-    // 5. GATILHO DA INTELIGÊNCIA ARTIFICIAL (A Correção Crítica)
-    console.log(`[Webhook] Disparando IA para Lead: ${lead.id}`)
-
-    const aiPayload = {
-      lead_id: lead.id,
-      message_content: messageContent,
-      conversation_history: conversationHistory
-    }
-
-    // EdgeRuntime.waitUntil mantem o processo vivo em background
-    EdgeRuntime.waitUntil(
-      fetch(`${supabaseUrl}/functions/v1/analyze-message`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 👇 AQUI ESTÁ A CHAVE QUE FALTAVA PARA O ERRO 401 👇
-          'Authorization': `Bearer ${supabaseServiceKey}`
-        },
-        body: JSON.stringify(aiPayload)
-      })
-      .then(async res => {
-        if (!res.ok) {
-          const txt = await res.text()
-          console.error(`[Webhook] ❌ ERRO AO ACIONAR IA: ${res.status} - ${txt}`)
-        } else {
-          console.log(`[Webhook] ✅ IA acionada com sucesso (Status: ${res.status})`)
-        }
-      })
-      .catch(err => {
-        console.error(`[Webhook] 🚨 FALHA DE REDE/FETCH DA IA:`, err)
-      })
+    // 2. CONEXÃO COM BANCO (Admin)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Retorna 200 OK imediatamente para o WhatsApp/Gateway não ficar travado
+    // 3. BUSCA/CRIA LEAD (Prioridade Máxima)
+    let { data: lead } = await supabase.from('leads').select('id').eq('phone', senderPhone).maybeSingle()
+
+    if (!lead) {
+      const { data: newLead, error } = await supabase.from('leads').insert({
+        phone: senderPhone,
+        name: senderName,
+        creation_source: 'ai_agent',
+        lead_type: 'lead'
+      }).select('id').single()
+      
+      if (error) {
+        console.error('[Webhook] Erro ao criar lead:', error)
+        // Se falhar criar lead, não tem como salvar mensagem. Retorna erro.
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders })
+      }
+      lead = newLead
+    }
+
+    // 4. SALVA MENSAGEM (Obrigatório aparecer no Chat)
+    const { error: msgError } = await supabase.from('messages').insert({
+      lead_id: lead.id,
+      content: messageContent,
+      sender_type: 'customer',
+      created_at: payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
+    })
+
+    if (msgError) console.error('[Webhook] Erro Message:', msgError)
+
+    // 5. GATILHO DA IA (Desacoplado)
+    // Aqui usamos waitUntil. Se a IA falhar, o webhook JÁ salvou a mensagem e o lead.
+    const aiUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/analyze-message`
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    EdgeRuntime.waitUntil(
+      (async () => {
+        try {
+          console.log('[Webhook] Chamando IA...')
+          const res = await fetch(aiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceKey}` // Autenticação Admin
+            },
+            body: JSON.stringify({
+              lead_id: lead.id,
+              message_content: messageContent,
+              conversation_history: '' // Simplificado por enquanto
+            })
+          })
+          const text = await res.text()
+          console.log('[Webhook] Resposta IA:', res.status, text)
+        } catch (e) {
+          console.error('[Webhook] Falha ao chamar IA:', e)
+        }
+      })()
+    )
+
+    // 6. RESPOSTA FINAL (Sucesso)
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
 
   } catch (error) {
-    console.error('[Webhook] Erro Fatal:', error)
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
+    console.error('[Webhook] CRASH:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     })
