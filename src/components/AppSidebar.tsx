@@ -1,4 +1,4 @@
-import { Home, MessageCircle, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield } from "lucide-react";
+import { Home, MessageCircle, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield, Bot } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
@@ -28,6 +28,7 @@ export function AppSidebar() {
     { title: "Dashboard", url: "/dashboard", icon: BarChart3, external: false },
     { title: "Chat", url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
+    { title: "Agente", url: "/agent", icon: Bot, external: false },
     { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false },
     { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'owner' },
     { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve" },

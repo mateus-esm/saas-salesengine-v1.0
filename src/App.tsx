@@ -22,6 +22,7 @@ import Billing from "./pages/Billing";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
+import Agent from "./pages/Agent";
 import { ToolkitPage, ClubePage } from "./pages/ComingSoon";
 import { WhatsAppButton } from "./components/WhatsAppButton";
 
@@ -113,6 +114,16 @@ const App = () => (
                     <ProtectedRoute>
                       <AuthenticatedLayout>
                         <Webhooks />
+                      </AuthenticatedLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/agent"
+                  element={
+                    <ProtectedRoute>
+                      <AuthenticatedLayout>
+                        <Agent />
                       </AuthenticatedLayout>
                     </ProtectedRoute>
                   }
