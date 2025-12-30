@@ -1,10 +1,16 @@
- import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { useLeads } from './useLeads';
 
 // Define o tipo da mensagem baseado no banco de dados
-type Message = Database['public']['Tables']['messages']['Row'];
+type DbMessage = Database['public']['Tables']['messages']['Row'];
+
+// Tipo estendido com campos de mídia
+interface Message extends DbMessage {
+  media_url: string | null;
+  media_type: string | null;
+}
 
 export const useMessages = (leadId: string | undefined) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -19,7 +25,7 @@ export const useMessages = (leadId: string | undefined) => {
   // Garante que a mensagem mais antiga (menor data) fique no topo e a nova embaixo
   const sortMessages = (msgs: Message[]) => {
     return [...msgs].sort((a, b) => 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
     );
   };
 
@@ -43,7 +49,7 @@ export const useMessages = (leadId: string | undefined) => {
         if (error) throw error;
         
         // Ordena antes de exibir
-        if (data) setMessages(sortMessages(data));
+        if (data) setMessages(sortMessages(data as Message[]));
 
         // 2. Zera o contador de "Não Lidos" no banco
         await supabase
