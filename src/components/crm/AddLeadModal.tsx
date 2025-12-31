@@ -43,7 +43,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
     stage_id: "",
     valor: "",
     observations: "",
-    source: "manual",
+    source: "Manual",
   });
 
   const handleSubmit = () => {
@@ -69,7 +69,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
       stage_id: stages[0]?.id || "",
       valor: "",
       observations: "",
-      source: "manual",
+      source: "Manual",
     });
   };
 
@@ -207,9 +207,8 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="manual">Manual</SelectItem>
-                <SelectItem value="ia">IA (Agente)</SelectItem>
-                <SelectItem value="ads">Ads (Tráfego Pago)</SelectItem>
+                <SelectItem value="Manual">Manual</SelectItem>
+                <SelectItem value="Ads">Ads (Tráfego Pago)</SelectItem>
               </SelectContent>
             </Select>
           </div>
