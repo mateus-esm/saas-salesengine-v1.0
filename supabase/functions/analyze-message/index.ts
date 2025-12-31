@@ -1,358 +1,217 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import OpenAI from "https://esm.sh/openai@4.28.0"
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import OpenAI from "https://esm.sh/openai@4.28.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-// OpenAI Function Definitions
+// --- MENU DE FERRAMENTAS DO AGENTE ---
 const AI_FUNCTIONS = [
   {
-    name: "classify_contact",
-    description: "Classify the contact as a lead (goes into pipeline) or contact (database only, no commercial interest)",
+    name: "schedule_meeting_complete",
+    description: "Use quando confirmar uma reunião. Atualiza data, link, briefing e move o card.",
     parameters: {
       type: "object",
       properties: {
-        lead_type: {
-          type: "string",
-          enum: ["lead", "contact"],
-          description: "lead = commercial interest (goes to pipeline), contact = no interest/support/spam (database only)"
-        },
-        reason: {
-          type: "string",
-          description: "Brief reason for this classification"
-        }
+        date: { type: "string", description: "Data YYYY-MM-DD" },
+        time: { type: "string", description: "Hora HH:MM" },
+        link: { type: "string", description: "Link da call (Meet/Zoom) se houver" },
+        briefing: { type: "string", description: "Resumo do que será tratado na reunião (Dores/Pauta)" }
       },
-      required: ["lead_type", "reason"]
+      required: ["date", "time", "briefing"]
     }
   },
   {
-    name: "update_lead_field",
-    description: "Update specific lead fields with extracted data from conversation",
+    name: "update_strategic_info",
+    description: "Atualiza dados do lead (Nome, Empresa) e adiciona observações estratégicas.",
     parameters: {
       type: "object",
       properties: {
-        field: {
-          type: "string",
-          enum: ["name", "email", "phone", "company", "position"],
-          description: "The field to update"
+        name: { type: "string" },
+        company: { type: "string" },
+        position: { type: "string" },
+        new_observation: { 
+          type: "string", 
+          description: "Informação CRÍTICA para salvar nas notas (Ex: Orçamento de 50k, Decisor é o Diretor, Usa concorrente X)." 
         },
-        value: {
-          type: "string",
-          description: "The value to set"
+        custom_fields: {
+          type: "object",
+          description: "Dados específicos como: niche, team_size, tool_stack"
         }
-      },
-      required: ["field", "value"]
+      }
     }
   },
   {
-    name: "create_note",
-    description: "Create an automatic note summarizing important information mentioned by the client",
+    name: "disqualify_contact",
+    description: "Use APENAS se o lead for explicitamente descartado (spam, engano, sem fit nenhum). Remove do pipeline.",
     parameters: {
       type: "object",
       properties: {
-        summary: {
-          type: "string",
-          description: "Concise summary of the important information (pain points, needs, budget, timeline, etc.)"
-        }
-      },
-      required: ["summary"]
-    }
-  },
-  {
-    name: "schedule_meeting",
-    description: "Schedule a meeting with date, time, and optional link",
-    parameters: {
-      type: "object",
-      properties: {
-        date: {
-          type: "string",
-          description: "Meeting date in ISO format (YYYY-MM-DD)"
-        },
-        time: {
-          type: "string",
-          description: "Meeting time (HH:MM)"
-        },
-        link: {
-          type: "string",
-          description: "Meeting link (Google Meet, Zoom, etc.) if mentioned"
-        }
-      },
-      required: ["date", "time"]
-    }
-  },
-  {
-    name: "update_stage",
-    description: "Move the lead to a different pipeline stage based on context",
-    parameters: {
-      type: "object",
-      properties: {
-        stage_name: {
-          type: "string",
-          enum: ["Novo Lead", "Qualificação", "Reunião Agendada", "Proposta Enviada", "Fechado", "Desqualificado", "Perdido", "Reciclo"],
-          description: "The stage to move the lead to"
-        },
-        reason: {
-          type: "string",
-          description: "Why the lead should be moved to this stage"
-        }
-      },
-      required: ["stage_name", "reason"]
-    }
-  },
-  {
-    name: "request_handoff",
-    description: "Request human takeover when the AI cannot handle the situation",
-    parameters: {
-      type: "object",
-      properties: {
-        reason: {
-          type: "string",
-          description: "Why human intervention is needed"
-        },
-        priority: {
-          type: "string",
-          enum: ["low", "medium", "high"],
-          description: "Priority of the handoff request"
-        }
+        reason: { type: "string", description: "Por que não é um lead?" }
       },
       required: ["reason"]
+    }
+  },
+  {
+    name: "move_stage_manual",
+    description: "Move de fase manualmente se não for caso de reunião (ex: pediu proposta, fechou contrato).",
+    parameters: {
+      type: "object",
+      properties: {
+        stage_name: { type: "string", enum: ["Qualificação", "Proposta Enviada", "Fechado", "Perdido"] },
+        reason: { type: "string" }
+      },
+      required: ["stage_name"]
     }
   }
 ];
 
-const SYSTEM_PROMPT = `Você é o Orquestrador Operacional do CRM SoloAI. Sua missão é ACELERAR o preenchimento do CRM analisando conversas de WhatsApp.
-
-CLASSIFICAÇÃO INICIAL (PRIMEIRO CONTATO):
-- Se a pessoa demonstra INTERESSE em serviços (tráfego pago, "quero saber mais", perguntas sobre produtos/serviços):
-  → classify_contact({ lead_type: 'lead' })
-  → update_stage({ stage_name: 'Novo Lead' })
-  
-- Se NÃO há interesse comercial (cliente ativo pedindo suporte, spam, pessoal, "número errado"):
-  → classify_contact({ lead_type: 'contact' })
-  → NÃO entra no pipeline, fica apenas no database
-
-EXTRAÇÃO CONTÍNUA DE DADOS:
-- SEMPRE use update_lead_field() para preencher: nome, email, empresa, telefone, cargo
-- SEMPRE use create_note() para registrar informações relevantes (dores, necessidades, orçamento, prazos)
-- Se cliente mencionar reunião: use schedule_meeting() com data, hora e link
-- Se contexto mudar: use update_stage() (ex: "enviei a proposta" → "Proposta Enviada")
-
-FASES DO PIPELINE:
-Novo Lead → Qualificação → Reunião Agendada → Proposta Enviada → Fechado
-Saídas: Desqualificado, Perdido, Reciclo
-
-GATILHOS AUTOMÁTICOS:
-- "quero agendar" / "vamos marcar" → Reunião Agendada
-- "enviei a proposta" / "segue proposta" → Proposta Enviada
-- "fechamos" / "aprovado" / "vamos começar" → Fechado
-- "não tenho interesse" / "não vou seguir" → Perdido
-- "não atende nosso perfil" → Desqualificado
-
-REGRAS:
-- Seja PROATIVO: preencha tudo que puder automaticamente
-- Crie notas CONCISAS com informações-chave
-- Detecte mudanças de contexto e atualize fases
-- Você pode chamar MÚLTIPLAS funções se necessário
-- Trabalhe como braço operacional, não como filtro`;
-
-
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const { lead_id, message_content, conversation_history } = await req.json();
-    console.log(`[analyze-message] START processing for lead_id: ${lead_id}`);
 
-    // Inicializa Supabase com SERVICE ROLE (Isso ignora RLS para escrita)
+    // 1. Setup Admin
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
-
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
-    // Build conversation context
-    const messages = [
-      { role: "system" as const, content: SYSTEM_PROMPT },
-      {
-        role: "user" as const,
-        content: `Última mensagem do cliente: "${message_content}"\n\nHistórico recente:\n${conversation_history || 'Nenhum histórico disponível'}`
-      }
-    ];
+    // 2. BUSCAR CONTEXTO ATUAL (Memória)
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('*, pipeline_stages(name)')
+      .eq('id', lead_id)
+      .single();
 
-    console.log('[analyze-message] Calling OpenAI...');
+    if (!lead) throw new Error("Lead não encontrado");
 
-    // Call OpenAI with function calling
+    const currentNotes = lead.notes || "Sem observações.";
+    const currentStage = lead.pipeline_stages?.name || "Novo Lead";
+
+    // 3. PROMPT ESTRATÉGICO
+    const SYSTEM_PROMPT = `
+      Você é o Agente de CRM da Solo Ventures. Sua função é OUVIR a conversa e ORGANIZAR os dados.
+      
+      ESTADO ATUAL DO LEAD:
+      - Nome: ${lead.name}
+      - Fase: ${currentStage}
+      - Tipo: ${lead.lead_type} (Padrão: 'lead')
+      - Observações Atuais: "${currentNotes}"
+
+      REGRAS DE OURO:
+      1. **Reuniões:** Se confirmar data/hora, USE 'schedule_meeting_complete'. Isso é prioridade máxima.
+      2. **Informação:** Se o cliente falar cargo, empresa ou detalhes do negócio, USE 'update_strategic_info'.
+         - No campo 'new_observation', resuma apenas o que é NOVO e RELEVANTE. Não repita o que já está nas notas.
+         - Seja analítico: "Cliente tem budget X", "Urgência alta", "Dor principal é Y".
+      3. **Desqualificação:** Só use 'disqualify_contact' se o cliente disser "não tenho interesse", "número errado" ou for spam.
+         - Se ele for 'contact', ele sai do Pipeline (Kanban), mas continua no Chat.
+      4. **Fases:** - Pediu preço/info -> Qualificação
+         - Pediu proposta -> Proposta Enviada
+         - Aceitou -> Fechado
+
+      Não alucine dados. Só preencha o que estiver explícito ou óbvio na conversa.
+    `;
+
+    // 4. PENSAMENTO DA IA
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: `Histórico:\n${conversation_history}\n\nÚltima msg: "${message_content}"` }
+      ],
       functions: AI_FUNCTIONS,
       function_call: "auto",
-      temperature: 0.3,
     });
 
-    const responseMessage = completion.choices[0].message;
-    const actions: any[] = [];
+    const aiDecision = completion.choices[0].message;
 
-    // Process function calls
-    if (responseMessage.function_call) {
-      const functionName = responseMessage.function_call.name;
-      const functionArgs = JSON.parse(responseMessage.function_call.arguments);
+    // 5. EXECUÇÃO DAS AÇÕES
+    if (aiDecision.function_call) {
+      const fn = aiDecision.function_call.name;
+      const args = JSON.parse(aiDecision.function_call.arguments);
+      console.log(`[Analyze] Executando: ${fn}`, args);
 
-      console.log(`[analyze-message] AI DECISION: ${functionName}`, JSON.stringify(functionArgs));
-
-      // 1. EXECUTE ACTION
-      switch (functionName) {
-        case 'classify_contact':
-          await supabase
-            .from('leads')
-            .update({ lead_type: functionArgs.lead_type })
-            .eq('id', lead_id);
-
-          await supabase.from('messages').insert({
-            lead_id,
-            content: `[Sistema] Lead classificado como: ${functionArgs.lead_type}. Motivo: ${functionArgs.reason}`,
-            sender_type: 'system'
-          });
-          break;
-
-        case 'update_lead_field':
-          const fieldUpdates: any = {};
-          if (functionArgs.field === 'company' || functionArgs.field === 'position') {
-            const { data: currentLead } = await supabase
-              .from('leads')
-              .select('custom_fields')
-              .eq('id', lead_id)
-              .single();
-
-            fieldUpdates.custom_fields = {
-              ...(currentLead?.custom_fields || {}),
-              [functionArgs.field]: functionArgs.value
-            };
-          } else {
-            fieldUpdates[functionArgs.field] = functionArgs.value;
-          }
-
-          await supabase
-            .from('leads')
-            .update(fieldUpdates)
-            .eq('id', lead_id);
-          break;
-
-        case 'create_note':
-          await supabase.from('messages').insert({
-            lead_id,
-            content: `[IA - Nota] ${functionArgs.summary}`,
-            sender_type: 'system'
-          });
-          break;
-
-        case 'schedule_meeting':
-          const meetingDateTime = `${functionArgs.date}T${functionArgs.time}:00`;
-          const meetingUpdates: any = {
-            meeting_date: meetingDateTime,
-            meeting_scheduled: true
-          };
-          if (functionArgs.link) meetingUpdates.meeting_notes = functionArgs.link;
-
-          await supabase
-            .from('leads')
-            .update(meetingUpdates)
-            .eq('id', lead_id);
-
-          const { data: meetingStages } = await supabase
-            .from('pipeline_stages')
-            .select('id')
-            .eq('name', 'Reunião Agendada')
-            .limit(1);
-
-          if (meetingStages && meetingStages.length > 0) {
-            await supabase
-              .from('leads')
-              .update({ stage_id: meetingStages[0].id, stage_entered_at: new Date().toISOString() })
-              .eq('id', lead_id);
-          }
-
-          await supabase.from('messages').insert({
-            lead_id,
-            content: `[Sistema] Reunião agendada para ${functionArgs.date} às ${functionArgs.time}${functionArgs.link ? '. Link: ' + functionArgs.link : ''}`,
-            sender_type: 'system'
-          });
-          break;
-
-        case 'update_stage':
-          const { data: stages } = await supabase
-            .from('pipeline_stages')
-            .select('id')
-            .eq('name', functionArgs.stage_name)
-            .limit(1);
-
-          if (stages && stages.length > 0) {
-            await supabase
-              .from('leads')
-              .update({ stage_id: stages[0].id, stage_entered_at: new Date().toISOString() })
-              .eq('id', lead_id);
-
-            await supabase.from('messages').insert({
-              lead_id,
-              content: `[Sistema] Lead movido para: ${functionArgs.stage_name}. Motivo: ${functionArgs.reason}`,
-              sender_type: 'system'
-            });
-          }
-          break;
-
-        case 'request_handoff':
-          await supabase.from('messages').insert({
-            lead_id,
-            content: `[Sistema] Solicitação de atendimento humano. Motivo: ${functionArgs.reason}. Prioridade: ${functionArgs.priority || 'medium'}`,
-            sender_type: 'system'
-          });
-          break;
-      }
-
-      // 2. AUDIT TRAIL (Salvar na tabela de auditoria)
-      const { error: auditError } = await supabase.from('ai_decisions').insert({
-        lead_id,
-        decision_type: functionName,
-        input_summary: `Message: ${message_content.substring(0, 100)}...`,
-        output_action: functionArgs,
-        confidence_score: 1.0
+      // Log de Auditoria
+      await supabase.from('ai_decisions').insert({
+        lead_id, intent_detected: fn, action_taken: args, raw_response: aiDecision
       });
 
-      if (auditError) {
-        console.error('[analyze-message] FAILED to save audit log:', auditError);
-      } else {
-        console.log('[analyze-message] Audit log saved successfully.');
-      }
+      switch (fn) {
+        case 'schedule_meeting_complete':
+          // 1. Achar Fase "Reunião Agendada"
+          const { data: stageMeet } = await supabase.from('pipeline_stages').select('id').eq('name', 'Reunião Agendada').maybeSingle();
+          
+          // 2. Preparar Notas da Reunião
+          const meetingNote = `[IA] Agendado para ${args.date} ${args.time}.\nLink: ${args.link || 'A definir'}\nBriefing: ${args.briefing}`;
+          
+          // 3. Update Monstro
+          await supabase.from('leads').update({
+            meeting_scheduled: true,
+            meeting_date: `${args.date}T${args.time}:00`,
+            meeting_notes: meetingNote, // Salva link e briefing aqui
+            stage_id: stageMeet?.id || lead.stage_id // Move se achar a fase
+          }).eq('id', lead_id);
 
-      actions.push({ action: functionName, ...functionArgs });
-    } else {
-      console.log('[analyze-message] No function called by AI.');
+          await supabase.from('messages').insert({
+            lead_id, sender_type: 'system', content: `📅 Reunião Confirmada: ${args.date} às ${args.time}.`
+          });
+          break;
+
+        case 'update_strategic_info':
+          const updates: any = {};
+          if (args.name) updates.name = args.name;
+          if (args.company) updates.company = args.company;
+          if (args.position) updates.position = args.position;
+          
+          // Lógica de Append nas Notas (Não apaga o velho)
+          if (args.new_observation) {
+            const timestamp = new Date().toLocaleString('pt-BR');
+            // Adiciona nova linha no topo ou fim
+            updates.notes = `${currentNotes === 'Sem observações.' ? '' : currentNotes + '\n'}- [${timestamp}] ${args.new_observation}`;
+          }
+
+          // Custom Fields (Merge inteligente)
+          if (args.custom_fields) {
+            updates.custom_fields = { ...(lead.custom_fields || {}), ...args.custom_fields };
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('leads').update(updates).eq('id', lead_id);
+          }
+          break;
+
+        case 'disqualify_contact':
+          // Muda para contact (sai do pipeline visualmente, mas fica no banco)
+          await supabase.from('leads').update({ 
+            lead_type: 'contact',
+            qualification_status: 'disqualified' 
+          }).eq('id', lead_id);
+          
+          await supabase.from('messages').insert({
+            lead_id, sender_type: 'system', content: `🚫 Lead desqualificado: ${args.reason}`
+          });
+          break;
+
+        case 'move_stage_manual':
+           const { data: stg } = await supabase.from('pipeline_stages').select('id').eq('name', args.stage_name).maybeSingle();
+           if (stg) {
+             await supabase.from('leads').update({ stage_id: stg.id }).eq('id', lead_id);
+             await supabase.from('messages').insert({
+                lead_id, sender_type: 'system', content: `🚀 Fase atualizada: ${args.stage_name}`
+             });
+           }
+           break;
+      }
     }
 
-    console.log('[analyze-message] END processing.');
-
-    return new Response(JSON.stringify({
-      success: true,
-      lead_id,
-      actions
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
+    return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
   } catch (error) {
-    const err = error as Error;
-    console.error('[Analyze] Erro:', err.message);
-    return new Response(JSON.stringify({
-      error: err.message
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    console.error((error as Error).message);
+    return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: corsHeaders });
   }
 });
