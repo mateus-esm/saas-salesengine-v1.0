@@ -7,211 +7,220 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// --- MENU DE FERRAMENTAS DO AGENTE ---
-const AI_FUNCTIONS = [
-  {
-    name: "schedule_meeting_complete",
-    description: "Use quando confirmar uma reunião. Atualiza data, link, briefing e move o card.",
-    parameters: {
-      type: "object",
-      properties: {
-        date: { type: "string", description: "Data YYYY-MM-DD" },
-        time: { type: "string", description: "Hora HH:MM" },
-        link: { type: "string", description: "Link da call (Meet/Zoom) se houver" },
-        briefing: { type: "string", description: "Resumo do que será tratado na reunião (Dores/Pauta)" }
-      },
-      required: ["date", "time", "briefing"]
-    }
-  },
-  {
-    name: "update_strategic_info",
-    description: "Atualiza dados do lead (Nome, Empresa) e adiciona observações estratégicas.",
-    parameters: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        company: { type: "string" },
-        position: { type: "string" },
-        new_observation: { 
-          type: "string", 
-          description: "Informação CRÍTICA para salvar nas notas (Ex: Orçamento de 50k, Decisor é o Diretor, Usa concorrente X)." 
-        },
-        custom_fields: {
-          type: "object",
-          description: "Dados específicos como: niche, team_size, tool_stack"
-        }
-      }
-    }
-  },
-  {
-    name: "disqualify_contact",
-    description: "Use APENAS se o lead for explicitamente descartado (spam, engano, sem fit nenhum). Remove do pipeline.",
-    parameters: {
-      type: "object",
-      properties: {
-        reason: { type: "string", description: "Por que não é um lead?" }
-      },
-      required: ["reason"]
-    }
-  },
-  {
-    name: "move_stage_manual",
-    description: "Move de fase manualmente se não for caso de reunião (ex: pediu proposta, fechou contrato).",
-    parameters: {
-      type: "object",
-      properties: {
-        stage_name: { type: "string", enum: ["Qualificação", "Proposta Enviada", "Fechado", "Perdido"] },
-        reason: { type: "string" }
-      },
-      required: ["stage_name"]
-    }
-  }
-];
+// --- DEFINIÇÃO DO SCHEMA DO BANCO (O que a IA pode preencher) ---
+// Isso guia a "visão" da IA sobre o que é importante.
+const CRM_SCHEMA = `
+CAMPOS DISPONÍVEIS PARA EXTRAÇÃO:
+- name (Texto)
+- email (Email válido)
+- phone (Telefone)
+- company (Nome da empresa)
+- position (Cargo)
+- custom_fields: {
+    avg_consumption: (Ex: "1000 kWh"),
+    roof_type: (Ex: "Fibrocimento", "Telha", "Laje"),
+    system_type: (Ex: "Investimento", "Assinatura"),
+    budget_estimation: (Valor monetário citado)
+}
+- meeting_info: {
+    scheduled: (Boolean - Só marque true se estiver confirmado),
+    date_iso: (ISO 8601 Format YYYY-MM-DDTHH:MM:SS),
+    link: (Link do Meet/Zoom enviado pelo BOT ou Cliente),
+    briefing: (Resumo técnico do que foi discutido)
+}
+`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const { lead_id, message_content, conversation_history } = await req.json();
+    const { lead_id } = await req.json(); // Só precisamos do ID, o resto buscamos no banco para garantir integridade
 
-    // 1. Setup Admin
+    // 1. SETUP & CONTEXTO
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
-    // 2. BUSCAR CONTEXTO ATUAL (Memória)
+    // 2. BUSCAR DADOS REAIS (Histórico Rico)
+    // Buscamos as últimas 15 mensagens para a IA ter contexto total (email passado antes, link enviado depois)
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('content, sender_type, created_at')
+      .eq('lead_id', lead_id)
+      .order('created_at', { ascending: true }) // Ordem cronológica
+      .limit(20);
+
     const { data: lead } = await supabase
       .from('leads')
       .select('*, pipeline_stages(name)')
       .eq('id', lead_id)
       .single();
 
-    if (!lead) throw new Error("Lead não encontrado");
+    if (!lead || !messages) throw new Error("Dados insuficientes.");
 
-    const currentNotes = lead.notes || "Sem observações.";
-    const currentStage = lead.pipeline_stages?.name || "Novo Lead";
+    // Formata o histórico como um "Roteiro de Teatro" para a IA
+    const historyScript = messages.map(m =>
+      `[${m.created_at}] ${m.sender_type === 'customer' ? 'CLIENTE' : 'BOT/SOLON'}: ${m.content}`
+    ).join('\n');
 
-    // 3. PROMPT ESTRATÉGICO
-    const SYSTEM_PROMPT = `
-      Você é o Agente de CRM da Solo Ventures. Sua função é OUVIR a conversa e ORGANIZAR os dados.
+    const today = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+    // =================================================================================
+    // FASE 1: O EXTRATOR DE DADOS (The Schema Filler) 🕵️‍♂️
+    // =================================================================================
+    // Aqui não pedimos ações. Pedimos DADOS. A IA olha pro passado e preenche o formulário.
+
+    const extractionPrompt = `
+      Você é o Auditor de Dados do CRM Solo Ventures.
+      Hoje é: ${today}.
       
-      ESTADO ATUAL DO LEAD:
-      - Nome: ${lead.name}
-      - Fase: ${currentStage}
-      - Tipo: ${lead.lead_type} (Padrão: 'lead')
-      - Observações Atuais: "${currentNotes}"
-
-      REGRAS DE OURO:
-      1. **Reuniões:** Se confirmar data/hora, USE 'schedule_meeting_complete'. Isso é prioridade máxima.
-      2. **Informação:** Se o cliente falar cargo, empresa ou detalhes do negócio, USE 'update_strategic_info'.
-         - No campo 'new_observation', resuma apenas o que é NOVO e RELEVANTE. Não repita o que já está nas notas.
-         - Seja analítico: "Cliente tem budget X", "Urgência alta", "Dor principal é Y".
-      3. **Desqualificação:** Só use 'disqualify_contact' se o cliente disser "não tenho interesse", "número errado" ou for spam.
-         - Se ele for 'contact', ele sai do Pipeline (Kanban), mas continua no Chat.
-      4. **Fases:** - Pediu preço/info -> Qualificação
-         - Pediu proposta -> Proposta Enviada
-         - Aceitou -> Fechado
-
-      Não alucine dados. Só preencha o que estiver explícito ou óbvio na conversa.
+      SUA MISSÃO:
+      Ler o histórico da conversa abaixo e extrair TODOS os dados técnicos e cadastrais mencionados.
+      
+      REGRAS CRÍTICAS:
+      1. **Reuniões:** Se o BOT enviou um link de reunião (ex: Google Meet), capture-o em 'meeting_info.link'.
+      2. **Contexto:** O email pode ter sido passado 5 mensagens atrás. Encontre-o.
+      3. **Técnico:** Procure por consumo (kWh) e tipo de telhado.
+      4. **Data:** Se falarem "quinta-feira", calcule a data baseada no dia de hoje (${today}).
+      
+      SCHEMA ALVO:
+      ${CRM_SCHEMA}
     `;
 
-    // 4. PENSAMENTO DA IA
+    // Definimos a ferramenta de extração (Force Function Calling)
+    const tools = [{
+      type: "function" as const,
+      function: {
+        name: "save_crm_data",
+        description: "Salva os dados extraídos no banco de dados.",
+        parameters: {
+          type: "object",
+          properties: {
+            extracted_data: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                email: { type: "string" },
+                custom_fields: {
+                  type: "object",
+                  properties: {
+                    avg_consumption: { type: "string" },
+                    roof_type: { type: "string" }
+                  }
+                },
+                meeting_info: {
+                  type: "object",
+                  properties: {
+                    scheduled: { type: "boolean" },
+                    date_iso: { type: "string", description: "ISO format com timezone correto" },
+                    link: { type: "string" },
+                    briefing: { type: "string" }
+                  },
+                  required: ["scheduled"]
+                },
+                intent_classification: {
+                  type: "string",
+                  enum: ["INTERESTED", "SCHEDULED", "DISQUALIFIED", "SPAM", "UNKNOWN"],
+                  description: "Estado atual do lead baseado na conversa."
+                }
+              }
+            }
+          },
+          required: ["extracted_data"]
+        }
+      }
+    }];
+
+    console.log(`[Pipeline] Analisando histórico de ${messages.length} mensagens...`);
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // Modelo mais inteligente para ler contexto longo
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Histórico:\n${conversation_history}\n\nÚltima msg: "${message_content}"` }
+        { role: "system", content: extractionPrompt },
+        { role: "user", content: `HISTÓRICO DA CONVERSA:\n\n${historyScript}` }
       ],
-      functions: AI_FUNCTIONS,
-      function_call: "auto",
+      tools: tools,
+      tool_choice: { type: "function", function: { name: "save_crm_data" } },
+      temperature: 0.1 // Baixa temperatura para precisão
     });
 
-    const aiDecision = completion.choices[0].message;
+    const toolCall = completion.choices[0].message.tool_calls?.[0];
 
-    // 5. EXECUÇÃO DAS AÇÕES
-    if (aiDecision.function_call) {
-      const fn = aiDecision.function_call.name;
-      const args = JSON.parse(aiDecision.function_call.arguments);
-      console.log(`[Analyze] Executando: ${fn}`, args);
+    // =================================================================================
+    // FASE 2: O EXECUTOR (Regras de Negócio) 💾
+    // =================================================================================
 
-      // Log de Auditoria
-      await supabase.from('ai_decisions').insert({
-        lead_id, intent_detected: fn, action_taken: args, raw_response: aiDecision
-      });
+    if (toolCall) {
+      const { extracted_data } = JSON.parse(toolCall.function.arguments);
+      console.log(`[Pipeline] Dados Extraídos:`, JSON.stringify(extracted_data, null, 2));
 
-      switch (fn) {
-        case 'schedule_meeting_complete':
-          // 1. Achar Fase "Reunião Agendada"
-          const { data: stageMeet } = await supabase.from('pipeline_stages').select('id').eq('name', 'Reunião Agendada').maybeSingle();
-          
-          // 2. Preparar Notas da Reunião
-          const meetingNote = `[IA] Agendado para ${args.date} ${args.time}.\nLink: ${args.link || 'A definir'}\nBriefing: ${args.briefing}`;
-          
-          // 3. Update Monstro
-          await supabase.from('leads').update({
-            meeting_scheduled: true,
-            meeting_date: `${args.date}T${args.time}:00`,
-            meeting_notes: meetingNote, // Salva link e briefing aqui
-            stage_id: stageMeet?.id || lead.stage_id // Move se achar a fase
-          }).eq('id', lead_id);
+      // 1. Atualização Cadastral (Merge inteligente)
+      const updates: any = {};
 
+      // Só atualiza se tiver dado novo e diferente
+      if (extracted_data.name && extracted_data.name !== lead.name) updates.name = extracted_data.name;
+      if (extracted_data.email && extracted_data.email !== lead.email) updates.email = extracted_data.email;
+
+      // Custom Fields (Merge)
+      if (extracted_data.custom_fields) {
+        updates.custom_fields = {
+          ...(lead.custom_fields || {}),
+          ...Object.fromEntries(Object.entries(extracted_data.custom_fields).filter(([_, v]) => v != null))
+        };
+      }
+
+      // 2. Lógica de Agendamento (Sua prioridade)
+      if (extracted_data.meeting_info?.scheduled && extracted_data.meeting_info?.date_iso) {
+
+        // Busca a fase "Reunião Agendada"
+        const { data: stage } = await supabase.from('pipeline_stages').select('id').eq('name', 'Reunião Agendada').maybeSingle();
+
+        updates.meeting_scheduled = true;
+        updates.meeting_date = extracted_data.meeting_info.date_iso;
+
+        // Monta a nota rica com Link
+        const link = extracted_data.meeting_info.link || "Link pendente";
+        const briefing = extracted_data.meeting_info.briefing || "Reunião comercial";
+        updates.meeting_notes = `[IA Auto-Schedule]\nLink: ${link}\nBriefing: ${briefing}`;
+
+        // Move o card
+        if (stage) updates.stage_id = stage.id;
+
+        // Avisa no chat interno se for novidade
+        if (!lead.meeting_scheduled) {
           await supabase.from('messages').insert({
-            lead_id, sender_type: 'system', content: `📅 Reunião Confirmada: ${args.date} às ${args.time}.`
+            lead_id, sender_type: 'system', content: `📅 Reunião detectada e agendada para ${new Date(updates.meeting_date).toLocaleString()}.`
           });
-          break;
+        }
+      }
 
-        case 'update_strategic_info':
-          const updates: any = {};
-          if (args.name) updates.name = args.name;
-          if (args.company) updates.company = args.company;
-          if (args.position) updates.position = args.position;
-          
-          // Lógica de Append nas Notas (Não apaga o velho)
-          if (args.new_observation) {
-            const timestamp = new Date().toLocaleString('pt-BR');
-            // Adiciona nova linha no topo ou fim
-            updates.notes = `${currentNotes === 'Sem observações.' ? '' : currentNotes + '\n'}- [${timestamp}] ${args.new_observation}`;
-          }
+      // 3. Lógica de Desqualificação (Cuidado para não ser agressivo)
+      if (extracted_data.intent_classification === 'DISQUALIFIED' || extracted_data.intent_classification === 'SPAM') {
+        // Só desqualifica se a IA tiver certeza absoluta
+        updates.lead_type = 'contact';
+        updates.qualification_status = 'disqualified';
+      }
 
-          // Custom Fields (Merge inteligente)
-          if (args.custom_fields) {
-            updates.custom_fields = { ...(lead.custom_fields || {}), ...args.custom_fields };
-          }
+      // 4. Salvar no Banco
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('leads').update(updates).eq('id', lead_id);
 
-          if (Object.keys(updates).length > 0) {
-            await supabase.from('leads').update(updates).eq('id', lead_id);
-          }
-          break;
-
-        case 'disqualify_contact':
-          // Muda para contact (sai do pipeline visualmente, mas fica no banco)
-          await supabase.from('leads').update({ 
-            lead_type: 'contact',
-            qualification_status: 'disqualified' 
-          }).eq('id', lead_id);
-          
-          await supabase.from('messages').insert({
-            lead_id, sender_type: 'system', content: `🚫 Lead desqualificado: ${args.reason}`
-          });
-          break;
-
-        case 'move_stage_manual':
-           const { data: stg } = await supabase.from('pipeline_stages').select('id').eq('name', args.stage_name).maybeSingle();
-           if (stg) {
-             await supabase.from('leads').update({ stage_id: stg.id }).eq('id', lead_id);
-             await supabase.from('messages').insert({
-                lead_id, sender_type: 'system', content: `🚀 Fase atualizada: ${args.stage_name}`
-             });
-           }
-           break;
+        // Log de Auditoria
+        await supabase.from('ai_decisions').insert({
+          lead_id,
+          intent_detected: extracted_data.intent_classification,
+          action_taken: updates,
+          raw_response: extracted_data
+        });
       }
     }
 
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+
   } catch (error) {
-    console.error((error as Error).message);
+    console.error('[Pipeline] Erro:', error);
     return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: corsHeaders });
   }
 });
