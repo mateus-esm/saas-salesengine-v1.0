@@ -39,11 +39,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TableFilters } from "./TableFilters";
 import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
-import { LeadDetailsModal } from "./LeadDetailsModal";
 import {
   ArrowUpDown,
   Columns,
@@ -55,10 +53,130 @@ import {
   ChevronRight,
   Loader2,
   MessageCircle,
+  Check,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+
+// Componente de célula editável inline
+interface EditableCellProps {
+  value: string;
+  onSave: (value: string) => void;
+  type?: "text" | "number" | "currency";
+  placeholder?: string;
+}
+
+const EditableCell = ({ value, onSave, type = "text", placeholder = "-" }: EditableCellProps) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [localValue, setLocalValue] = useState(value || "");
+
+  const handleSave = () => {
+    if (localValue !== (value || "")) {
+      onSave(localValue);
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setLocalValue(value || "");
+      setIsEditing(false);
+    }
+  };
+
+  const formatDisplayValue = () => {
+    if (!value) return placeholder;
+    if (type === "currency") {
+      const num = parseFloat(value);
+      return isNaN(num) ? placeholder : `R$ ${num.toLocaleString("pt-BR")}`;
+    }
+    return value;
+  };
+
+  if (isEditing) {
+    return (
+      <Input
+        autoFocus
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className="h-8 min-w-[100px] border-primary"
+        type={type === "number" || type === "currency" ? "number" : "text"}
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => {
+        setLocalValue(value || "");
+        setIsEditing(true);
+      }}
+      className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-h-[32px] flex items-center"
+    >
+      {formatDisplayValue()}
+    </div>
+  );
+};
+
+// Componente de select editável inline
+interface EditableSelectProps {
+  value: string | null;
+  options: { id: string; label: string; color?: string }[];
+  onSave: (value: string | null) => void;
+  placeholder?: string;
+  allowClear?: boolean;
+}
+
+const EditableSelect = ({ value, options, onSave, placeholder = "Selecionar", allowClear = false }: EditableSelectProps) => {
+  return (
+    <Select
+      value={value || "__none__"}
+      onValueChange={(val) => onSave(val === "__none__" ? null : val)}
+    >
+      <SelectTrigger className="h-8 border-transparent hover:border-input focus:border-primary bg-transparent min-w-[120px]">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {allowClear && <SelectItem value="__none__">-</SelectItem>}
+        {options.map((opt) => (
+          <SelectItem key={opt.id} value={opt.id}>
+            <div className="flex items-center gap-2">
+              {opt.color && (
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: opt.color }} />
+              )}
+              {opt.label}
+            </div>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
+
+// Componente de checkbox editável
+interface EditableCheckboxProps {
+  checked: boolean;
+  onSave: (checked: boolean) => void;
+  label?: string;
+}
+
+const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => {
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(val) => onSave(!!val)}
+      />
+      {label && <span className="text-xs text-muted-foreground">{label}</span>}
+    </div>
+  );
+};
 
 export const DatabaseView = () => {
   const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
@@ -71,17 +189,40 @@ export const DatabaseView = () => {
   const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState("");
 
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
   // Filter states
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [responsibleFilter, setResponsibleFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
 
-  const getStageById = useCallback((id: string | null) => stages.find(s => s.id === id), [stages]);
-  const getMemberById = useCallback((id: string | null) => members.find(m => m.id === id), [members]);
+  const handleUpdateField = useCallback((leadId: string, field: string, value: any) => {
+    updateLead.mutate({ id: leadId, [field]: value });
+  }, [updateLead]);
+
+  const stageOptions = useMemo(() => 
+    stages.map(s => ({ id: s.id, label: s.name, color: s.color })),
+    [stages]
+  );
+
+  const memberOptions = useMemo(() => 
+    members.map(m => ({ id: m.id, label: m.nome_completo || m.email || "Usuário" })),
+    [members]
+  );
+
+  const sourceOptions = [
+    { id: "Manual", label: "Manual" },
+    { id: "IA", label: "IA" },
+    { id: "Ads", label: "Ads" },
+  ];
+
+  const typeOptions = [
+    { id: "lead", label: "Lead" },
+    { id: "contact", label: "Contato" },
+    { id: "spam", label: "Spam" },
+    { id: "archived", label: "Arquivado" },
+  ];
 
   const filteredLeads = useMemo(() => {
     let result = leads;
@@ -94,8 +235,12 @@ export const DatabaseView = () => {
       result = result.filter(lead => lead.responsible_id === responsibleFilter);
     }
 
+    if (typeFilter && typeFilter !== "all") {
+      result = result.filter(lead => lead.lead_type === typeFilter);
+    }
+
     return result;
-  }, [leads, stageFilter, responsibleFilter]);
+  }, [leads, stageFilter, responsibleFilter, typeFilter]);
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
     {
@@ -112,6 +257,7 @@ export const DatabaseView = () => {
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
           aria-label="Selecionar linha"
+          onClick={(e) => e.stopPropagation()}
         />
       ),
       enableSorting: false,
@@ -123,41 +269,40 @@ export const DatabaseView = () => {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent"
+          className="p-0 hover:bg-transparent font-semibold"
         >
           Nome
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => (
-        <span className="font-medium">{row.getValue("name")}</span>
+        <EditableCell
+          value={row.getValue("name")}
+          onSave={(val) => handleUpdateField(row.original.id, "name", val)}
+          placeholder="Nome..."
+        />
       ),
-    },
-    {
-      accessorKey: "email",
-      header: "Email",
-      cell: ({ row }) => row.getValue("email") || "-",
     },
     {
       accessorKey: "phone",
       header: "Telefone",
       cell: ({ row }) => {
         const phone = row.getValue("phone") as string;
-        if (!phone) return "-";
-
-        const cleanPhone = phone.replace(/\D/g, "");
-        const canWhatsApp = cleanPhone.length >= 10;
-
         return (
           <div className="flex items-center gap-2">
-            <span>{phone}</span>
-            {canWhatsApp && (
+            <EditableCell
+              value={phone}
+              onSave={(val) => handleUpdateField(row.original.id, "phone", val)}
+              placeholder="-"
+            />
+            {phone && phone.length >= 10 && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-green-600 hover:text-green-700"
+                className="h-6 w-6 text-green-600 hover:text-green-700 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
+                  const cleanPhone = phone.replace(/\D/g, "");
                   const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
                   window.open(`https://wa.me/${formattedPhone}`, "_blank");
                 }}
@@ -170,29 +315,57 @@ export const DatabaseView = () => {
       },
     },
     {
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.getValue("email")}
+          onSave={(val) => handleUpdateField(row.original.id, "email", val)}
+          placeholder="-"
+        />
+      ),
+    },
+    {
+      accessorKey: "lead_type",
+      header: "Tipo",
+      cell: ({ row }) => (
+        <EditableSelect
+          value={row.getValue("lead_type")}
+          options={typeOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "lead_type", val)}
+          placeholder="Tipo"
+        />
+      ),
+    },
+    {
       accessorKey: "stage_id",
       header: "Etapa",
       cell: ({ row }) => {
-        const stage = getStageById(row.getValue("stage_id"));
-        return stage ? (
-          <Badge
-            style={{ backgroundColor: stage.color, color: "#fff" }}
-            className="font-normal"
-          >
-            {stage.name}
-          </Badge>
-        ) : (
-          <span className="text-muted-foreground">-</span>
+        const stageId = row.getValue("stage_id") as string | null;
+        const stage = stages.find(s => s.id === stageId);
+        return (
+          <EditableSelect
+            value={stageId}
+            options={stageOptions}
+            onSave={(val) => handleUpdateField(row.original.id, "stage_id", val)}
+            placeholder="Etapa"
+            allowClear
+          />
         );
       },
     },
     {
       accessorKey: "responsible_id",
       header: "Responsável",
-      cell: ({ row }) => {
-        const member = getMemberById(row.getValue("responsible_id"));
-        return member?.nome_completo || "-";
-      },
+      cell: ({ row }) => (
+        <EditableSelect
+          value={row.getValue("responsible_id")}
+          options={memberOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "responsible_id", val)}
+          placeholder="Responsável"
+          allowClear
+        />
+      ),
     },
     {
       accessorKey: "opportunity_value",
@@ -200,33 +373,86 @@ export const DatabaseView = () => {
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent"
+          className="p-0 hover:bg-transparent font-semibold"
         >
           Valor
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => {
-        const value = row.getValue("opportunity_value") as number;
-        return value ? `R$ ${value.toLocaleString("pt-BR")}` : "-";
+        const value = row.getValue("opportunity_value") as number | null;
+        return (
+          <EditableCell
+            value={value?.toString() || ""}
+            onSave={(val) => handleUpdateField(row.original.id, "opportunity_value", parseFloat(val) || 0)}
+            type="currency"
+            placeholder="-"
+          />
+        );
       },
     },
     {
       accessorKey: "source",
       header: "Origem",
-      cell: ({ row }) => {
-        const source = row.getValue("source") as string;
-        return source || "-";
-      },
+      cell: ({ row }) => (
+        <EditableSelect
+          value={row.getValue("source")}
+          options={sourceOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "source", val)}
+          placeholder="Origem"
+          allowClear
+        />
+      ),
+    },
+    {
+      accessorKey: "observations",
+      header: "Observações",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.getValue("observations")}
+          onSave={(val) => handleUpdateField(row.original.id, "observations", val)}
+          placeholder="-"
+        />
+      ),
+    },
+    {
+      accessorKey: "meeting_scheduled",
+      header: "Reunião Ag.",
+      cell: ({ row }) => (
+        <EditableCheckbox
+          checked={row.getValue("meeting_scheduled") || false}
+          onSave={(val) => handleUpdateField(row.original.id, "meeting_scheduled", val)}
+        />
+      ),
+    },
+    {
+      accessorKey: "meeting_done",
+      header: "Reunião Ok",
+      cell: ({ row }) => (
+        <EditableCheckbox
+          checked={row.getValue("meeting_done") || false}
+          onSave={(val) => handleUpdateField(row.original.id, "meeting_done", val)}
+        />
+      ),
+    },
+    {
+      accessorKey: "no_show",
+      header: "No Show",
+      cell: ({ row }) => (
+        <EditableCheckbox
+          checked={row.getValue("no_show") || false}
+          onSave={(val) => handleUpdateField(row.original.id, "no_show", val)}
+        />
+      ),
     },
     {
       accessorKey: "tags",
       header: "Tags",
       cell: ({ row }) => {
         const tags = row.getValue("tags") as string[] | null;
-        if (!tags || tags.length === 0) return "-";
+        if (!tags || tags.length === 0) return <span className="text-muted-foreground">-</span>;
         return (
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap max-w-[150px]">
             {tags.slice(0, 2).map((tag, i) => (
               <Badge key={i} variant="secondary" className="text-xs">
                 {tag}
@@ -242,26 +468,12 @@ export const DatabaseView = () => {
       },
     },
     {
-      accessorKey: "meeting_scheduled",
-      header: "Reunião",
-      cell: ({ row }) => {
-        const scheduled = row.getValue("meeting_scheduled") as boolean;
-        const done = row.original.meeting_done;
-        const noShow = row.original.no_show;
-
-        if (noShow) return <Badge variant="destructive">No Show</Badge>;
-        if (done) return <Badge className="bg-green-600">Realizada</Badge>;
-        if (scheduled) return <Badge className="bg-blue-600">Agendada</Badge>;
-        return "-";
-      },
-    },
-    {
       accessorKey: "created_at",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent"
+          className="p-0 hover:bg-transparent font-semibold"
         >
           Criado em
           <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -269,10 +481,10 @@ export const DatabaseView = () => {
       ),
       cell: ({ row }) => {
         const date = new Date(row.getValue("created_at"));
-        return format(date, "dd/MM/yyyy", { locale: ptBR });
+        return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [stages, members, getStageById, getMemberById]);
+  ], [stages, members, stageOptions, memberOptions, sourceOptions, typeOptions, handleUpdateField]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -299,23 +511,6 @@ export const DatabaseView = () => {
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const selectedLeads = selectedRows.map(row => row.original);
 
-  const handleRowClick = (lead: Lead) => {
-    setSelectedLead(lead);
-    setShowDetailsModal(true);
-  };
-
-  const handleUpdateLead = (data: { id: string } & Partial<Lead>) => {
-    updateLead.mutate(data);
-    setShowDetailsModal(false);
-    setSelectedLead(null);
-  };
-
-  const handleDeleteLead = (id: string) => {
-    deleteLead.mutate(id);
-    setShowDetailsModal(false);
-    setSelectedLead(null);
-  };
-
   const handleRefresh = () => {
     refetch();
     toast.success("Dados atualizados!");
@@ -338,7 +533,7 @@ export const DatabaseView = () => {
             Database <span className="text-primary">Leads</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredLeads.length} leads • {selectedLeads.length} selecionados
+            {filteredLeads.length} leads • {selectedLeads.length} selecionados • Clique para editar
           </p>
         </div>
         <div className="flex gap-2">
@@ -371,6 +566,21 @@ export const DatabaseView = () => {
             />
           </div>
 
+          {/* Type Filter */}
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              {typeOptions.map((opt) => (
+                <SelectItem key={opt.id} value={opt.id}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Stage Filter */}
           <Select value={stageFilter} onValueChange={setStageFilter}>
             <SelectTrigger className="w-[180px]">
@@ -380,7 +590,10 @@ export const DatabaseView = () => {
               <SelectItem value="all">Todas as etapas</SelectItem>
               {stages.map((stage) => (
                 <SelectItem key={stage.id} value={stage.id}>
-                  {stage.name}
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
+                    {stage.name}
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -409,28 +622,37 @@ export const DatabaseView = () => {
                 Colunas
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="max-h-[400px] overflow-y-auto">
               {table
                 .getAllColumns()
                 .filter((col) => col.getCanHide())
-                .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                  >
-                    {col.id === "name" ? "Nome" :
-                      col.id === "email" ? "Email" :
-                        col.id === "phone" ? "Telefone" :
-                          col.id === "stage_id" ? "Etapa" :
-                            col.id === "responsible_id" ? "Responsável" :
-                              col.id === "opportunity_value" ? "Valor" :
-                                col.id === "source" ? "Origem" :
-                                  col.id === "tags" ? "Tags" :
-                                    col.id === "meeting_scheduled" ? "Reunião" :
-                                      col.id === "created_at" ? "Criado em" : col.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                .map((col) => {
+                  const labelMap: Record<string, string> = {
+                    name: "Nome",
+                    email: "Email",
+                    phone: "Telefone",
+                    lead_type: "Tipo",
+                    stage_id: "Etapa",
+                    responsible_id: "Responsável",
+                    opportunity_value: "Valor",
+                    source: "Origem",
+                    observations: "Observações",
+                    tags: "Tags",
+                    meeting_scheduled: "Reunião Ag.",
+                    meeting_done: "Reunião Ok",
+                    no_show: "No Show",
+                    created_at: "Criado em",
+                  };
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={col.id}
+                      checked={col.getIsVisible()}
+                      onCheckedChange={(value) => col.toggleVisibility(!!value)}
+                    >
+                      {labelMap[col.id] || col.id}
+                    </DropdownMenuCheckboxItem>
+                  );
+                })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -448,13 +670,13 @@ export const DatabaseView = () => {
 
       {/* Table */}
       <div className="flex-1 overflow-auto p-4">
-        <div className="rounded-md border">
+        <div className="rounded-md border bg-card">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
+                <TableRow key={headerGroup.id} className="bg-muted/30">
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className="whitespace-nowrap">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -472,18 +694,10 @@ export const DatabaseView = () => {
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && "selected"}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleRowClick(row.original)}
+                    className="hover:bg-muted/30"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        onClick={(e) => {
-                          if (cell.column.id === "select" || cell.column.id === "phone") {
-                            e.stopPropagation();
-                          }
-                        }}
-                      >
+                      <TableCell key={cell.id} className="py-1">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
@@ -502,33 +716,20 @@ export const DatabaseView = () => {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between p-4 border-t border-border bg-card">
-        <p className="text-sm text-muted-foreground">
-          Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
-        </p>
-        <div className="flex items-center gap-2">
-          <Select
-            value={String(table.getState().pagination.pageSize)}
-            onValueChange={(value) => table.setPageSize(Number(value))}
-          >
-            <SelectTrigger className="w-[100px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 25, 50, 100].map((size) => (
-                <SelectItem key={size} value={String(size)}>
-                  {size} linhas
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-card">
+        <div className="text-sm text-muted-foreground">
+          Página {table.getState().pagination.pageIndex + 1} de{" "}
+          {table.getPageCount() || 1}
+        </div>
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Anterior
           </Button>
           <Button
             variant="outline"
@@ -536,31 +737,19 @@ export const DatabaseView = () => {
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            <ChevronRight className="h-4 w-4" />
+            Próxima
+            <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
       </div>
 
       {/* Modals */}
-      <LeadDetailsModal
-        lead={selectedLead}
-        stages={stages}
-        open={showDetailsModal}
-        onClose={() => {
-          setShowDetailsModal(false);
-          setSelectedLead(null);
-        }}
-        onSave={handleUpdateLead}
-        onDelete={handleDeleteLead}
-      />
-
       <ImportModal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
         stages={stages}
         members={members}
       />
-
       <ExportModal
         open={showExportModal}
         onClose={() => setShowExportModal(false)}

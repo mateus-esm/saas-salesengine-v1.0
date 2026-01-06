@@ -121,6 +121,8 @@ serve(async (req) => {
           gpt_maker_chat_id: chatId,
           lead_type: 'lead',
           creation_source: 'ai_agent',
+          source: 'IA',
+          origem: 'IA',
           last_message_at: messageDate
         })
         .select('id, gpt_maker_chat_id')
