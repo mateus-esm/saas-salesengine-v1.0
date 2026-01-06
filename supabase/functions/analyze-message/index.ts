@@ -33,14 +33,27 @@ CAMPOS DISPONÍVEIS PARA EXTRAÇÃO:
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  // 1. Variáveis de Auditoria (Iniciam vazias)
+  let auditLog = {
+    lead_id: null as string | null,
+    equipe_id: null as string | null,
+    decision_type: 'analysis_started',
+    input_summary: 'Iniciando análise...',
+    output_action: {} as any,
+    status: 'processing', // status inicial
+    error_details: null as string | null
+  };
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
   try {
     const { lead_id } = await req.json(); // Só precisamos do ID, o resto buscamos no banco para garantir integridade
+    auditLog.lead_id = lead_id;
 
     // 1. SETUP & CONTEXTO
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
     // 2. BUSCAR DADOS REAIS (Histórico Rico)
@@ -52,13 +65,22 @@ serve(async (req) => {
       .order('created_at', { ascending: true }) // Ordem cronológica
       .limit(20);
 
-    const { data: lead } = await supabase
+    const { data: lead, error: leadError } = await supabase
       .from('leads')
       .select('*, pipeline_stages(name)')
       .eq('id', lead_id)
       .single();
 
-    if (!lead || !messages) throw new Error("Dados insuficientes.");
+    if (leadError || !lead) throw new Error(`Lead search error: ${leadError?.message || 'Lead not found'}`);
+    
+    auditLog.equipe_id = lead.equipe_id;
+    auditLog.input_summary = `Analisando histórico de ${messages?.length || 0} mensagens para ${lead.name || 'Lead'}`;
+
+    if (!messages || messages.length === 0) {
+       auditLog.status = 'warning';
+       auditLog.output_action = { msg: "Sem histórico de mensagens" };
+       throw new Error("Dados insuficientes: Sem mensagens.");
+    }
 
     // Formata o histórico como um "Roteiro de Teatro" para a IA
     const historyScript = messages.map(m =>
@@ -175,7 +197,12 @@ serve(async (req) => {
       if (extracted_data.meeting_info?.scheduled && extracted_data.meeting_info?.date_iso) {
 
         // Busca a fase "Reunião Agendada"
-        const { data: stage } = await supabase.from('pipeline_stages').select('id').eq('name', 'Reunião Agendada').eq('equipe_id', lead.equipe_id).maybeSingle();
+        const { data: stage } = await supabase
+            .from('pipeline_stages')
+            .select('id')
+            .eq('name', 'Reunião Agendada')
+            .eq('equipe_id', lead.equipe_id)
+            .maybeSingle();
 
         updates.meeting_scheduled = true;
         updates.meeting_date = extracted_data.meeting_info.date_iso;
@@ -206,21 +233,52 @@ serve(async (req) => {
       // 4. Salvar no Banco
       if (Object.keys(updates).length > 0) {
         await supabase.from('leads').update(updates).eq('id', lead_id);
-
-        // Log de Auditoria
-        await supabase.from('ai_decisions').insert({
-          lead_id,
-          intent_detected: extracted_data.intent_classification,
-          action_taken: updates,
-          raw_response: extracted_data
-        });
+        
+        auditLog.decision_type = 'crm_update';
+        auditLog.output_action = { 
+            changes: updates, 
+            reason: extracted_data.intent_classification,
+            raw_data: extracted_data
+        };
+        auditLog.status = 'success';
+      } else {
+        auditLog.decision_type = 'no_action';
+        auditLog.output_action = { reason: "Nenhuma informação nova detectada" };
+        auditLog.status = 'success';
       }
+    } else {
+         auditLog.decision_type = 'skipped';
+         auditLog.output_action = { reason: "IA não chamou nenhuma ferramenta" };
+         auditLog.status = 'success';
     }
 
     return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
 
   } catch (error) {
     console.error('[Pipeline] Erro:', error);
+    
+    auditLog.status = 'error';
+    auditLog.decision_type = 'system_failure';
+    auditLog.error_details = (error as Error).message;
+
     return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: corsHeaders });
+  } finally {
+    // 6. O GRANDE FINAL: Salvar o Log independente do que aconteceu
+    if (auditLog.lead_id) {
+         // Log de Auditoria
+        const { error: auditError } = await supabase.from('ai_decisions').insert({
+          lead_id: auditLog.lead_id,
+          equipe_id: auditLog.equipe_id, // Pode ser null se falhou antes de pegar o lead, mas o insert deve lidar (ou falhar, mas já estamos no finally)
+          decision_type: auditLog.decision_type,
+          input_summary: auditLog.input_summary,
+          output_action: auditLog.output_action || {}, 
+          status: auditLog.status,
+          error_details: auditLog.error_details
+        });
+        
+        if (auditError) {
+             console.error("Erro CRÍTICO ao salvar auditoria:", auditError);
+        }
+    }
   }
 });
