@@ -33,12 +33,12 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   // 1. Variáveis de Auditoria
-  let auditLog = {
+  const auditLog = {
     lead_id: null as string | null,
     equipe_id: null as string | null,
     decision_type: 'analysis_started',
     input_summary: 'Iniciando análise...',
-    output_action: {} as any,
+    output_action: {} as Record<string, any>,
     status: 'processing',
     error_details: null as string | null,
     confidence_score: 0 // Default 0
@@ -61,7 +61,7 @@ serve(async (req) => {
       .select('content, sender_type, created_at')
       .eq('lead_id', lead_id)
       .order('created_at', { ascending: true })
-      .limit(20);
+      .limit(40);
 
     const { data: lead, error: leadError } = await supabase
       .from('leads')
@@ -91,11 +91,14 @@ serve(async (req) => {
       Hoje é: ${today}.
       
       SUA MISSÃO:
-      Ler o histórico e extrair dados técnicos (Consumo, Tipo Telhado, Valor Conta).
+      Ler o histórico e extrair dados técnicos (Consumo, Tipo Telhado, Valor Conta) e DETECTAR REUNIÕES.
       
-      REGRAS:
-      1. Extraia chaves em PORTUGUÊS: consumo_medio, tipo_telhado, valor_conta.
-      2. Capture reuniões confirmadas em meeting_info.
+      REGRAS CRÍTICAS - MODO SUPER INTELIGENTE (Level 5):
+      1. **AGENDAMENTO AGRESSIVO:** Se o usuário confirmou um horário (ex: "sim", "12", "topo", "pode ser"), MARQUE 'scheduled: true' IMEDIATAMENTE.
+         - NÃO ESPERE O EMAIL.
+         - O fato de ter escolhido o horário JÁ É um agendamento.
+      2. **Extração PT-BR:** Use chaves em PORTUGUÊS: consumo_medio, tipo_telhado, valor_conta.
+      3. **Contexto Longo:** Analise as 100 msgs para entender a negociação.
       
       SCHEMA:
       ${CRM_SCHEMA}
@@ -149,7 +152,7 @@ serve(async (req) => {
     console.log(`[Pipeline] Analisando...`);
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5", // Modelo Level 5 (Next Gen)
       messages: [
         { role: "system", content: extractionPrompt },
         { role: "user", content: `HISTÓRICO:\n\n${historyScript}` }
@@ -183,7 +186,10 @@ serve(async (req) => {
       }
 
       // 3. Lógica de Agendamento (Prioridade Máxima)
-      if (extracted_data.meeting_info?.scheduled && extracted_data.meeting_info?.date_iso) {
+      // Se a IA marcou scheduled: true OU detectou intenção clara de agendamento (Ex: usuário confirmou horário)
+      const isScheduled = extracted_data.meeting_info?.scheduled || extracted_data.intent_classification === 'SCHEDULED';
+      
+      if (isScheduled) {
         // Busca fase 'Reunião Agendada'
         const { data: stage } = await supabase
             .from('pipeline_stages')
@@ -193,9 +199,20 @@ serve(async (req) => {
             .maybeSingle();
 
         updates.meeting_scheduled = true;
-        updates.meeting_date = extracted_data.meeting_info.date_iso;
-        updates.meeting_notes = `[IA] Link: ${extracted_data.meeting_info.link || "N/A"}`;
-        if (stage) updates.stage_id = stage.id;
+        // Se a data não veio no JSON (falha de extração), tentamos manter a que já existe ou usar 'hoje' como fallback provisório,
+        // mas o ideal é confiar na extração. Se veio null, não atualizamos a data para não quebrar.
+        if (extracted_data.meeting_info?.date_iso) {
+            updates.meeting_date = extracted_data.meeting_info.date_iso;
+        } else if (!lead.meeting_date) { // Se não extraiu e não tem data anterior, usa hoje
+            updates.meeting_date = new Date().toISOString();
+        }
+
+        updates.meeting_notes = `[IA Auto-Schedule] Intenção: ${extracted_data.intent_classification}. Link: ${extracted_data.meeting_info?.link || "Pendente"}`;
+        
+        if (stage) {
+             updates.stage_id = stage.id;
+             console.log(`[Pipeline] 🚀 REUNIÃO DETECTADA! Movendo para ${stage.id}`);
+        }
       }
       // 4. Lógica de Qualificação (NOVO)
       // Se está INTERESSADO, não agendou reunião ainda, e está no início do funil
