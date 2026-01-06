@@ -175,7 +175,7 @@ serve(async (req) => {
       if (extracted_data.meeting_info?.scheduled && extracted_data.meeting_info?.date_iso) {
 
         // Busca a fase "Reunião Agendada"
-        const { data: stage } = await supabase.from('pipeline_stages').select('id').eq('name', 'Reunião Agendada').maybeSingle();
+        const { data: stage } = await supabase.from('pipeline_stages').select('id').eq('name', 'Reunião Agendada').eq('equipe_id', lead.equipe_id).maybeSingle();
 
         updates.meeting_scheduled = true;
         updates.meeting_date = extracted_data.meeting_info.date_iso;
