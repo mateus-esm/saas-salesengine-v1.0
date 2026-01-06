@@ -158,8 +158,7 @@ serve(async (req) => {
         { role: "user", content: `HISTÓRICO:\n\n${historyScript}` }
       ],
       tools: tools,
-      tool_choice: { type: "function", function: { name: "save_crm_data" } },
-      temperature: 0.1
+      tool_choice: { type: "function", function: { name: "save_crm_data" } }
     });
 
     const toolCall = completion.choices[0].message.tool_calls?.[0];
