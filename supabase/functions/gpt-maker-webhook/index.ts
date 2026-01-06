@@ -46,9 +46,10 @@ serve(async (req) => {
     console.log('[Webhook] Mídia detectada:', { mediaUrl, mediaType })
 
     // 4. Ignorar mensagens vazias (mas permitir mensagens com mídia)
-    if (!senderPhone || (!messageContent && !mediaUrl)) {
-      console.log('[Webhook] Ignorando mensagem vazia ou sem telefone')
-      return new Response(JSON.stringify({ ignored: true, reason: 'empty_message' }), { 
+    // Relaxed check: senderPhone CAN be null/empty now, as long as we have chatId
+    if ((!senderPhone && !chatId) || (!messageContent && !mediaUrl)) {
+      console.log('[Webhook] Ignorando mensagem invalida (sem telefone/chatId ou vazia)')
+      return new Response(JSON.stringify({ ignored: true, reason: 'invalid_payload' }), { 
         headers: corsHeaders, 
         status: 200 
       })
@@ -96,27 +97,52 @@ serve(async (req) => {
       })
     }
 
-    // 8. Buscar lead existente pelo telefone E equipe_id
-    let { data: lead, error: leadError } = await supabase
-      .from('leads')
-      .select('id, gpt_maker_chat_id')
-      .eq('phone', senderPhone)
-      .eq('equipe_id', equipeId)
-      .maybeSingle()
+    // 8. Buscar lead existente
+    // Strategy: 
+    // - Try by phone AND equipe_id first (if phone exists)
+    // - If not found (or no phone), try by gpt_maker_chat_id AND equipe_id
+    let lead: any = null
+    
+    if (senderPhone) {
+      const { data: leadByPhone } = await supabase
+        .from('leads')
+        .select('id, gpt_maker_chat_id, phone')
+        .eq('phone', senderPhone)
+        .eq('equipe_id', equipeId)
+        .maybeSingle()
+      
+      if (leadByPhone) {
+        lead = leadByPhone
+        console.log('[Webhook] Lead encontrado por telefone:', lead.id)
+      }
+    }
 
-    if (leadError) {
-      console.error('[Webhook] Erro ao buscar lead:', leadError)
-      throw leadError
+    if (!lead && chatId) {
+      const { data: leadByChat } = await supabase
+        .from('leads')
+        .select('id, gpt_maker_chat_id, phone')
+        .eq('gpt_maker_chat_id', chatId)
+        .eq('equipe_id', equipeId)
+        .maybeSingle()
+      
+      if (leadByChat) {
+        lead = leadByChat
+        console.log('[Webhook] Lead encontrado por Chat ID:', lead.id)
+      }
     }
 
     // 9. Criar novo lead se não existir
     if (!lead) {
       console.log('[Webhook] Lead não encontrado, criando novo...')
+      
+      // Fallback name if missing
+      const finalName = senderName || (senderPhone ? `Lead ${senderPhone}` : 'Novo Visitante')
+      
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
-          phone: senderPhone,
-          name: senderName,
+          phone: senderPhone || null, // Can be null now
+          name: finalName,
           equipe_id: equipeId,
           gpt_maker_chat_id: chatId,
           lead_type: 'lead',
@@ -137,8 +163,15 @@ serve(async (req) => {
     } else {
       // Atualizar chat_id e last_message_at se necessário
       const updates: Record<string, any> = { last_message_at: messageDate }
-      if (chatId && !lead.gpt_maker_chat_id) {
+      
+      // If we found by phone but lead has no chat_id, or chat_id changed
+      if (chatId && lead.gpt_maker_chat_id !== chatId) {
         updates.gpt_maker_chat_id = chatId
+      }
+      
+      // If we found by chat_id but now we have a phone (unlikely but possible merge)
+      if (senderPhone && !lead.phone) {
+        updates.phone = senderPhone
       }
       
       await supabase
