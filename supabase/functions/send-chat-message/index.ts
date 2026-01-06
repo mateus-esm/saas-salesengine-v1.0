@@ -17,7 +17,7 @@ serve(async (req) => {
     )
 
     // Recebe dados do Frontend
-    const { content, chat_id, lead_id, action } = await req.json()
+    const { content, chat_id, lead_id, action, media_url, media_type } = await req.json()
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
     // CENÁRIO 1: Botão Manual de Parar/Retomar Robô (Caso queira usar)
@@ -40,7 +40,9 @@ serve(async (req) => {
       .insert({
         lead_id,
         content,
-        sender_type: 'agent'
+        sender_type: 'agent',
+        media_url: media_url || null,
+        media_type: media_type || null
       })
       .select()
       .single()
@@ -65,10 +67,16 @@ serve(async (req) => {
     }
 
     // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
+    const body: any = { message: content }
+    if (media_url) {
+      body.mediaUrl = media_url
+      body.mediaType = media_type
+    }
+
     const gptResponse = await fetch(`https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`, {
       method: 'POST',
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: content })
+      body: JSON.stringify(body)
     })
 
     if (!gptResponse.ok) {

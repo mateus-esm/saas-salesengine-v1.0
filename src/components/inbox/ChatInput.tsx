@@ -1,7 +1,7 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Paperclip, Smile, Mic, Send, MicOff } from "lucide-react";
+import { Paperclip, Smile, Mic, Send, MicOff, X, Loader2, StopCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -11,27 +11,62 @@ import {
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import { useTheme } from "next-themes";
 
+import { useMediaUpload, MediaType } from "@/hooks/useMediaUpload";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
+
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, media?: { url: string; type: MediaType }) => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
 export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem..." }: ChatInputProps) {
   const [message, setMessage] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme } = useTheme();
 
+  const { uploadFile, isUploading } = useMediaUpload();
+  const { isRecording, recordingTime, startRecording, stopRecording, cancelRecording } = useAudioRecorder();
+
   const handleSend = () => {
-    if (message.trim() && !disabled) {
+    if (message.trim() && !disabled && !isUploading && !isRecording) {
       onSend(message.trim());
       setMessage("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const result = await uploadFile(file);
+      if (result) {
+        onSend("", result);
+      }
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleStopRecording = async () => {
+    const blob = await stopRecording();
+    if (blob) {
+      const file = new File([blob], "audio_message.webm", { type: "audio/webm" });
+      const result = await uploadFile(file);
+      if (result) {
+        onSend("", { ...result, type: 'audio' });
+      }
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -70,10 +105,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
     setEmojiPickerOpen(false);
   };
 
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    // TODO: Implement actual audio recording
-  };
+
 
   return (
     <div className={cn(
@@ -81,16 +113,58 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
       disabled && "opacity-50"
     )}>
       <div className="flex items-end gap-2">
-        {/* Action buttons */}
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-muted-foreground hover:text-foreground"
-            disabled={disabled}
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileSelect}
+          // Accept images, audio, video, pdf, doc, docx, txt
+          accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt"
+        />
+
+        {isRecording ? (
+          /* Recording UI */
+          <div className="flex-1 flex items-center gap-4 px-2 py-1.5 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-red-500 animate-pulse">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              <span className="text-sm font-medium">{formatTime(recordingTime)}</span>
+            </div>
+            <div className="flex-1" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={cancelRecording}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="icon"
+              className="h-8 w-8 rounded-full bg-red-500 hover:bg-red-600 text-white"
+              onClick={handleStopRecording}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          /* Normal Input UI */
+          <>
+            {/* Action buttons */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                disabled={disabled || isUploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {isUploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Paperclip className="h-5 w-5" />
+                )}
+              </Button>
           
           {/* Emoji Picker */}
           <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
@@ -136,35 +210,30 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
         </div>
 
         {/* Send / Record buttons */}
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-9 w-9",
-              isRecording 
-                ? "text-destructive hover:text-destructive" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            onClick={toggleRecording}
-            disabled={disabled}
-          >
-            {isRecording ? (
-              <MicOff className="h-5 w-5" />
-            ) : (
-              <Mic className="h-5 w-5" />
-            )}
-          </Button>
-
-          <Button
-            size="icon"
-            className="h-9 w-9"
-            onClick={handleSend}
-            disabled={disabled || !message.trim()}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
+            <div className="flex items-center gap-1">
+              {message.trim() ? (
+                <Button
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={handleSend}
+                  disabled={disabled || isUploading}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  onClick={startRecording}
+                  disabled={disabled || isUploading}
+                >
+                  <Mic className="h-5 w-5" />
+                </Button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

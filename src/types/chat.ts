@@ -2,7 +2,7 @@
 
 export type SenderType = 'customer' | 'ai' | 'agent' | 'system';
 
-export type MessageType = 'text' | 'image' | 'audio';
+export type MessageType = 'text' | 'image' | 'audio' | 'video' | 'document';
 
 export type ChatStatus = 'active' | 'bot_handling' | 'human_handling';
 

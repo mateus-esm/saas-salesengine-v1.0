@@ -98,7 +98,7 @@ const Chat = () => {
   }, [leads]);
 
   // Envio de Mensagem Real (Chama a Edge Function)
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, media?: { url: string; type: string }) => {
     if (!selectedLeadId) return;
 
     try {
@@ -107,7 +107,8 @@ const Chat = () => {
         body: {
           lead_id: selectedLeadId,
           content: content,
-          type: 'text',
+          type: media ? media.type : 'text',
+          media_url: media?.url,
           chat_id: (lead as any)?.gpt_maker_chat_id
         }
       });
