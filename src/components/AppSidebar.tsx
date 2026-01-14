@@ -29,11 +29,11 @@ export function AppSidebar() {
     { title: "Chat", url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
     { title: "Agente", url: "/agent", icon: Bot, external: false, requiredRole: 'admin' },
-    { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false },
+    { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false, requiredRole: 'admin' },
     { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin' },
     { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin' },
     { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin' },
-    { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false },
+    { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false, requiredRole: 'admin' },
     { title: "Tutorial", url: "/tutorial", icon: BookOpen, external: false },
   ];
 
