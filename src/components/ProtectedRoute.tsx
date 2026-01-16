@@ -3,17 +3,19 @@ import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
+import { useRole } from "@/hooks/useRole";
 
 export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading, equipe, signOut } = useAuth();
   const { tenant } = useTenant();
+  const { isAdmin, isSuperAdmin } = useRole();
 
   useEffect(() => {
     if (!loading && user && tenant.id !== 'default') {
       const userNiche = equipe?.niche?.toLowerCase() || '';
       const tenantId = tenant.id.toLowerCase();
 
-      if (userNiche && userNiche !== tenantId) {
+      if (userNiche && userNiche !== tenantId && !isAdmin() && !isSuperAdmin()) {
         toast.error(`Acesso negado! Sua conta pertence ao nicho "${equipe?.niche}" le não tem acesso ao portal "${tenant.name}".`);
         signOut();
       }
@@ -42,7 +44,7 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const userNiche = equipe?.niche?.toLowerCase() || '';
     const tenantId = tenant.id.toLowerCase();
     
-    if (userNiche && userNiche !== tenantId) {
+    if (userNiche && userNiche !== tenantId && !isAdmin() && !isSuperAdmin()) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background">
           <div className="text-center">
