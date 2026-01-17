@@ -72,10 +72,12 @@ serve(async (req) => {
 
     // 7. Buscar equipe pelo assistantId (gpt_maker_agent_id)
     let equipeId: string | null = null
+    let isAgentEnabled = false
+
     if (assistantId) {
       const { data: equipe, error: equipeError } = await supabase
         .from('equipes')
-        .select('id')
+        .select('id, is_crm_agent_enabled')
         .eq('gpt_maker_agent_id', assistantId)
         .maybeSingle()
       
@@ -83,7 +85,8 @@ serve(async (req) => {
         console.error('[Webhook] Erro ao buscar equipe:', equipeError)
       }
       equipeId = equipe?.id || null
-      console.log('[Webhook] Equipe encontrada:', equipeId)
+      isAgentEnabled = equipe?.is_crm_agent_enabled || false
+      console.log('[Webhook] Equipe encontrada:', equipeId, 'Agent Enabled:', isAgentEnabled)
     }
 
     if (!equipeId) {
@@ -209,32 +212,36 @@ serve(async (req) => {
       }
     }
 
-    // 12. Disparar IA em background (apenas para mensagens do cliente)
+    // 12. Disparar IA em background (apenas para mensagens do cliente e se agente estiver ativo)
     if (lead && senderType === 'customer') {
-      const aiUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/analyze-message`
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      if (!isAgentEnabled) {
+        console.log('[Webhook] Agente CRM desativado para esta equipe. Ignorando análise IA.')
+      } else {
+        const aiUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/analyze-message`
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-      EdgeRuntime.waitUntil(
-        fetch(aiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${serviceKey}`
-          },
-          body: JSON.stringify({
-            lead_id: lead.id,
-            message_content: messageContent,
-            conversation_history: ''
-          })
-        }).then(async res => {
-          if (!res.ok) {
-            const text = await res.text();
-            console.error('[Webhook] Falha IA:', res.status, text);
-          } else {
-            console.log('[Webhook] IA Disparada com sucesso');
-          }
-        }).catch(err => console.error('[Webhook] Erro Fetch IA:', err))
-      )
+        EdgeRuntime.waitUntil(
+          fetch(aiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceKey}`
+            },
+            body: JSON.stringify({
+              lead_id: lead.id,
+              message_content: messageContent,
+              conversation_history: ''
+            })
+          }).then(async res => {
+            if (!res.ok) {
+              const text = await res.text();
+              console.error('[Webhook] Falha IA:', res.status, text);
+            } else {
+              console.log('[Webhook] IA Disparada com sucesso');
+            }
+          }).catch(err => console.error('[Webhook] Erro Fetch IA:', err))
+        )
+      }
     }
 
     return new Response(JSON.stringify({ success: true, lead_id: lead.id }), {

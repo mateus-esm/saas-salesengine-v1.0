@@ -22,6 +22,7 @@ interface Equipe {
   limite_creditos: number;
   creditos_avulsos: number;
   webhook_secret: string | null;
+  is_crm_agent_enabled: boolean;
 }
 
 interface AuthContextType {
@@ -82,7 +83,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (equipeError) {
             console.error("Erro ao buscar equipe:", equipeError);
           } else if (equipeData) {
-            setEquipe(equipeData as Equipe);
+            setEquipe(equipeData as unknown as Equipe);
           }
         }
       }
