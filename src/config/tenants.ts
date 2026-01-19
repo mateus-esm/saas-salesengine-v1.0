@@ -1,4 +1,4 @@
-export type TenantId = 'advai' | 'solon' | 'cb' | 'nutria' | 'imob' | 'default';
+export type TenantId = 'advai' | 'solon' | 'cb' | 'nutria' | 'imob' | 'bmg' | 'leadland' | 'default';
 
 export interface CustomFieldDefinition {
   key: string;
@@ -94,6 +94,28 @@ export const tenants: Record<TenantId, TenantConfig> = {
       { key: 'bairro_interesse', label: 'Bairro de Interesse', type: 'text', placeholder: 'Ex: Centro' },
       { key: 'faixa_preco', label: 'Faixa de Preço', type: 'select', options: ['Até R$ 200 mil', 'R$ 200-500 mil', 'R$ 500 mil - 1 milhão', 'Acima de R$ 1 milhão'] },
     ],
+  },
+  bmg: {
+    id: 'bmg',
+    name: 'Be My Guest',
+    nicho: 'bmg',
+    domain: 'bmg.soloventures.com.br',
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
+    description: 'Máquina de Vendas Automatizada',
+    customFields: [],
+  },
+  leadland: {
+    id: 'leadland',
+    name: 'Lead Land',
+    nicho: 'leadland',
+    domain: 'leadland.soloventures.com.br',
+    logo: '/solo-ventures-icon-512.png',
+    logoLight: '/solo-ventures-icon-512.png',
+    primaryColor: '28 100% 50%', // Solo Ventures Orange
+    description: 'Máquina de Vendas Automatizada',
+    customFields: [],
   },
   default: {
     id: 'default',
