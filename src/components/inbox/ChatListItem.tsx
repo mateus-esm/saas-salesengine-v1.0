@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Bot, User } from "lucide-react";
 import { ChatSession } from "@/types/chat";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { isToday, isYesterday, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface ChatListItemProps {
@@ -20,10 +20,17 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
     .slice(0, 2)
     .toUpperCase();
 
-  const timeAgo = formatDistanceToNow(session.lastMessageTime, {
-    addSuffix: false,
-    locale: ptBR,
-  });
+  const getFormattedDate = (date: Date) => {
+    if (isToday(date)) {
+      return format(date, "HH:mm");
+    }
+    if (isYesterday(date)) {
+      return "Ontem";
+    }
+    return format(date, "dd/MM/yyyy");
+  };
+
+  const timeAgo = getFormattedDate(session.lastMessageTime);
 
   return (
     <div
