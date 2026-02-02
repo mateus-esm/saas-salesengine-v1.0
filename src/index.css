@@ -2,32 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Solo Ventures Design System
-   A sophisticated dark-first design with orange gradient accents
+/* Precision OS Design System
+   "The ultimate sophistication is simplicity" — Leonardo da Vinci
+   
+   A refined, engineering-grade aesthetic inspired by Linear, Raycast, and Apple.
+   Focus: Subtraction, whitespace, and functional color usage.
    All colors MUST be HSL.
 */
 
 @layer base {
   :root {
-    /* Light mode - for users who prefer light */
-    --background: 0 0% 98%;
-    --foreground: 0 0% 8%;
+    /* Light mode - Precision OS palette */
+    --background: 240 5% 96%;        /* Off-white technical gray #F4F4F6 */
+    --foreground: 240 10% 3.9%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 8%;
+    --card: 0 0% 100%;               /* Pure white for contrast */
+    --card-foreground: 240 10% 3.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 8%;
+    --popover-foreground: 240 10% 3.9%;
 
-    /* Orange accent - Solo Ventures brand */
+    /* Orange accent - Solo Ventures brand (functional, not decorative) */
     --primary: 28 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 94%;
-    --secondary-foreground: 0 0% 8%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 0 0% 94%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
 
     --accent: 38 100% 55%;
     --accent-foreground: 0 0% 100%;
@@ -35,74 +38,85 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 88%;
-    --input: 0 0% 88%;
+    /* Precision borders - subtle, high-finesse */
+    --border: 220 13% 91%;           /* Slate-200 equivalent */
+    --input: 220 13% 91%;
     --ring: 28 100% 50%;
 
-    --radius: 0.75rem;
+    /* Tighter radius for professional look */
+    --radius: 0.5rem;
 
     /* Custom tokens */
     --solar-orange: 28 100% 50%;
     --solar-yellow: 45 100% 55%;
     --deep-black: 0 0% 6%;
-    --soft-gray: 0 0% 94%;
+    --soft-gray: 240 4.8% 95.9%;
     --header-bg: 0 0% 100%;
 
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    --shadow-elegant: 0 10px 40px -10px hsl(28 100% 50% / 0.25);
-    --shadow-soft: 0 2px 12px hsl(0 0% 0% / 0.08);
+    /* Glass effects */
+    --glass-bg: 0 0% 100% / 0.8;
+    --glass-border: 220 13% 91%;
+    --glass-blur: 12px;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 0 0% 25%;
-    --sidebar-primary: 0 0% 8%;
+    --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --shadow-elegant: 0 1px 3px 0 hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.05);
+
+    --sidebar-background: 0 0% 100% / 0.8;
+    --sidebar-foreground: 240 5.9% 10%;
+    --sidebar-primary: 240 5.9% 10%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 0 0% 94%;
-    --sidebar-accent-foreground: 0 0% 8%;
-    --sidebar-border: 0 0% 90%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
     --sidebar-ring: 28 100% 50%;
   }
 
   .dark {
-    /* Dark mode - primary theme for Solo Ventures */
-    --background: 0 0% 6%;
-    --foreground: 0 0% 95%;
+    /* Dark mode - Precision OS */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 95%;
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
 
-    /* Orange accent - Solo Ventures brand */
+    /* Orange accent maintained */
     --primary: 28 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 55%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
 
     --accent: 38 100% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 65% 45%;
-    --destructive-foreground: 0 0% 95%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
     --ring: 28 100% 50%;
     
-    --soft-gray: 0 0% 12%;
-    --header-bg: 0 0% 8%;
+    --soft-gray: 240 3.7% 15.9%;
+    --header-bg: 240 10% 6%;
     
-    --sidebar-background: 0 0% 8%;
-    --sidebar-foreground: 0 0% 85%;
+    /* Glass effects dark mode */
+    --glass-bg: 240 10% 3.9% / 0.8;
+    --glass-border: 240 3.7% 20%;
+    
+    --sidebar-background: 240 10% 3.9% / 0.8;
+    --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 28 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 14%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 0% 18%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 28 100% 50%;
   }
 }
@@ -114,12 +128,35 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* Gradient utilities */
+/* Precision OS Utilities */
 @layer utilities {
+  /* Glassmorphism */
+  .glass {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+  
+  .glass-sidebar {
+    background: hsl(var(--sidebar-background));
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  
+  /* Subtle engineering grid pattern */
+  .bg-grid-subtle {
+    background-image: radial-gradient(hsl(var(--foreground) / 0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  
+  /* Gradient utilities (kept for brand elements) */
   .gradient-solo {
     background: linear-gradient(135deg, hsl(28 100% 50%), hsl(45 100% 55%));
   }
@@ -132,6 +169,18 @@
   }
   
   .glow-orange {
-    box-shadow: 0 0 30px hsl(28 100% 50% / 0.3);
+    box-shadow: 0 0 20px hsl(28 100% 50% / 0.2);
+  }
+  
+  /* Monospace for data display */
+  .font-mono-data {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.02em;
+  }
+  
+  /* Machined button effect */
+  .btn-machined {
+    @apply ring-1 ring-inset ring-black/5 dark:ring-white/5;
   }
 }

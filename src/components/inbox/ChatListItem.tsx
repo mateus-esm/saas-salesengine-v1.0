@@ -38,29 +38,29 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
       className={cn(
         "flex items-start gap-3 p-3 cursor-pointer transition-colors border-b border-border/50",
         isSelected
-          ? "bg-accent"
+          ? "bg-sidebar-accent"
           : "hover:bg-muted/50"
       )}
     >
       {/* Avatar */}
       <div className="relative flex-shrink-0">
-        <Avatar className="h-12 w-12">
-          <AvatarFallback className="bg-primary/10 text-primary font-medium">
+        <Avatar className="h-10 w-10">
+          <AvatarFallback className="bg-secondary text-secondary-foreground text-sm font-medium">
             {initials}
           </AvatarFallback>
         </Avatar>
         {session.isOnline && (
-          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
+          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-background" />
         )}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-foreground truncate">
+          <span className="font-medium text-sm text-foreground truncate">
             {session.customerName}
           </span>
-          <span className="text-xs text-muted-foreground flex-shrink-0">
+          <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono">
             {timeAgo}
           </span>
         </div>

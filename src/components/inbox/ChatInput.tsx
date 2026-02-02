@@ -109,10 +109,10 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
 
   return (
     <div className={cn(
-      "border-t border-border bg-card p-3",
+      "p-3",
       disabled && "opacity-50"
     )}>
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-2 bg-card/90 backdrop-blur-xl border border-border rounded-xl p-2 shadow-sm">
         {/* Hidden File Input */}
         <input
           type="file"
@@ -205,7 +205,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
             placeholder={placeholder}
             disabled={disabled}
             rows={1}
-            className="min-h-[40px] max-h-[120px] resize-none pr-12 py-2.5"
+            className="min-h-[36px] max-h-[120px] resize-none py-2 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
           />
         </div>
 

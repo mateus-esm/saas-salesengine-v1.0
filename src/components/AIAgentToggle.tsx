@@ -34,7 +34,7 @@ export function AIAgentToggle() {
     try {
       const { error } = await supabase
         .from("equipes")
-        .update({ is_crm_agent_enabled: checked })
+        .update({ is_crm_agent_enabled: checked } as any)
         .eq("id", equipe.id);
 
       if (error) throw error;

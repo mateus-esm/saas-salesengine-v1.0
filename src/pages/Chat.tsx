@@ -290,7 +290,7 @@ const Chat = () => {
             </div>
 
             {/* Mensagens */}
-            <ScrollArea className="flex-1 p-4 bg-muted/30">
+            <ScrollArea className="flex-1 p-4 bg-grid-subtle">
               <div className="max-w-3xl mx-auto space-y-4">
                 {loadingMessages ? (
                   <div className="flex justify-center py-8">
