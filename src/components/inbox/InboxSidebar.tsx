@@ -77,14 +77,14 @@ export function InboxSidebar({
   const unreadCount = sessions.filter((s) => s.unreadCount > 0).length;
 
   return (
-    <div className="h-full flex flex-col border-r border-border bg-card">
+    <div className="h-full flex flex-col border-r border-border glass">
       {/* Header */}
       <div className="p-3 border-b border-border">
-        <h2 className="font-semibold text-lg mb-3 flex items-center gap-2">
-          <Inbox className="h-5 w-5 text-primary" />
+        <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
+          <Inbox className="h-4 w-4 text-primary" />
           Inbox
           {unreadCount > 0 && (
-            <Badge className="ml-auto">{unreadCount}</Badge>
+            <Badge className="ml-auto text-xs">{unreadCount}</Badge>
           )}
         </h2>
 
@@ -95,7 +95,7 @@ export function InboxSidebar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar conversas..."
-            className="pl-9 h-9"
+            className="pl-9 h-8 text-sm"
           />
         </div>
 
@@ -106,7 +106,7 @@ export function InboxSidebar({
               key={id}
               variant={filter === id ? "default" : "outline"}
               className={cn(
-                "cursor-pointer gap-1 transition-colors",
+                "cursor-pointer gap-1 transition-colors text-xs",
                 filter === id && "bg-primary"
               )}
               onClick={() => setFilter(id)}

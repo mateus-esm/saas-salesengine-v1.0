@@ -116,16 +116,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     >
       {/* Customer avatar on left */}
       {isCustomer && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-          <User className="h-4 w-4 text-muted-foreground" />
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
+          <User className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
       )}
 
       <div
         className={cn(
-          "max-w-[70%] rounded-2xl px-4 py-2.5",
-          isCustomer && "bg-muted text-foreground rounded-tl-sm",
-          isAI && "bg-purple-100 text-purple-900 dark:bg-purple-900 dark:text-purple-100 rounded-tr-sm",
+          "max-w-[70%] rounded-xl px-3.5 py-2.5",
+          isCustomer && "bg-card border border-border text-foreground rounded-tl-sm",
+          isAI && "bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-foreground rounded-tr-sm",
           isAgent && "bg-primary text-primary-foreground rounded-tr-sm"
         )}
       >
@@ -149,9 +149,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {/* Timestamp */}
         <p
           className={cn(
-            "text-[10px] mt-1 text-right",
+            "text-[10px] mt-1.5 text-right font-mono",
             isCustomer && "text-muted-foreground",
-            isAI && "text-purple-600 dark:text-purple-300",
+            isAI && "text-purple-500 dark:text-purple-400",
             isAgent && "text-primary-foreground/70"
           )}
         >
@@ -163,15 +163,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {!isCustomer && (
         <div
           className={cn(
-            "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-            isAI && "bg-purple-200 dark:bg-purple-800",
+            "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center",
+            isAI && "bg-purple-100 dark:bg-purple-900",
             isAgent && "bg-primary"
           )}
         >
           {isAI ? (
-            <Bot className="h-4 w-4 text-purple-700 dark:text-purple-300" />
+            <Bot className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
           ) : (
-            <User className="h-4 w-4 text-primary-foreground" />
+            <User className="h-3.5 w-3.5 text-primary-foreground" />
           )}
         </div>
       )}

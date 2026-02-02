@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
 import { TenantLogo } from "@/components/TenantLogo";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import icon from "@/assets/solo-ventures-icon.png";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 
@@ -46,13 +47,13 @@ export function AppSidebar() {
   });
 
   return (
-    <Sidebar className={open ? "w-64" : "w-16"} collapsible="icon">
-      <SidebarHeader className="border-b border-border p-4">
+    <Sidebar className={cn(open ? "w-64" : "w-16", "glass-sidebar")} collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center justify-center">
           {open ? (
-            <TenantLogo className="h-10" />
+            <TenantLogo className="h-9" />
           ) : (
-            <img src={icon} alt="Solo Ventures" className="h-8 w-8 shrink-0" />
+            <img src={icon} alt="Solo Ventures" className="h-7 w-7 shrink-0" />
           )}
         </div>
       </SidebarHeader>
@@ -65,20 +66,20 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     {item.external ? (
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
-                        <item.icon className="h-5 w-5 shrink-0" />
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors">
+                        <item.icon className="h-4 w-4 shrink-0" />
                         {open && (
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1 text-sm">
                             {item.title}
                             <ExternalLink className="h-3 w-3" />
                           </span>
                         )}
                       </a>
                     ) : (
-                      <NavLink to={item.url} end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors" activeClassName="bg-primary/10 text-primary font-medium">
-                        <item.icon className="h-5 w-5 shrink-0" />
+                      <NavLink to={item.url} end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
+                        <item.icon className="h-4 w-4 shrink-0" />
                         {open && (
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 text-sm">
                             {item.title}
                             {item.badge && (
                               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
@@ -104,9 +105,9 @@ export function AppSidebar() {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <NavLink to="/admin" end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors" activeClassName="bg-primary/10 text-primary font-medium">
-                      <Shield className="h-5 w-5 shrink-0" />
-                      {open && <span>Admin Panel</span>}
+                    <NavLink to="/admin" end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
+                      <Shield className="h-4 w-4 shrink-0" />
+                      {open && <span className="text-sm">Admin Panel</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -115,11 +116,11 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="border-t border-border p-4">
+      <SidebarFooter className="border-t border-sidebar-border p-4">
         {open && profile && (
           <div className="mb-3 px-2">
             <p className="text-sm font-medium text-foreground truncate">{profile.nome_completo}</p>
-            <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
+            <p className="text-xs text-muted-foreground truncate font-mono-data">{profile.email}</p>
             {profile.role && profile.role !== 'user' && (
               <Badge variant="outline" className="mt-1 text-[10px] capitalize">
                 {profile.role.replace('_', ' ')}
@@ -127,9 +128,9 @@ export function AppSidebar() {
             )}
           </div>
         )}
-        <SidebarMenuButton onClick={signOut} className="w-full">
-          <LogOut className="h-5 w-5 shrink-0" />
-          {open && <span>Sair</span>}
+        <SidebarMenuButton onClick={signOut} className="w-full hover:bg-sidebar-accent">
+          <LogOut className="h-4 w-4 shrink-0" />
+          {open && <span className="text-sm">Sair</span>}
         </SidebarMenuButton>
       </SidebarFooter>
     </Sidebar>

@@ -9,10 +9,10 @@ export const Header = () => {
   const isExternalChatLink = chatHref.startsWith("http");
 
   return (
-    <header className="border-b border-border bg-background sticky top-0 z-50">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <header className="border-b border-border glass sticky top-0 z-50">
+      <div className="container mx-auto px-4 h-14 flex items-center justify-between">
         <Link to="/home" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          <Logo className="h-8" />
+          <Logo className="h-7" />
         </Link>
         <nav className="flex items-center gap-4">
           <Link
