@@ -53,6 +53,11 @@
     --soft-gray: 240 4.8% 95.9%;
     --header-bg: 0 0% 100%;
 
+    /* Solo Ventures Palette */
+    --solo-orange: 14 100% 56%;      /* #FF481E */
+    --solo-yellow: 48 91% 53%;       /* #F2CE1F */
+    --solo-red: 8 59% 38%;           /* #9E2A19 */
+
     /* Glass effects */
     --glass-bg: 0 0% 100% / 0.8;
     --glass-border: 220 13% 91%;
@@ -182,5 +187,42 @@
   /* Machined button effect */
   .btn-machined {
     @apply ring-1 ring-inset ring-black/5 dark:ring-white/5;
+  }
+
+  /* Solo Ventures Hover Effects */
+  .hover-gradient-border {
+    position: relative;
+  }
+  .hover-gradient-border::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, hsl(var(--solo-orange)), hsl(var(--solo-yellow)));
+    transform: scaleX(0);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: left;
+  }
+  .hover-gradient-border:hover::after {
+    transform: scaleX(1);
+  }
+  
+  /* Card with Solo hover effect */
+  .card-hover-solo {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card-hover-solo:hover {
+    border-color: hsl(var(--solo-orange));
+    box-shadow: 0 0 0 1px hsl(var(--solo-orange) / 0.2);
+  }
+
+  /* Gradient text Solo */
+  .text-gradient-solo {
+    background: linear-gradient(135deg, hsl(var(--solo-orange)), hsl(var(--solo-yellow)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }

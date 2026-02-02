@@ -3,14 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantProvider, useTenant } from "@/contexts/TenantContext";
 import { useTenantTheme } from "@/hooks/useTenantTheme";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { AppSidebar } from "@/components/AppSidebar";
-import { ModeToggle } from "@/components/ModeToggle";
+import { TopNavbar } from "@/components/TopNavbar";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
@@ -33,26 +31,18 @@ const AuthenticatedLayout = ({ children }: { children: React.ReactNode }) => {
   useTenantTheme();
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <header className="h-14 flex items-center justify-between border-b border-border bg-background px-4 shrink-0">
-            <SidebarTrigger />
-            <ModeToggle />
-          </header>
-          <main className="flex-1 flex flex-col overflow-hidden">
-            {children}
-          </main>
-          <footer className="border-t border-border bg-header-bg shrink-0">
-            <div className="container mx-auto px-4 py-3 text-center text-sm text-foreground/70 font-medium">
-              © 2025 Solo Ventures. Todos os direitos reservados. | {tenant.name} é uma plataforma proprietária.
-            </div>
-          </footer>
+    <div className="min-h-screen flex flex-col w-full bg-background">
+      <TopNavbar />
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {children}
+      </main>
+      <footer className="border-t border-border bg-card shrink-0">
+        <div className="container mx-auto px-4 py-3 text-center text-sm text-muted-foreground font-medium">
+          © 2025 Solo Ventures. Todos os direitos reservados. | {tenant.name} é uma plataforma proprietária.
         </div>
-      </div>
+      </footer>
       <WhatsAppButton />
-    </SidebarProvider>
+    </div>
   );
 };
 
