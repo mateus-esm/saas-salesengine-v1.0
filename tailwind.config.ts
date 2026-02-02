@@ -57,6 +57,11 @@ export default {
           dark: "hsl(var(--gold-dark))",
         },
         surface: "hsl(var(--surface))",
+        solo: {
+          orange: "hsl(var(--solo-orange))",
+          yellow: "hsl(var(--solo-yellow))",
+          red: "hsl(var(--solo-red))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
