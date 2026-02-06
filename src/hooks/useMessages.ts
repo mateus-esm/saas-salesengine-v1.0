@@ -99,14 +99,21 @@ export const useMessages = (leadId: string | undefined) => {
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          
-          // Adiciona a nova mensagem e força a ordenação novamente
-          // Isso resolve o problema de mensagens aparecerem fora de ordem
-          setMessages((current) => sortMessages([...current, newMsg]));
-          
+
+          // Adiciona a nova mensagem APENAS se não existir (evita duplicatas)
+          setMessages((current) => {
+            // Verifica se já existe pelo ID
+            const exists = current.some(m => m.id === newMsg.id);
+            if (exists) {
+              console.log('[Realtime] Mensagem duplicada ignorada:', newMsg.id);
+              return current;
+            }
+            return sortMessages([...current, newMsg]);
+          });
+
           // Garante que o contador continue zerado enquanto o chat está aberto
           if (leadId) {
-             supabase.from('leads').update({ unread_count: 0 }).eq('id', leadId);
+            supabase.from('leads').update({ unread_count: 0 }).eq('id', leadId);
           }
         }
       )

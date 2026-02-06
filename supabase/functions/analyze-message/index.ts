@@ -7,263 +7,288 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// --- DEFINIÇÃO DO SCHEMA DO BANCO ---
-// Atualizado para usar chaves em PORTUGUÊS para alinhar com o frontend (src/config/tenants.ts)
-const CRM_SCHEMA = `
-CAMPOS DISPONÍVEIS PARA EXTRAÇÃO:
-- name (Texto)
-- email (Email válido)
-- phone (Telefone)
-- company (Nome da empresa)
-- position (Cargo)
-- custom_fields: {
-    consumo_medio: (Ex: "1000 kWh" - extrair apenas números se possível),
-    tipo_telhado: (Ex: "Fibrocimento", "Telha", "Laje", "Metálico", "Cerâmica"),
-    valor_conta: (Valor monetário da conta de energia, apenas números. Ex: 500.50)
-}
-- meeting_info: {
-    scheduled: (Boolean - Só marque true se estiver confirmado),
-    date_iso: (ISO 8601 Format YYYY-MM-DDTHH:MM:SS),
-    link: (Link do Meet/Zoom enviado pelo BOT ou Cliente),
-    briefing: (Resumo técnico do que foi discutido)
-}
-`;
+// ============ CONFIGURAÇÕES ============
+const CONFIG = {
+  MIN_NEW_MESSAGES: 2,        // Mínimo de msgs novas para disparar análise
+  CONTEXT_MESSAGES: 5,        // Msgs antigas para contexto
+  NEW_MESSAGES_LIMIT: 10,     // Máximo de msgs novas a analisar
+  COOLDOWN_MINUTES: 3,        // Intervalo mínimo entre análises do mesmo lead
+};
+
+// Tool schema compacto
+const EXTRACTION_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "save_crm_data",
+    description: "Extrai dados do lead",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        email: { type: "string" },
+        consumo_medio: { type: "string" },
+        tipo_telhado: { type: "string", enum: ["Cerâmica", "Fibrocimento", "Metálico", "Laje", "Outro"] },
+        valor_conta: { type: "string" },
+        meeting_scheduled: { type: "boolean" },
+        meeting_date: { type: "string" },
+        meeting_link: { type: "string" },
+        intent: { type: "string", enum: ["INTERESTED", "SCHEDULED", "DISQUALIFIED", "SPAM", "UNCHANGED"] }
+      },
+      required: ["intent"]
+    }
+  }
+};
+
+const SYSTEM_PROMPT = `Analise o chat de energia solar. Msgs novas marcadas com [NOVO].
+- meeting_scheduled=true se CONFIRMOU horário
+- intent: SCHEDULED/INTERESTED/DISQUALIFIED/SPAM ou UNCHANGED se nada relevante
+- Extraia dados mencionados: nome, email, consumo, telhado, valor
+Hoje:`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-
-  // 1. Variáveis de Auditoria
-  const auditLog = {
-    lead_id: null as string | null,
-    equipe_id: null as string | null,
-    decision_type: 'analysis_started',
-    input_summary: 'Iniciando análise...',
-    output_action: {} as Record<string, any>,
-    status: 'processing',
-    error_details: null as string | null,
-    confidence_score: 0 // Default 0
-  };
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
+  const auditLog = {
+    lead_id: null as string | null,
+    equipe_id: null as string | null,
+    decision_type: 'started',
+    input_summary: '',
+    output_action: {} as Record<string, any>,
+    status: 'processing',
+    error_details: null as string | null,
+    confidence_score: 0,
+    tokens_used: 0
+  };
+
   try {
-    const { lead_id } = await req.json();
+    const { lead_id, force = false } = await req.json();
     auditLog.lead_id = lead_id;
 
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-
-    // 2. BUSCAR DADOS
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('content, sender_type, created_at')
+    // ============ CACHE CHECK: Última análise ============
+    const { data: lastAnalysis } = await supabase
+      .from('ai_decisions')
+      .select('created_at')
       .eq('lead_id', lead_id)
-      .order('created_at', { ascending: true })
-      .limit(40);
+      .eq('status', 'success')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
+    const lastAnalyzedAt = lastAnalysis?.created_at || '1970-01-01';
+
+    // ============ COOLDOWN: Evita spam de análises ============
+    if (!force && lastAnalysis) {
+      const cooldownMs = CONFIG.COOLDOWN_MINUTES * 60 * 1000;
+      const timeSinceLastAnalysis = Date.now() - new Date(lastAnalyzedAt).getTime();
+
+      if (timeSinceLastAnalysis < cooldownMs) {
+        console.log(`[Cache] Cooldown ativo. Última análise há ${Math.round(timeSinceLastAnalysis/1000)}s`);
+        return new Response(JSON.stringify({
+          skipped: true,
+          reason: 'cooldown',
+          retry_after_seconds: Math.ceil((cooldownMs - timeSinceLastAnalysis) / 1000)
+        }), { headers: corsHeaders });
+      }
+    }
+
+    // ============ BUSCAR MENSAGENS NOVAS ============
+    const { count: newMsgCount } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('lead_id', lead_id)
+      .gt('created_at', lastAnalyzedAt);
+
+    // Se não houver mensagens novas suficientes, skip
+    if (!force && (newMsgCount || 0) < CONFIG.MIN_NEW_MESSAGES) {
+      console.log(`[Cache] Apenas ${newMsgCount} msgs novas (mínimo: ${CONFIG.MIN_NEW_MESSAGES})`);
+      auditLog.decision_type = 'cache_hit';
+      auditLog.status = 'skipped';
+      auditLog.output_action = { new_messages: newMsgCount, threshold: CONFIG.MIN_NEW_MESSAGES };
+
+      return new Response(JSON.stringify({
+        skipped: true,
+        reason: 'insufficient_new_messages',
+        new_messages: newMsgCount
+      }), { headers: corsHeaders });
+    }
+
+    // ============ BUSCAR LEAD ============
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('*, pipeline_stages(name)')
+      .select('id, name, email, custom_fields, meeting_date, equipe_id, pipeline_stages(name)')
       .eq('id', lead_id)
       .single();
 
-    if (leadError || !lead) throw new Error(`Lead search error: ${leadError?.message || 'Lead not found'}`);
-    
+    if (leadError || !lead) throw new Error(`Lead not found`);
     auditLog.equipe_id = lead.equipe_id;
-    auditLog.input_summary = `Analisando ${messages?.length || 0} msgs de ${lead.name}`;
 
-    if (!messages || messages.length === 0) {
-       auditLog.status = 'warning';
-       auditLog.output_action = { msg: "Sem histórico de mensagens" };
-       throw new Error("Dados insuficientes: Sem mensagens.");
+    // ============ BUSCAR CONTEXTO + MENSAGENS NOVAS ============
+    // 1. Mensagens de contexto (antigas, antes da última análise)
+    const { data: contextMsgs } = await supabase
+      .from('messages')
+      .select('content, sender_type, created_at')
+      .eq('lead_id', lead_id)
+      .lte('created_at', lastAnalyzedAt)
+      .order('created_at', { ascending: false })
+      .limit(CONFIG.CONTEXT_MESSAGES);
+
+    // 2. Mensagens novas (após última análise)
+    const { data: newMsgs } = await supabase
+      .from('messages')
+      .select('content, sender_type, created_at')
+      .eq('lead_id', lead_id)
+      .gt('created_at', lastAnalyzedAt)
+      .order('created_at', { ascending: true })
+      .limit(CONFIG.NEW_MESSAGES_LIMIT);
+
+    if (!newMsgs || newMsgs.length === 0) {
+      auditLog.status = 'skipped';
+      auditLog.output_action = { reason: "Sem mensagens novas" };
+      return new Response(JSON.stringify({ skipped: true }), { headers: corsHeaders });
     }
 
-    const historyScript = messages.map(m =>
-      `[${m.created_at}] ${m.sender_type === 'customer' ? 'CLIENTE' : 'BOT/SOLON'}: ${m.content}`
-    ).join('\n');
+    // ============ MONTAR HISTÓRICO COMPACTO ============
+    // Formato: Contexto antigo + separador + Mensagens novas marcadas
+    const contextHistory = (contextMsgs || [])
+      .reverse()
+      .map(m => `${m.sender_type === 'customer' ? 'C' : 'B'}:${m.content}`)
+      .join('\n');
 
-    const today = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const newHistory = newMsgs
+      .map(m => `[NOVO]${m.sender_type === 'customer' ? 'C' : 'B'}:${m.content}`)
+      .join('\n');
 
-    const extractionPrompt = `
-      Você é o Auditor de Dados do CRM Solo Ventures (Solon).
-      Hoje é: ${today}.
-      
-      SUA MISSÃO:
-      Ler o histórico e extrair dados técnicos (Consumo, Tipo Telhado, Valor Conta) e DETECTAR REUNIÕES.
-      
-      REGRAS CRÍTICAS - MODO SUPER INTELIGENTE (Level 5):
-      1. **AGENDAMENTO AGRESSIVO:** Se o usuário confirmou um horário (ex: "sim", "12", "topo", "pode ser"), MARQUE 'scheduled: true' IMEDIATAMENTE.
-         - NÃO ESPERE O EMAIL.
-         - O fato de ter escolhido o horário JÁ É um agendamento.
-      2. **Extração PT-BR:** Use chaves em PORTUGUÊS: consumo_medio, tipo_telhado, valor_conta.
-      3. **Contexto Longo:** Analise as 100 msgs para entender a negociação.
-      
-      SCHEMA:
-      ${CRM_SCHEMA}
-    `;
+    const history = contextHistory
+      ? `${contextHistory}\n---\n${newHistory}`
+      : newHistory;
 
-    // Atualizado para chaves em Português
-    const tools = [{
-      type: "function" as const,
-      function: {
-        name: "save_crm_data",
-        description: "Salva os dados extraídos no banco de dados.",
-        parameters: {
-          type: "object",
-          properties: {
-            extracted_data: {
-              type: "object",
-              properties: {
-                name: { type: "string" },
-                email: { type: "string" },
-                custom_fields: {
-                  type: "object",
-                  properties: {
-                    consumo_medio: { type: "string" },
-                    tipo_telhado: { type: "string" },
-                    valor_conta: { type: "string" }
-                  }
-                },
-                meeting_info: {
-                  type: "object",
-                  properties: {
-                    scheduled: { type: "boolean" },
-                    date_iso: { type: "string" },
-                    link: { type: "string" },
-                    briefing: { type: "string" }
-                  },
-                  required: ["scheduled"]
-                },
-                intent_classification: {
-                  type: "string",
-                  enum: ["INTERESTED", "SCHEDULED", "DISQUALIFIED", "SPAM", "UNKNOWN"],
-                  description: "Classificação da intenção do cliente"
-                }
-              }
-            }
-          },
-          required: ["extracted_data"]
-        }
-      }
-    }];
+    auditLog.input_summary = `${contextMsgs?.length || 0}ctx+${newMsgs.length}new`;
+    console.log(`[Pipeline] ${auditLog.input_summary} msgs`);
 
-    console.log(`[Pipeline] Analisando...`);
+    // ============ CHAMAR IA ============
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const today = new Date().toISOString().split('T')[0];
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5", // Modelo Level 5 (Next Gen)
+      model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: extractionPrompt },
-        { role: "user", content: `HISTÓRICO:\n\n${historyScript}` }
+        { role: "system", content: SYSTEM_PROMPT + today },
+        { role: "user", content: history }
       ],
-      tools: tools,
-      tool_choice: { type: "function", function: { name: "save_crm_data" } }
+      tools: [EXTRACTION_TOOL],
+      tool_choice: { type: "function", function: { name: "save_crm_data" } },
+      max_tokens: 250
     });
+
+    auditLog.tokens_used = completion.usage?.total_tokens || 0;
+    console.log(`[Pipeline] Tokens: ${auditLog.tokens_used}`);
 
     const toolCall = completion.choices[0].message.tool_calls?.[0];
 
-    if (toolCall) {
-      const { extracted_data } = JSON.parse(toolCall.function.arguments);
-      console.log(`[Pipeline] Dados:`, JSON.stringify(extracted_data));
-
-      // Define confiança baseada na presença de tool call (GPT-4o usually high confidence)
-      auditLog.confidence_score = 1.0; 
-
-      const updates: any = {};
-
-      // 1. Merge Cadastral
-      if (extracted_data.name && extracted_data.name !== lead.name) updates.name = extracted_data.name;
-      if (extracted_data.email && extracted_data.email !== lead.email) updates.email = extracted_data.email;
-
-      // 2. Merge Custom Fields
-      if (extracted_data.custom_fields) {
-        updates.custom_fields = {
-          ...(lead.custom_fields || {}),
-          ...Object.fromEntries(Object.entries(extracted_data.custom_fields).filter(([_, v]) => v != null))
-        };
-      }
-
-      // 3. Lógica de Agendamento (Prioridade Máxima)
-      // Se a IA marcou scheduled: true OU detectou intenção clara de agendamento (Ex: usuário confirmou horário)
-      const isScheduled = extracted_data.meeting_info?.scheduled || extracted_data.intent_classification === 'SCHEDULED';
-      
-      if (isScheduled) {
-        // Busca fase 'Reunião Agendada'
-        const { data: stage } = await supabase
-            .from('pipeline_stages')
-            .select('id')
-            .eq('name', 'Reunião Agendada')
-            .eq('equipe_id', lead.equipe_id)
-            .maybeSingle();
-
-        updates.meeting_scheduled = true;
-        // Se a data não veio no JSON (falha de extração), tentamos manter a que já existe ou usar 'hoje' como fallback provisório,
-        // mas o ideal é confiar na extração. Se veio null, não atualizamos a data para não quebrar.
-        if (extracted_data.meeting_info?.date_iso) {
-            updates.meeting_date = extracted_data.meeting_info.date_iso;
-        } else if (!lead.meeting_date) { // Se não extraiu e não tem data anterior, usa hoje
-            updates.meeting_date = new Date().toISOString();
-        }
-
-        updates.meeting_notes = `[IA Auto-Schedule] Intenção: ${extracted_data.intent_classification}. Link: ${extracted_data.meeting_info?.link || "Pendente"}`;
-        
-        if (stage) {
-             updates.stage_id = stage.id;
-             console.log(`[Pipeline] 🚀 REUNIÃO DETECTADA! Movendo para ${stage.id}`);
-        }
-      }
-      // 4. Lógica de Qualificação (NOVO)
-      // Se está INTERESSADO, não agendou reunião ainda, e está no início do funil
-      else if (extracted_data.intent_classification === 'INTERESTED') {
-          const currentStageName = lead.pipeline_stages?.name;
-          
-          // Se estiver em 'Novo Lead' ou sem etapa, avança para 'Qualificação'
-          if (!currentStageName || currentStageName === 'Novo Lead') {
-              const { data: qualStage } = await supabase
-                .from('pipeline_stages')
-                .select('id')
-                .eq('name', 'Qualificação')
-                .eq('equipe_id', lead.equipe_id)
-                .maybeSingle();
-              
-              if (qualStage) {
-                  updates.stage_id = qualStage.id;
-                  console.log(`[Pipeline] Avançando para Qualificação (ID: ${qualStage.id})`);
-              }
-          }
-      }
-
-      // 5. Desqualificação
-      if (extracted_data.intent_classification === 'DISQUALIFIED') {
-        updates.lead_type = 'contact';
-        updates.qualification_status = 'disqualified';
-      }
-
-      // 6. Aplicar Updates
-      if (Object.keys(updates).length > 0) {
-        await supabase.from('leads').update(updates).eq('id', lead_id);
-        
-        auditLog.decision_type = 'crm_update';
-        auditLog.output_action = { 
-            changes: updates, 
-            intent: extracted_data.intent_classification,
-            raw_data: extracted_data
-        };
-        auditLog.status = 'success';
-      } else {
-        auditLog.decision_type = 'no_action';
-        auditLog.output_action = { reason: "Nada novo", raw: extracted_data };
-        auditLog.status = 'success';
-      }
-
-    } else {
-         auditLog.decision_type = 'skipped';
-         auditLog.output_action = { reason: "Sem tool call" };
-         auditLog.status = 'success';
+    if (!toolCall) {
+      auditLog.decision_type = 'skipped';
+      auditLog.output_action = { reason: "No tool call" };
+      auditLog.status = 'success';
+      return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
-    return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    const data = JSON.parse(toolCall.function.arguments);
+    console.log(`[Pipeline] Extraído:`, JSON.stringify(data));
+
+    // ============ EARLY EXIT: Nada mudou ============
+    if (data.intent === 'UNCHANGED') {
+      auditLog.decision_type = 'unchanged';
+      auditLog.output_action = { intent: 'UNCHANGED' };
+      auditLog.status = 'success';
+      auditLog.confidence_score = 1.0;
+      console.log(`[Pipeline] Sem mudanças relevantes`);
+      return new Response(JSON.stringify({ success: true, unchanged: true }), { headers: corsHeaders });
+    }
+
+    auditLog.confidence_score = 1.0;
+    const updates: any = {};
+
+    // 1. Dados cadastrais
+    if (data.name && data.name !== lead.name) updates.name = data.name;
+    if (data.email && data.email !== lead.email) updates.email = data.email;
+
+    // 2. Custom fields
+    const cf: any = {};
+    if (data.consumo_medio) cf.consumo_medio = data.consumo_medio;
+    if (data.tipo_telhado) cf.tipo_telhado = data.tipo_telhado;
+    if (data.valor_conta) cf.valor_conta = data.valor_conta;
+
+    if (Object.keys(cf).length > 0) {
+      updates.custom_fields = { ...(lead.custom_fields || {}), ...cf };
+    }
+
+    // 3. Agendamento
+    const isScheduled = data.meeting_scheduled || data.intent === 'SCHEDULED';
+
+    if (isScheduled) {
+      const { data: stage } = await supabase
+        .from('pipeline_stages')
+        .select('id')
+        .eq('name', 'Reunião Agendada')
+        .eq('equipe_id', lead.equipe_id)
+        .maybeSingle();
+
+      updates.meeting_scheduled = true;
+      if (data.meeting_date) updates.meeting_date = data.meeting_date;
+      else if (!lead.meeting_date) updates.meeting_date = new Date().toISOString();
+      if (data.meeting_link) updates.meeting_notes = `[IA] ${data.meeting_link}`;
+      if (stage) {
+        updates.stage_id = stage.id;
+        console.log(`[Pipeline] Reunião → ${stage.id}`);
+      }
+    }
+    // 4. Qualificação
+    else if (data.intent === 'INTERESTED') {
+      const currentStage = lead.pipeline_stages?.name;
+      if (!currentStage || currentStage === 'Novo Lead') {
+        const { data: qualStage } = await supabase
+          .from('pipeline_stages')
+          .select('id')
+          .eq('name', 'Qualificação')
+          .eq('equipe_id', lead.equipe_id)
+          .maybeSingle();
+
+        if (qualStage) {
+          updates.stage_id = qualStage.id;
+          console.log(`[Pipeline] → Qualificação`);
+        }
+      }
+    }
+
+    // 5. Desqualificação
+    if (data.intent === 'DISQUALIFIED') {
+      updates.lead_type = 'contact';
+      updates.qualification_status = 'disqualified';
+    }
+
+    // 6. Aplicar updates
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('leads').update(updates).eq('id', lead_id);
+      auditLog.decision_type = 'crm_update';
+      auditLog.output_action = { changes: updates, intent: data.intent, tokens: auditLog.tokens_used };
+      auditLog.status = 'success';
+    } else {
+      auditLog.decision_type = 'no_action';
+      auditLog.output_action = { intent: data.intent };
+      auditLog.status = 'success';
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      intent: data.intent,
+      updates: Object.keys(updates).length,
+      tokens: auditLog.tokens_used
+    }), { headers: corsHeaders });
 
   } catch (error) {
     console.error('[Pipeline] Erro:', error);

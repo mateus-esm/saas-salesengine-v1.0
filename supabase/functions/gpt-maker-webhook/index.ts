@@ -185,35 +185,78 @@ serve(async (req) => {
       console.log('[Webhook] Lead existente atualizado:', lead.id)
     }
 
-    // 10. Salvar mensagem com dados de mídia
-    const { error: msgError } = await supabase.from('messages').insert({
-      lead_id: lead.id,
-      content: messageContent,
-      sender_type: senderType,
-      gpt_message_id: messageId,
-      media_url: mediaUrl,
-      media_type: mediaType,
-      created_at: messageDate
-    })
+    // 10. Verificar duplicata ANTES de inserir
+    // Mensagens de agente enviadas pelo Chat UI já foram salvas pelo send-chat-message
+    // GPT Maker ecoa essas mensagens de volta, causando duplicação
 
-    if (msgError) {
-      console.error('[Webhook] Erro ao salvar mensagem:', msgError)
-    } else {
-      console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType, 'media_type:', mediaType)
+    let skipInsert = false
+
+    if (senderType === 'agent') {
+      // Verifica se já existe mensagem similar nos últimos 30 segundos
+      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
+
+      const { data: existingMsg } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('lead_id', lead.id)
+        .eq('sender_type', 'agent')
+        .eq('content', messageContent)
+        .gte('created_at', thirtySecondsAgo)
+        .limit(1)
+        .maybeSingle()
+
+      if (existingMsg) {
+        console.log('[Webhook] Mensagem de agente duplicada detectada, ignorando:', existingMsg.id)
+        skipInsert = true
+      }
     }
 
-    // 11. Incrementar contador de não lidos (apenas para mensagens do cliente)
-    if (senderType === 'customer') {
-      const { error: rpcError } = await supabase.rpc('increment_unread_count', { 
-        row_id: lead.id 
+    // Também verifica por gpt_message_id se disponível
+    if (!skipInsert && messageId) {
+      const { data: existingById } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('gpt_message_id', messageId)
+        .limit(1)
+        .maybeSingle()
+
+      if (existingById) {
+        console.log('[Webhook] Mensagem com mesmo gpt_message_id já existe, ignorando:', messageId)
+        skipInsert = true
+      }
+    }
+
+    // 11. Salvar mensagem com dados de mídia (apenas se não for duplicata)
+    if (!skipInsert) {
+      const { error: msgError } = await supabase.from('messages').insert({
+        lead_id: lead.id,
+        content: messageContent,
+        sender_type: senderType,
+        gpt_message_id: messageId,
+        media_url: mediaUrl,
+        media_type: mediaType,
+        created_at: messageDate
+      })
+
+      if (msgError) {
+        console.error('[Webhook] Erro ao salvar mensagem:', msgError)
+      } else {
+        console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType, 'media_type:', mediaType)
+      }
+    }
+
+    // 12. Incrementar contador de não lidos (apenas para mensagens do cliente E se não foi duplicata)
+    if (senderType === 'customer' && !skipInsert) {
+      const { error: rpcError } = await supabase.rpc('increment_unread_count', {
+        row_id: lead.id
       })
       if (rpcError) {
         console.error('[Webhook] Erro ao incrementar unread_count:', rpcError)
       }
     }
 
-    // 12. Disparar IA em background (apenas para mensagens do cliente e se agente estiver ativo)
-    if (lead && senderType === 'customer') {
+    // 13. Disparar IA em background (apenas para mensagens NOVAS do cliente e se agente estiver ativo)
+    if (lead && senderType === 'customer' && !skipInsert) {
       if (!isAgentEnabled) {
         console.log('[Webhook] Agente CRM desativado para esta equipe. Ignorando análise IA.')
       } else {
