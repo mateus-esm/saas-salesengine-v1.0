@@ -58,7 +58,7 @@ serve(async (req) => {
     equipe_id: null as string | null,
     decision_type: 'started',
     input_summary: '',
-    output_action: {} as Record<string, any>,
+    output_action: {} as Record<string, unknown>,
     status: 'processing',
     error_details: null as string | null,
     confidence_score: 0,
@@ -211,14 +211,14 @@ serve(async (req) => {
     }
 
     auditLog.confidence_score = 1.0;
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
 
     // 1. Dados cadastrais
     if (data.name && data.name !== lead.name) updates.name = data.name;
     if (data.email && data.email !== lead.email) updates.email = data.email;
 
     // 2. Custom fields
-    const cf: any = {};
+    const cf: Record<string, unknown> = {};
     if (data.consumo_medio) cf.consumo_medio = data.consumo_medio;
     if (data.tipo_telhado) cf.tipo_telhado = data.tipo_telhado;
     if (data.valor_conta) cf.valor_conta = data.valor_conta;

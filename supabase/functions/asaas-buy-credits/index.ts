@@ -168,7 +168,13 @@ serve(async (req) => {
     const paymentData = await paymentResponse.json();
     console.log('[Asaas Buy Credits] Payment created:', paymentData.id);
 
-    const response: any = {
+    const response: {
+      success: boolean;
+      paymentId: string;
+      invoiceUrl: string;
+      pixQrCode?: string;
+      pixCopyPaste?: string;
+    } = {
       success: true,
       paymentId: paymentData.id,
       invoiceUrl: paymentData.invoiceUrl,

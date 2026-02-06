@@ -71,8 +71,9 @@ export const useLeads = () => {
         .from("leads")
         .update({
           ...updateData,
+          custom_fields: updateData.custom_fields as any,
           updated_at: new Date().toISOString(),
-        } as any)
+        })
         .eq("id", id)
         .select()
         .single();

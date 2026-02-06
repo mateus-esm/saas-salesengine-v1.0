@@ -46,16 +46,24 @@ serve(async (req) => {
 
     const jestorToken = equipe.jestor_api_token;
     
+    interface JestorLead {
+      criado_em?: string;
+      status?: string;
+      reuniao_agendada?: boolean | string;
+      valor_da_proposta?: string | number;
+      [key: string]: unknown;
+    }
+
     // Parse request body for custom date range
-    let requestBody: any = {};
+    let requestBody: Record<string, unknown> = {};
     try {
       requestBody = await req.json();
     } catch {
       // If no body, use current month
     }
     
-    const targetMonth = requestBody.month ? parseInt(requestBody.month) : new Date().getMonth() + 1;
-    const targetYear = requestBody.year ? parseInt(requestBody.year) : new Date().getFullYear();
+    const targetMonth = requestBody.month ? parseInt(String(requestBody.month)) : new Date().getMonth() + 1;
+    const targetYear = requestBody.year ? parseInt(String(requestBody.year)) : new Date().getFullYear();
     
     const firstDay = new Date(targetYear, targetMonth - 1, 1);
     const lastDay = new Date(targetYear, targetMonth, 0);
@@ -88,7 +96,7 @@ serve(async (req) => {
     console.log("[Jestor] Estrutura da resposta:", JSON.stringify(leadsData).substring(0, 500) + "..."); 
 
     // Verificação de Segurança: Garante que 'leads' seja sempre um array
-    let leads: any[] = [];
+    let leads: JestorLead[] = [];
     
     if (Array.isArray(leadsData.data)) {
         leads = leadsData.data;
@@ -107,7 +115,7 @@ serve(async (req) => {
     console.log(`[Jestor] Total de registros processados: ${leads.length}`);
 
     // Filtra leads criados no mês atual
-    const currentMonthLeads = leads.filter((lead: any) => {
+    const currentMonthLeads = leads.filter((lead: JestorLead) => {
       if (!lead.criado_em) return false;
       const createdDate = new Date(lead.criado_em);
       return createdDate >= firstDay && createdDate <= lastDay;
@@ -115,24 +123,24 @@ serve(async (req) => {
 
     const leadsAtendidos = currentMonthLeads.length;
 
-    const reunioesAgendadas = currentMonthLeads.filter((lead: any) => {
+    const reunioesAgendadas = currentMonthLeads.filter((lead: JestorLead) => {
       const s = String(lead.status || '').toLowerCase();
       const temFlagReuniao = lead.reuniao_agendada === true || lead.reuniao_agendada === 'true' || (lead.reuniao_agendada && lead.reuniao_agendada !== 'false');
       const statusReuniao = s.includes('agendada') || s.includes('reunião') || s === 'agendado';
       return temFlagReuniao || statusReuniao;
     }).length;
 
-    const negociosFechados = currentMonthLeads.filter((lead: any) => {
+    const negociosFechados = currentMonthLeads.filter((lead: JestorLead) => {
       const s = String(lead.status || '').toLowerCase();
       return s.includes('fechado') || s.includes('ganho') || s === 'contratado' || s.includes('venda');
     }).length;
 
     const valorTotalNegocios = currentMonthLeads
-      .filter((lead: any) => {
+      .filter((lead: JestorLead) => {
           const s = String(lead.status || '').toLowerCase();
           return s.includes('fechado') || s.includes('ganho') || s === 'contratado' || s.includes('venda');
       })
-      .reduce((sum: number, lead: any) => sum + (parseFloat(lead.valor_da_proposta) || 0), 0);
+      .reduce((sum: number, lead: JestorLead) => sum + (parseFloat(String(lead.valor_da_proposta || 0)) || 0), 0);
 
     const taxaConversaoReuniao = leadsAtendidos > 0 ? ((reunioesAgendadas / leadsAtendidos) * 100).toFixed(1) : '0.0';
     const taxaConversaoNegocio = reunioesAgendadas > 0 ? ((negociosFechados / reunioesAgendadas) * 100).toFixed(1) : '0.0';

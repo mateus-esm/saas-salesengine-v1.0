@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 declare const EdgeRuntime: {
-  waitUntil: (promise: Promise<any>) => void;
+  waitUntil: (promise: Promise<void>) => void;
 };
 
 const corsHeaders = {
@@ -104,7 +104,7 @@ serve(async (req) => {
     // Strategy: 
     // - Try by phone AND equipe_id first (if phone exists)
     // - If not found (or no phone), try by gpt_maker_chat_id AND equipe_id
-    let lead: any = null
+    let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null } | null = null
     
     if (senderPhone) {
       const { data: leadByPhone } = await supabase
@@ -154,7 +154,7 @@ serve(async (req) => {
           origem: 'IA',
           last_message_at: messageDate
         })
-        .select('id, gpt_maker_chat_id')
+        .select('id, gpt_maker_chat_id, phone')
         .single()
 
       if (createError) {
@@ -165,7 +165,7 @@ serve(async (req) => {
       console.log('[Webhook] Novo lead criado:', lead.id)
     } else {
       // Atualizar chat_id e last_message_at se necessário
-      const updates: Record<string, any> = { last_message_at: messageDate }
+      const updates: Record<string, unknown> = { last_message_at: messageDate }
       
       // If we found by phone but lead has no chat_id, or chat_id changed
       if (chatId && lead.gpt_maker_chat_id !== chatId) {
@@ -184,6 +184,8 @@ serve(async (req) => {
       
       console.log('[Webhook] Lead existente atualizado:', lead.id)
     }
+
+    if (!lead) throw new Error("Falha inesperada: Lead nulo após processamento");
 
     // 10. Verificar duplicata ANTES de inserir
     // Mensagens de agente enviadas pelo Chat UI já foram salvas pelo send-chat-message

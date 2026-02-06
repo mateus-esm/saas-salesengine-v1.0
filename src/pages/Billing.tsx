@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -38,7 +38,7 @@ const Billing = () => {
   const [pixData, setPixData] = useState<{ qrCode: string; copyPaste: string } | null>(null);
   const { toast } = useToast();
 
-  const fetchCredits = async () => {
+  const fetchCredits = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -86,7 +86,7 @@ const Billing = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const handleRecharge = () => {
     const totalCost = (selectedCredits / 500) * 40;
@@ -181,7 +181,7 @@ const Billing = () => {
 
   useEffect(() => {
     fetchCredits();
-  }, []);
+  }, [fetchCredits]);
 
   if (loading) {
     return (

@@ -13,9 +13,6 @@ export function formatWhatsAppText(text: string): React.ReactNode {
   
   // Primeiro, vamos dividir o texto em partes (URLs e não-URLs)
   const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-  let keyIndex = 0;
 
   // Processa URLs primeiro
   const textWithPlaceholders: { text: string; urls: string[] } = {
@@ -149,12 +146,13 @@ function restoreUrls(content: React.ReactNode, urls: string[]): React.ReactNode 
     }
 
     if (React.isValidElement(node)) {
-      const children = (node.props as any).children;
+      const element = node as React.ReactElement;
+      const children = element.props.children;
       if (children) {
-        return React.cloneElement(node, {
-          ...node.props,
+        return React.cloneElement(element, {
+          ...element.props,
           children: processNode(children, `${keyPrefix}child-`)
-        } as any);
+        });
       }
     }
 

@@ -20,9 +20,10 @@ const Dashboard = () => {
     switch (selectedPeriod) {
       case "current":
         return { start: startOfMonth(currentDate), end: endOfMonth(currentDate) };
-      case "last":
+      case "last": {
         const lastMonth = subMonths(currentDate, 1);
         return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
+      }
       case "last3":
         return { start: startOfMonth(subMonths(currentDate, 2)), end: endOfMonth(currentDate) };
       case "year":

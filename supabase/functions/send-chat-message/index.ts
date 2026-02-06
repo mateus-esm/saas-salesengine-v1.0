@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
-    const body: any = { message: content }
+    const body: { message: string; mediaUrl?: string; mediaType?: string } = { message: content }
     if (media_url) {
       body.mediaUrl = media_url
       body.mediaType = media_type

@@ -55,9 +55,9 @@ const Chat = () => {
       leadId: lead.id,
       customerName: lead.name || "Sem Nome",
       customerPhone: lead.phone || lead.origem || "WhatsApp",
-      status: (lead as any).atendido_por_agente ? 'human_handling' : 'bot_handling',
+      status: lead.atendido_por_agente ? 'human_handling' : 'bot_handling',
       isOnline: true,
-      unreadCount: (lead as any).unread_count || 0,
+      unreadCount: lead.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
       tags: lead.tags || [],
@@ -82,8 +82,8 @@ const Chat = () => {
       leadId: lead.id,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
-      status: (lead as any).atendido_por_agente ? 'human_handling' as const : 'bot_handling' as const,
-      unreadCount: (lead as any).unread_count || 0,
+      status: lead.atendido_por_agente ? 'human_handling' as const : 'bot_handling' as const,
+      unreadCount: lead.unread_count || 0,
       leadType: lead.lead_type,
       responsibleId: lead.responsible_id,
       crmData: {
@@ -107,9 +107,9 @@ const Chat = () => {
         body: {
           lead_id: selectedLeadId,
           content: content,
-          type: media ? media.type : 'text',
+          media_type: media ? media.type : 'text',
           media_url: media?.url,
-          chat_id: (lead as any)?.gpt_maker_chat_id
+          chat_id: lead?.gpt_maker_chat_id
         }
       });
 
@@ -124,7 +124,7 @@ const Chat = () => {
   const handleToggleHandoff = async () => {
     if (!selectedLeadId) return;
     const lead = leads?.find(l => l.id === selectedLeadId);
-    const isHuman = (lead as any)?.atendido_por_agente;
+    const isHuman = lead?.atendido_por_agente;
 
     try {
       // Atualiza no banco
@@ -134,7 +134,7 @@ const Chat = () => {
         .eq('id', selectedLeadId);
 
       // Chama API do GPT Maker para controlar bot
-      const chatId = (lead as any)?.gpt_maker_chat_id;
+      const chatId = lead?.gpt_maker_chat_id;
       if (chatId) {
         await supabase.functions.invoke('send-chat-message', {
           body: {
@@ -156,7 +156,7 @@ const Chat = () => {
   const handleUpdateCRM = async (data: Partial<ChatSession["crmData"]>) => {
     if (!selectedLeadId) return;
 
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     if (data.value !== undefined) updates.opportunity_value = data.value;
     if (data.stage !== undefined) updates.stage_id = data.stage;
     if (data.notes !== undefined) updates.observations = data.notes;
@@ -192,16 +192,7 @@ const Chat = () => {
     createdAt: new Date(t.created_at)
   }));
 
-  // CRM Panel Component (para reutilizar em mobile sheet)
-  const CRMPanelContent = () => (
-    <CRMContextPanel
-      session={selectedSession}
-      tasks={currentTasks}
-      onUpdateCRM={handleUpdateCRM}
-      onAddTask={handleAddTask}
-      onToggleTask={handleToggleTask}
-    />
-  );
+
 
   return (
     <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background">
@@ -239,9 +230,14 @@ const Chat = () => {
               </div>
             ) : (
               <InboxSidebar
-                sessions={sessionsAdapter as any}
+                sessions={sessionsAdapter}
                 selectedSessionId={selectedLeadId}
-                onSelectSession={setSelectedLeadId}
+                onSelectSession={(id) => {
+                  setSelectedLeadId(id);
+                  if (window.innerWidth < 1024) {
+                    setShowInbox(false);
+                  }
+                }}
               />
             )}
           </>
@@ -257,7 +253,10 @@ const Chat = () => {
               <div className="flex-1">
                 <ConversationHeader
                   session={selectedSession}
+                  stages={stages}
                   onToggleHandoff={handleToggleHandoff}
+                  onUpdateCRM={handleUpdateCRM}
+                  onBack={() => setShowInbox(true)}
                 />
               </div>
               {/* Toggle buttons */}
@@ -283,7 +282,13 @@ const Chat = () => {
                     </Button>
                   </SheetTrigger>
                   <SheetContent side="right" className="w-80 p-0">
-                    <CRMPanelContent />
+                    <CRMContextPanel
+                        session={selectedSession}
+                        tasks={currentTasks}
+                        onUpdateCRM={handleUpdateCRM}
+                        onAddTask={handleAddTask}
+                        onToggleTask={handleToggleTask}
+                    />
                   </SheetContent>
                 </Sheet>
               </div>
@@ -312,7 +317,9 @@ const Chat = () => {
                           content: msg.content || '',
                           sender: msg.sender_type as 'customer' | 'agent' | 'ai',
                           timestamp: new Date(msg.created_at || new Date()),
-                          type: 'text'
+                          type: 'text',
+                          mediaUrl: msg.media_url,
+                          mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined
                         }}
                       />
                     ))
@@ -366,7 +373,13 @@ const Chat = () => {
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <CRMPanelContent />
+            <CRMContextPanel
+                session={selectedSession}
+                tasks={currentTasks}
+                onUpdateCRM={handleUpdateCRM}
+                onAddTask={handleAddTask}
+                onToggleTask={handleToggleTask}
+            />
           </>
         )}
       </div>

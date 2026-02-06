@@ -2,7 +2,7 @@ import { Message } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bot, User, Image as ImageIcon, FileAudio } from "lucide-react";
+import { Bot, User, Image as ImageIcon, FileText } from "lucide-react";
 import { formatWhatsAppText } from "@/lib/whatsappFormatter";
 import { useState } from "react";
 
@@ -91,7 +91,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (message.mediaType === 'document') {
       return (
         <div className="mb-2 flex items-center gap-2">
-          <FileAudio className="h-4 w-4" />
+          <FileText className="h-4 w-4" />
           <a 
             href={message.mediaUrl} 
             target="_blank" 

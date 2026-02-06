@@ -60,14 +60,14 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
       // Fetch pipeline stages
       const { data: stages, error: stagesError } = await supabase
         .from("pipeline_stages")
-        .select("id, name, color, position")
+        .select("id, name, color, position, category")
         .eq("equipe_id", equipeId)
         .order("position");
 
       if (stagesError) throw stagesError;
 
       // Find the "won" category stage (Fechado)
-      const wonStage = stages?.find(s => (s as any).category === 'won');
+      const wonStage = stages?.find(s => s.category === 'won');
 
       // Fetch team members for responsible names
       const { data: teamMembers, error: teamError } = await supabase
@@ -169,6 +169,7 @@ export const useDashboardMetrics = ({ startDate, endDate }: UseDashboardMetricsO
       let totalTouchpoints = 0;
       try {
         // Try RPC function first
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: kpiData, error: kpiError } = await supabase
           .rpc('get_dashboard_kpis' as any, {
             p_equipe_id: equipeId,

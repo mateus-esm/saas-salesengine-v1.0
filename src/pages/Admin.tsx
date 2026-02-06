@@ -82,7 +82,7 @@ const Admin = () => {
                 const [equipesRes, profilesRes, rolesRes] = await Promise.all([
                     supabase.from("equipes").select("*").order("nome"),
                     supabase.from("profiles").select("id, user_id, email, nome_completo, equipe_id").order("email"),
-                    supabase.from("user_roles").select("*") as any,
+                    supabase.from("user_roles").select("*"),
                 ]);
 
                 if (equipesRes.data) setEquipes(equipesRes.data);
@@ -92,7 +92,7 @@ const Admin = () => {
 
                 // Merge profiles with roles
                 if (profilesRes.data) {
-                    const profilesWithRoles = profilesRes.data.map((profile: any) => {
+                    const profilesWithRoles = profilesRes.data.map((profile) => {
                         const userRole = roles.find(r => r.user_id === profile.user_id);
                         return {
                             ...profile,
@@ -180,7 +180,7 @@ const Admin = () => {
                 // Update existing role
                 const { error } = await supabase
                     .from("user_roles")
-                    .update({ role: editingProfile.role } as any)
+                    .update({ role: editingProfile.role as "user" | "admin" | "owner" | "super_admin" })
                     .eq("user_id", editingProfile.user_id);
 
                 if (error) throw error;
@@ -190,8 +190,8 @@ const Admin = () => {
                     .from("user_roles")
                     .insert({
                         user_id: editingProfile.user_id,
-                        role: editingProfile.role
-                    } as any);
+                        role: editingProfile.role as "user" | "admin" | "owner" | "super_admin"
+                    });
 
                 if (error) throw error;
             }
