@@ -26,7 +26,7 @@ interface ConversationHeaderProps {
   onBack?: () => void;
 }
 
-export function ConversationHeader({ session, onToggleHandoff, onBack }: ConversationHeaderProps) {
+export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateCRM, onBack }: ConversationHeaderProps) {
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
