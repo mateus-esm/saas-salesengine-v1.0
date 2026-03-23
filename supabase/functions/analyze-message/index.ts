@@ -122,7 +122,7 @@ serve(async (req) => {
       .from('leads')
       .select('id, name, email, custom_fields, meeting_date, equipe_id, pipeline_stages(name)')
       .eq('id', lead_id)
-      .single();
+      .maybeSingle();
 
     if (leadError || !lead) throw new Error(`Lead not found`);
     auditLog.equipe_id = lead.equipe_id;
@@ -249,7 +249,8 @@ serve(async (req) => {
     }
     // 4. Qualificação
     else if (data.intent === 'INTERESTED') {
-      const currentStage = lead.pipeline_stages?.name;
+      const stagesArr = lead.pipeline_stages as unknown as { name: string }[] | null;
+      const currentStage = stagesArr?.[0]?.name;
       if (!currentStage || currentStage === 'Novo Lead') {
         const { data: qualStage } = await supabase
           .from('pipeline_stages')

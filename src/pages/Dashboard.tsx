@@ -169,7 +169,7 @@ const Dashboard = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.totalLeads || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.totalLeads || 0}</div>
               <p className="text-xs text-muted-foreground">No período</p>
             </CardContent>
           </Card>
@@ -180,7 +180,7 @@ const Dashboard = () => {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.meetingsScheduled || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.meetingsScheduled || 0}</div>
               <p className="text-xs text-muted-foreground">
                 {metrics?.conversionRate.toFixed(1)}% conversão
               </p>
@@ -193,7 +193,7 @@ const Dashboard = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.meetingsDone || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.meetingsDone || 0}</div>
               <p className="text-xs text-muted-foreground">Concluídas</p>
             </CardContent>
           </Card>
@@ -204,7 +204,7 @@ const Dashboard = () => {
               <UserX className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.noShowCount || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.noShowCount || 0}</div>
               <p className="text-xs text-muted-foreground">
                 {metrics?.noShowRate.toFixed(1)}% taxa
               </p>
@@ -217,7 +217,7 @@ const Dashboard = () => {
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.meetingsToday || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.meetingsToday || 0}</div>
               <p className="text-xs text-muted-foreground">Agendadas</p>
             </CardContent>
           </Card>
@@ -228,7 +228,7 @@ const Dashboard = () => {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold font-mono">
                 {formatCurrency(metrics?.totalPipelineValue || 0)}
               </div>
               <p className="text-xs text-muted-foreground">Em aberto</p>
@@ -241,7 +241,7 @@ const Dashboard = () => {
               <BadgeCheck className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{metrics?.closedDealsCount || 0}</div>
+              <div className="text-2xl font-bold font-mono text-green-600">{metrics?.closedDealsCount || 0}</div>
               <p className="text-xs text-muted-foreground">No período</p>
             </CardContent>
           </Card>
@@ -252,7 +252,7 @@ const Dashboard = () => {
               <Banknote className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold font-mono text-green-600">
                 {formatCurrency(metrics?.closedDealsValue || 0)}
               </div>
               <p className="text-xs text-muted-foreground">Fechados</p>
@@ -268,7 +268,7 @@ const Dashboard = () => {
               <Percent className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">
+              <div className="text-2xl font-bold font-mono text-primary">
                 {(metrics?.closingRate || 0).toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">
@@ -283,7 +283,7 @@ const Dashboard = () => {
               <Target className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold font-mono text-green-600">
                 {formatCurrency(metrics?.avgTicket || 0)}
               </div>
               <p className="text-xs text-muted-foreground">Por negócio fechado</p>
@@ -296,7 +296,7 @@ const Dashboard = () => {
               <Phone className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold font-mono text-blue-600">
                 {metrics?.totalTouchpoints || 0}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -311,7 +311,7 @@ const Dashboard = () => {
               <Award className="h-4 w-4 text-amber-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600">
+              <div className="text-2xl font-bold font-mono text-amber-600">
                 {(metrics?.closingRatePostMeeting || 0).toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">Fecham após reunião</p>

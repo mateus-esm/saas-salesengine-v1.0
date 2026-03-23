@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bot, RefreshCw, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,8 @@ import { AgentUsage } from "@/components/agent/AgentUsage";
 import { AgentTraining } from "@/components/agent/AgentTraining";
 
 export default function Agent() {
+  const [refreshKey, setRefreshKey] = useState(0);
+
   return (
     <div className="flex-1 space-y-6 p-4 md:p-6 lg:p-8">
       {/* Header */}
@@ -27,7 +30,12 @@ export default function Agent() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" className="gap-2 w-fit">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="gap-2 w-fit"
+          onClick={() => setRefreshKey(k => k + 1)}
+        >
           <RefreshCw className="h-4 w-4" />
           Atualizar
         </Button>
@@ -47,11 +55,11 @@ export default function Agent() {
         </TabsList>
 
         <TabsContent value="usage" className="mt-6">
-          <AgentUsage />
+          <AgentUsage key={`usage-${refreshKey}`} />
         </TabsContent>
 
         <TabsContent value="training" className="mt-6">
-          <AgentTraining />
+          <AgentTraining key={`training-${refreshKey}`} />
         </TabsContent>
       </Tabs>
     </div>

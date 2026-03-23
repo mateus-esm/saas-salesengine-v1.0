@@ -19,6 +19,11 @@ jobs:
       
       # Deploy ignorando JWT check para a função de análise
       - run: supabase functions deploy analyze-message --no-verify-jwt
-      
-      # Deploy normal para o webhook
       - run: supabase functions deploy gpt-maker-webhook
+      - run: supabase functions deploy fetch-gpt-credits
+      - run: supabase functions deploy send-chat-message
+      - run: supabase functions deploy asaas-buy-credits
+      - run: supabase functions deploy asaas-subscribe
+      - run: supabase functions deploy crm-webhook --no-verify-jwt
+      - run: supabase functions deploy sync-chat-history
+      - run: supabase functions deploy process-automations

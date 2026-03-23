@@ -90,7 +90,7 @@ const Billing = () => {
 
   const handleRecharge = () => {
     const totalCost = (selectedCredits / 500) * 40;
-    const message = `Olá! Gostaria de recarregar ${selectedCredits.toLocaleString()} créditos AdvAI (R$ ${totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+    const message = `Olá! Gostaria de recarregar ${selectedCredits.toLocaleString()} créditos (R$ ${totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
     window.open(`https://wa.me/5585996487923?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -202,7 +202,7 @@ const Billing = () => {
             Billing <span className="text-primary">&amp; Créditos</span>
           </h1>
           <p className="text-sm text-foreground/70 mt-1 font-medium">
-            Gerencie seu consumo e plano AdvAI
+            Gerencie seu consumo e plano
           </p>
         </div>
       </div>
@@ -336,7 +336,7 @@ const Billing = () => {
         {/* Credit Recharge with Asaas */}
         <Card>
           <CardHeader>
-            <CardTitle>Recarga de Créditos AdvAI</CardTitle>
+            <CardTitle>Recarga de Créditos</CardTitle>
             <CardDescription>
               Adicione créditos para continuar utilizando a plataforma sem interrupções
             </CardDescription>
@@ -344,7 +344,7 @@ const Billing = () => {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Quantidade de Créditos AdvAI</label>
+                <label className="text-sm font-medium">Quantidade de Créditos</label>
                 <span className="text-2xl font-bold text-primary">{selectedCredits.toLocaleString()}</span>
               </div>
               <Slider
@@ -434,9 +434,9 @@ const Billing = () => {
         {/* Available Plans Section */}
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Planos AdvAI</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Planos Solo Ventures</h2>
             <p className="text-sm text-muted-foreground">
-              Escolha o plano ideal para escalar sua operação jurídica
+              Escolha o plano ideal para escalar sua operação
             </p>
           </div>
 
@@ -459,7 +459,7 @@ const Billing = () => {
                 <div className="space-y-2 py-4 border-t border-b">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">1.000 Créditos AdvAI</span>
+                    <span className="text-sm font-medium">1.000 Créditos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
@@ -470,7 +470,7 @@ const Billing = () => {
                 <ul className="space-y-2">
                   <li className="text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-primary mt-0.5">✓</span>
-                    <span>Setup completo do Agente AdvAI</span>
+                    <span>Setup completo do Agente IA</span>
                   </li>
                   <li className="text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-primary mt-0.5">✓</span>
@@ -528,7 +528,7 @@ const Billing = () => {
                 <div className="space-y-2 py-4 border-t border-b">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">3.000 Créditos AdvAI</span>
+                    <span className="text-sm font-medium">3.000 Créditos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
@@ -594,7 +594,7 @@ const Billing = () => {
                 <div className="space-y-2 py-4 border-t border-b">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">10.000 Créditos AdvAI</span>
+                    <span className="text-sm font-medium">10.000 Créditos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
