@@ -36,8 +36,9 @@ export function AgentTraining() {
 
       if (error) throw error;
 
-      // API returns array of { id, type, text, image }
-      const mapped: AgentTrainingType[] = (Array.isArray(data) ? data : []).map((item: any) => ({
+      // API returns { data: [...] } wrapper from GPT Maker
+      const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      const mapped: AgentTrainingType[] = items.map((item: any) => ({
         id: item.id,
         type: item.type || 'TEXT',
         text: item.text || '',
