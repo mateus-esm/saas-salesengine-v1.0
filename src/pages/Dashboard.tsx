@@ -296,7 +296,7 @@ const Dashboard = () => {
               <Phone className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold font-mono text-blue-600">
                 {metrics?.totalTouchpoints || 0}
               </div>
               <p className="text-xs text-muted-foreground">
