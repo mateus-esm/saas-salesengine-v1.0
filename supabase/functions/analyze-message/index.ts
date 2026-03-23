@@ -122,7 +122,7 @@ serve(async (req) => {
       .from('leads')
       .select('id, name, email, custom_fields, meeting_date, equipe_id, pipeline_stages(name)')
       .eq('id', lead_id)
-      .single();
+      .maybeSingle();
 
     if (leadError || !lead) throw new Error(`Lead not found`);
     auditLog.equipe_id = lead.equipe_id;
