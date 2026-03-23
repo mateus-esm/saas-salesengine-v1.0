@@ -311,7 +311,7 @@ const Dashboard = () => {
               <Award className="h-4 w-4 text-amber-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600">
+              <div className="text-2xl font-bold font-mono text-amber-600">
                 {(metrics?.closingRatePostMeeting || 0).toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">Fecham após reunião</p>

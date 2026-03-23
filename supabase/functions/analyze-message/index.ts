@@ -249,7 +249,8 @@ serve(async (req) => {
     }
     // 4. Qualificação
     else if (data.intent === 'INTERESTED') {
-      const currentStage = lead.pipeline_stages?.name;
+      const stagesArr = lead.pipeline_stages as unknown as { name: string }[] | null;
+      const currentStage = stagesArr?.[0]?.name;
       if (!currentStage || currentStage === 'Novo Lead') {
         const { data: qualStage } = await supabase
           .from('pipeline_stages')
