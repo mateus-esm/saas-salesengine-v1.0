@@ -90,7 +90,7 @@ const Billing = () => {
 
   const handleRecharge = () => {
     const totalCost = (selectedCredits / 500) * 40;
-    const message = `Olá! Gostaria de recarregar ${selectedCredits.toLocaleString()} créditos AdvAI (R$ ${totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
+    const message = `Olá! Gostaria de recarregar ${selectedCredits.toLocaleString()} créditos (R$ ${totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`;
     window.open(`https://wa.me/5585996487923?text=${encodeURIComponent(message)}`, '_blank');
   };
 
