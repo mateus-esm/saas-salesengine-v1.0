@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TrainingBlockCard } from "./TrainingBlockCard";
@@ -7,6 +7,7 @@ import { TrainingEmptyState } from "./TrainingEmptyState";
 import { AddTrainingModal } from "./AddTrainingModal";
 import { AgentTraining as AgentTrainingType } from "@/types/agent";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,61 +19,99 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// Mock data for demonstration
-const initialTrainings: AgentTrainingType[] = [
-  {
-    id: "1",
-    type: "TEXT",
-    text: "Nossos horários de atendimento são de segunda a sexta, das 8h às 18h. Aos sábados, atendemos das 9h às 13h. Domingos e feriados não há expediente.",
-    createdAt: "2024-12-15T10:30:00Z",
-  },
-  {
-    id: "2",
-    type: "WEBSITE",
-    text: "https://soloventures.com.br/produtos",
-    createdAt: "2024-12-14T15:45:00Z",
-  },
-  {
-    id: "3",
-    type: "TEXT",
-    text: "Aceitamos as seguintes formas de pagamento: cartão de crédito em até 12x sem juros, boleto bancário com 5% de desconto, e PIX com 10% de desconto.",
-    createdAt: "2024-12-10T09:00:00Z",
-  },
-  {
-    id: "4",
-    type: "VIDEO",
-    text: "https://youtube.com/watch?v=exemplo123",
-    createdAt: "2024-12-08T14:20:00Z",
-  },
-];
-
 export function AgentTraining() {
-  const [trainings, setTrainings] = useState<AgentTrainingType[]>(initialTrainings);
+  const [trainings, setTrainings] = useState<AgentTrainingType[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  const fetchTrainings = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.functions.invoke('manage-agent-training', {
+        method: 'GET',
+      });
+
+      if (error) throw error;
+
+      // API returns array of { id, type, text, image }
+      const mapped: AgentTrainingType[] = (Array.isArray(data) ? data : []).map((item: any) => ({
+        id: item.id,
+        type: item.type || 'TEXT',
+        text: item.text || '',
+        image: item.image || undefined,
+        createdAt: item.createdAt || undefined,
+      }));
+
+      setTrainings(mapped);
+    } catch (err) {
+      console.error('Error fetching trainings:', err);
+      toast.error("Erro ao carregar treinamentos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTrainings();
+  }, [fetchTrainings]);
 
   const filteredTrainings = trainings.filter(t => 
     t.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
     t.type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAdd = (newTraining: Omit<AgentTrainingType, 'id' | 'createdAt'>) => {
-    const training: AgentTrainingType = {
-      ...newTraining,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-    };
-    setTrainings(prev => [training, ...prev]);
-    toast.success("Treinamento adicionado com sucesso!");
+  const handleAdd = async (newTraining: Omit<AgentTrainingType, 'id' | 'createdAt'>) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-agent-training?action=create', {
+        body: {
+          type: newTraining.type,
+          text: newTraining.text,
+          image: newTraining.image,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success("Treinamento adicionado com sucesso!");
+      // Refresh list from API
+      await fetchTrainings();
+    } catch (err) {
+      console.error('Error adding training:', err);
+      toast.error("Erro ao adicionar treinamento");
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteId) return;
-    setTrainings(prev => prev.filter(t => t.id !== deleteId));
-    toast.success("Treinamento removido com sucesso!");
-    setDeleteId(null);
+    try {
+      setDeleting(true);
+      const { data, error } = await supabase.functions.invoke('manage-agent-training?action=delete', {
+        body: { trainingId: deleteId },
+      });
+
+      if (error) throw error;
+
+      toast.success("Treinamento removido com sucesso!");
+      setTrainings(prev => prev.filter(t => t.id !== deleteId));
+      setDeleteId(null);
+    } catch (err) {
+      console.error('Error deleting training:', err);
+      toast.error("Erro ao remover treinamento");
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -137,7 +176,12 @@ export function AgentTraining() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+            <AlertDialogAction 
+              onClick={handleDelete} 
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleting}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Remover
             </AlertDialogAction>
           </AlertDialogFooter>
