@@ -202,7 +202,7 @@ const Billing = () => {
             Billing <span className="text-primary">&amp; Créditos</span>
           </h1>
           <p className="text-sm text-foreground/70 mt-1 font-medium">
-            Gerencie seu consumo e plano AdvAI
+            Gerencie seu consumo e plano
           </p>
         </div>
       </div>
