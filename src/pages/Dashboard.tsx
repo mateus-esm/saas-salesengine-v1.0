@@ -169,7 +169,7 @@ const Dashboard = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.totalLeads || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.totalLeads || 0}</div>
               <p className="text-xs text-muted-foreground">No período</p>
             </CardContent>
           </Card>
