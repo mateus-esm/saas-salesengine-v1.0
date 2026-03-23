@@ -470,7 +470,7 @@ const Billing = () => {
                 <ul className="space-y-2">
                   <li className="text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-primary mt-0.5">✓</span>
-                    <span>Setup completo do Agente AdvAI</span>
+                    <span>Setup completo do Agente IA</span>
                   </li>
                   <li className="text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-primary mt-0.5">✓</span>
