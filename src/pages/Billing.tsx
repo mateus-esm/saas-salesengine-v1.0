@@ -344,7 +344,7 @@ const Billing = () => {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Quantidade de Créditos AdvAI</label>
+                <label className="text-sm font-medium">Quantidade de Créditos</label>
                 <span className="text-2xl font-bold text-primary">{selectedCredits.toLocaleString()}</span>
               </div>
               <Slider
