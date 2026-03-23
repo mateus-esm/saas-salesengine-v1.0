@@ -180,7 +180,7 @@ const Dashboard = () => {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metrics?.meetingsScheduled || 0}</div>
+              <div className="text-2xl font-bold font-mono">{metrics?.meetingsScheduled || 0}</div>
               <p className="text-xs text-muted-foreground">
                 {metrics?.conversionRate.toFixed(1)}% conversão
               </p>
