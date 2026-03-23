@@ -528,7 +528,7 @@ const Billing = () => {
                 <div className="space-y-2 py-4 border-t border-b">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">3.000 Créditos AdvAI</span>
+                    <span className="text-sm font-medium">3.000 Créditos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
