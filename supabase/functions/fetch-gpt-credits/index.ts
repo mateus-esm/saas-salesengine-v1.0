@@ -40,8 +40,8 @@ serve(async (req) => {
       );
     }
 
-    const gptMakerToken = Deno.env.get('GPT_MAKER_API_TOKEN');
-    if (!gptMakerToken) throw new Error('GPT Maker API token not configured');
+    const gptMakerToken = Deno.env.get('GPT_MAKER_TOKEN');
+    if (!gptMakerToken) throw new Error('GPT Maker token not configured');
 
     const now = new Date();
     const year = now.getFullYear();
