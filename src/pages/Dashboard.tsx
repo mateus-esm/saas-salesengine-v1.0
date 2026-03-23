@@ -268,7 +268,7 @@ const Dashboard = () => {
               <Percent className="h-4 w-4 text-primary" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">
+              <div className="text-2xl font-bold font-mono text-primary">
                 {(metrics?.closingRate || 0).toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">
