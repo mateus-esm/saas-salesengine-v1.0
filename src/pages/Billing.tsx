@@ -336,7 +336,7 @@ const Billing = () => {
         {/* Credit Recharge with Asaas */}
         <Card>
           <CardHeader>
-            <CardTitle>Recarga de Créditos AdvAI</CardTitle>
+            <CardTitle>Recarga de Créditos</CardTitle>
             <CardDescription>
               Adicione créditos para continuar utilizando a plataforma sem interrupções
             </CardDescription>
