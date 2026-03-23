@@ -434,9 +434,9 @@ const Billing = () => {
         {/* Available Plans Section */}
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Planos AdvAI</h2>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Planos Solo Ventures</h2>
             <p className="text-sm text-muted-foreground">
-              Escolha o plano ideal para escalar sua operação jurídica
+              Escolha o plano ideal para escalar sua operação
             </p>
           </div>
 
