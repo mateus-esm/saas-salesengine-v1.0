@@ -1,300 +1,154 @@
 
 
-# Transformação: Sidebar para Topbar + App Hub
+# Plano MVP Final para Produção — Análise Completa
 
-## Visão Estratégica
+## Estado Atual do Projeto
 
-Inspirado nas referências enviadas (Linear, Apple, Tesla, Basepoint), esta transformação move o app de um layout tradicional de "sidebar" para uma experiência mais limpa e focada com:
-
-1. **Topbar Minimalista** — Navegação horizontal no estilo Apple/Tesla
-2. **App Hub** — Página inicial como "launcher" explicando cada módulo
-3. **Paleta Solo** — Cores vibrantes (#FF481E, #F2CE1F, #9E2A19) usadas como acentos sutis no hover
-
-```text
-ANTES                              DEPOIS
-+--------+------------------+      +------------------------+
-| SIDE   |                  |      | Logo  Nav  Nav  User   | ← Topbar Glass
-| BAR    |    Conteúdo      |      +------------------------+
-|        |                  |      |                        |
-| Menu   |                  |      |      App Hub           | ← Cards com descrições
-| Items  |                  |      |      (Home page)       |
-|        |                  |      |                        |
-+--------+------------------+      +------------------------+
-```
+O SaaS já possui uma base sólida com autenticação, multi-tenancy, CRM com Kanban/Database, Chat com WhatsApp via GPT Maker, Dashboard com KPIs reais, e Billing com Asaas. O design "Precision OS" foi aplicado com TopNavbar + App Hub.
 
 ---
 
-## Arquitetura de Componentes
+## Problemas Críticos (Bloqueiam Produção)
 
-### Novos Componentes
+### 1. Build Error: `analyze-message` Edge Function
+**Problema:** Linha 252 — `lead.pipeline_stages?.name` falha porque a query retorna um array, não um objeto.
+**Fix:** Mudar a query do lead para usar `.select('*, pipeline_stages!inner(name)')` com `.maybeSingle()`, ou acessar como `lead.pipeline_stages?.[0]?.name`.
 
-| Componente | Descrição |
-|------------|-----------|
-| `TopNavbar.tsx` | Navegação horizontal fixa com glass effect |
-| `UserMenu.tsx` | Dropdown do usuário (avatar, nome, logout) |
-| `AppHubCard.tsx` | Card do App Hub com hover gradient |
+### 2. Agente de Treinamento usa dados MOCK
+**Problema:** `AgentTraining.tsx` usa `initialTrainings` hardcoded no estado local. `AgentUsage.tsx` usa `mockUsageData` hardcoded. Nenhum dado real é carregado do GPT Maker.
+**Fix:** Conectar à API do GPT Maker via Edge Functions para buscar blocos de treinamento reais e dados de consumo reais.
 
-### Arquivos Modificados
-
-| Arquivo | Mudança |
-|---------|---------|
-| `App.tsx` | Remover SidebarProvider, usar TopNavbar |
-| `Home.tsx` | Refatorar para App Hub com cards expandidos |
-| `index.css` | Adicionar utilitários de hover gradient |
-| `tailwind.config.ts` | Adicionar cores Solo (vermelho, laranja, amarelo) |
+### 3. Referências a "AdvAI" espalhadas pelo código
+**Problema:** Billing, Tutorial e Suporte ainda referenciam "AdvAI" em vez do nome dinâmico da equipe/tenant.
+**Fix:** Substituir todas as referências hardcoded por `tenant.name` ou `equipe.nome`.
 
 ---
 
-## Fase 1: Paleta Solo no Tailwind
+## Módulo por Módulo — O que Falta
 
-### Cores a Adicionar (HSL)
+### A. Chat (80% pronto)
+| Item | Status | Ação |
+|------|--------|------|
+| Envio de texto | OK | - |
+| Recebimento via webhook | OK | - |
+| Envio de imagens/docs | OK (upload funciona) | - |
+| Recebimento de mídia do webhook | OK (mediaUrl/mediaType mapeados) | - |
+| Áudio (gravação) | OK (useAudioRecorder) | - |
+| Recebimento de áudio do cliente | Parcial | O webhook salva `media_url`/`media_type`, mas o `MessageBubble` já renderiza audio/video/image/document |
+| Handoff IA/Humano | OK | - |
+| Sync histórico GPT Maker | OK | - |
 
-```css
-/* Paleta Solo Ventures */
---solo-orange: 14 100% 56%;      /* #FF481E */
---solo-yellow: 48 91% 53%;       /* #F2CE1F */
---solo-red: 8 59% 38%;           /* #9E2A19 */
---solo-gradient: linear-gradient(135deg, #FF481E, #F2CE1F);
-```
+**Pendências Chat:**
+1. Testar envio de áudio end-to-end (gravar → upload → GPT Maker → cliente recebe)
+2. Verificar se mídia recebida do cliente via webhook renderiza corretamente no chat
 
-### Uso Estratégico
+### B. CRM (85% pronto)
+| Item | Status | Ação |
+|------|--------|------|
+| Kanban drag-and-drop | OK | - |
+| Database View editável | OK (TanStack Table com inline edit) | - |
+| Trigger `handle_lead_lifecycle` | OK (lead→pipeline, contact→sai) | - |
+| Campos `creation_source` | OK (trigger + AddLeadModal) | - |
+| LeadDetailsModal | Existe | Verificar se todos os campos do banco estão acessíveis |
+| Filtros no Database | OK (stage, responsible, type) | - |
+| Import/Export CSV | Componentes existem | Verificar funcionalidade |
 
-- **Normal:** Preto/branco + cinza técnico
-- **Hover:** Borda ou underline com cor Solo
-- **Active:** Linha inferior com gradiente
+**Pendências CRM:**
+1. Verificar se `AddLeadModal` envia `creation_source: 'manual'` e `lead_type: 'lead'`
+2. Garantir que `company` e `position` estejam no LeadDetailsModal (campos existem no DB mas podem não estar no modal)
 
----
+### C. Dashboard (90% pronto)
+| Item | Status | Ação |
+|------|--------|------|
+| KPIs (8 cards) | OK | - |
+| KPIs avançados (4 cards) | OK | - |
+| Gráficos (pipeline, timeline, pie) | OK | - |
+| Filtro por período | OK | - |
+| Export CSV | OK | - |
+| Fonte mono nos números | Pendente | Aplicar `font-mono` nos valores de KPI |
 
-## Fase 2: TopNavbar Component
+**Pendências Dashboard:**
+1. Aplicar `font-mono` nos valores numéricos dos KPI cards
 
-### Design Visual
+### D. Agente IA (40% pronto — CRÍTICO)
+| Item | Status | Ação |
+|------|--------|------|
+| Tab Usage | MOCK | Conectar à edge function `fetch-gpt-credits` (já existe!) |
+| Tab Training | MOCK | Criar edge function para buscar/criar/deletar blocos via API GPT Maker |
+| Botão Atualizar | Não funciona | Conectar ao refetch |
 
-```text
-+------------------------------------------------------------------+
-| [Logo]    Início  Dashboard  Chat  CRM  Agente  ...    [Avatar]  |
-+------------------------------------------------------------------+
-          ↑ Links com hover underline gradiente
-```
+**Pendências Agente (PRIORIDADE ALTA):**
+1. `AgentUsage.tsx` — Substituir mock por chamada real à `fetch-gpt-credits` (a edge function já existe e retorna dados reais)
+2. `AgentTraining.tsx` — Criar edge function `manage-agent-training` que faz CRUD na API do GPT Maker (`/v2/training-blocks`)
+3. Conectar botão "Atualizar" ao refetch
 
-### Características
+### E. Billing (75% pronto)
+| Item | Status | Ação |
+|------|--------|------|
+| Créditos (saldo/consumo) | OK (via fetch-gpt-credits) | - |
+| Compra de créditos (Asaas) | OK | - |
+| Planos (Solo Starter/Scale/Pro) | UI OK | - |
+| PIX QR Code dialog | OK | - |
+| Referências "AdvAI" | Bug | Substituir por nome dinâmico |
 
-- Glass effect (`backdrop-blur-xl bg-white/80`)
-- Height: `h-14` (mesmo tamanho atual)
-- Links espaçados com `gap-8`
-- Hover: underline ou borda inferior com gradiente Solo
-- Active: texto mais escuro + linha inferior colorida
-- Mobile: Menu hambúrguer com dropdown
+**Pendências Billing:**
+1. Substituir "AdvAI" por `tenant.name` em todos os textos
+2. Verificar se os planos hardcoded correspondem aos da tabela `planos`
 
-### Dropdown de Usuário
+### F. Suporte (95% pronto)
+| Item | Status | Ação |
+|------|--------|------|
+| WhatsApp link | OK | - |
+| Email link | OK | - |
+| Info da equipe | OK | - |
 
-- Avatar circular pequeno (32px)
-- Click abre popover com:
-  - Nome + Email
-  - Role badge
-  - Separator
-  - Logout button
+**Pendência:** Nenhuma crítica. Apenas branding (já usa `tenant.name`).
 
----
+### G. Tutorial (70% pronto)
+| Item | Status | Ação |
+|------|--------|------|
+| Cards de overview | OK | - |
+| FAQ Accordion | OK | - |
+| Primeiros Passos | OK | - |
+| Referências "AdvAI" | Bug | Substituir por nome dinâmico |
+| Conteúdo genérico | Parcial | Atualizar textos para refletir funcionalidades reais |
 
-## Fase 3: App Hub (Nova Home)
-
-### Layout Inspirado em Linear/Apple
-
-```text
-+----------------------------------------------------------+
-|                                                          |
-|    Solo Ventures Engine                                  |
-|    Powered by [equipe.nome] • [user.nome]               |
-|                                                          |
-+----------------------------------------------------------+
-|                                                          |
-|  +-------------------+  +-------------------+            |
-|  | [Icon]            |  | [Icon]            |            |
-|  | Central de Chat   |  | Pipeline CRM      |            |
-|  |                   |  |                   |            |
-|  | Gerencie todas as |  | Visualize seu    |            |
-|  | conversas do      |  | funil de vendas  |            |
-|  | WhatsApp em um    |  | com drag-and-drop |           |
-|  | só lugar.         |  | intuitivo.        |            |
-|  +-------------------+  +-------------------+            |
-|                                                          |
-|  +-------------------+  +-------------------+  +-------+ |
-|  | Dashboard         |  | Agente IA         |  | ...   | |
-|  +-------------------+  +-------------------+  +-------+ |
-|                                                          |
-+----------------------------------------------------------+
-```
-
-### Cards do App Hub
-
-Cada card terá:
-
-1. **Ícone** — Lucide icon em círculo com gradiente sutil
-2. **Título** — Nome do módulo
-3. **Descrição** — 1-2 frases explicando a funcionalidade
-4. **Hover Effect** — Borda ganha cor do gradiente Solo (2px)
-5. **Badge** (opcional) — "Em Breve", "Novo", etc.
-
-### Módulos com Descrições
-
-| Módulo | Descrição |
-|--------|-----------|
-| **Central de Chat** | Gerencie todas as conversas do WhatsApp. Responda clientes, transfira para humanos e acompanhe em tempo real. |
-| **Pipeline CRM** | Visualize seu funil de vendas com Kanban drag-and-drop. Mova leads entre etapas e nunca perca uma oportunidade. |
-| **Dashboard** | Métricas de performance: leads, reuniões, no-shows, valor do pipeline. Exporte relatórios em CSV. |
-| **Agente IA** | Configure o comportamento do seu agente de vendas. Treine com documentos e ajuste prompts. |
-| **Webhooks** | Integre com sistemas externos via webhooks. Monitore logs e configure automações. |
-| **Billing** | Gerencie créditos e assinatura. Compre pacotes via PIX ou cartão. |
-| **Suporte** | Acesse suporte técnico e estratégico dedicado da Solo Ventures. |
-| **Tutorial** | Aprenda a usar a plataforma com guias passo-a-passo e vídeos. |
+**Pendências Tutorial:**
+1. Substituir "AdvAI Portal" por nome dinâmico
+2. Atualizar conteúdo do FAQ para refletir as funcionalidades atuais (não mais "jurídico")
 
 ---
 
-## Fase 4: Hover Effects com Gradiente Solo
+## Plano de Implementação (Priorizado)
 
-### CSS Utilities
+### Fase 1: Fixes Críticos (Desbloqueiam produção)
+1. **Fix build error** em `analyze-message/index.ts` (linha 252)
+2. **Conectar AgentUsage** ao `fetch-gpt-credits` real (remover mock)
+3. **Conectar AgentTraining** — criar edge function `manage-agent-training` para CRUD via API GPT Maker
 
-```css
-/* Hover com gradiente na borda */
-.hover-gradient-border {
-  position: relative;
-}
-.hover-gradient-border::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #FF481E, #F2CE1F);
-  transform: scaleX(0);
-  transition: transform 0.2s ease;
-}
-.hover-gradient-border:hover::after {
-  transform: scaleX(1);
-}
+### Fase 2: Branding & Consistência
+4. **Substituir "AdvAI"** por `tenant.name` em Billing, Tutorial e textos hardcoded
+5. **Aplicar `font-mono`** nos KPIs do Dashboard e dados numéricos
 
-/* Card com borda hover */
-.card-hover-solo:hover {
-  border-color: #FF481E;
-  box-shadow: 0 0 0 1px #FF481E20;
-}
-```
+### Fase 3: Robustez
+6. **Verificar AddLeadModal** — garantir `creation_source: 'manual'`
+7. **Testar fluxo de mídia end-to-end** — envio e recebimento de áudio/imagem/documento
+8. **Deploy das edge functions** — garantir que `send-chat-message`, `analyze-message`, e `manage-agent-training` estejam no workflow de deploy
+
+### Fase 4: Polish Final
+9. **Atualizar conteúdo do Tutorial** para ser genérico (não "jurídico")
+10. **Verificar responsividade** da TopNavbar e App Hub em mobile (viewport atual: 411px)
 
 ---
 
-## Fase 5: Atualizar App.tsx
+## Estimativa de Esforço
 
-### Antes
+| Fase | Itens | Complexidade |
+|------|-------|-------------|
+| Fase 1 | 3 itens | Alta (edge functions + API integration) |
+| Fase 2 | 2 itens | Baixa (find & replace textos) |
+| Fase 3 | 3 itens | Média (testes + verificações) |
+| Fase 4 | 2 itens | Baixa (conteúdo + CSS) |
 
-```tsx
-<SidebarProvider>
-  <div className="min-h-screen flex w-full">
-    <AppSidebar />
-    <div className="flex-1 flex flex-col">
-      <header>...</header>
-      <main>{children}</main>
-    </div>
-  </div>
-</SidebarProvider>
-```
-
-### Depois
-
-```tsx
-<div className="min-h-screen flex flex-col w-full bg-background">
-  <TopNavbar />
-  <main className="flex-1 flex flex-col overflow-hidden">
-    {children}
-  </main>
-  <footer>...</footer>
-</div>
-```
-
----
-
-## Fase 6: Responsividade Mobile
-
-### TopNavbar Mobile
-
-- Telas < 768px: Esconder links, mostrar menu hambúrguer
-- Menu abre como Sheet (slide from right)
-- Lista vertical com todos os links
-
-### App Hub Mobile
-
-- Cards em coluna única (1 col grid)
-- Descrições permanecem visíveis
-
----
-
-## Arquivos a Criar
-
-| Arquivo | Tipo |
-|---------|------|
-| `src/components/TopNavbar.tsx` | Novo componente |
-| `src/components/UserMenu.tsx` | Novo componente |
-| `src/components/AppHubCard.tsx` | Novo componente |
-
-## Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/App.tsx` | Remover Sidebar, usar TopNavbar |
-| `src/pages/Home.tsx` | Refatorar para App Hub |
-| `src/index.css` | Adicionar utilities de hover gradient |
-| `tailwind.config.ts` | Adicionar cores Solo |
-
-## Arquivos a Remover (Opcional - Fase Futura)
-
-| Arquivo | Motivo |
-|---------|--------|
-| `src/components/AppSidebar.tsx` | Substituído por TopNavbar |
-| `src/components/Header.tsx` | Mesclado com TopNavbar |
-
----
-
-## Preview Visual Esperado
-
-```text
-+------------------------------------------------------------------+
-| [Solo Logo]  Início  Dashboard  Chat  CRM  •••    [◯ Avatar]     |
-+------------------------------------------------------------------+
-|                                                                  |
-|              Solo Ventures Engine                                |
-|              Seu sistema de vendas inteligente                   |
-|                                                                  |
-|    +-------------------------+  +-------------------------+      |
-|    |   💬                    |  |   📊                    |      |
-|    |   Central de Chat       |  |   Pipeline CRM          |      |
-|    |                         |  |                         |      |
-|    |   Gerencie conversas    |  |   Funil de vendas com   |      |
-|    |   do WhatsApp em um     |  |   drag-and-drop         |      |
-|    |   só lugar.             |  |   intuitivo.            |      |
-|    +-------------------------+  +-------------------------+      |
-|                                                                  |
-|    +-------------------------+  +-------------------------+      |
-|    |   📈 Dashboard          |  |   🤖 Agente IA          |      |
-|    +-------------------------+  +-------------------------+      |
-|                                                                  |
-+------------------------------------------------------------------+
-```
-
----
-
-## Notas Técnicas
-
-1. **Remoção do SidebarProvider**: O layout atual usa `SidebarProvider` que controla estado da sidebar. Será removido completamente.
-
-2. **Glassmorphism Topbar**: Manter consistência com o design "Precision OS" já implementado.
-
-3. **Role-based Navigation**: A lógica de `hasRole()` e `isSuperAdmin()` será mantida para controlar quais itens aparecem na TopNavbar.
-
-4. **External Links**: Links externos (como Chat externo) continuarão abrindo em nova aba com ícone indicativo.
-
-5. **Paleta Solo como Accent**: As cores vibrantes (#FF481E, #F2CE1F) serão usadas APENAS para:
-   - Hover states
-   - Active indicators
-   - Badges especiais
-   - Nunca como cor de fundo sólida
+**Recomendação:** Começar pela Fase 1 (desbloqueio) + Fase 2 (branding) na mesma iteração, pois são independentes e podem ser feitas em paralelo.
 
