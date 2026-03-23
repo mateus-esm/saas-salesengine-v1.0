@@ -252,7 +252,7 @@ const Dashboard = () => {
               <Banknote className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold font-mono text-green-600">
                 {formatCurrency(metrics?.closedDealsValue || 0)}
               </div>
               <p className="text-xs text-muted-foreground">Fechados</p>
