@@ -24,9 +24,10 @@ interface ConversationHeaderProps {
   onToggleHandoff: () => void;
   onUpdateCRM: (data: Partial<ChatSession['crmData']>) => void;
   onBack?: () => void;
+  onOpenLeadDetails?: () => void;
 }
 
-export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateCRM, onBack }: ConversationHeaderProps) {
+export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateCRM, onBack, onOpenLeadDetails }: ConversationHeaderProps) {
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
@@ -66,9 +67,12 @@ export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateC
         {/* Info */}
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground">
+            <button 
+              onClick={onOpenLeadDetails}
+              className="font-medium text-foreground hover:underline cursor-pointer text-left"
+            >
               {session.customerName}
-            </span>
+            </button>
             {session.isOnline ? (
               <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                 Online

@@ -47,6 +47,7 @@ export function CRMContextPanel({
   onToggleTask,
   stageEnteredAt,
 }: CRMContextPanelProps) {
+  const [activeTab, setActiveTab] = useState("notes");
   const [newTask, setNewTask] = useState("");
   const [notes, setNotes] = useState(session?.crmData.notes || "");
   const { stages } = usePipelineStages();
@@ -216,7 +217,7 @@ export function CRMContextPanel({
         </div>
       </div>
 
-      <Tabs defaultValue="notes" className="flex-1 flex flex-col overflow-hidden">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="mx-3 mt-3 w-auto">
           <TabsTrigger value="notes" className="flex-1">
             Notas

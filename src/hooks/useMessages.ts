@@ -17,6 +17,10 @@ export const useMessages = (leadId: string | undefined) => {
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const addOptimisticMessage = (msg: Message) => {
+    setMessages((current) => sortMessages([...current, msg]));
+  };
+
   // Precisamos do lead atual para pegar o Chat ID do GPT Maker para a sincronização
   const { leads } = useLeads();
   const currentLead = leads?.find(l => l.id === leadId);
@@ -108,7 +112,19 @@ export const useMessages = (leadId: string | undefined) => {
               console.log('[Realtime] Mensagem duplicada ignorada:', newMsg.id);
               return current;
             }
-            return sortMessages([...current, newMsg]);
+
+            // Remove a mensagem otimista correspondente (mesmo conteúdo e remetente)
+            const withoutOptimistic = current.filter(m => {
+              const isTemp = m.id.startsWith('temp-');
+              const sameContent = m.content === newMsg.content;
+              const sameSender = m.sender_type === newMsg.sender_type;
+              if (isTemp && sameContent && sameSender) {
+                return false;
+              }
+              return true;
+            });
+
+            return sortMessages([...withoutOptimistic, newMsg]);
           });
 
           // Garante que o contador continue zerado enquanto o chat está aberto
@@ -142,5 +158,5 @@ export const useMessages = (leadId: string | undefined) => {
 
   }, [leadId, currentLead?.gpt_maker_chat_id]); // Recria o hook se mudar o Lead ou o ChatID
 
-  return { messages, loading, isSyncing };
+  return { messages, loading, isSyncing, addOptimisticMessage };
 };

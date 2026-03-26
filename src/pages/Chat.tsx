@@ -13,22 +13,25 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { LeadDetailsModal } from "@/components/crm/LeadDetailsModal";
 import { ChatSession, Task } from "@/types/chat";
+import { Lead } from "@/types/crm";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const Chat = () => {
   // 1. Busca Leads Reais do Supabase
-  const { leads, isLoading: loadingLeads, refetch: refetchLeads } = useLeads();
+  const { leads, isLoading: loadingLeads, refetch: refetchLeads, updateLead, deleteLead } = useLeads();
   const { stages } = usePipelineStages();
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [showLeadModal, setShowLeadModal] = useState(false);
 
   // Toggle states for panels
   const [showInbox, setShowInbox] = useState(true);
   const [showCRM, setShowCRM] = useState(true);
 
   // 2. Busca Mensagens do Lead Selecionado (Com Realtime)
-  const { messages, loading: loadingMessages } = useMessages(selectedLeadId || undefined);
+  const { messages, loading: loadingMessages, addOptimisticMessage } = useMessages(selectedLeadId || undefined);
 
   // 3. Busca Tasks do Lead Selecionado (Com Realtime e Persistência)
   const { tasks, createTask, toggleTask, isLoading: loadingTasks } = useTasks(selectedLeadId);
@@ -102,6 +105,18 @@ const Chat = () => {
     if (!selectedLeadId) return;
 
     try {
+      // Optimistic Update
+      const tempId = `temp-${Date.now()}`;
+      addOptimisticMessage({
+        id: tempId,
+        content,
+        lead_id: selectedLeadId,
+        sender_type: 'agent',
+        created_at: new Date().toISOString(),
+        media_url: media?.url || null,
+        media_type: media?.type || null,
+      } as any);
+
       const lead = leads?.find(l => l.id === selectedLeadId);
       const { error } = await supabase.functions.invoke('send-chat-message', {
         body: {
@@ -257,6 +272,7 @@ const Chat = () => {
                   onToggleHandoff={handleToggleHandoff}
                   onUpdateCRM={handleUpdateCRM}
                   onBack={() => setShowInbox(true)}
+                  onOpenLeadDetails={() => setShowLeadModal(true)}
                 />
               </div>
               {/* Toggle buttons */}
@@ -383,6 +399,22 @@ const Chat = () => {
           </>
         )}
       </div>
+
+      <LeadDetailsModal
+        lead={leads?.find(l => l.id === selectedLeadId) as Lead || null}
+        stages={stages}
+        open={showLeadModal}
+        onClose={() => setShowLeadModal(false)}
+        onSave={(data) => {
+          updateLead.mutate(data);
+          setShowLeadModal(false);
+        }}
+        onDelete={(id) => {
+          deleteLead.mutate(id);
+          setSelectedLeadId(null);
+          setShowLeadModal(false);
+        }}
+      />
     </div>
   );
 };
