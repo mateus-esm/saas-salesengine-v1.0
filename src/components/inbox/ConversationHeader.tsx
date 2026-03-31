@@ -52,39 +52,40 @@ export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateC
           </Button>
         )}
 
-        {/* Avatar */}
-        <div className="relative">
-          <Avatar className="h-10 w-10">
-            <AvatarFallback className="bg-primary/10 text-primary font-medium">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          {session.isOnline && (
-            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-card" />
-          )}
-        </div>
-
-        {/* Info */}
-        <div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={onOpenLeadDetails}
-              className="font-medium text-foreground hover:underline cursor-pointer text-left"
-            >
-              {session.customerName}
-            </button>
-            {session.isOnline ? (
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                Online
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="text-xs">
-                Offline
-              </Badge>
+        {/* Avatar and Info Block */}
+        <button 
+          onClick={onOpenLeadDetails}
+          className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity focus:outline-none"
+        >
+          <div className="relative">
+            <Avatar className="h-10 w-10">
+              <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            {session.isOnline && (
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-card" />
             )}
           </div>
-          <p className="text-sm text-muted-foreground">{session.customerPhone}</p>
-        </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-foreground">
+                {session.customerName}
+              </span>
+              {session.isOnline ? (
+                <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                  Online
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">
+                  Offline
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{session.customerPhone}</p>
+          </div>
+        </button>
       </div>
 
       <div className="flex items-center gap-2">

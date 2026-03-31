@@ -3,8 +3,9 @@ import { ChatSession } from "@/types/chat";
 import { ChatListItem } from "./ChatListItem";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Inbox, Bot, User, MessageCircle, Users } from "lucide-react";
+import { Search, Inbox, Bot, User, MessageCircle, Users, MessageSquareDot } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ExtendedChatSession extends ChatSession {
@@ -19,7 +20,7 @@ interface InboxSidebarProps {
   currentUserId?: string;
 }
 
-type FilterType = "all" | "mine" | "unread" | "bot" | "contacts";
+type FilterType = "all" | "mine" | "bot" | "contacts";
 
 export function InboxSidebar({
   sessions,
@@ -29,11 +30,11 @@ export function InboxSidebar({
 }: InboxSidebarProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
 
   const filters: { id: FilterType; label: string; icon: React.ElementType }[] = [
     { id: "all", label: "Todos", icon: Inbox },
     { id: "mine", label: "Meus", icon: User },
-    { id: "unread", label: "Não Lidos", icon: MessageCircle },
     { id: "bot", label: "Bot", icon: Bot },
     { id: "contacts", label: "Contatos", icon: Users },
   ];
@@ -59,9 +60,6 @@ export function InboxSidebar({
           session.status === "human_handling" || 
           session.responsibleId === currentUserId;
         break;
-      case "unread":
-        matchesFilter = session.unreadCount > 0;
-        break;
       case "bot":
         matchesFilter = session.status === "bot_handling";
         break;
@@ -69,6 +67,10 @@ export function InboxSidebar({
         // Show only contacts (not leads)
         matchesFilter = session.leadType === 'contact' || session.leadType === 'spam';
         break;
+    }
+
+    if (showUnreadOnly && session.unreadCount === 0) {
+       return false;
     }
 
     return matchesSearch && matchesFilter;
@@ -88,15 +90,31 @@ export function InboxSidebar({
           )}
         </h2>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar conversas..."
-            className="pl-9 h-8 text-sm"
-          />
+        {/* Search and Unread Filter */}
+        <div className="flex items-center justify-between gap-2 mt-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar conversas..."
+              className="pl-9 h-8 text-sm"
+            />
+          </div>
+          <Button
+            variant={showUnreadOnly ? "default" : "outline"}
+            size="sm"
+            className={cn("h-8 px-2 gap-1.5 border hover:bg-muted/50 transition-colors", showUnreadOnly && "bg-primary")}
+            onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+            title="Filtrar não lidas"
+          >
+            <MessageSquareDot className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="font-mono text-[10px] leading-tight px-1.5 py-0.5 rounded-full bg-background/20">
+                {unreadCount}
+              </span>
+            )}
+          </Button>
         </div>
 
         {/* Filter badges */}

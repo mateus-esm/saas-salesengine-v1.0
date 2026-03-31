@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { useLeads } from './useLeads';
@@ -12,18 +12,31 @@ interface Message extends DbMessage {
   media_type: string | null;
 }
 
+// Global cache for messages
+const messagesCache = new Map<string, Message[]>();
+
 export const useMessages = (leadId: string | undefined) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const chatMakerIdRef = useRef<string | null>(null);
 
   const addOptimisticMessage = (msg: Message) => {
-    setMessages((current) => sortMessages([...current, msg]));
+    setMessages((current) => {
+      const newMsgs = sortMessages([...current, msg]);
+      if (leadId) messagesCache.set(leadId, newMsgs);
+      return newMsgs;
+    });
   };
 
   // Precisamos do lead atual para pegar o Chat ID do GPT Maker para a sincronização
   const { leads } = useLeads();
   const currentLead = leads?.find(l => l.id === leadId);
+
+  // Atualiza a ref do chat ID sem engatilhar re-render no useEffect de conexão
+  if (currentLead?.gpt_maker_chat_id && currentLead.gpt_maker_chat_id !== chatMakerIdRef.current) {
+    chatMakerIdRef.current = currentLead.gpt_maker_chat_id;
+  }
 
   // --- FUNÇÃO AUXILIAR DE ORDENAÇÃO ---
   // Garante que a mensagem mais antiga (menor data) fique no topo e a nova embaixo
@@ -40,22 +53,34 @@ export const useMessages = (leadId: string | undefined) => {
       return;
     }
 
-    const initChat = async () => {
+    // Configura inicial instantâneo se houver cache
+    if (messagesCache.has(leadId)) {
+      setMessages(messagesCache.get(leadId)!);
+      setLoading(false);
+    } else {
+      setMessages([]);
       setLoading(true);
+    }
 
+    const initChat = async () => {
       try {
-        // 1. Busca mensagens salvas no Banco (Histórico Rápido)
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('lead_id', leadId);
+        if (!messagesCache.has(leadId)) {
+          // 1. Busca mensagens salvas no Banco (Histórico Rápido)
+          const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('lead_id', leadId);
 
-        if (error) throw error;
-        
-        // Ordena antes de exibir
-        if (data) setMessages(sortMessages(data as Message[]));
+          if (error) throw error;
+          
+          if (data) {
+            const sortedData = sortMessages(data as Message[]);
+            messagesCache.set(leadId, sortedData);
+            setMessages(sortedData);
+          }
+        }
 
-        // 2. Zera o contador de "Não Lidos" no banco
+        // 2. Transforma como "Lido" e zera contador no banco DE FORMA INSTANTÂNEA
         await supabase
           .from('leads')
           .update({ unread_count: 0 })
@@ -68,16 +93,14 @@ export const useMessages = (leadId: string | undefined) => {
       }
 
       // 3. SINCRONIZAÇÃO EM SEGUNDO PLANO (O Pulo do Gato)
-      // Tenta buscar no GPT Maker mensagens que podem estar faltando (ex: enviadas pelo robô)
-      if (currentLead?.gpt_maker_chat_id) {
+      // Tenta buscar no GPT Maker mensagens que podem estar faltando
+      if (chatMakerIdRef.current) {
           setIsSyncing(true);
           try {
-              // Chama a Edge Function que busca na API do GPT Maker e salva no banco
-              // O Realtime abaixo vai detectar essas inserções e atualizar a tela sozinho
               await supabase.functions.invoke('sync-chat-history', {
                   body: { 
                       lead_id: leadId, 
-                      chat_id: currentLead.gpt_maker_chat_id 
+                      chat_id: chatMakerIdRef.current 
                   }
               });
           } catch (e) {
@@ -109,7 +132,6 @@ export const useMessages = (leadId: string | undefined) => {
             // Verifica se já existe pelo ID
             const exists = current.some(m => m.id === newMsg.id);
             if (exists) {
-              console.log('[Realtime] Mensagem duplicada ignorada:', newMsg.id);
               return current;
             }
 
@@ -124,7 +146,9 @@ export const useMessages = (leadId: string | undefined) => {
               return true;
             });
 
-            return sortMessages([...withoutOptimistic, newMsg]);
+            const newMsgs = sortMessages([...withoutOptimistic, newMsg]);
+            messagesCache.set(leadId, newMsgs);
+            return newMsgs;
           });
 
           // Garante que o contador continue zerado enquanto o chat está aberto
@@ -145,7 +169,9 @@ export const useMessages = (leadId: string | undefined) => {
           const updatedMsg = payload.new as Message;
           setMessages((current) => {
             const updatedList = current.map(msg => msg.id === updatedMsg.id ? updatedMsg : msg);
-            return sortMessages(updatedList);
+            const newMsgs = sortMessages(updatedList);
+            messagesCache.set(leadId, newMsgs);
+            return newMsgs;
           });
         }
       )
@@ -156,7 +182,7 @@ export const useMessages = (leadId: string | undefined) => {
       supabase.removeChannel(channel);
     };
 
-  }, [leadId, currentLead?.gpt_maker_chat_id]); // Recria o hook se mudar o Lead ou o ChatID
+  }, [leadId]); // Recria o hook apeñas quando muda o Lead
 
   return { messages, loading, isSyncing, addOptimisticMessage };
 };

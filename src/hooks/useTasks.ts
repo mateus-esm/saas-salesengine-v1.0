@@ -49,6 +49,22 @@ export function useTasks(leadId: string | null) {
   const createTask = useCallback(async (title: string, description?: string, dueDate?: string) => {
     if (!leadId || !title.trim()) return null;
 
+    const tempId = `temp-${Date.now()}`;
+    const newTaskObj: Task = {
+      id: tempId,
+      lead_id: leadId,
+      title: title.trim(),
+      description: description || null,
+      due_date: dueDate || null,
+      status: 'pending',
+      created_by: user?.id || null,
+      assigned_to: null,
+      created_at: new Date().toISOString()
+    };
+    
+    // Optimistic insert
+    setTasks(prev => [newTaskObj, ...prev]);
+
     try {
       const { data, error } = await supabase
         .from('tasks')
@@ -64,11 +80,16 @@ export function useTasks(leadId: string | null) {
         .single();
 
       if (error) throw error;
-      toast.success('Tarefa criada');
+      toast.success('Tarefa crianda');
+      
+      // Update temp id with real id and data
+      setTasks(prev => prev.map(t => t.id === tempId ? data as Task : t));
       return data as Task;
     } catch (error) {
       console.error('Error creating task:', error);
       toast.error('Erro ao criar tarefa');
+      // Revert optimistic insert
+      setTasks(prev => prev.filter(t => t.id !== tempId));
       return null;
     }
   }, [leadId, user?.id]);
@@ -81,39 +102,43 @@ export function useTasks(leadId: string | null) {
 
       const newStatus = task.status === 'done' ? 'pending' : 'done';
       
+      // Optimistic update
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, status: newStatus } : t
+      ));
+      
       const { error } = await supabase
         .from('tasks')
         .update({ status: newStatus })
         .eq('id', taskId);
 
       if (error) throw error;
-      
-      setTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, status: newStatus } : t
-      ));
     } catch (error) {
       console.error('Error toggling task:', error);
       toast.error('Erro ao atualizar tarefa');
+      fetchTasks(); // Revert on failure
     }
-  }, [tasks]);
+  }, [tasks, fetchTasks]);
 
   // Delete a task
   const deleteTask = useCallback(async (taskId: string) => {
     try {
+      // Optimistic delete
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+
       const { error } = await supabase
         .from('tasks')
         .delete()
         .eq('id', taskId);
 
       if (error) throw error;
-      
-      setTasks(prev => prev.filter(t => t.id !== taskId));
       toast.success('Tarefa removida');
     } catch (error) {
       console.error('Error deleting task:', error);
       toast.error('Erro ao remover tarefa');
+      fetchTasks(); // Revert on failure
     }
-  }, []);
+  }, [fetchTasks]);
 
   // Initial fetch
   useEffect(() => {
@@ -137,7 +162,17 @@ export function useTasks(leadId: string | null) {
         (payload) => {
           console.log('Task change:', payload);
           if (payload.eventType === 'INSERT') {
-            setTasks(prev => [payload.new as Task, ...prev]);
+            const newTask = payload.new as Task;
+            setTasks(prev => {
+              if (prev.some(t => t.id === newTask.id)) return prev;
+              
+              // Remove redundant optimistic updates
+              const hasTemp = prev.some(t => t.id.startsWith('temp-') && t.title === newTask.title);
+              if (hasTemp) {
+                 return prev.map(t => (t.id.startsWith('temp-') && t.title === newTask.title) ? newTask : t);
+              }
+              return [newTask, ...prev];
+            });
           } else if (payload.eventType === 'UPDATE') {
             setTasks(prev => prev.map(t => 
               t.id === (payload.new as Task).id ? payload.new as Task : t
