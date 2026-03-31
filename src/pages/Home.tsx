@@ -4,7 +4,7 @@ import {
   Headphones,
   Zap,
   BarChart3,
-  Bot,
+  Cpu,
   Webhook,
   CreditCard,
   BookOpen,
@@ -53,11 +53,11 @@ const Home = () => {
       requiredRole: undefined,
     },
     {
-      title: "Agente IA",
+      title: "AI Studio",
       description:
         "Configure o comportamento do seu agente de vendas. Treine com documentos e ajuste prompts.",
-      icon: Bot,
-      href: "/agent",
+      icon: Cpu,
+      href: "/ai-studio",
       external: false,
       requiredRole: "admin" as const,
     },

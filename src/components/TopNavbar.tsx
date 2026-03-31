@@ -13,7 +13,7 @@ import {
   Wrench,
   Star,
   Shield,
-  Bot,
+  Cpu,
   Menu,
   X,
 } from "lucide-react";
@@ -56,9 +56,9 @@ export function TopNavbar() {
     },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
     {
-      title: "Agente",
-      url: "/agent",
-      icon: Bot,
+      title: "AI Studio",
+      url: "/ai-studio",
+      icon: Cpu,
       external: false,
       requiredRole: "admin",
     },
