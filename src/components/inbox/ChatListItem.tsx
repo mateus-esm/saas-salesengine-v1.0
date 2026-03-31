@@ -36,7 +36,7 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
     <div
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 p-3 cursor-pointer transition-colors border-b border-border/50",
+        "flex items-start gap-3 p-3 pr-5 cursor-pointer transition-colors border-b border-border/50",
         isSelected
           ? "bg-sidebar-accent"
           : "hover:bg-muted/50"
