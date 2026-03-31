@@ -94,8 +94,8 @@ export function CRMContextPanel({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Lead Card Header */}
-      <Card className="m-3 mb-0">
-        <CardHeader className="pb-3">
+      <Card className="m-2 mb-0">
+        <CardHeader className="p-3 pb-2">
           <div className="flex items-start justify-between">
             <div>
               <CardTitle className="text-lg">{session.customerName}</CardTitle>
@@ -127,7 +127,7 @@ export function CRMContextPanel({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="pt-0 space-y-3">
+        <CardContent className="p-3 pt-0 space-y-2">
           {/* Contact info */}
           <div className="space-y-2">
             {session.crmData.email && (
@@ -179,7 +179,7 @@ export function CRMContextPanel({
       </Card>
 
       {/* Quick Data (Editable) */}
-      <div className="p-3 space-y-3 border-b border-border">
+      <div className="p-2 px-3 space-y-2 border-b border-border">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
             Valor da Oportunidade
@@ -217,8 +217,8 @@ export function CRMContextPanel({
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="mx-3 mt-3 w-auto">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
+        <TabsList className="mx-2 mt-2 w-auto">
           <TabsTrigger value="notes" className="flex-1">
             Notas
           </TabsTrigger>
@@ -230,7 +230,7 @@ export function CRMContextPanel({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="notes" className="flex-1 p-3 pt-2 m-0 flex flex-col">
+        <TabsContent value="notes" className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0 flex flex-col">
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -239,7 +239,7 @@ export function CRMContextPanel({
           />
           <Button
             size="sm"
-            className="mt-2"
+            className="mt-2 shrink-0"
             onClick={handleNotesBlur}
             disabled={notes === session.crmData.notes}
           >
@@ -247,7 +247,7 @@ export function CRMContextPanel({
           </Button>
         </TabsContent>
 
-        <TabsContent value="tasks" className="flex-1 p-3 pt-2 m-0 overflow-auto">
+        <TabsContent value="tasks" className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0">
           <div className="space-y-2">
             {/* Add task input */}
             <div className="flex gap-2">
@@ -292,7 +292,7 @@ export function CRMContextPanel({
           </div>
         </TabsContent>
 
-        <TabsContent value="touchpoints" className="flex-1 p-3 pt-2 m-0 overflow-auto">
+        <TabsContent value="touchpoints" className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0">
           {session?.leadId && <TouchpointsList leadId={session.leadId} />}
         </TabsContent>
       </Tabs>
