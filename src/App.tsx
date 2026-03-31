@@ -21,7 +21,7 @@ import Billing from "./pages/Billing";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
-import Agent from "./pages/Agent";
+import AIStudio from "./pages/AIStudio";
 import { ToolkitPage, ClubePage } from "./pages/ComingSoon";
 import { WhatsAppButton } from "./components/WhatsAppButton";
 
@@ -120,11 +120,11 @@ const App = () => (
                   }
                 />
                 <Route
-                  path="/agent"
+                  path="/ai-studio"
                   element={
                     <ProtectedRoute>
                       <AuthenticatedLayout>
-                        <Agent />
+                        <AIStudio />
                       </AuthenticatedLayout>
                     </ProtectedRoute>
                   }
