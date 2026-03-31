@@ -37,6 +37,7 @@ interface CRMContextPanelProps {
   onAddTask: (title: string) => void;
   onToggleTask: (taskId: string) => void;
   stageEnteredAt?: string | null;
+  onOpenLeadDetails?: () => void;
 }
 
 export function CRMContextPanel({
@@ -46,6 +47,7 @@ export function CRMContextPanel({
   onAddTask,
   onToggleTask,
   stageEnteredAt,
+  onOpenLeadDetails,
 }: CRMContextPanelProps) {
   const [activeTab, setActiveTab] = useState("notes");
   const [newTask, setNewTask] = useState("");
@@ -98,7 +100,14 @@ export function CRMContextPanel({
         <CardHeader className="p-3 pb-2">
           <div className="flex items-start justify-between">
             <div>
-              <CardTitle className="text-lg">{session.customerName}</CardTitle>
+              <CardTitle className="text-lg">
+                <button 
+                  onClick={onOpenLeadDetails} 
+                  className="hover:underline focus:outline-none text-left w-full truncate max-w-[200px] xl:max-w-[240px]"
+                >
+                  {session.customerName}
+                </button>
+              </CardTitle>
               {session.crmData.position && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                   <Briefcase className="h-3 w-3" />

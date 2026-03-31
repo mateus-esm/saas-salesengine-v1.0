@@ -85,9 +85,6 @@ export function InboxSidebar({
         <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
           <Inbox className="h-4 w-4 text-primary" />
           Inbox
-          {unreadCount > 0 && (
-            <Badge className="ml-auto text-xs">{unreadCount}</Badge>
-          )}
         </h2>
 
         {/* Search and Unread Filter */}

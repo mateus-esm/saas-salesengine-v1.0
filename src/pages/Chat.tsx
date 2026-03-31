@@ -304,6 +304,7 @@ const Chat = () => {
                         onUpdateCRM={handleUpdateCRM}
                         onAddTask={handleAddTask}
                         onToggleTask={handleToggleTask}
+                        onOpenLeadDetails={() => setShowLeadModal(true)}
                     />
                   </SheetContent>
                 </Sheet>
@@ -395,6 +396,7 @@ const Chat = () => {
                 onUpdateCRM={handleUpdateCRM}
                 onAddTask={handleAddTask}
                 onToggleTask={handleToggleTask}
+                onOpenLeadDetails={() => setShowLeadModal(true)}
             />
           </>
         )}

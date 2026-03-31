@@ -56,11 +56,11 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-sm text-foreground truncate">
+        <div className="flex items-center justify-between gap-2 overflow-hidden w-full">
+          <span className="font-medium text-sm text-foreground truncate block min-w-0">
             {session.customerName}
           </span>
-          <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono">
+          <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono whitespace-nowrap">
             {timeAgo}
           </span>
         </div>
