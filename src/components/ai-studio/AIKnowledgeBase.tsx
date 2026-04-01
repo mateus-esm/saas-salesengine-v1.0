@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SectionFolder } from "./SectionFolder";
 import { TrainingBlockEditor } from "./TrainingBlockEditor";
+import { Accordion } from "@/components/ui/accordion";
 
 interface TrainingItem {
   id: string;
@@ -148,12 +149,12 @@ export function AIKnowledgeBase() {
         <p className="text-sm text-muted-foreground mt-1">Configure as "conexões neurais" do seu agente usando pastas lógico-específicas.</p>
       </div>
 
-      <SectionFolder 
+      <Accordion type="single" collapsible defaultValue="perfil" className="w-full">
+        <SectionFolder 
         value="perfil" 
         title="Perfil (Behavior)" 
         description="Como o agente deve se comportar e responder (persona, regras gerais)."
         icon={<User className="w-5 h-5" />}
-        defaultOpen
       >
         <div className="space-y-4 pt-2">
           <div className="relative">
@@ -264,6 +265,7 @@ export function AIKnowledgeBase() {
           </div>
         </div>
       </SectionFolder>
+      </Accordion>
     </div>
   );
 }

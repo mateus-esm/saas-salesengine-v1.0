@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { IntentionWizard } from "./IntentionWizard";
 import { SectionFolder } from "./SectionFolder";
+import { Accordion } from "@/components/ui/accordion";
 
 interface Intention {
   id: string;
@@ -14,7 +15,7 @@ interface Intention {
   triggers: string[];
   webhook?: {
     url: string;
-    method: string;
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
     headers?: Record<string, string>;
     body?: string;
   };
@@ -105,13 +106,13 @@ export function AISkills() {
         <p className="text-sm text-muted-foreground mt-1">Configure gatilhos na conversa para disparar webhooks ou ações no sistema.</p>
       </div>
 
-      <SectionFolder 
-        value="intencoes" 
-        title="Pasta de Intenções" 
-        description={`${intentions.length} intenções ativas mapeadas para o agente.`}
-        icon={<Zap className="w-5 h-5" />}
-        defaultOpen
-      >
+      <Accordion type="single" collapsible defaultValue="intencoes" className="w-full">
+        <SectionFolder 
+          value="intencoes" 
+          title="Pasta de Intenções" 
+          description={`${intentions.length} intenções ativas mapeadas para o agente.`}
+          icon={<Zap className="w-5 h-5" />}
+        >
         <div className="space-y-4 pt-4">
           <div className="flex justify-end mb-2">
             <Button className="gap-2" onClick={() => { setEditingIntention(null); setWizardOpen(true); }}>
@@ -180,11 +181,12 @@ export function AISkills() {
             </div>
           )}
         </div>
-      </SectionFolder>
+        </SectionFolder>
+      </Accordion>
 
       {wizardOpen && (
         <IntentionWizard
-          initialData={editingIntention || undefined}
+          initialData={editingIntention as any}
           onSave={handleSave}
           onClose={() => { setWizardOpen(false); setEditingIntention(null); }}
         />
