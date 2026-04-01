@@ -51,45 +51,19 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'list';
 
-    // LIST trainings
+    // LIST intentions
     if (req.method === 'GET' || action === 'list') {
-      const page = url.searchParams.get('page') || '1';
-      const filter = url.searchParams.get('filter') || '';
-
-      const apiUrl = `${GPT_MAKER_BASE}/agent/${agentId}/trainings?page=${page}${filter ? `&filter=${encodeURIComponent(filter)}` : ''}`;
-      const res = await fetch(apiUrl, { headers: gptHeaders });
+      const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}/intentions`, {
+        headers: gptHeaders,
+      });
 
       if (!res.ok) {
         const err = await res.text();
-        console.error('GPT Maker list error:', err);
+        console.error('GPT Maker list intentions error:', err);
         throw new Error(`GPT Maker API error: ${res.status}`);
       }
 
       const data = await res.json();
-
-      // Sync to local cache (agent_trainings table)
-      const trainings = data.data || data || [];
-      if (Array.isArray(trainings) && trainings.length > 0) {
-        const upsertRows = trainings.map((t: any) => ({
-          equipe_id: profile.equipe_id,
-          gpt_training_id: t.id || t._id,
-          type: (t.type || 'TEXT').toUpperCase(),
-          content: t.text || t.content || '',
-          image: t.image || null,
-          synced_at: new Date().toISOString(),
-        }));
-
-        const { error: upsertError } = await supabase
-          .from('agent_trainings')
-          .upsert(upsertRows, { onConflict: 'gpt_training_id', ignoreDuplicates: false });
-
-        if (upsertError) {
-          console.error('Cache sync error:', upsertError);
-        } else {
-          console.log(`Synced ${upsertRows.length} trainings to local cache`);
-        }
-      }
-
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -98,22 +72,26 @@ serve(async (req) => {
     // POST actions (create, update, delete)
     const body = await req.json();
 
-    // CREATE training
+    // CREATE intention
     if (action === 'create') {
-      const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}/trainings`, {
+      const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}/intentions`, {
         method: 'POST',
         headers: gptHeaders,
         body: JSON.stringify({
-          type: body.type,
-          text: body.text,
-          image: body.image || undefined,
+          name: body.name,
+          description: body.description || '',
+          triggers: body.triggers || [],
+          webhook: body.webhook || null,
+          persistVariables: body.persistVariables || false,
+          responseType: body.responseType || 'ai_interpretation',
+          fixedResponse: body.fixedResponse || '',
         }),
       });
 
       if (!res.ok) {
         const err = await res.text();
-        console.error('GPT Maker create error:', err);
-        throw new Error(`Failed to create training: ${res.status}`);
+        console.error('GPT Maker create intention error:', err);
+        throw new Error(`Failed to create intention: ${res.status}`);
       }
 
       const data = await res.json();
@@ -122,24 +100,28 @@ serve(async (req) => {
       });
     }
 
-    // UPDATE training
+    // UPDATE intention
     if (action === 'update') {
-      if (!body.trainingId) throw new Error('trainingId required');
+      if (!body.intentionId) throw new Error('intentionId required');
 
-      const res = await fetch(`${GPT_MAKER_BASE}/training/${body.trainingId}`, {
+      const res = await fetch(`${GPT_MAKER_BASE}/intention/${body.intentionId}`, {
         method: 'PUT',
         headers: gptHeaders,
         body: JSON.stringify({
-          type: body.type,
-          text: body.text,
-          image: body.image || undefined,
+          name: body.name,
+          description: body.description,
+          triggers: body.triggers,
+          webhook: body.webhook,
+          persistVariables: body.persistVariables,
+          responseType: body.responseType,
+          fixedResponse: body.fixedResponse,
         }),
       });
 
       if (!res.ok) {
         const err = await res.text();
-        console.error('GPT Maker update error:', err);
-        throw new Error(`Failed to update training: ${res.status}`);
+        console.error('GPT Maker update intention error:', err);
+        throw new Error(`Failed to update intention: ${res.status}`);
       }
 
       const data = await res.json();
@@ -148,26 +130,20 @@ serve(async (req) => {
       });
     }
 
-    // DELETE training
+    // DELETE intention
     if (action === 'delete') {
-      if (!body.trainingId) throw new Error('trainingId required');
+      if (!body.intentionId) throw new Error('intentionId required');
 
-      const res = await fetch(`${GPT_MAKER_BASE}/training/${body.trainingId}`, {
+      const res = await fetch(`${GPT_MAKER_BASE}/intention/${body.intentionId}`, {
         method: 'DELETE',
         headers: gptHeaders,
       });
 
       if (!res.ok) {
         const err = await res.text();
-        console.error('GPT Maker delete error:', err);
-        throw new Error(`Failed to delete training: ${res.status}`);
+        console.error('GPT Maker delete intention error:', err);
+        throw new Error(`Failed to delete intention: ${res.status}`);
       }
-
-      // Remove from local cache
-      await supabase
-        .from('agent_trainings')
-        .delete()
-        .eq('gpt_training_id', body.trainingId);
 
       const data = await res.json();
       return new Response(JSON.stringify(data), {

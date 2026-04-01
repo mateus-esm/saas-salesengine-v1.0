@@ -43,11 +43,13 @@ serve(async (req) => {
     const gptMakerToken = Deno.env.get('GPT_MAKER_TOKEN');
     if (!gptMakerToken) throw new Error('GPT Maker token not configured');
 
+    // Accept date params from client or default to current month
+    const url = new URL(req.url);
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    const year = parseInt(url.searchParams.get('year') || String(now.getFullYear()));
+    const month = parseInt(url.searchParams.get('month') || String(now.getMonth() + 1));
 
-    // Chama apenas a API de consumo (v2)
+    // Chama a API de consumo (v2)
     const spentUrl = `https://api.gptmaker.ai/v2/agent/${equipe.gpt_maker_agent_id}/credits-spent?year=${year}&month=${month}`;
 
     const spentRes = await fetch(spentUrl, { 
@@ -66,15 +68,10 @@ serve(async (req) => {
     console.log("JSON Retornado pelo GPT Maker:", spentData);
 
     // --- LÓGICA DE SALDO COM CRÉDITOS AVULSOS ---
-    // Lê o campo "total" do JSON
     const creditsSpent = spentData.total || 0; 
-    
-    // Pega o limite do banco (ou usa 1000 como padrão)
     const planLimit = equipe.limite_creditos || 1000;
     const extraCredits = equipe.creditos_avulsos || 0;
     const totalCredits = planLimit + extraCredits;
-
-    // Calcula o saldo do cliente localmente
     const creditsBalance = totalCredits - creditsSpent;
 
     const periodo = `${year}-${month.toString().padStart(2, '0')}`;
@@ -87,11 +84,13 @@ serve(async (req) => {
       metadata: spentData
     }, { onConflict: 'equipe_id,periodo', ignoreDuplicates: false });
 
+    // Return full details for charts
     return new Response(JSON.stringify({
-      creditsSpent: creditsSpent,
-      creditsBalance: creditsBalance,
-      totalCredits: totalCredits,
-      periodo
+      creditsSpent,
+      creditsBalance,
+      totalCredits,
+      periodo,
+      details: spentData.details || [],
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
