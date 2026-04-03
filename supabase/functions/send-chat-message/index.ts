@@ -67,15 +67,16 @@ serve(async (req) => {
     }
 
     // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
-    const body: Record<string, any> = { message: content }
+    const body: Record<string, any> = { message: content || "" }
     if (media_url) {
       if (media_type === 'image') {
-        body.imageUrl = media_url
+        body.image = media_url
       } else if (media_type === 'audio') {
-        body.audioUrl = media_url
+        body.audio = media_url
+      } else if (media_type === 'video') {
+        body.video = media_url
       } else {
-        body.fileUrl = media_url
-        body.documentUrl = media_url
+        body.document = media_url
       }
     }
 
