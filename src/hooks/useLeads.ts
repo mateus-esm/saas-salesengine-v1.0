@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,13 +21,39 @@ export const useLeads = () => {
         .from("leads")
         .select("*")
         .eq("equipe_id", equipeId)
-        .order("created_at", { ascending: false });
+        .order("last_message_at", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
       return (data || []) as Lead[];
     },
     enabled: !!equipeId,
   });
+
+  // Escutar atualizações na tabela Leads (Realtime)
+  useEffect(() => {
+    if (!equipeId) return;
+
+    const channel = supabase
+      .channel(`leads_updates_${equipeId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "leads",
+          filter: `equipe_id=eq.${equipeId}`
+        },
+        () => {
+          // Quando o banco atualizar (ex: Webhook alterar o last_message_at ou unread_count), refetch!
+          queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [equipeId, queryClient]);
 
   const createLead = useMutation({
     mutationFn: async (leadData: CreateLeadData) => {
