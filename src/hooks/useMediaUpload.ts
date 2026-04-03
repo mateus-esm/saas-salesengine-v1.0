@@ -29,9 +29,9 @@ export function useMediaUpload() {
         return null;
       }
 
-      // 2. Gerar nome único
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+      // 2. Gerar nome único garantindo retenção do nome original (necessário para exibição correta no WPP)
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const fileName = `${Date.now()}_${sanitizedName}`;
       const filePath = `${fileName}`;
 
       // 3. Upload para Supabase Storage

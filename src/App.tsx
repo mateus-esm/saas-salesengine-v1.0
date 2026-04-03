@@ -22,6 +22,12 @@ import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import AIStudio from "./pages/AIStudio";
+import AIStudioLayout from "./pages/ai-studio/AIStudioLayout";
+import UsagePage from "./pages/ai-studio/UsagePage";
+import KnowledgePage from "./pages/ai-studio/KnowledgePage";
+import SkillsPage from "./pages/ai-studio/SkillsPage";
+import ChannelsPage from "./pages/ai-studio/ChannelsPage";
+import SettingsPage from "./pages/ai-studio/SettingsPage";
 import { ToolkitPage, ClubePage } from "./pages/ComingSoon";
 import { WhatsAppButton } from "./components/WhatsAppButton";
 
@@ -124,11 +130,17 @@ const App = () => (
                   element={
                     <ProtectedRoute>
                       <AuthenticatedLayout>
-                        <AIStudio />
+                        <AIStudioLayout />
                       </AuthenticatedLayout>
                     </ProtectedRoute>
                   }
-                />
+                >
+                  <Route path="usage" element={<UsagePage />} />
+                  <Route path="knowledge" element={<KnowledgePage />} />
+                  <Route path="skills" element={<SkillsPage />} />
+                  <Route path="channels" element={<ChannelsPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                </Route>
                 <Route
                   path="/billing"
                   element={
