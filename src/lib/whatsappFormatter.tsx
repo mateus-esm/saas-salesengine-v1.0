@@ -20,12 +20,12 @@ export function formatWhatsAppText(text: string): React.ReactNode {
     urls: []
   };
 
-  // Substitui URLs por placeholders temporários
+  // Substitui URLs por placeholders temporários (sem underscores para evitar conflito com itálico)
   const urlMatches = text.match(urlRegex) || [];
   let processedText = text;
   urlMatches.forEach((url, index) => {
     textWithPlaceholders.urls.push(url);
-    processedText = processedText.replace(url, `__URL_PLACEHOLDER_${index}__`);
+    processedText = processedText.replace(url, `@@URL_PLACEHOLDER_${index}@@`);
   });
 
   // Agora processa a formatação WhatsApp
@@ -103,7 +103,7 @@ function restoreUrls(content: React.ReactNode, urls: string[]): React.ReactNode 
   const processNode = (node: React.ReactNode, keyPrefix: string = ''): React.ReactNode => {
     if (typeof node === 'string') {
       // Verifica se há placeholders de URL neste texto
-      const placeholderRegex = /__URL_PLACEHOLDER_(\d+)__/g;
+      const placeholderRegex = /@@URL_PLACEHOLDER_(\d+)@@/g;
       let match;
       const parts: React.ReactNode[] = [];
       let lastIndex = 0;

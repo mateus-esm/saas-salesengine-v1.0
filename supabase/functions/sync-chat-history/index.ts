@@ -50,11 +50,24 @@ serve(async (req) => {
         let content = msg.text;
         
         // Tratamento para Mídia (se o texto vier vazio, mas tiver imagem/audio)
-        if (!content && msg.imageUrl) content = '[Imagem] ' + msg.imageUrl;
-        else if (!content && msg.audioUrl) content = '[Áudio] ' + msg.audioUrl;
-        else if (!content && msg.documentUrl) content = '[Documento] ' + msg.documentUrl;
+        let mediaUrl = null;
+        let mediaType = null;
         
-        if (!content) continue; // Pula se realmente não tiver nada
+        if (msg.imageUrl) {
+            mediaUrl = msg.imageUrl;
+            mediaType = 'image';
+            if (!content) content = '[Imagem Encaminhada]';
+        } else if (msg.audioUrl) {
+            mediaUrl = msg.audioUrl;
+            mediaType = 'audio';
+            if (!content) content = '[Mensagem de Voz]';
+        } else if (msg.documentUrl) {
+            mediaUrl = msg.documentUrl;
+            mediaType = 'document';
+            if (!content) content = '[Documento Anexo]';
+        }
+        
+        if (!content && !mediaUrl) continue; // Pula se realmente não tiver nada
 
         // "role": "<string>" -> Definir quem enviou
         // Geralmente 'user' ou 'customer' é o cliente. Todo o resto assumimos que é o sistema/agente.
@@ -73,7 +86,9 @@ serve(async (req) => {
                 content: content,
                 sender_type: senderType,
                 gpt_message_id: externalId,
-                created_at: messageDate
+                created_at: messageDate,
+                media_url: mediaUrl,
+                media_type: mediaType
             }, { 
                 onConflict: 'gpt_message_id', 
                 ignoreDuplicates: true 
