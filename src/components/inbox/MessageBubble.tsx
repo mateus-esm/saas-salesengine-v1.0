@@ -2,9 +2,10 @@ import { Message } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Bot, User, Image as ImageIcon, FileText } from "lucide-react";
+import { Bot, User, Image as ImageIcon, FileText, Download } from "lucide-react";
 import { formatWhatsAppText } from "@/lib/whatsappFormatter";
 import { useState } from "react";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface MessageBubbleProps {
   message: Message;
@@ -35,21 +36,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
     if (message.mediaType === 'image' && !imageError) {
       return (
-        <div className="mb-2">
-          <img
-            src={message.mediaUrl}
-            alt="Imagem"
-            className="rounded-lg max-w-full max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={() => window.open(message.mediaUrl, '_blank')}
-            onError={() => setImageError(true)}
-          />
+        <div className="mb-2 w-[240px] sm:w-[280px]">
+          <AspectRatio ratio={4 / 3} className="bg-muted rounded-lg overflow-hidden border border-border/50">
+            <img
+              src={message.mediaUrl}
+              alt="Imagem anexa"
+              className="object-cover w-full h-full cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => window.open(message.mediaUrl, '_blank')}
+              onError={() => setImageError(true)}
+            />
+          </AspectRatio>
         </div>
       );
     }
 
     if (message.mediaType === 'image' && imageError) {
       return (
-        <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+        <div className="mb-2 flex items-center gap-2 text-muted-foreground bg-muted/50 p-2 rounded-lg border border-border/50">
           <ImageIcon className="h-4 w-4" />
           <a 
             href={message.mediaUrl} 
@@ -66,7 +69,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (message.mediaType === 'audio') {
       return (
         <div className="mb-2">
-          <audio controls className="w-full max-w-[250px]">
+          <audio controls controlsList="nodownload" className="h-10 w-[240px] sm:w-[260px] opacity-90 hover:opacity-100 transition-opacity">
             <source src={message.mediaUrl} />
             Seu navegador não suporta áudio.
           </audio>
@@ -76,29 +79,37 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
     if (message.mediaType === 'video') {
       return (
-        <div className="mb-2">
-          <video 
-            controls 
-            className="rounded-lg max-w-full max-h-64"
-          >
-            <source src={message.mediaUrl} />
-            Seu navegador não suporta vídeo.
-          </video>
+        <div className="mb-2 w-[240px] sm:w-[280px]">
+          <AspectRatio ratio={16 / 9} className="bg-muted rounded-lg overflow-hidden border border-border/50">
+            <video 
+              controls 
+              className="w-full h-full object-cover"
+            >
+              <source src={message.mediaUrl} />
+              Seu navegador não suporta vídeo.
+            </video>
+          </AspectRatio>
         </div>
       );
     }
 
     if (message.mediaType === 'document') {
       return (
-        <div className="mb-2 flex items-center gap-2">
-          <FileText className="h-4 w-4" />
+        <div className="mb-2">
           <a 
             href={message.mediaUrl} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-sm hover:underline"
+            className="flex items-center gap-3 p-3 bg-background/50 rounded-lg border border-border/50 hover:bg-background/80 transition-colors group max-w-[280px]"
           >
-            Baixar documento
+            <div className="h-8 w-8 bg-primary/10 rounded-md flex items-center justify-center flex-shrink-0">
+               <FileText className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">Documento Anexo</p>
+              <p className="text-[10px] text-muted-foreground">Clique para baixar</p>
+            </div>
+            <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
           </a>
         </div>
       );
