@@ -36,7 +36,7 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
     <div
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 p-3 cursor-pointer transition-colors border-b border-border/50",
+        "flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors border-b border-border/50",
         isSelected
           ? "bg-sidebar-accent"
           : "hover:bg-muted/50"
@@ -56,11 +56,11 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center justify-between gap-2">
           <span className="font-medium text-sm text-foreground truncate flex-1 min-w-0">
             {session.customerName}
           </span>
-          <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono whitespace-nowrap">
+          <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono whitespace-nowrap ml-2">
             {timeAgo}
           </span>
         </div>
