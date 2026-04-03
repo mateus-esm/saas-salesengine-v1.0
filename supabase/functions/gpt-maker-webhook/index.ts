@@ -27,7 +27,8 @@ serve(async (req) => {
     }
 
     // 2. Normalização de Dados
-    const messageContent = payload.message || payload.content || payload.text || ''
+    const rawContent = payload.message || payload.content || payload.text || ''
+    let messageContent = typeof rawContent === 'string' ? rawContent.trim() : ''
     const senderPhone = payload.contactPhone || payload.phone || payload.from || ''
     const senderName = payload.contactName || payload.pushName || 'Desconhecido'
     const messageDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
@@ -37,13 +38,38 @@ serve(async (req) => {
 
     // 3. Extrair dados de mídia do payload
     // GPT Maker pode enviar mídia em diferentes formatos
-    const mediaUrl = payload.mediaUrl || payload.media?.url || payload.fileUrl || payload.audioUrl || payload.imageUrl || null
-    const mediaType = normalizeMediaType(
+    let mediaUrl = payload.mediaUrl || payload.media?.url || payload.fileUrl || payload.audioUrl || payload.imageUrl || null
+    let mediaType = normalizeMediaType(
       payload.mediaType || payload.media?.type || payload.type || payload.messageType || null,
       mediaUrl
     )
+
+    // Fallback: Inferir mediaType a partir do texto (WPP default placeholders) e limpar texto inútil
+    if (messageContent) {
+        const lowerMsg = messageContent.toLowerCase();
+        if (!mediaType) {
+            if (lowerMsg.includes('[imagem') || lowerMsg.includes('foto')) mediaType = 'image';
+            else if (lowerMsg.includes('[áudio') || lowerMsg.includes('[audio') || lowerMsg.includes('voz')) mediaType = 'audio';
+            else if (lowerMsg.includes('[documento') || lowerMsg.includes('[arquivo') || lowerMsg.includes('[vídeo') || lowerMsg.includes('[video')) {
+                 mediaType = (lowerMsg.includes('vídeo') || lowerMsg.includes('video')) ? 'video' : 'document';
+            }
+        }
+        
+        // Se temos mídia, limpar a string inútil '[Imagem Encaminhada]' para não poluir UI
+        if (mediaUrl || mediaType) {
+            if (messageContent === '[Imagem Encaminhada]' || 
+                messageContent === '[Mensagem de voz]' || 
+                messageContent === '[Mensagem de Voz]' || 
+                messageContent === '[Áudio Encaminhado]' || 
+                messageContent === '[Documento Anexo]' ||
+                messageContent === '[Imagem]' ||
+                messageContent === '[Áudio]') {
+                messageContent = '';
+            }
+        }
+    }
     
-    console.log('[Webhook] Mídia detectada:', { mediaUrl, mediaType })
+    console.log('[Webhook] Mídia detectada:', { mediaUrl, mediaType, cleanContent: messageContent })
 
     // 4. Ignorar mensagens vazias (mas permitir mensagens com mídia)
     // Relaxed check: senderPhone CAN be null/empty now, as long as we have chatId
@@ -194,16 +220,16 @@ serve(async (req) => {
     let skipInsert = false
 
     if (senderType === 'agent') {
-      // Verifica se já existe mensagem similar nos últimos 30 segundos
-      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
+      // Verifica se já existe mensagem similar nos últimos 60 segundos
+      const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString()
 
       const { data: existingMsg } = await supabase
         .from('messages')
         .select('id')
         .eq('lead_id', lead.id)
         .eq('sender_type', 'agent')
-        .eq('content', messageContent)
-        .gte('created_at', thirtySecondsAgo)
+        .ilike('content', messageContent || '%') 
+        .gte('created_at', sixtySecondsAgo)
         .limit(1)
         .maybeSingle()
 
