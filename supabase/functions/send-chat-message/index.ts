@@ -68,15 +68,23 @@ serve(async (req) => {
 
     // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
     const body: Record<string, any> = { message: content || "" }
+    
     if (media_url) {
+      // Extrai o nome do arquivo ignorando a hash de timestamp que colocamos antes do "_"
+      const rawFileName = media_url.split('/').pop()?.split('?')[0] || 'documento';
+      const cleanName = decodeURIComponent(rawFileName.includes('_') ? rawFileName.split('_').slice(1).join('_') : rawFileName);
+
       if (media_type === 'image') {
         body.image = media_url
+        body.fileName = cleanName
       } else if (media_type === 'audio') {
         body.audio = media_url
       } else if (media_type === 'video') {
         body.video = media_url
+        body.fileName = cleanName
       } else {
         body.document = media_url
+        body.fileName = cleanName
       }
     }
 
