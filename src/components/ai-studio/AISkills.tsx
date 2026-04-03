@@ -72,7 +72,7 @@ export function AISkills() {
       fetchIntentions(); // Refresh list to get real ID
     } catch (err) {
       console.error('Error saving intention:', err);
-      toast({ title: 'Erro', description: 'Falha ao salvar no GPT Maker.', variant: 'destructive' });
+      toast({ title: 'Erro', description: 'Falha ao salvar no AI Engine.', variant: 'destructive' });
     }
   };
 

@@ -1,6 +1,6 @@
 /**
  * PromptBuilder — Converte respostas de formulário em string de comportamento
- * para o campo `behavior` da API do GPT Maker (limite: 3000 chars).
+ * para o campo `behavior` da API do AI Engine (limite: 3000 chars).
  */
 
 export interface BehaviorAnswers {

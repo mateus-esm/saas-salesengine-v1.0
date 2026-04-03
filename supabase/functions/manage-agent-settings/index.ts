@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const GPT_MAKER_BASE = 'https://api.gptmaker.ai/v2';
+const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,7 +19,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Auth
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const { data: { user } } = await supabase.auth.getUser(token);
@@ -34,33 +33,33 @@ serve(async (req) => {
 
     const { data: equipe } = await supabase
       .from('equipes')
-      .select('gpt_maker_agent_id')
+      .select('gpt_maker_agent_id, workspace_id')
       .eq('id', profile.equipe_id)
       .single();
-    if (!equipe?.gpt_maker_agent_id) throw new Error('GPT Maker Agent ID not configured');
+    if (!equipe?.gpt_maker_agent_id) throw new Error('AI Engine Agent ID not configured');
 
-    const gptToken = Deno.env.get('GPT_MAKER_TOKEN');
-    if (!gptToken) throw new Error('GPT Maker token not configured');
+    const engineToken = Deno.env.get('GPT_MAKER_TOKEN');
+    if (!engineToken) throw new Error('AI Engine token not configured');
 
     const agentId = equipe.gpt_maker_agent_id;
-    const gptHeaders = {
-      'Authorization': `Bearer ${gptToken}`,
+    const engineHeaders = {
+      'Authorization': `Bearer ${engineToken}`,
       'Content-Type': 'application/json',
     };
 
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'get';
 
-    // GET agent settings (behavior, description, prefferModel)
+    // GET — return all agent settings
     if (req.method === 'GET' || action === 'get') {
-      const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}`, {
-        headers: gptHeaders,
+      const res = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}`, {
+        headers: engineHeaders,
       });
 
       if (!res.ok) {
         const err = await res.text();
-        console.error('GPT Maker get agent error:', err);
-        throw new Error(`GPT Maker API error: ${res.status}`);
+        console.error('AI Engine get agent error:', err);
+        throw new Error(`AI Engine API error: ${res.status}`);
       }
 
       const data = await res.json();
@@ -69,14 +68,17 @@ serve(async (req) => {
         description: data.description || '',
         prefferModel: data.prefferModel || 'gpt-4o-mini',
         name: data.name || '',
+        // Operational config fields
+        splitMessages: data.splitMessages ?? false,
+        enabledEmoji: data.enabledEmoji ?? false,
+        messageGroupingTime: data.messageGroupingTime ?? null,
+        knowledgeByFunction: data.knowledgeByFunction ?? false,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // POST actions (update-behavior, update-description, update-model)
     const body = await req.json();
-
     let updatePayload: Record<string, unknown> = {};
 
     if (action === 'update-behavior') {
@@ -85,6 +87,12 @@ serve(async (req) => {
       updatePayload = { description: body.description };
     } else if (action === 'update-model') {
       updatePayload = { prefferModel: body.model };
+    } else if (action === 'update-settings') {
+      // Selective patch — only include provided keys
+      const allowed = ['splitMessages', 'enabledEmoji', 'messageGroupingTime', 'knowledgeByFunction'];
+      for (const key of allowed) {
+        if (key in body) updatePayload[key] = body[key];
+      }
     } else {
       return new Response(JSON.stringify({ error: 'Invalid action' }), {
         status: 400,
@@ -92,16 +100,16 @@ serve(async (req) => {
       });
     }
 
-    const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}`, {
+    const res = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}`, {
       method: 'PUT',
-      headers: gptHeaders,
+      headers: engineHeaders,
       body: JSON.stringify(updatePayload),
     });
 
     if (!res.ok) {
       const err = await res.text();
-      console.error('GPT Maker update error:', err);
-      throw new Error(`GPT Maker API error: ${res.status}`);
+      console.error('AI Engine update error:', err);
+      throw new Error(`AI Engine API error: ${res.status}`);
     }
 
     const data = await res.json();

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:developer.gptmaker.ai)",
+      "Bash(cat:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

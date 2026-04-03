@@ -75,7 +75,7 @@ export function AIKnowledgeBase() {
       toast({ title: 'Sincronizado!', description: `Dados atualizados com sucesso.` });
     } catch (err) {
       console.error(`Error saving ${field}:`, err);
-      toast({ title: 'Erro de Sincronização', description: 'A API do GPT Maker pode estar fora.', variant: 'destructive' });
+      toast({ title: 'Erro de Sincronização', description: 'A API do AI Engine pode estar fora.', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -98,7 +98,7 @@ export function AIKnowledgeBase() {
       fetchAll();
     } catch (err) {
       console.error('Error creating training:', err);
-      toast({ title: 'Erro', description: 'Falha ao criar bloco no GPT Maker.', variant: 'destructive' });
+      toast({ title: 'Erro', description: 'Falha ao criar bloco no AI Engine.', variant: 'destructive' });
     } finally {
       setCreating(false);
     }
@@ -106,7 +106,7 @@ export function AIKnowledgeBase() {
 
   const updateTraining = async (id: string, newContent: string) => {
     toast({ description: "Sincronizando alteração no bloco..." });
-    // GPT Maker API usually needs the type again for update, we infer it from local array
+    // AI Engine API needs the type again for update, we infer it from local array
     const training = trainings.find(t => t.id === id || (t as any)._id === id);
     const type = training ? (training.type || 'TEXT') : 'TEXT';
 
@@ -120,7 +120,7 @@ export function AIKnowledgeBase() {
       setTrainings(prev => prev.map(t => (t.id === id || (t as any)._id === id) ? { ...t, text: newContent } : t));
     } catch (err) {
        console.error('Error updating training:', err);
-       toast({ title: 'Erro', description: 'Falha ao atualizar bloco no GPT Maker.', variant: 'destructive' });
+       toast({ title: 'Erro', description: 'Falha ao atualizar bloco no AI Engine.', variant: 'destructive' });
     }
   };
 

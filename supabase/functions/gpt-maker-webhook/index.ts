@@ -220,22 +220,31 @@ serve(async (req) => {
     let skipInsert = false
 
     if (senderType === 'agent') {
-      // Verifica se já existe mensagem similar nos últimos 60 segundos
-      const sixtySecondsAgo = new Date(Date.now() - 60000).toISOString()
-
+      // Busca a última mensagem do agente nesse chat específico
       const { data: existingMsg } = await supabase
         .from('messages')
-        .select('id')
+        .select('id, content, created_at')
         .eq('lead_id', lead.id)
         .eq('sender_type', 'agent')
-        .ilike('content', messageContent || '%') 
-        .gte('created_at', sixtySecondsAgo)
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
 
       if (existingMsg) {
-        console.log('[Webhook] Mensagem de agente duplicada detectada, ignorando:', existingMsg.id)
-        skipInsert = true
+        // Validação no JS para evitar bugs de Timestamp Timezone do PostgreSQL
+        const msgTime = new Date(existingMsg.created_at).getTime()
+        const nowTime = Date.now()
+        const isRecent = (nowTime - msgTime) < 60000 // 60s
+
+        // Se houver texto, valida coerência. Se não houver, assume que o anexo isolado engatilhou duplicate.
+        const isContentMatch = (messageContent || '').trim() 
+            ? (existingMsg.content || '').toLowerCase().includes((messageContent || '').trim().toLowerCase()) 
+            : true
+
+        if (isRecent && isContentMatch) {
+          console.log('[Webhook] Mensagem de agente duplicada detectada no JS, ignorando:', existingMsg.id)
+          skipInsert = true
+        }
       }
     }
 

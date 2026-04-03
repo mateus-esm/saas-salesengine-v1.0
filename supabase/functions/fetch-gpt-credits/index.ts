@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,13 +22,15 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const { data: { user } } = await supabaseClient.auth.getUser(token);
-
     if (!user) throw new Error('Unauthorized');
 
-    const { data: profile } = await supabaseClient.from('profiles').select('equipe_id').eq('user_id', user.id).single();
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('equipe_id')
+      .eq('user_id', user.id)
+      .single();
     if (!profile) throw new Error('Profile not found');
 
-    // Busca o ID do agente, limite do plano E créditos avulsos
     const { data: equipe } = await supabaseClient
       .from('equipes')
       .select('gpt_maker_agent_id, limite_creditos, creditos_avulsos')
@@ -35,62 +39,87 @@ serve(async (req) => {
 
     if (!equipe?.gpt_maker_agent_id) {
       return new Response(
-        JSON.stringify({ error: 'GPT Maker Agent ID not configured' }),
+        JSON.stringify({ error: 'AI Engine Agent ID not configured' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    const gptMakerToken = Deno.env.get('GPT_MAKER_TOKEN');
-    if (!gptMakerToken) throw new Error('GPT Maker token not configured');
+    const engineToken = Deno.env.get('GPT_MAKER_TOKEN');
+    if (!engineToken) throw new Error('AI Engine token not configured');
 
-    // Accept date params from client or default to current month
+    const engineHeaders = {
+      'Authorization': `Bearer ${engineToken}`,
+      'Content-Type': 'application/json',
+    };
+
     const url = new URL(req.url);
     const now = new Date();
     const year = parseInt(url.searchParams.get('year') || String(now.getFullYear()));
     const month = parseInt(url.searchParams.get('month') || String(now.getMonth() + 1));
+    const period = url.searchParams.get('period') || 'month'; // 'month' | 'year'
 
-    // Chama a API de consumo (v2)
-    const spentUrl = `https://api.gptmaker.ai/v2/agent/${equipe.gpt_maker_agent_id}/credits-spent?year=${year}&month=${month}`;
-
-    const spentRes = await fetch(spentUrl, { 
-      headers: { 'Authorization': `Bearer ${gptMakerToken}`, 'Content-Type': 'application/json' } 
-    });
-
-    if (!spentRes.ok) {
-        const err = await spentRes.text();
-        console.error("Erro API Agent Spent:", err);
-        throw new Error(`GPT Maker Agent API error: ${spentRes.status}`);
-    }
-
-    const spentData = await spentRes.json();
-    
-    // LOG PARA CONFERÊNCIA
-    console.log("JSON Retornado pelo GPT Maker:", spentData);
-
-    // --- LÓGICA DE SALDO COM CRÉDITOS AVULSOS ---
-    const creditsSpent = spentData.total || 0; 
+    const agentId = equipe.gpt_maker_agent_id;
     const planLimit = equipe.limite_creditos || 1000;
     const extraCredits = equipe.creditos_avulsos || 0;
     const totalCredits = planLimit + extraCredits;
-    const creditsBalance = totalCredits - creditsSpent;
 
-    const periodo = `${year}-${month.toString().padStart(2, '0')}`;
+    let allDetails: any[] = [];
+    let totalSpent = 0;
 
-    // Salva no banco
-    await supabaseClient.from('consumo_creditos').upsert({
-      equipe_id: profile.equipe_id, 
-      creditos_utilizados: creditsSpent, 
-      periodo, 
-      metadata: spentData
-    }, { onConflict: 'equipe_id,periodo', ignoreDuplicates: false });
+    if (period === 'year') {
+      // Fetch all 12 months in parallel for yearly view
+      const monthFetches = Array.from({ length: 12 }, (_, i) => i + 1).map(async (m) => {
+        const spentUrl = `${AI_ENGINE_BASE}/agent/${agentId}/credits-spent?year=${year}&month=${m}`;
+        try {
+          const res = await fetch(spentUrl, { headers: engineHeaders });
+          if (!res.ok) return [];
+          const data = await res.json();
+          return data.details || [];
+        } catch {
+          return [];
+        }
+      });
 
-    // Return full details for charts
+      const monthResults = await Promise.all(monthFetches);
+      allDetails = monthResults.flat();
+      totalSpent = allDetails.reduce((sum: number, d: any) => sum + (d.credits || 0), 0);
+    } else {
+      // Single month fetch
+      const spentUrl = `${AI_ENGINE_BASE}/agent/${agentId}/credits-spent?year=${year}&month=${month}`;
+      const spentRes = await fetch(spentUrl, { headers: engineHeaders });
+
+      if (!spentRes.ok) {
+        const err = await spentRes.text();
+        console.error('AI Engine credits-spent error:', err);
+        throw new Error(`AI Engine API error: ${spentRes.status}`);
+      }
+
+      const spentData = await spentRes.json();
+      console.log('AI Engine credits-spent:', JSON.stringify(spentData).slice(0, 200));
+
+      totalSpent = spentData.total || 0;
+      allDetails = spentData.details || [];
+
+      // Cache to DB
+      const periodKey = `${year}-${month.toString().padStart(2, '0')}`;
+      await supabaseClient.from('consumo_creditos').upsert({
+        equipe_id: profile.equipe_id,
+        creditos_utilizados: totalSpent,
+        periodo: periodKey,
+        metadata: spentData,
+      }, { onConflict: 'equipe_id,periodo', ignoreDuplicates: false });
+    }
+
+    const creditsBalance = totalCredits - totalSpent;
+
     return new Response(JSON.stringify({
-      creditsSpent,
+      creditsSpent: totalSpent,
       creditsBalance,
       totalCredits,
-      periodo,
-      details: spentData.details || [],
+      period,
+      year,
+      month: period === 'month' ? month : null,
+      details: allDetails,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {

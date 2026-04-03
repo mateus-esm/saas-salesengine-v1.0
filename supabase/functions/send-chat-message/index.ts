@@ -67,7 +67,8 @@ serve(async (req) => {
     }
 
     // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
-    const body: Record<string, any> = { message: content || "" }
+    const body: Record<string, any> = {}
+    if (content) body.message = content
     
     if (media_url) {
       // Extrai o nome do arquivo ignorando a hash de timestamp que colocamos antes do "_"
@@ -79,6 +80,8 @@ serve(async (req) => {
         body.fileName = cleanName
       } else if (media_type === 'audio') {
         body.audio = media_url
+        // Nunca enviar 'message' de uma voice note pois a API de WPP recusa audio com caption
+        delete body.message 
       } else if (media_type === 'video') {
         body.video = media_url
         body.fileName = cleanName
