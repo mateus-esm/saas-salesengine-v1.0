@@ -67,10 +67,16 @@ serve(async (req) => {
     }
 
     // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
-    const body: { message: string; media_url?: string; media_type?: string } = { message: content }
+    const body: Record<string, any> = { message: content }
     if (media_url) {
-      body.media_url = media_url
-      body.media_type = media_type
+      if (media_type === 'image') {
+        body.imageUrl = media_url
+      } else if (media_type === 'audio') {
+        body.audioUrl = media_url
+      } else {
+        body.fileUrl = media_url
+        body.documentUrl = media_url
+      }
     }
 
     const gptResponse = await fetch(`https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`, {

@@ -56,15 +56,15 @@ serve(async (req) => {
         if (msg.imageUrl) {
             mediaUrl = msg.imageUrl;
             mediaType = 'image';
-            if (!content) content = '[Imagem Encaminhada]';
+            content = content || '';
         } else if (msg.audioUrl) {
             mediaUrl = msg.audioUrl;
             mediaType = 'audio';
-            if (!content) content = '[Mensagem de Voz]';
+            content = content || '';
         } else if (msg.documentUrl) {
             mediaUrl = msg.documentUrl;
             mediaType = 'document';
-            if (!content) content = '[Documento Anexo]';
+            content = content || '';
         }
         
         if (!content && !mediaUrl) continue; // Pula se realmente não tiver nada
