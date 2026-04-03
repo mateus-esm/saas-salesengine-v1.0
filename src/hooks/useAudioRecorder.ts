@@ -2,12 +2,33 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
+// Formatos preferidos em ordem de prioridade para compatibilidade com WhatsApp
+const PREFERRED_MIME_TYPES = [
+  'audio/ogg;codecs=opus',   // WhatsApp nativo (voice note)
+  'audio/ogg',                // OGG genérico
+  'audio/mp4',                // Aceito pelo WhatsApp
+  'audio/webm;codecs=opus',   // Chrome default (NÃO aceito como PTT pelo WPP)
+  'audio/webm',               // Fallback final
+];
+
+function getBestMimeType(): string {
+  for (const mimeType of PREFERRED_MIME_TYPES) {
+    if (MediaRecorder.isTypeSupported(mimeType)) {
+      console.log('[AudioRecorder] Usando mimeType:', mimeType);
+      return mimeType;
+    }
+  }
+  console.warn('[AudioRecorder] Nenhum formato preferido suportado, usando default do browser');
+  return '';  // Deixa o browser decidir
+}
+
 export function useAudioRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const actualMimeTypeRef = useRef<string>('audio/webm');
 
   useEffect(() => {
     return () => {
@@ -18,7 +39,14 @@ export function useAudioRecorder() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      
+      const mimeType = getBestMimeType();
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      
+      mediaRecorderRef.current = new MediaRecorder(stream, options);
+      actualMimeTypeRef.current = mediaRecorderRef.current.mimeType || mimeType || 'audio/webm';
+      console.log('[AudioRecorder] MediaRecorder iniciado com:', actualMimeTypeRef.current);
+      
       chunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (e) => {
@@ -49,7 +77,9 @@ export function useAudioRecorder() {
       }
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const usedMime = actualMimeTypeRef.current;
+        const blob = new Blob(chunksRef.current, { type: usedMime });
+        console.log('[AudioRecorder] Blob criado:', { type: blob.type, size: blob.size });
         // Limpar tracks
         mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
         resolve(blob);

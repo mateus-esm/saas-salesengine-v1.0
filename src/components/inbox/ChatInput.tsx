@@ -72,10 +72,23 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
   const handleStopRecording = async () => {
       const blob = await stopRecording();
       if (blob) {
-        // WhatsApp nativo utiliza codec Opus envolvido em OGG. A maioria dos navegadores (Chrome/Edge) empacota em WebM nativamente.
-        // É melhor enviar o formato VERDADEIRO (webm) para não quebrar o check do libmagic do provedor (Z-API).
-        const fileExt = blob.type.includes('webm') ? 'webm' : (blob.type.includes('mp4') ? 'mp4' : 'ogg')
-        const file = new File([blob], `audio_message.${fileExt}`, { type: blob.type || "audio/webm" });
+        // Determinar extensão correta baseada no MIME type REAL do blob
+        // Se o recorder conseguiu usar OGG (preferido), o arquivo terá extensão .ogg
+        // Se caiu em WebM, a Edge Function vai enviar como document (fallback seguro)
+        let fileExt = 'ogg';
+        let mimeType = blob.type || 'audio/ogg;codecs=opus';
+        
+        if (mimeType.includes('webm')) {
+          fileExt = 'webm';
+        } else if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
+          fileExt = 'mp4';
+        } else if (mimeType.includes('ogg') || mimeType.includes('opus')) {
+          fileExt = 'ogg';
+          mimeType = 'audio/ogg;codecs=opus'; // Normalizar para WPP
+        }
+        
+        console.log('[ChatInput] Áudio gravado:', { mimeType, fileExt, size: blob.size });
+        const file = new File([blob], `audio_message.${fileExt}`, { type: mimeType });
         const result = await uploadFile(file);
         if (result) {
           onSend("", { ...result, type: 'audio' });

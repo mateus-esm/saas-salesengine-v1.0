@@ -218,37 +218,9 @@ serve(async (req) => {
 
     let skipInsert = false
 
-    if (senderType === 'agent') {
-      // Busca a última mensagem do agente nesse chat específico
-      const { data: existingMsg } = await supabase
-        .from('messages')
-        .select('id, content, created_at')
-        .eq('lead_id', lead.id)
-        .eq('sender_type', 'agent')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (existingMsg) {
-        // Validação no JS para evitar bugs de Timestamp Timezone do PostgreSQL
-        const msgTime = new Date(existingMsg.created_at).getTime()
-        const nowTime = Date.now()
-        const isRecent = (nowTime - msgTime) < 60000 // 60s
-
-        // Se houver texto, valida coerência. Se não houver, assume que o anexo isolado engatilhou duplicate.
-        const isContentMatch = (messageContent || '').trim() 
-            ? (existingMsg.content || '').toLowerCase().includes((messageContent || '').trim().toLowerCase()) 
-            : true
-
-        if (isRecent && isContentMatch) {
-          console.log('[Webhook] Mensagem de agente duplicada detectada no JS, ignorando:', existingMsg.id)
-          skipInsert = true
-        }
-      }
-    }
-
-    // Também verifica por gpt_message_id se disponível
-    if (!skipInsert && messageId) {
+    // ── DEDUPLICAÇÃO ROBUSTA ──
+    // Verificação 1: por gpt_message_id (mais confiável, checar PRIMEIRO)
+    if (messageId) {
       const { data: existingById } = await supabase
         .from('messages')
         .select('id')
@@ -259,6 +231,46 @@ serve(async (req) => {
       if (existingById) {
         console.log('[Webhook] Mensagem com mesmo gpt_message_id já existe, ignorando:', messageId)
         skipInsert = true
+      }
+    }
+
+    // Verificação 2: para mensagens de agente, buscar TODAS recentes (120s) e comparar
+    if (!skipInsert && senderType === 'agent') {
+      const { data: recentAgentMsgs } = await supabase
+        .from('messages')
+        .select('id, content, created_at, media_url')
+        .eq('lead_id', lead.id)
+        .eq('sender_type', 'agent')
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (recentAgentMsgs && recentAgentMsgs.length > 0) {
+        const nowTime = Date.now()
+        const incomingContent = (messageContent || '').trim().toLowerCase()
+
+        for (const existingMsg of recentAgentMsgs) {
+          const msgTime = new Date(existingMsg.created_at).getTime()
+          const isRecent = (nowTime - msgTime) < 120000 // 120s janela ampliada
+          if (!isRecent) break // Mensagens estão ordenadas desc, se saiu da janela pode parar
+
+          // Match por conteúdo de texto
+          const existingContent = (existingMsg.content || '').trim().toLowerCase()
+          const textMatch = incomingContent
+            ? (existingContent === incomingContent || existingContent.includes(incomingContent))
+            : !existingContent // ambos vazios = match (mídia pura)
+
+          // Match por URL de mídia (para documentos/áudios/imagens sem texto)
+          const mediaMatch = mediaUrl && existingMsg.media_url
+            ? existingMsg.media_url === mediaUrl
+            : false
+
+          if (textMatch || mediaMatch) {
+            console.log('[Webhook] Mensagem de agente duplicada detectada (janela 120s), ignorando:', existingMsg.id,
+              { textMatch, mediaMatch, incomingContent: incomingContent.substring(0, 50) })
+            skipInsert = true
+            break
+          }
+        }
       }
     }
 

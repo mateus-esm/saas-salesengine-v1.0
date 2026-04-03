@@ -74,13 +74,24 @@ serve(async (req) => {
       // Extrai o nome do arquivo ignorando a hash de timestamp que colocamos antes do "_"
       const rawFileName = media_url.split('/').pop()?.split('?')[0] || 'documento';
       const cleanName = decodeURIComponent(rawFileName.includes('_') ? rawFileName.split('_').slice(1).join('_') : rawFileName);
+      const lowerUrl = media_url.toLowerCase();
 
       if (media_type === 'image') {
         body.image = media_url
         body.fileName = cleanName
       } else if (media_type === 'audio') {
-        body.audio = media_url
-        // Nunca enviar 'message' de uma voice note pois a API de WPP recusa audio com caption
+        // WhatsApp rejeita áudio WebM como voice note (PTT).
+        // Se o arquivo é .webm, enviar como document (arquivo) que chega como playable.
+        // Se é .ogg/.mp3/.aac, enviar como audio nativo (voice note).
+        const isWebm = lowerUrl.includes('.webm');
+        if (isWebm) {
+          console.log('[SendMsg] Áudio WebM detectado, enviando como document (fallback WPP)')
+          body.document = media_url
+          body.fileName = cleanName
+        } else {
+          body.audio = media_url
+        }
+        // Nunca enviar 'message' junto com áudio/voice note pois a API de WPP recusa com caption
         delete body.message 
       } else if (media_type === 'video') {
         body.video = media_url
@@ -90,6 +101,8 @@ serve(async (req) => {
         body.fileName = cleanName
       }
     }
+
+    console.log('[SendMsg] Payload para GPT Maker:', JSON.stringify(body))
 
     const gptResponse = await fetch(`https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`, {
       method: 'POST',
