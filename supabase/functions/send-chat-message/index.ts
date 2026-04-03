@@ -100,6 +100,17 @@ serve(async (req) => {
     if (!gptResponse.ok) {
       console.error('Erro ao entregar no WhatsApp:', await gptResponse.text())
       // Opcional: Atualizar status da mensagem no banco para 'failed'
+    } else {
+      // Captura o messageId do GPT Maker de forma resiliente
+      try {
+        const respData = await gptResponse.json()
+        if (respData && respData.messageId) {
+           await supabase.from('messages').update({ gpt_message_id: respData.messageId }).eq('id', msg.id)
+           msg.gpt_message_id = respData.messageId // atualizar pra UI
+        }
+      } catch (err) {
+        console.error('Nao foi possivel extrair messageId do GPT Maker', err)
+      }
     }
 
     return new Response(JSON.stringify(msg), {

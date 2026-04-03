@@ -81,11 +81,10 @@ serve(async (req) => {
       })
     }
 
-    // 5. Mapear sender_type corretamente baseado no role
     let senderType = 'customer'
-    if (payload.role === 'assistant') {
+    if (payload.role === 'assistant' || payload.fromMe === true) {
       senderType = 'agent'
-      console.log('[Webhook] Mensagem do agente IA')
+      console.log(`[Webhook] Mensagem do agente/sistema (role: ${payload.role}, fromMe: ${payload.fromMe})`)
     } else {
       console.log('[Webhook] Mensagem do cliente')
     }

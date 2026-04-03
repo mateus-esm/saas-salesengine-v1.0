@@ -70,17 +70,17 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
   };
 
   const handleStopRecording = async () => {
-    const blob = await stopRecording();
-    if (blob) {
-      // WhatsApp nativo utiliza codec Opus envolvido em OGG. A maioria dos navegadores empacotam o webm compativelmente.
-      // Modificar a extensão ajuda a API do provedor (Z-API/GPT Maker) a reconhecê-lo como áudio e não arquivo de vídeo genérico.
-      // Modificado para .mp3 com type mpeg porque o GPT Maker recusou o arquivo .ogg direto do browser.
-      const file = new File([blob], "audio_message.mp3", { type: "audio/mpeg" });
-      const result = await uploadFile(file);
-      if (result) {
-        onSend("", { ...result, type: 'audio' });
+      const blob = await stopRecording();
+      if (blob) {
+        // WhatsApp nativo utiliza codec Opus envolvido em OGG. A maioria dos navegadores (Chrome/Edge) empacota em WebM nativamente.
+        // É melhor enviar o formato VERDADEIRO (webm) para não quebrar o check do libmagic do provedor (Z-API).
+        const fileExt = blob.type.includes('webm') ? 'webm' : (blob.type.includes('mp4') ? 'mp4' : 'ogg')
+        const file = new File([blob], `audio_message.${fileExt}`, { type: blob.type || "audio/webm" });
+        const result = await uploadFile(file);
+        if (result) {
+          onSend("", { ...result, type: 'audio' });
+        }
       }
-    }
   };
 
   const formatTime = (seconds: number) => {
