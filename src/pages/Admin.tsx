@@ -741,7 +741,7 @@ const Admin = () => {
           DIALOG: CREATE / EDIT EQUIPE
       ════════════════════════════════════════════════════════════════════════ */}
       <Dialog open={equipeDialog} onOpenChange={(o) => { setEquipeDialog(o); if (!o) setEditingEquipe(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{isNewEquipe ? "Nova Equipe" : `Editar: ${editingEquipe?.nome}`}</DialogTitle>
             <DialogDescription>
@@ -749,7 +749,7 @@ const Admin = () => {
             </DialogDescription>
           </DialogHeader>
           {editingEquipe && (
-            <ScrollArea className="flex-1 pr-4">
+            <div className="max-h-[65vh] overflow-y-auto pr-1">
               <div className="space-y-6 py-2">
 
                 {/* ── Dados básicos */}
@@ -917,9 +917,9 @@ const Admin = () => {
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
           )}
-          <DialogFooter className="mt-4 pt-4 border-t">
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setEquipeDialog(false)}>Cancelar</Button>
             <Button onClick={handleSaveEquipe}>
               {isNewEquipe ? "Criar Equipe" : "Salvar Alterações"}
