@@ -35,9 +35,11 @@ export function useMediaUpload() {
       const filePath = `${fileName}`;
 
       // 3. Upload para Supabase Storage
+      // contentType OBRIGATÓRIO: sem ele, o Supabase serve como application/octet-stream
+      // e o WhatsApp rejeita silenciosamente ao tentar baixar a mídia.
       const { error: uploadError } = await supabase.storage
         .from('chat-attachments')
-        .upload(filePath, file);
+        .upload(filePath, file, { contentType: file.type });
 
       if (uploadError) throw uploadError;
 
