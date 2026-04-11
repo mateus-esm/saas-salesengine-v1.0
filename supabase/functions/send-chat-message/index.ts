@@ -80,19 +80,13 @@ serve(async (req) => {
         body.image = media_url
         body.fileName = cleanName
       } else if (media_type === 'audio') {
-        // WhatsApp rejeita áudio WebM como voice note (PTT).
-        // Se o arquivo é .webm, enviar como document (arquivo) que chega como playable.
-        // Se é .ogg/.mp3/.aac, enviar como audio nativo (voice note).
-        const isWebm = lowerUrl.includes('.webm');
-        if (isWebm) {
-          console.log('[SendMsg] Áudio WebM detectado, enviando como document (fallback WPP)')
-          body.document = media_url
-          body.fileName = cleanName
-        } else {
-          body.audio = media_url
-        }
-        // Nunca enviar 'message' junto com áudio/voice note pois a API de WPP recusa com caption
-        delete body.message 
+        // Sempre enviar como campo 'audio' com a URL pública do Supabase Storage.
+        // O GPT Maker recebe a URL, faz download e repassa ao WhatsApp.
+        // O campo correto conforme docs da API: { audio: "<URL>" }
+        // Não usar 'document' pois o WhatsApp não aceita WebM como documento.
+        body.audio = media_url
+        // Nunca enviar 'message' junto com áudio pois a API do WPP recusa caption em voice note.
+        delete body.message
       } else if (media_type === 'video') {
         body.video = media_url
         body.fileName = cleanName
@@ -103,6 +97,7 @@ serve(async (req) => {
     }
 
     console.log('[SendMsg] Payload para GPT Maker:', JSON.stringify(body))
+    console.log('[SendMsg] chat_id:', chat_id, '| media_type:', media_type, '| media_url:', media_url)
 
     const gptResponse = await fetch(`https://api.gptmaker.ai/v2/chat/${chat_id}/send-message`, {
       method: 'POST',
@@ -110,19 +105,21 @@ serve(async (req) => {
       body: JSON.stringify(body)
     })
 
+    const gptRawText = await gptResponse.text()
+    console.log(`[SendMsg] GPT Maker status: ${gptResponse.status} | body: ${gptRawText}`)
+
     if (!gptResponse.ok) {
-      console.error('Erro ao entregar no WhatsApp:', await gptResponse.text())
-      // Opcional: Atualizar status da mensagem no banco para 'failed'
+      console.error('[SendMsg] ERRO na entrega ao WhatsApp:', gptResponse.status, gptRawText)
     } else {
       // Captura o messageId do GPT Maker de forma resiliente
       try {
-        const respData = await gptResponse.json()
+        const respData = JSON.parse(gptRawText)
         if (respData && respData.messageId) {
            await supabase.from('messages').update({ gpt_message_id: respData.messageId }).eq('id', msg.id)
            msg.gpt_message_id = respData.messageId // atualizar pra UI
         }
       } catch (err) {
-        console.error('Nao foi possivel extrair messageId do GPT Maker', err)
+        console.error('[SendMsg] Nao foi possivel extrair messageId do GPT Maker', err)
       }
     }
 
