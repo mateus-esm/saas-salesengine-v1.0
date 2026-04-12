@@ -2,60 +2,113 @@
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
-// Formatos preferidos em ordem de prioridade para compatibilidade com WhatsApp
-const PREFERRED_MIME_TYPES = [
-  'audio/ogg;codecs=opus',   // WhatsApp nativo (voice note)
-  'audio/ogg',                // OGG genérico
-  'audio/mp4',                // Aceito pelo WhatsApp
-  'audio/webm;codecs=opus',   // Chrome default (NÃO aceito como PTT pelo WPP)
-  'audio/webm',               // Fallback final
-];
+// opus-recorder não tem tipos TypeScript oficiais
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import Recorder from 'opus-recorder';
 
-function getBestMimeType(): string {
-  for (const mimeType of PREFERRED_MIME_TYPES) {
-    if (MediaRecorder.isTypeSupported(mimeType)) {
-      console.log('[AudioRecorder] Usando mimeType:', mimeType);
-      return mimeType;
-    }
-  }
-  console.warn('[AudioRecorder] Nenhum formato preferido suportado, usando default do browser');
-  return '';  // Deixa o browser decidir
-}
+/** Máximo de espera após chamar stop() antes de desistir */
+const STOP_TIMEOUT_MS = 6000;
 
+/**
+ * Hook de gravação de áudio que produz OGG+OPUS via WASM (opus-recorder).
+ * Worker file em /public/encoderWorker.min.js.
+ */
 export function useAudioRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const actualMimeTypeRef = useRef<string>('audio/webm');
 
+  const recorderRef = useRef<any>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const stopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cancelledRef = useRef(false);
+  const resolveRef = useRef<((blob: Blob | null) => void) | null>(null);
+
+  // Limpar tudo ao desmontar
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearTimer();
+      clearStopTimeout();
+      try { recorderRef.current?.close(); } catch (_) { /* ignore */ }
     };
   }, []);
 
+  function clearTimer() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  function clearStopTimeout() {
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+  }
+
+  /** Resolve a promise pendente de stopRecording com o resultado fornecido */
+  function settlePending(blob: Blob | null) {
+    clearStopTimeout();
+    const resolve = resolveRef.current;
+    if (resolve) {
+      resolveRef.current = null;
+      resolve(blob);
+    }
+  }
+
+  /** Limpa o estado de gravação na UI */
+  function resetRecordingState() {
+    setIsRecording(false);
+    clearTimer();
+  }
+
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      const mimeType = getBestMimeType();
-      const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
-      
-      mediaRecorderRef.current = new MediaRecorder(stream, options);
-      actualMimeTypeRef.current = mediaRecorderRef.current.mimeType || mimeType || 'audio/webm';
-      console.log('[AudioRecorder] MediaRecorder iniciado com:', actualMimeTypeRef.current);
-      
-      chunksRef.current = [];
+      cancelledRef.current = false;
 
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
+      const recorder = new Recorder({
+        encoderPath: '/encoderWorker.min.js',
+        numberOfChannels: 1,
+        encoderApplication: 2048,  // OPUS_APPLICATION_VOIP
+        encoderBitRate: 32000,
+        encoderSampleRate: 48000,
+        maxFramesPerPage: 40,
+        streamPages: false,        // Entrega tudo de uma vez no stop
+      });
+
+      // Dados prontos — sempre dispara antes de onstop (com streamPages: false)
+      recorder.ondataavailable = (arrayBuffer: ArrayBuffer) => {
+        if (cancelledRef.current) {
+          settlePending(null);
+          return;
+        }
+        const blob = new Blob([arrayBuffer], { type: 'audio/ogg;codecs=opus' });
+        console.log('[AudioRecorder] OGG+OPUS pronto:', { size: blob.size });
+        settlePending(blob);
+      };
+
+      // Gravação encerrada — garante limpeza de estado
+      recorder.onstop = () => {
+        resetRecordingState();
+        // Caso ondataavailable não tenha disparado (ex: gravação < 1 frame)
+        if (resolveRef.current) {
+          console.warn('[AudioRecorder] onstop sem dados — resolvendo com null.');
+          settlePending(null);
         }
       };
 
-      mediaRecorderRef.current.start();
+      // Erro no worker de encoding
+      recorder.onerror = (e: Event) => {
+        console.error('[AudioRecorder] Erro no worker de encoding:', e);
+        resetRecordingState();
+        settlePending(null);
+        toast.error('Erro no encoding de áudio. Tente novamente.');
+      };
+
+      recorderRef.current = recorder;
+      await recorder.start(); // Solicita microfone e inicia gravação
+
       setIsRecording(true);
       setRecordingTime(0);
 
@@ -64,47 +117,43 @@ export function useAudioRecorder() {
       }, 1000);
 
     } catch (error) {
-      console.error("Erro ao acessar microfone:", error);
-      toast.error("Erro ao acessar microfone. Verifique as permissões.");
+      console.error('[AudioRecorder] Erro ao iniciar gravação:', error);
+      toast.error('Erro ao acessar microfone. Verifique as permissões.');
     }
   };
 
   const stopRecording = (): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
+      if (!recorderRef.current) {
         resolve(null);
         return;
       }
 
-      mediaRecorderRef.current.onstop = () => {
-        const usedMime = actualMimeTypeRef.current;
-        const blob = new Blob(chunksRef.current, { type: usedMime });
-        console.log('[AudioRecorder] Blob criado:', { type: blob.type, size: blob.size });
-        // Limpar tracks
-        mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
-        resolve(blob);
-      };
+      resolveRef.current = resolve;
 
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      // Timeout de segurança: se nada acontecer em STOP_TIMEOUT_MS, desiste
+      stopTimeoutRef.current = setTimeout(() => {
+        console.error(`[AudioRecorder] Timeout ${STOP_TIMEOUT_MS}ms ao parar. Worker pode estar travado.`);
+        resetRecordingState();
+        settlePending(null);
+        toast.error('Gravação travou. Tente novamente.');
+      }, STOP_TIMEOUT_MS);
+
+      try {
+        recorderRef.current.stop();
+      } catch (err) {
+        console.error('[AudioRecorder] Exceção em recorder.stop():', err);
+        resetRecordingState();
+        settlePending(null);
       }
     });
   };
 
   const cancelRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-    }
-    setIsRecording(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    chunksRef.current = [];
+    cancelledRef.current = true;
+    try { recorderRef.current?.stop(); } catch (_) { /* ignore */ }
+    resetRecordingState();
+    settlePending(null);
   };
 
   return {
@@ -112,6 +161,6 @@ export function useAudioRecorder() {
     recordingTime,
     startRecording,
     stopRecording,
-    cancelRecording
+    cancelRecording,
   };
 }

@@ -127,23 +127,39 @@ export const useMessages = (leadId: string | undefined) => {
         (payload) => {
           const newMsg = payload.new as Message;
 
-          // Adiciona a nova mensagem APENAS se não existir (evita duplicatas)
           setMessages((current) => {
-            // Verifica se já existe pelo ID
-            const exists = current.some(m => m.id === newMsg.id);
-            if (exists) {
+            // Guarda 1: mesmo ID já está na lista (idempotência)
+            if (current.some(m => m.id === newMsg.id)) return current;
+
+            // Guarda 2: já existe mensagem com mesmo conteúdo + sender + tempo próximo (≤ 10s)
+            // Previne duplicatas que escaparam do webhook ou chegaram por duas subscrições.
+            const newTime = new Date(newMsg.created_at || 0).getTime();
+            const WINDOW_MS = 10_000;
+            const isDuplicate = current.some(m => {
+              if (m.id.startsWith('temp-')) return false; // ignorar otimistas
+              if (m.sender_type !== newMsg.sender_type) return false;
+              const mTime = new Date(m.created_at || 0).getTime();
+              if (Math.abs(mTime - newTime) > WINDOW_MS) return false;
+              // conteúdo idêntico (null e '' são tratados como iguais)
+              const mContent = (m.content || '').trim();
+              const nContent = (newMsg.content || '').trim();
+              if (mContent !== nContent) return false;
+              // mídia: se ambas tiverem URL, devem ser iguais; se nenhuma tiver, ok
+              if (m.media_url && newMsg.media_url) return m.media_url === newMsg.media_url;
+              if (!m.media_url && !newMsg.media_url) return true;
+              return false;
+            });
+            if (isDuplicate) {
+              console.warn('[useMessages] Mensagem duplicada bloqueada na UI:', newMsg.id);
               return current;
             }
 
-            // Remove a mensagem otimista correspondente (mesmo conteúdo e remetente)
+            // Remove otimista correspondente (conteúdo + sender + sem ID real)
             const withoutOptimistic = current.filter(m => {
-              const isTemp = m.id.startsWith('temp-');
-              const sameContent = m.content === newMsg.content;
+              if (!m.id.startsWith('temp-')) return true;
+              const sameContent = (m.content || '').trim() === (newMsg.content || '').trim();
               const sameSender = m.sender_type === newMsg.sender_type;
-              if (isTemp && sameContent && sameSender) {
-                return false;
-              }
-              return true;
+              return !(sameContent && sameSender);
             });
 
             const newMsgs = sortMessages([...withoutOptimistic, newMsg]);

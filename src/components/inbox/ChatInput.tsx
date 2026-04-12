@@ -72,23 +72,9 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
   const handleStopRecording = async () => {
       const blob = await stopRecording();
       if (blob) {
-        // Determinar extensão correta baseada no MIME type REAL do blob
-        // Se o recorder conseguiu usar OGG (preferido), o arquivo terá extensão .ogg
-        // Se caiu em WebM, a Edge Function vai enviar como document (fallback seguro)
-        let fileExt = 'ogg';
-        let mimeType = blob.type || 'audio/ogg;codecs=opus';
-        
-        if (mimeType.includes('webm')) {
-          fileExt = 'webm';
-        } else if (mimeType.includes('mp4') || mimeType.includes('m4a')) {
-          fileExt = 'mp4';
-        } else if (mimeType.includes('ogg') || mimeType.includes('opus')) {
-          fileExt = 'ogg';
-          mimeType = 'audio/ogg;codecs=opus'; // Normalizar para WPP
-        }
-        
-        console.log('[ChatInput] Áudio gravado:', { mimeType, fileExt, size: blob.size });
-        const file = new File([blob], `audio_message.${fileExt}`, { type: mimeType });
+        // opus-recorder sempre entrega audio/ogg;codecs=opus — formato nativo de PTT do WhatsApp.
+        console.log('[ChatInput] Áudio OGG pronto para upload:', { size: blob.size, type: blob.type });
+        const file = new File([blob], 'audio_message.ogg', { type: 'audio/ogg;codecs=opus' });
         const result = await uploadFile(file);
         if (result) {
           onSend("", { ...result, type: 'audio' });

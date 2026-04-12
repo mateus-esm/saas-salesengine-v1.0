@@ -213,13 +213,14 @@ serve(async (req) => {
     if (!lead) throw new Error("Falha inesperada: Lead nulo após processamento");
 
     // 10. Verificar duplicata ANTES de inserir
-    // Mensagens de agente enviadas pelo Chat UI já foram salvas pelo send-chat-message
-    // GPT Maker ecoa essas mensagens de volta, causando duplicação
+    // GPT Maker ecoa mensagens de volta causando duplicação.
+    // O campo gpt_message_id NEM SEMPRE é preenchido (GPT Maker retorna {success:true} sem ID),
+    // então a deduplicação por conteúdo é a linha de defesa principal.
 
     let skipInsert = false
 
     // ── DEDUPLICAÇÃO ROBUSTA ──
-    // Verificação 1: por gpt_message_id (mais confiável, checar PRIMEIRO)
+    // Verificação 1: por gpt_message_id (funciona quando GPT Maker retorna o ID)
     if (messageId) {
       const { data: existingById } = await supabase
         .from('messages')
@@ -229,44 +230,47 @@ serve(async (req) => {
         .maybeSingle()
 
       if (existingById) {
-        console.log('[Webhook] Mensagem com mesmo gpt_message_id já existe, ignorando:', messageId)
+        console.log('[Webhook] Dedup por gpt_message_id:', messageId)
         skipInsert = true
       }
     }
 
-    // Verificação 2: para mensagens de agente, buscar TODAS recentes (120s) e comparar
-    if (!skipInsert && senderType === 'agent') {
-      const { data: recentAgentMsgs } = await supabase
+    // Verificação 2: por conteúdo + sender_type + janela de tempo (300s)
+    // Aplicado para QUALQUER tipo de remetente — agente ou cliente.
+    // Isso cobre o caso onde o role vem errado e captura ecos de mensagens do agente
+    // tratadas incorretamente como 'customer'.
+    if (!skipInsert) {
+      const DEDUP_WINDOW_MS = 300_000 // 5 minutos
+      const cutoff = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString()
+      const incomingContent = (messageContent || '').trim().toLowerCase()
+
+      const { data: recentMsgs } = await supabase
         .from('messages')
-        .select('id, content, created_at, media_url')
+        .select('id, content, created_at, media_url, sender_type')
         .eq('lead_id', lead.id)
-        .eq('sender_type', 'agent')
+        .eq('sender_type', senderType)
+        .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(20)
 
-      if (recentAgentMsgs && recentAgentMsgs.length > 0) {
-        const nowTime = Date.now()
-        const incomingContent = (messageContent || '').trim().toLowerCase()
+      if (recentMsgs && recentMsgs.length > 0) {
+        for (const existing of recentMsgs) {
+          const existingContent = (existing.content || '').trim().toLowerCase()
 
-        for (const existingMsg of recentAgentMsgs) {
-          const msgTime = new Date(existingMsg.created_at).getTime()
-          const isRecent = (nowTime - msgTime) < 120000 // 120s janela ampliada
-          if (!isRecent) break // Mensagens estão ordenadas desc, se saiu da janela pode parar
-
-          // Match por conteúdo de texto
-          const existingContent = (existingMsg.content || '').trim().toLowerCase()
+          // Match de texto: ambos com conteúdo igual OU ambos vazios (mídia pura)
           const textMatch = incomingContent
-            ? (existingContent === incomingContent || existingContent.includes(incomingContent))
-            : !existingContent // ambos vazios = match (mídia pura)
+            ? existingContent === incomingContent
+            : existingContent === ''
 
-          // Match por URL de mídia (para documentos/áudios/imagens sem texto)
-          const mediaMatch = mediaUrl && existingMsg.media_url
-            ? existingMsg.media_url === mediaUrl
+          // Match de mídia: URLs iguais (quando presente nos dois lados)
+          const mediaMatch = mediaUrl && existing.media_url
+            ? existing.media_url === mediaUrl
             : false
 
           if (textMatch || mediaMatch) {
-            console.log('[Webhook] Mensagem de agente duplicada detectada (janela 120s), ignorando:', existingMsg.id,
-              { textMatch, mediaMatch, incomingContent: incomingContent.substring(0, 50) })
+            console.log('[Webhook] Dedup por conteúdo/mídia — ignorando duplicata:',
+              existing.id, { textMatch, mediaMatch, senderType,
+                snippet: incomingContent.substring(0, 60) })
             skipInsert = true
             break
           }
