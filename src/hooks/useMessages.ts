@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
-import { useLeads } from './useLeads';
 
 // Define o tipo da mensagem baseado no banco de dados
 type DbMessage = Database['public']['Tables']['messages']['Row'];
@@ -15,11 +14,10 @@ interface Message extends DbMessage {
 // Global cache for messages
 const messagesCache = new Map<string, Message[]>();
 
-export const useMessages = (leadId: string | undefined) => {
+export const useMessages = (leadId: string | undefined, chatId?: string | null) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const chatMakerIdRef = useRef<string | null>(null);
 
   const addOptimisticMessage = (msg: Message) => {
     setMessages((current) => {
@@ -29,19 +27,10 @@ export const useMessages = (leadId: string | undefined) => {
     });
   };
 
-  // Precisamos do lead atual para pegar o Chat ID do GPT Maker para a sincronização
-  const { leads } = useLeads();
-  const currentLead = leads?.find(l => l.id === leadId);
-
-  // Atualiza a ref do chat ID sem engatilhar re-render no useEffect de conexão
-  if (currentLead?.gpt_maker_chat_id && currentLead.gpt_maker_chat_id !== chatMakerIdRef.current) {
-    chatMakerIdRef.current = currentLead.gpt_maker_chat_id;
-  }
-
   // --- FUNÇÃO AUXILIAR DE ORDENAÇÃO ---
   // Garante que a mensagem mais antiga (menor data) fique no topo e a nova embaixo
   const sortMessages = (msgs: Message[]) => {
-    return [...msgs].sort((a, b) => 
+    return [...msgs].sort((a, b) =>
       new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
     );
   };
@@ -72,11 +61,19 @@ export const useMessages = (leadId: string | undefined) => {
             .eq('lead_id', leadId);
 
           if (error) throw error;
-          
+
           if (data) {
             const sortedData = sortMessages(data as Message[]);
             messagesCache.set(leadId, sortedData);
-            setMessages(sortedData);
+            // Merge: preserva mensagens Realtime que chegaram durante o fetch
+            // (evita substituir estado e perder mensagens que chegaram em paralelo)
+            setMessages(current => {
+              const dbIds = new Set(sortedData.map(m => m.id));
+              const realtimeOnly = current.filter(m => !dbIds.has(m.id) && !m.id.startsWith('temp-'));
+              const merged = sortMessages([...sortedData, ...realtimeOnly]);
+              messagesCache.set(leadId, merged);
+              return merged;
+            });
           }
         }
 
@@ -94,13 +91,13 @@ export const useMessages = (leadId: string | undefined) => {
 
       // 3. SINCRONIZAÇÃO EM SEGUNDO PLANO (O Pulo do Gato)
       // Tenta buscar no GPT Maker mensagens que podem estar faltando
-      if (chatMakerIdRef.current) {
+      if (chatId) {
           setIsSyncing(true);
           try {
               await supabase.functions.invoke('sync-chat-history', {
-                  body: { 
-                      lead_id: leadId, 
-                      chat_id: chatMakerIdRef.current 
+                  body: {
+                      lead_id: leadId,
+                      chat_id: chatId
                   }
               });
           } catch (e) {
@@ -131,10 +128,10 @@ export const useMessages = (leadId: string | undefined) => {
             // Guarda 1: mesmo ID já está na lista (idempotência)
             if (current.some(m => m.id === newMsg.id)) return current;
 
-            // Guarda 2: já existe mensagem com mesmo conteúdo + sender + tempo próximo (≤ 10s)
-            // Previne duplicatas que escaparam do webhook ou chegaram por duas subscrições.
+            // Guarda 2: já existe mensagem com mesmo conteúdo + sender + tempo próximo (≤ 30s)
+            // 30s cobre atrasos do webhook e eventuais ecos tardios do GPT Maker.
             const newTime = new Date(newMsg.created_at || 0).getTime();
-            const WINDOW_MS = 10_000;
+            const WINDOW_MS = 30_000;
             const isDuplicate = current.some(m => {
               if (m.id.startsWith('temp-')) return false; // ignorar otimistas
               if (m.sender_type !== newMsg.sender_type) return false;
@@ -198,7 +195,7 @@ export const useMessages = (leadId: string | undefined) => {
       supabase.removeChannel(channel);
     };
 
-  }, [leadId]); // Recria o hook apeñas quando muda o Lead
+  }, [leadId]); // Recria o hook apenas quando muda o Lead
 
   return { messages, loading, isSyncing, addOptimisticMessage };
 };

@@ -19,83 +19,135 @@ serve(async (req) => {
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
     // 1. Busca histórico na API do GPT Maker
-    // O endpoint deve retornar a lista que você mandou (Array de objetos)
     const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/messages?limit=50`
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
     })
 
     if (!response.ok) {
-       console.error("Erro API GPT Maker:", await response.text());
-       throw new Error('Failed to fetch history');
+      console.error("Erro API GPT Maker:", await response.text());
+      throw new Error('Failed to fetch history');
     }
 
     const externalMessages = await response.json();
-    
-    // Validação: Garante que é um array (conforme seu payload mostra [ ... ])
     const messagesArray = Array.isArray(externalMessages) ? externalMessages : (externalMessages.messages || []);
 
     let savedCount = 0
 
-    // 2. Loop Adaptado ao seu Payload Real
     for (const msg of messagesArray) {
-        
-        // Mapeamento baseado no seu JSON:
-        // "text": "<string>"
-        // "imageUrl": "<string>"
-        // "audioUrl": "<string>"
-        
-        let content = msg.text;
-        
-        // Tratamento para Mídia (se o texto vier vazio, mas tiver imagem/audio)
-        let mediaUrl = null;
-        let mediaType = null;
-        
-        if (msg.imageUrl) {
-            mediaUrl = msg.imageUrl;
-            mediaType = 'image';
-            content = content || '';
-        } else if (msg.audioUrl) {
-            mediaUrl = msg.audioUrl;
-            mediaType = 'audio';
-            content = content || '';
-        } else if (msg.documentUrl) {
-            mediaUrl = msg.documentUrl;
-            mediaType = 'document';
-            content = content || '';
-        }
-        
-        if (!content && !mediaUrl) continue; // Pula se realmente não tiver nada
+      let content = msg.text
+      let mediaUrl: string | null = null
+      let mediaType: string | null = null
 
-        // "role": "<string>" -> Definir quem enviou
-        // Geralmente 'user' ou 'customer' é o cliente. Todo o resto assumimos que é o sistema/agente.
-        const senderType = (msg.role === 'user' || msg.role === 'customer') ? 'customer' : 'agent';
-        
-        // "id": "<string>" -> ID Único para evitar duplicidade
-        const externalId = msg.id; 
-        
-        // "time": 123 -> Converter Timestamp para Data ISO do Supabase
-        // Assumindo que o timestamp é milissegundos (padrão JS). Se for segundos, multiplicar por 1000.
-        const messageDate = msg.time ? new Date(msg.time).toISOString() : new Date().toISOString();
+      if (msg.imageUrl) {
+        mediaUrl = msg.imageUrl; mediaType = 'image'; content = content || ''
+      } else if (msg.audioUrl) {
+        mediaUrl = msg.audioUrl; mediaType = 'audio'; content = content || ''
+      } else if (msg.documentUrl) {
+        mediaUrl = msg.documentUrl; mediaType = 'document'; content = content || ''
+      }
 
-        if (externalId) {
-            const { error } = await supabase.from('messages').upsert({
-                lead_id: lead_id,
-                content: content,
-                sender_type: senderType,
-                gpt_message_id: externalId,
-                created_at: messageDate,
-                media_url: mediaUrl,
-                media_type: mediaType
-            }, { 
-                onConflict: 'gpt_message_id', 
-                ignoreDuplicates: true 
-            })
-            
-            if (!error) savedCount++
+      if (!content && !mediaUrl) continue
+
+      const senderType = (msg.role === 'user' || msg.role === 'customer') ? 'customer' : 'agent'
+      const externalId: string | null = msg.id || null
+      const msgTime = msg.time ? new Date(msg.time) : new Date()
+      const messageDate = msgTime.toISOString()
+      const trimmedContent = (content || '').trim()
+
+      // ── DEDUPLICAÇÃO EM DUAS CAMADAS ──────────────────────────────────────
+      //
+      // Camada 1: por gpt_message_id exacto
+      // Cobre: webhook já inseriu, ou sync anterior já correu
+      if (externalId) {
+        const { data: existingById } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('lead_id', lead_id)
+          .eq('gpt_message_id', externalId)
+          .maybeSingle()
+
+        if (existingById) {
+          savedCount++
+          continue
         }
+      }
+
+      // Camada 2: por conteúdo + sender_type + janela de ±30 s
+      // Cobre o caso crítico: mensagem do agente inserida via send-chat-message
+      // com gpt_message_id=null — não é detectada pela Camada 1.
+      const windowStart = new Date(msgTime.getTime() - 30_000).toISOString()
+      const windowEnd   = new Date(msgTime.getTime() + 30_000).toISOString()
+
+      let existingId: string | null = null
+      let existingHasGptId: boolean = false
+
+      if (trimmedContent) {
+        const { data } = await supabase
+          .from('messages')
+          .select('id, gpt_message_id')
+          .eq('lead_id', lead_id)
+          .eq('sender_type', senderType)
+          .eq('content', trimmedContent)
+          .gte('created_at', windowStart)
+          .lte('created_at', windowEnd)
+          .limit(1)
+          .maybeSingle() as { data: { id: string; gpt_message_id: string | null } | null }
+
+        if (data) {
+          existingId = data.id
+          existingHasGptId = !!data.gpt_message_id
+        }
+      } else if (mediaUrl) {
+        const { data } = await supabase
+          .from('messages')
+          .select('id, gpt_message_id')
+          .eq('lead_id', lead_id)
+          .eq('sender_type', senderType)
+          .eq('media_url', mediaUrl)
+          .gte('created_at', windowStart)
+          .lte('created_at', windowEnd)
+          .limit(1)
+          .maybeSingle() as { data: { id: string; gpt_message_id: string | null } | null }
+
+        if (data) {
+          existingId = data.id
+          existingHasGptId = !!data.gpt_message_id
+        }
+      }
+
+      if (existingId) {
+        // Patch: se o row existente ainda não tem gpt_message_id, aproveita e actualiza
+        if (externalId && !existingHasGptId) {
+          await supabase
+            .from('messages')
+            .update({ gpt_message_id: externalId })
+            .eq('id', existingId)
+          console.log('[Sync] Patched gpt_message_id em row existente:', existingId, '→', externalId)
+        }
+        savedCount++
+        continue
+      }
+
+      // ── INSERT (mensagem genuinamente nova) ───────────────────────────────
+      const { error } = await supabase.from('messages').insert({
+        lead_id,
+        content,
+        sender_type: senderType,
+        gpt_message_id: externalId,
+        created_at: messageDate,
+        media_url: mediaUrl,
+        media_type: mediaType
+      })
+
+      if (!error) {
+        savedCount++
+        console.log('[Sync] Nova mensagem inserida:', externalId || 'no-id', senderType)
+      } else {
+        console.error('[Sync] Erro ao inserir:', error.message)
+      }
     }
 
     return new Response(JSON.stringify({ success: true, synced: savedCount }), {

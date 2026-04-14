@@ -30,19 +30,36 @@ const Chat = () => {
   const [showCRM, setShowCRM] = useState(true);
 
   // 2. Busca Mensagens do Lead Selecionado (Com Realtime)
-  const { messages, loading: loadingMessages, addOptimisticMessage } = useMessages(selectedLeadId || undefined);
+  const selectedLead = leads?.find(l => l.id === selectedLeadId);
+  const { messages, loading: loadingMessages, addOptimisticMessage } = useMessages(
+    selectedLeadId || undefined,
+    selectedLead?.gpt_maker_chat_id
+  );
 
   // 3. Busca Tasks do Lead Selecionado (Com Realtime e Persistência)
   const { tasks, createTask, toggleTask, isLoading: loadingTasks } = useTasks(selectedLeadId);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll
+  // Auto-scroll: usa scrollTop para funcionar com container nativo (não ScrollArea)
   useEffect(() => {
     if (messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        }
+      });
     }
   }, [messages]);
+
+  // Scroll instantâneo ao abrir um novo chat
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    });
+  }, [selectedLeadId]);
 
   // Sessão selecionada adaptada para ChatSession
   const selectedSession = useMemo((): ChatSession | null => {
@@ -311,7 +328,7 @@ const Chat = () => {
             </div>
 
             {/* Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 bg-grid-subtle">
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 bg-grid-subtle">
               <div className="max-w-3xl mx-auto space-y-4">
                 {loadingMessages ? (
                   <div className="flex justify-center py-8">
@@ -340,7 +357,7 @@ const Chat = () => {
                       />
                     ))
                 )}
-                <div ref={messagesEndRef} />
+                <div />
               </div>
             </div>
 

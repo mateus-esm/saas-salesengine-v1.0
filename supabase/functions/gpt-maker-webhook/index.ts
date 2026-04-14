@@ -235,23 +235,35 @@ serve(async (req) => {
       }
     }
 
-    // Verificação 2: por conteúdo + sender_type + janela de tempo (300s)
-    // Aplicado para QUALQUER tipo de remetente — agente ou cliente.
-    // Isso cobre o caso onde o role vem errado e captura ecos de mensagens do agente
-    // tratadas incorretamente como 'customer'.
+    // Verificação 2: por conteúdo + janela de tempo (300s)
+    //
+    // Para mensagens de AGENTE: busca em TODOS os sender_types.
+    // Razão: GPT Maker pode devolver o eco da mensagem com role diferente (ex: sem fromMe=true),
+    // o que faria o senderType ser detectado como 'customer'. Sem este cross-check,
+    // o eco passaria a dedup e seria inserido como duplicata com sender errado.
+    //
+    // Para mensagens de CLIENTE: busca apenas entre mensagens de clientes.
+    // Isso evita falsos positivos (ex: agente e cliente dizem "sim" no mesmo intervalo).
     if (!skipInsert) {
       const DEDUP_WINDOW_MS = 300_000 // 5 minutos
       const cutoff = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString()
       const incomingContent = (messageContent || '').trim().toLowerCase()
 
-      const { data: recentMsgs } = await supabase
+      let recentQuery = supabase
         .from('messages')
         .select('id, content, created_at, media_url, sender_type')
         .eq('lead_id', lead.id)
-        .eq('sender_type', senderType)
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
         .limit(20)
+
+      // Clientes: filtrar por sender_type para evitar falsos positivos
+      if (senderType === 'customer') {
+        recentQuery = recentQuery.eq('sender_type', 'customer')
+      }
+      // Agentes: sem filtro de sender_type — cobre eco com role errado
+
+      const { data: recentMsgs } = await recentQuery
 
       if (recentMsgs && recentMsgs.length > 0) {
         for (const existing of recentMsgs) {
