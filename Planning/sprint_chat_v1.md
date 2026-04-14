@@ -17,13 +17,13 @@ enriquecer os dados depois, e finalizar com o "Design Premium".
 
 Fase 1: Estabilidade Core (Fricção Zero)
 
-Real-time sem refresh (Ponto 8)
+[x] Real-time sem refresh (Ponto 8)
 
-Anti-duplicação de mensagens (Ponto 1)
+[x] Anti-duplicação de mensagens (Ponto 1)
 
-Scroll automático para o fundo (Ponto 3)
+[x] Scroll automático para o fundo (Ponto 3)
 
-Correção de Links que aparecem como strings estranhas (Ponto 6)
+[x] Correção de Links que aparecem como strings estranhas (Ponto 6)
 
 Fase 2: Motor Omnichannel & Enriquecimento (O Valor do SaaS)
 
