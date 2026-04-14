@@ -9,7 +9,6 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { ChatInput } from "@/components/inbox/ChatInput";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -312,7 +311,7 @@ const Chat = () => {
             </div>
 
             {/* Mensagens */}
-            <ScrollArea className="flex-1 p-4 bg-grid-subtle">
+            <div className="flex-1 overflow-y-auto p-4 bg-grid-subtle">
               <div className="max-w-3xl mx-auto space-y-4">
                 {loadingMessages ? (
                   <div className="flex justify-center py-8">
@@ -343,7 +342,7 @@ const Chat = () => {
                 )}
                 <div ref={messagesEndRef} />
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Input */}
             <ChatInput
