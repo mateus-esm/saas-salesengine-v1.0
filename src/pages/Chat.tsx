@@ -41,24 +41,23 @@ const Chat = () => {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll: usa scrollTop para funcionar com container nativo (não ScrollArea)
-  useEffect(() => {
-    if (messages.length > 0) {
+  // Auto-scroll: duplo RAF garante que o browser calculou o scrollHeight antes de mover
+  const scrollToBottom = () => {
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
         }
       });
-    }
+    });
+  };
+
+  useEffect(() => {
+    if (messages.length > 0) scrollToBottom();
   }, [messages]);
 
-  // Scroll instantâneo ao abrir um novo chat
   useEffect(() => {
-    requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    });
+    scrollToBottom();
   }, [selectedLeadId]);
 
   // Sessão selecionada adaptada para ChatSession

@@ -161,15 +161,50 @@ serve(async (req) => {
 
     // 9. Criar novo lead se não existir
     if (!lead) {
-      console.log('[Webhook] Lead não encontrado, criando novo...')
-      
+      // ── RETRY anti-race-condition ─────────────────────────────────────────
+      // Quando mensagens chegam em sequência rápida, dois webhooks concorrentes
+      // podem AMBOS chegar aqui sem encontrar o lead (a primeira INSERT ainda não
+      // fez commit quando a segunda SELECT rodou). Esperamos 250ms e tentamos
+      // novamente ANTES de criar, evitando leads duplicados para o mesmo contacto.
+      await new Promise(resolve => setTimeout(resolve, 250))
+
+      if (senderPhone) {
+        const { data: retryByPhone } = await supabase
+          .from('leads')
+          .select('id, gpt_maker_chat_id, phone')
+          .eq('phone', senderPhone)
+          .eq('equipe_id', equipeId)
+          .maybeSingle()
+        if (retryByPhone) {
+          lead = retryByPhone
+          console.log('[Webhook] Lead encontrado no retry por telefone:', lead.id)
+        }
+      }
+
+      if (!lead && chatId) {
+        const { data: retryByChat } = await supabase
+          .from('leads')
+          .select('id, gpt_maker_chat_id, phone')
+          .eq('gpt_maker_chat_id', chatId)
+          .eq('equipe_id', equipeId)
+          .maybeSingle()
+        if (retryByChat) {
+          lead = retryByChat
+          console.log('[Webhook] Lead encontrado no retry por Chat ID:', lead.id)
+        }
+      }
+    }
+
+    if (!lead) {
+      console.log('[Webhook] Lead não encontrado após retry, criando novo...')
+
       // Fallback name if missing
       const finalName = senderName || (senderPhone ? `Lead ${senderPhone}` : 'Novo Visitante')
-      
+
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
-          phone: senderPhone || null, // Can be null now
+          phone: senderPhone || null,
           name: finalName,
           equipe_id: equipeId,
           gpt_maker_chat_id: chatId,
@@ -235,17 +270,17 @@ serve(async (req) => {
       }
     }
 
-    // Verificação 2: por conteúdo + janela de tempo (300s)
+    // Verificação 2: por conteúdo + janela de tempo
     //
-    // Para mensagens de AGENTE: busca em TODOS os sender_types.
-    // Razão: GPT Maker pode devolver o eco da mensagem com role diferente (ex: sem fromMe=true),
-    // o que faria o senderType ser detectado como 'customer'. Sem este cross-check,
-    // o eco passaria a dedup e seria inserido como duplicata com sender errado.
+    // Para mensagens de AGENTE: 5 minutos — ecos do GPT Maker podem chegar com atraso.
+    //   Busca em TODOS os sender_types (cobre eco com role errado).
     //
-    // Para mensagens de CLIENTE: busca apenas entre mensagens de clientes.
-    // Isso evita falsos positivos (ex: agente e cliente dizem "sim" no mesmo intervalo).
+    // Para mensagens de CLIENTE: 60 segundos — janela suficiente para bloquear retries
+    //   do GPT Maker (que ocorrem em segundos) mas permite que o cliente envie a mesma
+    //   mensagem novamente após 1 minuto (ex: "ok", "sim", "obrigado").
+    //   Busca apenas entre mensagens de clientes (evita falsos positivos cross-sender).
     if (!skipInsert) {
-      const DEDUP_WINDOW_MS = 300_000 // 5 minutos
+      const DEDUP_WINDOW_MS = senderType === 'agent' ? 300_000 : 60_000
       const cutoff = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString()
       const incomingContent = (messageContent || '').trim().toLowerCase()
 
