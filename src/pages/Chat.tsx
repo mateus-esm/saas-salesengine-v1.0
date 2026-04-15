@@ -51,14 +51,12 @@ const Chat = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll: duplo RAF garante que o browser calculou o scrollHeight antes de mover
+  // Auto-scroll to bottom on new messages — simple and reliable
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-        }
-      });
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
     });
   };
 
@@ -371,46 +369,44 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Mensagens — flex-col to anchor messages at bottom like WhatsApp */}
+            {/* Mensagens — always light background, scroll to bottom like WhatsApp */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto bg-white dark:bg-slate-950"
+              className="flex-1 overflow-y-auto bg-[#f0f2f5]"
             >
-              <div className="min-h-full flex flex-col justify-end p-4">
-                <div className="max-w-3xl w-full mx-auto space-y-1">
-                  {loadingMessages ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Nenhuma mensagem ainda</p>
-                    </div>
-                  ) : (
-                    messages
-                      .filter(msg => msg.sender_type !== 'system')
-                      .map((msg) => (
-                        <MessageBubble
-                          key={msg.id}
-                          message={{
-                            id: msg.id,
-                            content: msg.content || '',
-                            sender: msg.sender_type as 'customer' | 'agent' | 'ai',
-                            timestamp: new Date(msg.created_at || new Date()),
-                            type: 'text',
-                            mediaUrl: msg.media_url,
-                            mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
-                            readAt: msg.read_at ? new Date(msg.read_at) : undefined,
-                            senderName: msg.sender_type !== 'customer'
-                              ? (selectedLead?.agent_name || 'Assistente IA')
-                              : undefined,
-                          }}
-                        />
-                      ))
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
+              <div className="max-w-3xl w-full mx-auto p-4 space-y-3">
+                {loadingMessages ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>Nenhuma mensagem ainda</p>
+                  </div>
+                ) : (
+                  messages
+                    .filter(msg => msg.sender_type !== 'system')
+                    .map((msg) => (
+                      <MessageBubble
+                        key={msg.id}
+                        message={{
+                          id: msg.id,
+                          content: msg.content || '',
+                          sender: msg.sender_type as 'customer' | 'agent' | 'ai',
+                          timestamp: new Date(msg.created_at || new Date()),
+                          type: 'text',
+                          mediaUrl: msg.media_url,
+                          mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
+                          readAt: msg.read_at ? new Date(msg.read_at) : undefined,
+                          senderName: msg.sender_type !== 'customer'
+                            ? (selectedLead?.agent_name || 'Assistente IA')
+                            : undefined,
+                        }}
+                      />
+                    ))
+                )}
+                <div ref={messagesEndRef} />
               </div>
             </div>
 
