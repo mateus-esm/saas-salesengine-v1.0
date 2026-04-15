@@ -128,29 +128,6 @@ export const useMessages = (leadId: string | undefined, chatId?: string | null) 
             // Guarda 1: mesmo ID já está na lista (idempotência)
             if (current.some(m => m.id === newMsg.id)) return current;
 
-            // Guarda 2: já existe mensagem com mesmo conteúdo + sender + tempo próximo (≤ 30s)
-            // 30s cobre atrasos do webhook e eventuais ecos tardios do GPT Maker.
-            const newTime = new Date(newMsg.created_at || 0).getTime();
-            const WINDOW_MS = 30_000;
-            const isDuplicate = current.some(m => {
-              if (m.id.startsWith('temp-')) return false; // ignorar otimistas
-              if (m.sender_type !== newMsg.sender_type) return false;
-              const mTime = new Date(m.created_at || 0).getTime();
-              if (Math.abs(mTime - newTime) > WINDOW_MS) return false;
-              // conteúdo idêntico (null e '' são tratados como iguais)
-              const mContent = (m.content || '').trim();
-              const nContent = (newMsg.content || '').trim();
-              if (mContent !== nContent) return false;
-              // mídia: se ambas tiverem URL, devem ser iguais; se nenhuma tiver, ok
-              if (m.media_url && newMsg.media_url) return m.media_url === newMsg.media_url;
-              if (!m.media_url && !newMsg.media_url) return true;
-              return false;
-            });
-            if (isDuplicate) {
-              console.warn('[useMessages] Mensagem duplicada bloqueada na UI:', newMsg.id);
-              return current;
-            }
-
             // Remove otimista correspondente (conteúdo + sender + sem ID real)
             const withoutOptimistic = current.filter(m => {
               if (!m.id.startsWith('temp-')) return true;

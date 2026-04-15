@@ -27,11 +27,11 @@ Fase 1: Estabilidade Core (Fricção Zero)
 
 Fase 2: Motor Omnichannel & Enriquecimento (O Valor do SaaS)
 
-Lógica de Atribuição (Responsible User) e Segmentação de Canal (Ponto 4)
+[x] Lógica de Atribuição (Responsible User) e Segmentação de Canal (Ponto 4)
 
-Nome do Agente Correto em vez de "bot" (Ponto 2)
+[x] Nome do Agente Correto em vez de "bot" (Ponto 2)
 
-Sincronização de Foto de Perfil, Nome e Metadados do GPT Maker para o Supabase
+[x] Sincronização de Foto de Perfil, Nome e Metadados do GPT Maker para o Supabase
 (Ponto 5 & 6)
 
 Fase 3: UX/UI Supremacy (A Retenção estilo "Casino")

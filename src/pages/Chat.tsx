@@ -3,6 +3,8 @@ import { useLeads } from "@/hooks/useLeads";
 import { useMessages } from "@/hooks/useMessages";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { useTasks } from "@/hooks/useTasks";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/hooks/useRole";
 import { supabase } from "@/integrations/supabase/client";
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
@@ -19,6 +21,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const Chat = () => {
+  // 0. Auth e Role (Fase 2 — filtro por permissão)
+  const { user } = useAuth();
+  const { isAdmin } = useRole();
+  const currentUserId = user?.id;
+
   // 1. Busca Leads Reais do Supabase
   const { leads, isLoading: loadingLeads, refetch: refetchLeads, updateLead, deleteLead } = useLeads();
   const { stages } = usePipelineStages();
@@ -73,12 +80,16 @@ const Chat = () => {
       leadId: lead.id,
       customerName: lead.name || "Sem Nome",
       customerPhone: lead.phone || lead.origem || "WhatsApp",
+      customerAvatar: lead.profile_picture || undefined,
       status: lead.atendido_por_agente ? 'human_handling' : 'bot_handling',
       isOnline: true,
       unreadCount: lead.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
       tags: lead.tags || [],
+      // Fase 2: Omnichannel
+      channel: lead.channel || 'whatsapp',
+      agentName: lead.agent_name || undefined,
       crmData: {
         value: lead.opportunity_value || 0,
         stage: lead.stage_id || stageName,
@@ -97,13 +108,17 @@ const Chat = () => {
       id: lead.id,
       customerName: lead.name || "Sem Nome",
       customerPhone: lead.origem || lead.source || 'WhatsApp',
+      customerAvatar: lead.profile_picture || undefined,
       leadId: lead.id,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
       status: lead.atendido_por_agente ? 'human_handling' as const : 'bot_handling' as const,
       unreadCount: lead.unread_count || 0,
       leadType: lead.lead_type,
-      responsibleId: lead.responsible_id,
+      responsibleId: lead.responsible_id || lead.assigned_to,
+      // Fase 2: Omnichannel
+      channel: lead.channel || 'whatsapp',
+      agentName: lead.agent_name || undefined,
       crmData: {
         value: lead.opportunity_value || 0,
         stage: lead.stage_id || 'Novo',
@@ -262,6 +277,8 @@ const Chat = () => {
               <InboxSidebar
                 sessions={sessionsAdapter}
                 selectedSessionId={selectedLeadId}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin()}
                 onSelectSession={(id) => {
                   setSelectedLeadId(id);
                   if (window.innerWidth < 1024) {
@@ -352,7 +369,11 @@ const Chat = () => {
                           type: 'text',
                           mediaUrl: msg.media_url,
                           mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
-                          readAt: msg.read_at ? new Date(msg.read_at) : undefined
+                          readAt: msg.read_at ? new Date(msg.read_at) : undefined,
+                          // Fase 2: nome real do agente/assistente
+                          senderName: msg.sender_type !== 'customer'
+                            ? (selectedLead?.agent_name || undefined)
+                            : undefined,
                         }}
                       />
                     ))

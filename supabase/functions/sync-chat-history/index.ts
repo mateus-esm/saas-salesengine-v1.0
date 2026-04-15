@@ -20,134 +20,105 @@ serve(async (req) => {
 
     // 1. Busca histórico na API do GPT Maker
     const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/messages?limit=50`
-
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
     })
 
     if (!response.ok) {
-      console.error("Erro API GPT Maker:", await response.text());
-      throw new Error('Failed to fetch history');
+       console.error("Erro API GPT Maker:", await response.text());
+       throw new Error('Failed to fetch history');
     }
 
     const externalMessages = await response.json();
+    
+    // Validação: Garante que é um array (conforme o payload real)
     const messagesArray = Array.isArray(externalMessages) ? externalMessages : (externalMessages.messages || []);
 
     let savedCount = 0
 
+    // 2. Loop Adaptado ao Payload Real
     for (const msg of messagesArray) {
-      let content = msg.text
-      let mediaUrl: string | null = null
-      let mediaType: string | null = null
-
-      if (msg.imageUrl) {
-        mediaUrl = msg.imageUrl; mediaType = 'image'; content = content || ''
-      } else if (msg.audioUrl) {
-        mediaUrl = msg.audioUrl; mediaType = 'audio'; content = content || ''
-      } else if (msg.documentUrl) {
-        mediaUrl = msg.documentUrl; mediaType = 'document'; content = content || ''
-      }
-
-      if (!content && !mediaUrl) continue
-
-      const senderType = (msg.role === 'user' || msg.role === 'customer') ? 'customer' : 'agent'
-      const externalId: string | null = msg.id || null
-      const msgTime = msg.time ? new Date(msg.time) : new Date()
-      const messageDate = msgTime.toISOString()
-      const trimmedContent = (content || '').trim()
-
-      // ── DEDUPLICAÇÃO EM DUAS CAMADAS ──────────────────────────────────────
-      //
-      // Camada 1: por gpt_message_id exacto
-      // Cobre: webhook já inseriu, ou sync anterior já correu
-      if (externalId) {
-        const { data: existingById } = await supabase
-          .from('messages')
-          .select('id')
-          .eq('lead_id', lead_id)
-          .eq('gpt_message_id', externalId)
-          .maybeSingle()
-
-        if (existingById) {
-          savedCount++
-          continue
+        let content = msg.text;
+        
+        let mediaUrl = null;
+        let mediaType = null;
+        
+        if (msg.imageUrl) {
+            mediaUrl = msg.imageUrl;
+            mediaType = 'image';
+            content = content || '';
+        } else if (msg.audioUrl) {
+            mediaUrl = msg.audioUrl;
+            mediaType = 'audio';
+            content = content || '';
+        } else if (msg.documentUrl) {
+            mediaUrl = msg.documentUrl;
+            mediaType = 'document';
+            content = content || '';
         }
-      }
+        
+        if (!content && !mediaUrl) continue;
 
-      // Camada 2: por conteúdo + sender_type + janela de ±30 s
-      // Cobre o caso crítico: mensagem do agente inserida via send-chat-message
-      // com gpt_message_id=null — não é detectada pela Camada 1.
-      const windowStart = new Date(msgTime.getTime() - 30_000).toISOString()
-      const windowEnd   = new Date(msgTime.getTime() + 30_000).toISOString()
+        const senderType = (msg.role === 'user' || msg.role === 'customer') ? 'customer' : 'agent';
+        const externalId = msg.id; 
+        const messageDate = msg.time ? new Date(msg.time).toISOString() : new Date().toISOString();
 
-      let existingId: string | null = null
-      let existingHasGptId: boolean = false
-
-      if (trimmedContent) {
-        const { data } = await supabase
-          .from('messages')
-          .select('id, gpt_message_id')
-          .eq('lead_id', lead_id)
-          .eq('sender_type', senderType)
-          .eq('content', trimmedContent)
-          .gte('created_at', windowStart)
-          .lte('created_at', windowEnd)
-          .limit(1)
-          .maybeSingle() as { data: { id: string; gpt_message_id: string | null } | null }
-
-        if (data) {
-          existingId = data.id
-          existingHasGptId = !!data.gpt_message_id
+        if (externalId) {
+            const { error } = await supabase.from('messages').upsert({
+                lead_id: lead_id,
+                content: content,
+                sender_type: senderType,
+                gpt_message_id: externalId,
+                created_at: messageDate,
+                media_url: mediaUrl,
+                media_type: mediaType
+            }, { 
+                onConflict: 'gpt_message_id', 
+                ignoreDuplicates: true 
+            })
+            
+            if (!error) savedCount++
         }
-      } else if (mediaUrl) {
-        const { data } = await supabase
-          .from('messages')
-          .select('id, gpt_message_id')
-          .eq('lead_id', lead_id)
-          .eq('sender_type', senderType)
-          .eq('media_url', mediaUrl)
-          .gte('created_at', windowStart)
-          .lte('created_at', windowEnd)
-          .limit(1)
-          .maybeSingle() as { data: { id: string; gpt_message_id: string | null } | null }
+    }
 
-        if (data) {
-          existingId = data.id
-          existingHasGptId = !!data.gpt_message_id
-        }
-      }
-
-      if (existingId) {
-        // Patch: se o row existente ainda não tem gpt_message_id, aproveita e actualiza
-        if (externalId && !existingHasGptId) {
-          await supabase
-            .from('messages')
-            .update({ gpt_message_id: externalId })
-            .eq('id', existingId)
-          console.log('[Sync] Patched gpt_message_id em row existente:', existingId, '→', externalId)
-        }
-        savedCount++
-        continue
-      }
-
-      // ── INSERT (mensagem genuinamente nova) ───────────────────────────────
-      const { error } = await supabase.from('messages').insert({
-        lead_id,
-        content,
-        sender_type: senderType,
-        gpt_message_id: externalId,
-        created_at: messageDate,
-        media_url: mediaUrl,
-        media_type: mediaType
+    // 3. Fase 2 — Enriquecimento de metadados do chat
+    // Busca picture, agentName e channel do GPT Maker e persiste no Supabase
+    // Usa o endpoint de detalhe do chat (faz parte da API list-chats mas com ID específico)
+    try {
+      // Tentar endpoint de detalhe primeiro; se não existir, usar list-chats filtrado
+      const chatMetaUrl = `https://api.gptmaker.ai/v2/chat/${chat_id}`
+      const chatMetaRes = await fetch(chatMetaUrl, {
+        method: 'GET',
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
       })
 
-      if (!error) {
-        savedCount++
-        console.log('[Sync] Nova mensagem inserida:', externalId || 'no-id', senderType)
-      } else {
-        console.error('[Sync] Erro ao inserir:', error.message)
+      let chatMeta: Record<string, unknown> | null = null
+
+      if (chatMetaRes.ok) {
+        chatMeta = await chatMetaRes.json()
       }
+
+      if (chatMeta) {
+        const enrichment: Record<string, unknown> = {}
+
+        if (chatMeta.picture) enrichment.profile_picture = chatMeta.picture
+        if (chatMeta.agentName) enrichment.agent_name = chatMeta.agentName
+        if (chatMeta.conversationType || chatMeta.type) {
+          enrichment.channel = normalizeChannel(
+            (chatMeta.conversationType || chatMeta.type) as string
+          )
+        }
+
+        if (Object.keys(enrichment).length > 0) {
+          await supabase.from('leads').update(enrichment).eq('id', lead_id)
+          console.log('[SyncHistory] Lead enriquecido com metadados:', enrichment)
+        }
+      }
+    } catch (enrichErr) {
+      // Não falha o sync principal se o enriquecimento falhar
+      console.warn('[SyncHistory] Erro no enriquecimento (ignorado):', enrichErr)
     }
 
     return new Response(JSON.stringify({ success: true, synced: savedCount }), {
@@ -162,3 +133,16 @@ serve(async (req) => {
     })
   }
 })
+
+/**
+ * Normaliza o canal de comunicação
+ * GPT Maker: WHATSAPP, INSTAGRAM, WIDGET, TELEGRAM, etc.
+ */
+function normalizeChannel(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower.includes('instagram')) return 'instagram'
+  if (lower.includes('telegram')) return 'telegram'
+  if (lower.includes('widget') || lower.includes('web')) return 'web'
+  if (lower.includes('messenger') || lower.includes('facebook')) return 'messenger'
+  return 'whatsapp'
+}

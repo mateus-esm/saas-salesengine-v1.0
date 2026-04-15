@@ -36,6 +36,14 @@ serve(async (req) => {
     const assistantId = payload.assistantId || null
     const messageId = payload.messageId || null
 
+    // 2b. Metadados de Enriquecimento (Fase 2 — Omnichannel)
+    // GPT Maker envia estes campos no payload do webhook
+    const profilePicture: string | null = payload.picture || payload.contactPicture || payload.profilePic || null
+    const agentName: string | null = payload.agentName || payload.assistantName || null
+    // Canal: conversationType (WHATSAPP, INSTAGRAM, WIDGET...) ou type do payload
+    const rawChannel = payload.conversationType || payload.channelType || payload.type || null
+    const channel: string = normalizeChannel(rawChannel)
+
     // 3. Extrair dados de mídia do payload
     // GPT Maker pode enviar mídia em diferentes formatos
     let mediaUrl = payload.mediaUrl || payload.media?.url || payload.fileUrl || payload.audioUrl || payload.imageUrl || null
@@ -212,7 +220,11 @@ serve(async (req) => {
           creation_source: 'ai_agent',
           source: 'IA',
           origem: 'IA',
-          last_message_at: messageDate
+          last_message_at: messageDate,
+          // Fase 2: Enriquecimento omnichannel
+          channel: channel,
+          profile_picture: profilePicture,
+          agent_name: agentName
         })
         .select('id, gpt_maker_chat_id, phone')
         .single()
@@ -224,7 +236,7 @@ serve(async (req) => {
       lead = newLead
       console.log('[Webhook] Novo lead criado:', lead.id)
     } else {
-      // Atualizar chat_id e last_message_at se necessário
+      // Atualizar chat_id, last_message_at e metadados de enriquecimento se necessário
       const updates: Record<string, unknown> = { last_message_at: messageDate }
       
       // If we found by phone but lead has no chat_id, or chat_id changed
@@ -236,13 +248,21 @@ serve(async (req) => {
       if (senderPhone && !lead.phone) {
         updates.phone = senderPhone
       }
+
+      // Fase 2: Enriquecimento — atualizar metadados quando disponíveis
+      if (profilePicture) updates.profile_picture = profilePicture
+      if (agentName) updates.agent_name = agentName
+      if (channel !== 'whatsapp' || !lead.gpt_maker_chat_id) {
+        // Atualiza o canal sempre que recebemos info explícita
+        updates.channel = channel
+      }
       
       await supabase
         .from('leads')
         .update(updates)
         .eq('id', lead.id)
       
-      console.log('[Webhook] Lead existente atualizado:', lead.id)
+      console.log('[Webhook] Lead existente atualizado:', lead.id, '| channel:', channel)
     }
 
     if (!lead) throw new Error("Falha inesperada: Lead nulo após processamento");
@@ -426,4 +446,18 @@ function normalizeMediaType(type: string | null, url: string | null): string | n
   }
   
   return null
+}
+
+/**
+ * Normaliza o canal de comunicação
+ * GPT Maker retorna conversationType como: WHATSAPP, INSTAGRAM, WIDGET, TELEGRAM, etc.
+ */
+function normalizeChannel(raw: string | null): string {
+  if (!raw) return 'whatsapp'
+  const lower = raw.toLowerCase()
+  if (lower.includes('instagram')) return 'instagram'
+  if (lower.includes('telegram')) return 'telegram'
+  if (lower.includes('widget') || lower.includes('web')) return 'web'
+  if (lower.includes('messenger') || lower.includes('facebook')) return 'messenger'
+  return 'whatsapp' // default
 }
