@@ -36,11 +36,11 @@ Sincronização de Foto de Perfil, Nome e Metadados do GPT Maker para o Supabase
 
 Fase 3: UX/UI Supremacy (A Retenção estilo "Casino")
 
-Design minimalista, linhas finas, elegante (Ponto 9)
+[x] Design minimalista, linhas finas, elegante (Ponto 9)
 
-Indicadores de Presença/Leitura (Ponto 5)
+[x] Indicadores de Presença/Leitura (Ponto 5)
 
-Ações avançadas de canal (Delete/Edit) (Ponto 8b)
+[x] Ações avançadas de canal (Delete/Edit) (Ponto 8b)
 
 🚀 3. O Arquivo de Memória (PRD) para o Antigravity / Claude Copia o bloco
 abaixo e guarda-o como um ficheiro chamado CHAT_V1_SPRINT.md na raiz do teu
