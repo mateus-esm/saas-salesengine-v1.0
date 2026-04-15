@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useLeads } from "@/hooks/useLeads";
 import { useMessages } from "@/hooks/useMessages";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
@@ -51,22 +51,16 @@ const Chat = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages — simple and reliable
+  // Scroll to bottom — useLayoutEffect fires after DOM paint, before browser paints
   const scrollToBottom = () => {
-    requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      }
-    });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   };
 
-  useEffect(() => {
-    if (messages.length > 0) scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     scrollToBottom();
-  }, [selectedLeadId]);
+  }, [messages, selectedLeadId]);
 
   // Sessão selecionada adaptada para ChatSession
   const selectedSession = useMemo((): ChatSession | null => {
@@ -369,10 +363,10 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Mensagens — always light background, scroll to bottom like WhatsApp */}
+            {/* Mensagens */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto bg-[#f0f2f5]"
+              className="flex-1 overflow-y-auto bg-muted/30"
             >
               <div className="max-w-3xl w-full mx-auto p-4 space-y-3">
                 {loadingMessages ? (

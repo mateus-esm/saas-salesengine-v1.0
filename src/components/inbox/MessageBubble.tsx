@@ -191,8 +191,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     >
       {/* Customer avatar on left */}
       {isCustomer && (
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
-          <User className="h-3.5 w-3.5 text-slate-400" />
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <User className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
         </div>
       )}
 
@@ -201,12 +201,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {/* 3.3 — Action menu */}
         {renderActionMenu()}
 
-        {/* 3.1 — Sober & Elegant bubble — always light mode colors */}
+        {/* Bubble */}
         <div
           className={cn(
             "px-3.5 py-2.5 shadow-sm",
-            isCustomer && "bg-white border border-slate-200 text-slate-800 rounded-lg rounded-tl-sm",
-            isAI && "bg-slate-50 border border-slate-200 text-slate-800 rounded-lg rounded-tr-sm",
+            isCustomer && "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-lg rounded-tl-sm",
+            isAI && "bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-lg rounded-tr-sm",
             isAgent && "bg-primary text-primary-foreground rounded-lg rounded-tr-sm"
           )}
         >
@@ -254,12 +254,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className={cn(
             "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center",
-            isAI && "bg-slate-100",
+            isAI && "bg-slate-100 dark:bg-slate-800",
             isAgent && "bg-primary"
           )}
         >
           {isAI ? (
-            <Bot className="h-3.5 w-3.5 text-slate-500" />
+            <Bot className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
           ) : (
             <User className="h-3.5 w-3.5 text-primary-foreground" />
           )}
