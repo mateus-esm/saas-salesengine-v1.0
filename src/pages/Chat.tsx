@@ -327,7 +327,7 @@ const Chat = () => {
             </div>
 
             {/* Mensagens */}
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 bg-grid-subtle">
+            <div className="flex-1 overflow-y-auto p-4 bg-grid-subtle">
               <div className="max-w-3xl mx-auto space-y-4">
                 {loadingMessages ? (
                   <div className="flex justify-center py-8">
@@ -351,12 +351,13 @@ const Chat = () => {
                           timestamp: new Date(msg.created_at || new Date()),
                           type: 'text',
                           mediaUrl: msg.media_url,
-                          mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined
+                          mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
+                          readAt: msg.read_at ? new Date(msg.read_at) : undefined
                         }}
                       />
                     ))
                 )}
-                <div />
+                <div ref={messagesEndRef} />
               </div>
             </div>
 
