@@ -5,6 +5,7 @@ import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { useTasks } from "@/hooks/useTasks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { supabase } from "@/integrations/supabase/client";
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
@@ -25,6 +26,7 @@ const Chat = () => {
   const { user } = useAuth();
   const { isAdmin } = useRole();
   const currentUserId = user?.id;
+  const { teamMembers } = useTeamMembers();
 
   // 1. Busca Leads Reais do Supabase
   const { leads, isLoading: loadingLeads, refetch: refetchLeads, updateLead, deleteLead } = useLeads();
@@ -83,7 +85,10 @@ const Chat = () => {
       customerPhone: lead.phone || lead.origem || "WhatsApp",
       customerAvatar: lead.profile_picture || undefined,
       status: lead.atendido_por_agente ? 'human_handling' : 'bot_handling',
-      isOnline: false,
+      // Online = last message within 24h
+      isOnline: lead.last_message_at
+        ? (Date.now() - new Date(lead.last_message_at).getTime()) < 86_400_000
+        : false,
       unreadCount: lead.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
@@ -91,6 +96,7 @@ const Chat = () => {
       // Fase 2: Omnichannel
       channel: lead.channel || 'whatsapp',
       agentName: lead.agent_name || undefined,
+      responsibleId: lead.responsible_id || lead.assigned_to || undefined,
       crmData: {
         value: lead.opportunity_value || 0,
         stage: lead.stage_id || stageName,
@@ -117,6 +123,10 @@ const Chat = () => {
       unreadCount: lead.unread_count || 0,
       leadType: lead.lead_type,
       responsibleId: lead.responsible_id || lead.assigned_to,
+      // Online = last message within 24h
+      isOnline: lead.last_message_at
+        ? (Date.now() - new Date(lead.last_message_at).getTime()) < 86_400_000
+        : false,
       // Fase 2: Omnichannel
       channel: lead.channel || 'whatsapp',
       agentName: lead.agent_name || undefined,
@@ -220,6 +230,21 @@ const Chat = () => {
     }
   };
 
+  // Assign responsible team member
+  const handleAssignResponsible = async (userId: string | null) => {
+    if (!selectedLeadId) return;
+    try {
+      await supabase
+        .from('leads')
+        .update({ responsible_id: userId, assigned_to: userId })
+        .eq('id', selectedLeadId);
+      refetchLeads();
+      toast.success(userId ? 'Responsável atribuído' : 'Responsável removido');
+    } catch (err) {
+      toast.error('Erro ao atribuir responsável');
+    }
+  };
+
   // Tasks handlers - now using the useTasks hook for persistence
   const handleAddTask = async (title: string) => {
     if (!selectedLeadId) return;
@@ -302,8 +327,10 @@ const Chat = () => {
                 <ConversationHeader
                   session={selectedSession}
                   stages={stages}
+                  teamMembers={teamMembers}
                   onToggleHandoff={handleToggleHandoff}
                   onUpdateCRM={handleUpdateCRM}
+                  onAssignResponsible={handleAssignResponsible}
                   onBack={() => setShowInbox(true)}
                   onOpenLeadDetails={() => setShowLeadModal(true)}
                 />
@@ -344,42 +371,46 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 bg-grid-subtle">
-              <div className="max-w-3xl mx-auto space-y-4">
-                {loadingMessages ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>Nenhuma mensagem ainda</p>
-                  </div>
-                ) : (
-                  messages
-                    .filter(msg => msg.sender_type !== 'system')
-                    .map((msg) => (
-                      <MessageBubble
-                        key={msg.id}
-                        message={{
-                          id: msg.id,
-                          content: msg.content || '',
-                          sender: msg.sender_type as 'customer' | 'agent' | 'ai',
-                          timestamp: new Date(msg.created_at || new Date()),
-                          type: 'text',
-                          mediaUrl: msg.media_url,
-                          mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
-                          readAt: msg.read_at ? new Date(msg.read_at) : undefined,
-                          // Fase 2: nome real do agente/assistente
-                          senderName: msg.sender_type !== 'customer'
-                            ? (selectedLead?.agent_name || 'Assistente IA')
-                            : undefined,
-                        }}
-                      />
-                    ))
-                )}
-                <div ref={messagesEndRef} />
+            {/* Mensagens — flex-col to anchor messages at bottom like WhatsApp */}
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto bg-white dark:bg-slate-950"
+            >
+              <div className="min-h-full flex flex-col justify-end p-4">
+                <div className="max-w-3xl w-full mx-auto space-y-1">
+                  {loadingMessages ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                      <p>Nenhuma mensagem ainda</p>
+                    </div>
+                  ) : (
+                    messages
+                      .filter(msg => msg.sender_type !== 'system')
+                      .map((msg) => (
+                        <MessageBubble
+                          key={msg.id}
+                          message={{
+                            id: msg.id,
+                            content: msg.content || '',
+                            sender: msg.sender_type as 'customer' | 'agent' | 'ai',
+                            timestamp: new Date(msg.created_at || new Date()),
+                            type: 'text',
+                            mediaUrl: msg.media_url,
+                            mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
+                            readAt: msg.read_at ? new Date(msg.read_at) : undefined,
+                            senderName: msg.sender_type !== 'customer'
+                              ? (selectedLead?.agent_name || 'Assistente IA')
+                              : undefined,
+                          }}
+                        />
+                      ))
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
               </div>
             </div>
 

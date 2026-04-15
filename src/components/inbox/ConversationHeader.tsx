@@ -1,8 +1,9 @@
 import { ChatSession } from "@/types/chat";
+import { TeamMember } from "@/types/crm";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Hand, User, ChevronLeft, Globe, MessageCircle } from "lucide-react";
+import { Bot, Hand, User, ChevronLeft, UserCheck, UserX } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -16,18 +17,28 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PipelineStage } from "@/hooks/usePipelineStages";
 
 interface ConversationHeaderProps {
-  session: ChatSession;
+  session: ChatSession & { responsibleId?: string };
   stages: PipelineStage[];
+  teamMembers?: TeamMember[];
   onToggleHandoff: () => void;
   onUpdateCRM: (data: Partial<ChatSession['crmData']>) => void;
+  onAssignResponsible?: (userId: string | null) => void;
   onBack?: () => void;
   onOpenLeadDetails?: () => void;
 }
 
-export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateCRM, onBack, onOpenLeadDetails }: ConversationHeaderProps) {
+export function ConversationHeader({ session, stages, teamMembers = [], onToggleHandoff, onUpdateCRM, onAssignResponsible, onBack, onOpenLeadDetails }: ConversationHeaderProps) {
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
@@ -36,6 +47,11 @@ export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateC
     .toUpperCase();
 
   const isBotHandling = session.status === "bot_handling";
+
+  // Current responsible member
+  const responsibleMember = teamMembers.find(m => m.id === (session as any).responsibleId);
+  const responsibleInitials = responsibleMember?.nome_completo
+    ?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
 
   // Canal badge label + estilo
   const channelLabel = (ch?: string): { label: string; cls: string } => {
@@ -114,7 +130,72 @@ export function ConversationHeader({ session, stages, onToggleHandoff, onUpdateC
       <div className="flex items-center gap-2">
         {/* Quick Actions Area */}
         <div className="hidden md:flex items-center gap-2 mr-2 pr-2 border-r border-border/50">
-          
+
+          {/* Responsible Assignment */}
+          {onAssignResponsible && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2"
+                  title="Atribuir responsável"
+                >
+                  {responsibleMember ? (
+                    <>
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-[9px] bg-primary text-primary-foreground">
+                          {responsibleInitials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="hidden lg:inline max-w-[80px] truncate">
+                        {responsibleMember.nome_completo?.split(' ')[0]}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="h-4 w-4" />
+                      <span className="hidden lg:inline">Atribuir</span>
+                    </>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="text-xs">Responsável</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {teamMembers.map(member => (
+                  <DropdownMenuItem
+                    key={member.id}
+                    onClick={() => onAssignResponsible(member.id)}
+                    className="gap-2"
+                  >
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback className="text-[10px]">
+                        {member.nome_completo?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm truncate">{member.nome_completo || member.email}</span>
+                    {(session as any).responsibleId === member.id && (
+                      <UserCheck className="h-3.5 w-3.5 ml-auto text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                {(session as any).responsibleId && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onAssignResponsible(null)}
+                      className="gap-2 text-muted-foreground"
+                    >
+                      <UserX className="h-3.5 w-3.5" />
+                      Remover responsável
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {/* Stage Selector */}
           <Select 
             value={session.crmData.stage} 

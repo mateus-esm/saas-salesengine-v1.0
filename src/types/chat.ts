@@ -33,6 +33,7 @@ export interface ChatSession {
   // Fase 2: Omnichannel
   channel?: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string;
   agentName?: string;
+  responsibleId?: string | null;
   crmData: {
     value: number;
     stage: string;
