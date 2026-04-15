@@ -47,6 +47,7 @@ const Chat = () => {
   const { tasks, createTask, toggleTask, isLoading: loadingTasks } = useTasks(selectedLeadId);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll: duplo RAF garante que o browser calculou o scrollHeight antes de mover
   const scrollToBottom = () => {
@@ -82,7 +83,7 @@ const Chat = () => {
       customerPhone: lead.phone || lead.origem || "WhatsApp",
       customerAvatar: lead.profile_picture || undefined,
       status: lead.atendido_por_agente ? 'human_handling' : 'bot_handling',
-      isOnline: true,
+      isOnline: false,
       unreadCount: lead.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
@@ -372,7 +373,7 @@ const Chat = () => {
                           readAt: msg.read_at ? new Date(msg.read_at) : undefined,
                           // Fase 2: nome real do agente/assistente
                           senderName: msg.sender_type !== 'customer'
-                            ? (selectedLead?.agent_name || undefined)
+                            ? (selectedLead?.agent_name || 'Assistente IA')
                             : undefined,
                         }}
                       />

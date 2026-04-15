@@ -111,12 +111,8 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
             {initials}
           </AvatarFallback>
         </Avatar>
-        {/* Indicador online */}
-        {session.isOnline && (
-          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-background" />
-        )}
-        {/* Badge do canal (apenas quando não está online, para não colidir) */}
-        {!session.isOnline && <ChannelBadge channel={session.channel} />}
+        {/* Badge do canal — sempre visível */}
+        <ChannelBadge channel={session.channel} />
       </div>
 
       {/* Content */}
