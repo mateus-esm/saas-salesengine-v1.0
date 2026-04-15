@@ -34,6 +34,10 @@ export interface Lead {
   creation_source: 'ai_agent' | 'manual' | null;
   created_at: string;
   updated_at: string;
+  // Fase 2: Omnichannel enrichment
+  channel: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string | null;
+  profile_picture: string | null;
+  agent_name: string | null;
 }
 
 export interface PipelineStage {

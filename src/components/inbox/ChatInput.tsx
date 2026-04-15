@@ -137,8 +137,8 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
       {/* File Preview Area - New Premium UI */}
       {pendingFile && (
         <div className="mb-2 mx-1 animate-in slide-in-from-bottom-2 fade-in duration-200">
-            <div className="inline-flex items-center gap-2 bg-muted/80 backdrop-blur-sm border border-border/50 rounded-lg p-2 pr-3 shadow-sm">
-                <div className="h-10 w-10 bg-background rounded-md flex items-center justify-center border text-muted-foreground overflow-hidden">
+            <div className="inline-flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700/50 rounded-lg p-2 pr-3 shadow-sm">
+                <div className="h-10 w-10 bg-white dark:bg-slate-900 rounded-md flex items-center justify-center border border-slate-200/50 dark:border-slate-700/50 text-slate-400 overflow-hidden">
                    {pendingFile.type.startsWith('image/') ? (
                        <img src={URL.createObjectURL(pendingFile)} alt="Preview" className="h-full w-full object-cover" />
                    ) : (
@@ -146,8 +146,8 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
                    )}
                 </div>
                 <div className="flex flex-col max-w-[150px]">
-                    <span className="text-xs font-medium truncate">{pendingFile.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{(pendingFile.size / 1024).toFixed(0)}kb</span>
+                    <span className="text-xs font-medium truncate text-slate-800 dark:text-slate-200">{pendingFile.name}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{(pendingFile.size / 1024).toFixed(0)}kb</span>
                 </div>
                 <Button 
                     variant="ghost" 
@@ -161,7 +161,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
         </div>
       )}
 
-      <div className="flex items-end gap-2 bg-card/90 backdrop-blur-xl border border-border rounded-xl p-2 shadow-sm">
+      <div className="flex items-end gap-2 bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-700/50 rounded-xl p-2 shadow-sm">
         {/* Hidden File Input */}
         <input
           type="file"

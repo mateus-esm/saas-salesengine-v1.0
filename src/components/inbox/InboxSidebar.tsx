@@ -18,6 +18,8 @@ interface InboxSidebarProps {
   selectedSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   currentUserId?: string;
+  /** Admins/Owners vêem todos os chats; vendedores comuns só vêem os seus */
+  isAdmin?: boolean;
 }
 
 type FilterType = "all" | "mine" | "bot" | "contacts";
@@ -27,10 +29,16 @@ export function InboxSidebar({
   selectedSessionId,
   onSelectSession,
   currentUserId,
+  isAdmin = true,
 }: InboxSidebarProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+
+  // Para vendedores comuns, pré-filtrar apenas os seus leads (assigned_to)
+  const visibleSessions = isAdmin
+    ? sessions
+    : sessions.filter((s) => !s.responsibleId || s.responsibleId === currentUserId);
 
   const filters: { id: FilterType; label: string; icon: React.ElementType }[] = [
     { id: "all", label: "Todos", icon: Inbox },
@@ -39,15 +47,15 @@ export function InboxSidebar({
     { id: "contacts", label: "Contatos", icon: Users },
   ];
 
-  // Filter sessions - exclude contacts/spam from "all" unless specifically viewing "contacts"
-  const filteredSessions = sessions.filter((session) => {
+  // Filter sessions — exclude contacts/spam from "all" unless specifically viewing "contacts"
+  const filteredSessions = visibleSessions.filter((session) => {
     // Search filter
     const matchesSearch =
       session.customerName.toLowerCase().includes(search.toLowerCase()) ||
       session.lastMessage.toLowerCase().includes(search.toLowerCase()) ||
       session.customerPhone.includes(search);
 
-    // Status filter
+    // Status/assignment filter
     let matchesFilter = true;
     switch (filter) {
       case "all":
@@ -55,9 +63,9 @@ export function InboxSidebar({
         matchesFilter = !session.leadType || session.leadType === 'lead';
         break;
       case "mine":
-        // Show sessions where user is responsible or handling
-        matchesFilter = 
-          session.status === "human_handling" || 
+        // Show sessions onde o utilizador é responsável OU com human_handling
+        matchesFilter =
+          session.status === "human_handling" ||
           session.responsibleId === currentUserId;
         break;
       case "bot":
@@ -76,13 +84,13 @@ export function InboxSidebar({
     return matchesSearch && matchesFilter;
   });
 
-  const unreadCount = sessions.filter((s) => s.unreadCount > 0).length;
+  const unreadCount = visibleSessions.filter((s) => s.unreadCount > 0).length;
 
   return (
-    <div className="h-full flex flex-col border-r border-border glass">
+    <div className="h-full flex flex-col border-r border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900">
       {/* Header */}
-      <div className="p-3 border-b border-border">
-        <h2 className="font-semibold text-base mb-3 flex items-center gap-2">
+      <div className="p-3 border-b border-slate-200/60 dark:border-slate-700/60">
+        <h2 className="font-semibold text-base mb-3 flex items-center gap-2 text-slate-800 dark:text-slate-200">
           <Inbox className="h-4 w-4 text-primary" />
           Inbox
         </h2>
@@ -90,18 +98,18 @@ export function InboxSidebar({
         {/* Search and Unread Filter */}
         <div className="flex items-center justify-between gap-2 mt-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar conversas..."
-              className="pl-9 h-8 text-sm"
+              className="pl-9 h-8 text-sm bg-slate-50 dark:bg-slate-800 border-slate-200/50 dark:border-slate-700/50 focus-visible:ring-primary"
             />
           </div>
           <Button
             variant={showUnreadOnly ? "default" : "outline"}
             size="sm"
-            className={cn("h-8 px-2 gap-1.5 border hover:bg-muted/50 transition-colors", showUnreadOnly && "bg-primary")}
+            className={cn("h-8 px-2 gap-1.5 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", showUnreadOnly && "bg-primary border-primary text-primary-foreground")}
             onClick={() => setShowUnreadOnly(!showUnreadOnly)}
             title="Filtrar não lidas"
           >

@@ -8,8 +8,8 @@ import React from 'react';
 export function formatWhatsAppText(text: string): React.ReactNode {
   if (!text) return null;
 
-  // Regex para detectar URLs
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  // Regex para detectar URLs (com ou sem protocolo)
+  const urlRegex = /(https?:\/\/[^\s<>"]+|(?<![a-zA-Z0-9@])www\.[a-zA-Z0-9][^\s<>"]*)/g;
   
   // Primeiro, vamos dividir o texto em partes (URLs e não-URLs)
   const parts: React.ReactNode[] = [];

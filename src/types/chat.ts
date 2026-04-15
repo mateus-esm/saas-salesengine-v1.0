@@ -15,6 +15,7 @@ export interface Message {
   timestamp: Date;
   mediaUrl?: string;
   mediaType?: 'image' | 'audio' | 'video' | 'document';
+  readAt?: Date;
 }
 
 export interface ChatSession {
@@ -22,13 +23,16 @@ export interface ChatSession {
   leadId?: string;
   customerName: string;
   customerPhone: string;
-  customerAvatar?: string;
+  customerAvatar?: string;  // profile_picture URL
   lastMessage: string;
   lastMessageTime: Date;
   unreadCount: number;
   status: ChatStatus;
   isOnline?: boolean;
   tags: string[];
+  // Fase 2: Omnichannel
+  channel?: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string;
+  agentName?: string;
   crmData: {
     value: number;
     stage: string;
