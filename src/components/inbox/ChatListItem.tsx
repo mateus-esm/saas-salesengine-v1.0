@@ -1,15 +1,37 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Bot, User, Globe, MessageCircle } from "lucide-react";
-import { ChatSession } from "@/types/chat";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Bot, User, Globe, MessageCircle, MoreVertical, Archive, ArchiveRestore, Trash2 } from "lucide-react";
+import { ChatSession, ConversationStatus } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { isToday, isYesterday, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+/** Display labels for each supported channel. */
+const CHANNEL_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  instagram: "Instagram",
+  telegram: "Telegram",
+  web: "Web",
+  messenger: "Messenger",
+};
 
 interface ChatListItemProps {
   session: ChatSession;
   isSelected: boolean;
   onClick: () => void;
+  /** Resolved name of the responsible team member (lookup done by parent). */
+  responsibleName?: string;
+  /** Current conversation status — drives which kebab actions are shown. */
+  conversationStatus?: ConversationStatus;
+  /** Called when user picks Archive / Reopen / Delete from the kebab. */
+  onStatusChange?: (status: ConversationStatus) => void;
 }
 
 /** Ícone do canal em overlay no canto inferior-direito do avatar */
@@ -67,13 +89,24 @@ function ChannelBadge({ channel }: { channel?: string }) {
   );
 }
 
-export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps) {
+export function ChatListItem({
+  session,
+  isSelected,
+  onClick,
+  responsibleName,
+  conversationStatus,
+  onStatusChange,
+}: ChatListItemProps) {
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  const channelLabel = session.channel
+    ? CHANNEL_LABELS[session.channel] || session.channel
+    : null;
 
   const getFormattedDate = (date: Date) => {
     if (isToday(date)) {
@@ -117,14 +150,64 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="grid grid-cols-[1fr_auto] gap-2 items-center w-full">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center w-full">
           <span className="font-medium text-sm text-foreground truncate min-w-0">
             {session.customerName}
           </span>
           <span className="text-[10px] text-muted-foreground flex-shrink-0 font-mono whitespace-nowrap text-right">
             {timeAgo}
           </span>
+          {onStatusChange && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                asChild
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="p-0.5 rounded hover:bg-muted text-muted-foreground opacity-60 hover:opacity-100 transition-opacity"
+                  aria-label="Ações da conversa"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {conversationStatus === "archived" ? (
+                  <DropdownMenuItem onClick={() => onStatusChange("active")}>
+                    <ArchiveRestore className="h-4 w-4 mr-2" />
+                    Reabrir
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => onStatusChange("archived")}>
+                    <Archive className="h-4 w-4 mr-2" />
+                    Arquivar
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onStatusChange("deleted")}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remover
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
+
+        {/* Channel + Responsible line (Epic 1) */}
+        {(channelLabel || responsibleName) && (
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5 truncate">
+            {channelLabel && <span>{channelLabel}</span>}
+            {channelLabel && responsibleName && <span>·</span>}
+            {responsibleName && (
+              <span className="truncate">{responsibleName}</span>
+            )}
+          </div>
+        )}
 
         <p className="text-sm text-muted-foreground truncate mt-0.5">
           {session.lastMessage}
@@ -144,6 +227,16 @@ export function ChatListItem({ session, isSelected, onClick }: ChatListItemProps
               Humano
             </Badge>
           ) : null}
+
+          {conversationStatus === "archived" && (
+            <Badge
+              variant="outline"
+              className="gap-1 text-[10px] border-slate-300 text-slate-500"
+            >
+              <Archive className="h-3 w-3" />
+              Arquivada
+            </Badge>
+          )}
 
           {/* Unread Badge */}
           {session.unreadCount > 0 && (

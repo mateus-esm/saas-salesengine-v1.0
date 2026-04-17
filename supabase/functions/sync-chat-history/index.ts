@@ -15,11 +15,46 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { lead_id, chat_id } = await req.json()
+    const { lead_id, chat_id, conversation_id } = await req.json()
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
+    // Epic 1: resolve conversation + lead. If only conversation_id is given,
+    // look up lead_id and chat_id from the conversation row.
+    let resolvedLeadId: string | null = lead_id || null
+    let resolvedConversationId: string | null = conversation_id || null
+    let resolvedChatId: string | null = chat_id || null
+
+    if (resolvedConversationId && (!resolvedLeadId || !resolvedChatId)) {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('id, lead_id, gpt_maker_chat_id')
+        .eq('id', resolvedConversationId)
+        .maybeSingle()
+      if (conv) {
+        resolvedLeadId = resolvedLeadId || conv.lead_id
+        resolvedChatId = resolvedChatId || conv.gpt_maker_chat_id
+      }
+    } else if (!resolvedConversationId && resolvedLeadId) {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('lead_id', resolvedLeadId)
+        .neq('status', 'deleted')
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+      if (conv) resolvedConversationId = conv.id
+    }
+
+    if (!resolvedChatId) {
+      return new Response(JSON.stringify({ error: 'chat_id não encontrado' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      })
+    }
+
     // 1. Busca histórico na API do GPT Maker
-    const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/messages?limit=50`
+    const url = `https://api.gptmaker.ai/v2/chat/${resolvedChatId}/messages?limit=50`
     
     const response = await fetch(url, {
       method: 'GET',
@@ -67,18 +102,19 @@ serve(async (req) => {
 
         if (externalId) {
             const { error } = await supabase.from('messages').upsert({
-                lead_id: lead_id,
+                lead_id: resolvedLeadId,
+                conversation_id: resolvedConversationId,
                 content: content,
                 sender_type: senderType,
                 gpt_message_id: externalId,
                 created_at: messageDate,
                 media_url: mediaUrl,
                 media_type: mediaType
-            }, { 
-                onConflict: 'gpt_message_id', 
-                ignoreDuplicates: true 
+            }, {
+                onConflict: 'gpt_message_id',
+                ignoreDuplicates: true
             })
-            
+
             if (!error) savedCount++
         }
     }
@@ -88,7 +124,7 @@ serve(async (req) => {
     // Usa o endpoint de detalhe do chat (faz parte da API list-chats mas com ID específico)
     try {
       // Tentar endpoint de detalhe primeiro; se não existir, usar list-chats filtrado
-      const chatMetaUrl = `https://api.gptmaker.ai/v2/chat/${chat_id}`
+      const chatMetaUrl = `https://api.gptmaker.ai/v2/chat/${resolvedChatId}`
       const chatMetaRes = await fetch(chatMetaUrl, {
         method: 'GET',
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
@@ -111,9 +147,22 @@ serve(async (req) => {
           )
         }
 
-        if (Object.keys(enrichment).length > 0) {
-          await supabase.from('leads').update(enrichment).eq('id', lead_id)
+        if (Object.keys(enrichment).length > 0 && resolvedLeadId) {
+          await supabase.from('leads').update(enrichment).eq('id', resolvedLeadId)
           console.log('[SyncHistory] Lead enriquecido com metadados:', enrichment)
+        }
+
+        // Epic 1: mirror channel/agent_name onto the conversation row too
+        if (resolvedConversationId) {
+          const convEnrichment: Record<string, unknown> = {}
+          if (enrichment.channel) convEnrichment.channel = enrichment.channel
+          if (enrichment.agent_name) convEnrichment.agent_name = enrichment.agent_name
+          if (Object.keys(convEnrichment).length > 0) {
+            await supabase
+              .from('conversations')
+              .update(convEnrichment)
+              .eq('id', resolvedConversationId)
+          }
         }
       }
     } catch (enrichErr) {

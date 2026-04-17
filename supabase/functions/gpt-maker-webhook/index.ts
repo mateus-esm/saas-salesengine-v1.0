@@ -267,6 +267,68 @@ serve(async (req) => {
 
     if (!lead) throw new Error("Falha inesperada: Lead nulo após processamento");
 
+    // 9b. EPIC 1 — Upsert conversation
+    // Strategy: look for an existing conversation for (lead_id, channel) that is
+    // not deleted. If archived, auto-reopen on new inbound (per product decision).
+    let conversationId: string | null = null
+    {
+      const { data: existingConv } = await supabase
+        .from('conversations')
+        .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente')
+        .eq('lead_id', lead.id)
+        .eq('channel', channel)
+        .neq('status', 'deleted')
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingConv) {
+        conversationId = existingConv.id
+        const convUpdates: Record<string, unknown> = {
+          last_message_at: messageDate,
+        }
+        // Auto-reopen archived on new inbound
+        if (existingConv.status === 'archived') {
+          convUpdates.status = 'active'
+          convUpdates.archived_at = null
+          console.log('[Webhook] Auto-reabrindo conversa arquivada:', conversationId)
+        }
+        if (chatId && existingConv.gpt_maker_chat_id !== chatId) {
+          convUpdates.gpt_maker_chat_id = chatId
+        }
+        if (agentName && existingConv.agent_name !== agentName) {
+          convUpdates.agent_name = agentName
+        }
+        await supabase
+          .from('conversations')
+          .update(convUpdates)
+          .eq('id', conversationId)
+      } else {
+        const { data: newConv, error: convError } = await supabase
+          .from('conversations')
+          .insert({
+            lead_id: lead.id,
+            equipe_id: equipeId,
+            channel,
+            status: 'active',
+            atendido_por_agente: false,
+            agent_name: agentName,
+            gpt_maker_chat_id: chatId,
+            last_message_at: messageDate,
+            unread_count: 0,
+          })
+          .select('id')
+          .single()
+
+        if (convError) {
+          console.error('[Webhook] Erro ao criar conversa:', convError)
+          throw convError
+        }
+        conversationId = newConv.id
+        console.log('[Webhook] Nova conversa criada:', conversationId)
+      }
+    }
+
     // 10. Verificar duplicata ANTES de inserir
     // GPT Maker ecoa mensagens de volta causando duplicação.
     // O campo gpt_message_id NEM SEMPRE é preenchido (GPT Maker retorna {success:true} sem ID),
@@ -349,6 +411,7 @@ serve(async (req) => {
     if (!skipInsert) {
       const { error: msgError } = await supabase.from('messages').insert({
         lead_id: lead.id,
+        conversation_id: conversationId,
         content: messageContent,
         sender_type: senderType,
         gpt_message_id: messageId,
@@ -360,17 +423,28 @@ serve(async (req) => {
       if (msgError) {
         console.error('[Webhook] Erro ao salvar mensagem:', msgError)
       } else {
-        console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType, 'media_type:', mediaType)
+        console.log('[Webhook] Mensagem salva com sucesso, sender_type:', senderType, 'media_type:', mediaType, 'conv:', conversationId)
       }
     }
 
     // 12. Incrementar contador de não lidos (apenas para mensagens do cliente E se não foi duplicata)
     if (senderType === 'customer' && !skipInsert) {
+      // Epic 1: unread count now lives on the conversation
+      if (conversationId) {
+        const { error: convRpcError } = await supabase.rpc(
+          'increment_conversation_unread_count',
+          { conv_id: conversationId }
+        )
+        if (convRpcError) {
+          console.error('[Webhook] Erro ao incrementar unread_count da conversa:', convRpcError)
+        }
+      }
+      // Dual-write: keep lead-level unread in sync during transition
       const { error: rpcError } = await supabase.rpc('increment_unread_count', {
         row_id: lead.id
       })
       if (rpcError) {
-        console.error('[Webhook] Erro ao incrementar unread_count:', rpcError)
+        console.error('[Webhook] Erro ao incrementar unread_count (legado):', rpcError)
       }
     }
 

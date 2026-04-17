@@ -1,15 +1,31 @@
-import { useState } from "react";
-import { ChatSession } from "@/types/chat";
+import { useState, useMemo } from "react";
+import { ChatSession, ConversationStatus } from "@/types/chat";
 import { ChatListItem } from "./ChatListItem";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Inbox, Bot, User, MessageCircle, Users, MessageSquareDot } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Search,
+  Inbox,
+  MessageCircle,
+  MessageSquareDot,
+  Archive,
+  Inbox as InboxIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TeamMember } from "@/types/crm";
 
 interface ExtendedChatSession extends ChatSession {
-  leadType?: 'lead' | 'contact' | 'spam' | null;
+  leadType?: "lead" | "contact" | "spam" | null;
   responsibleId?: string | null;
 }
 
@@ -17,71 +33,103 @@ interface InboxSidebarProps {
   sessions: ExtendedChatSession[];
   selectedSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
+  onStatusChange?: (sessionId: string, status: ConversationStatus) => void;
   currentUserId?: string;
-  /** Admins/Owners vêem todos os chats; vendedores comuns só vêem os seus */
+  /** Admins/Owners see all chats; regular sellers only see theirs */
   isAdmin?: boolean;
+  /** Team members for the Responsible filter dropdown */
+  teamMembers?: TeamMember[];
 }
 
-type FilterType = "all" | "mine" | "bot" | "contacts";
+type StatusTab = "active" | "archived";
+
+// Special sentinel values for the Responsible filter
+const RESP_ALL = "__all__";
+const RESP_MINE = "__mine__";
+const RESP_AI = "__ai__";
+const RESP_UNASSIGNED = "__unassigned__";
+
+const CHANNEL_ALL = "__all__";
+const CHANNEL_OPTIONS = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "instagram", label: "Instagram" },
+  { value: "telegram", label: "Telegram" },
+  { value: "web", label: "Web" },
+  { value: "messenger", label: "Messenger" },
+];
 
 export function InboxSidebar({
   sessions,
   selectedSessionId,
   onSelectSession,
+  onStatusChange,
   currentUserId,
   isAdmin = true,
+  teamMembers = [],
 }: InboxSidebarProps) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [statusTab, setStatusTab] = useState<StatusTab>("active");
+  const [channelFilter, setChannelFilter] = useState<string>(CHANNEL_ALL);
+  const [responsibleFilter, setResponsibleFilter] = useState<string>(
+    isAdmin ? RESP_ALL : RESP_MINE
+  );
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
 
-  // Para vendedores comuns, pré-filtrar apenas os seus leads (assigned_to)
+  // Non-admin sellers only see their own chats — enforced regardless of filter
   const visibleSessions = isAdmin
     ? sessions
-    : sessions.filter((s) => !s.responsibleId || s.responsibleId === currentUserId);
+    : sessions.filter(
+        (s) => !s.responsibleId || s.responsibleId === currentUserId
+      );
 
-  const filters: { id: FilterType; label: string; icon: React.ElementType }[] = [
-    { id: "all", label: "Todos", icon: Inbox },
-    { id: "mine", label: "Meus", icon: User },
-    { id: "bot", label: "Bot", icon: Bot },
-    { id: "contacts", label: "Contatos", icon: Users },
-  ];
+  const teamMemberById = useMemo(() => {
+    const map = new Map<string, string>();
+    teamMembers.forEach((m) =>
+      map.set(m.id, m.nome_completo || m.email || "Sem nome")
+    );
+    return map;
+  }, [teamMembers]);
 
-  // Filter sessions — exclude contacts/spam from "all" unless specifically viewing "contacts"
   const filteredSessions = visibleSessions.filter((session) => {
-    // Search filter
+    // Status tab — "deleted" is always hidden in v1
+    const sessionConvStatus: ConversationStatus =
+      session.conversationStatus || "active";
+    if (sessionConvStatus === "deleted") return false;
+    if (sessionConvStatus !== statusTab) return false;
+
+    // Search
     const matchesSearch =
       session.customerName.toLowerCase().includes(search.toLowerCase()) ||
       session.lastMessage.toLowerCase().includes(search.toLowerCase()) ||
       session.customerPhone.includes(search);
+    if (!matchesSearch) return false;
 
-    // Status/assignment filter
-    let matchesFilter = true;
-    switch (filter) {
-      case "all":
-        // Show only leads (not contacts/spam) in "all"
-        matchesFilter = !session.leadType || session.leadType === 'lead';
-        break;
-      case "mine":
-        // Show sessions onde o utilizador é responsável OU com human_handling
-        matchesFilter =
-          session.status === "human_handling" ||
-          session.responsibleId === currentUserId;
-        break;
-      case "bot":
-        matchesFilter = session.status === "bot_handling";
-        break;
-      case "contacts":
-        // Show only contacts (not leads)
-        matchesFilter = session.leadType === 'contact' || session.leadType === 'spam';
-        break;
+    // Channel
+    if (channelFilter !== CHANNEL_ALL && session.channel !== channelFilter) {
+      return false;
     }
 
-    if (showUnreadOnly && session.unreadCount === 0) {
-       return false;
+    // Responsible
+    switch (responsibleFilter) {
+      case RESP_ALL:
+        break;
+      case RESP_MINE:
+        if (session.responsibleId !== currentUserId) return false;
+        break;
+      case RESP_AI:
+        if (session.status !== "bot_handling") return false;
+        break;
+      case RESP_UNASSIGNED:
+        if (session.responsibleId) return false;
+        break;
+      default:
+        if (session.responsibleId !== responsibleFilter) return false;
     }
 
-    return matchesSearch && matchesFilter;
+    // Unread
+    if (showUnreadOnly && session.unreadCount === 0) return false;
+
+    return true;
   });
 
   const unreadCount = visibleSessions.filter((s) => s.unreadCount > 0).length;
@@ -89,14 +137,14 @@ export function InboxSidebar({
   return (
     <div className="h-full flex flex-col border-r border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900">
       {/* Header */}
-      <div className="p-3 border-b border-slate-200/60 dark:border-slate-700/60">
-        <h2 className="font-semibold text-base mb-3 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+      <div className="p-3 border-b border-slate-200/60 dark:border-slate-700/60 space-y-3">
+        <h2 className="font-semibold text-base flex items-center gap-2 text-slate-800 dark:text-slate-200">
           <Inbox className="h-4 w-4 text-primary" />
           Inbox
         </h2>
 
-        {/* Search and Unread Filter */}
-        <div className="flex items-center justify-between gap-2 mt-3">
+        {/* Search + Unread toggle */}
+        <div className="flex items-center justify-between gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
@@ -109,7 +157,11 @@ export function InboxSidebar({
           <Button
             variant={showUnreadOnly ? "default" : "outline"}
             size="sm"
-            className={cn("h-8 px-2 gap-1.5 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors", showUnreadOnly && "bg-primary border-primary text-primary-foreground")}
+            className={cn(
+              "h-8 px-2 gap-1.5 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors",
+              showUnreadOnly &&
+                "bg-primary border-primary text-primary-foreground"
+            )}
             onClick={() => setShowUnreadOnly(!showUnreadOnly)}
             title="Filtrar não lidas"
           >
@@ -122,22 +174,79 @@ export function InboxSidebar({
           </Button>
         </div>
 
-        {/* Filter badges */}
-        <div className="flex gap-1.5 mt-3 flex-wrap">
-          {filters.map(({ id, label, icon: Icon }) => (
-            <Badge
-              key={id}
-              variant={filter === id ? "default" : "outline"}
-              className={cn(
-                "cursor-pointer gap-1 transition-colors text-xs",
-                filter === id && "bg-primary"
+        {/* Status tabs */}
+        <div className="flex items-center rounded-md border border-slate-200/60 dark:border-slate-700/60 p-0.5 bg-slate-50 dark:bg-slate-800">
+          <button
+            onClick={() => setStatusTab("active")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 text-xs py-1 rounded transition-colors",
+              statusTab === "active"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            )}
+          >
+            <InboxIcon className="h-3 w-3" />
+            Ativas
+          </button>
+          <button
+            onClick={() => setStatusTab("archived")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 text-xs py-1 rounded transition-colors",
+              statusTab === "archived"
+                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            )}
+          >
+            <Archive className="h-3 w-3" />
+            Arquivadas
+          </button>
+        </div>
+
+        {/* Channel + Responsible filters */}
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={channelFilter} onValueChange={setChannelFilter}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Canal" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={CHANNEL_ALL}>Todos os canais</SelectItem>
+              <SelectSeparator />
+              {CHANNEL_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={responsibleFilter}
+            onValueChange={setResponsibleFilter}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Responsável" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value={RESP_ALL}>Todos os chats</SelectItem>
+                <SelectItem value={RESP_MINE}>Meus chats</SelectItem>
+                <SelectItem value={RESP_AI}>Gerenciado pela IA</SelectItem>
+                <SelectItem value={RESP_UNASSIGNED}>Sem responsável</SelectItem>
+              </SelectGroup>
+              {teamMembers.length > 0 && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    {teamMembers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.nome_completo || m.email || "Sem nome"}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
               )}
-              onClick={() => setFilter(id)}
-            >
-              <Icon className="h-3 w-3" />
-              {label}
-            </Badge>
-          ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -150,6 +259,17 @@ export function InboxSidebar({
               session={session}
               isSelected={session.id === selectedSessionId}
               onClick={() => onSelectSession(session.id)}
+              responsibleName={
+                session.responsibleId
+                  ? teamMemberById.get(session.responsibleId)
+                  : undefined
+              }
+              conversationStatus={session.conversationStatus || "active"}
+              onStatusChange={
+                onStatusChange
+                  ? (status) => onStatusChange(session.id, status)
+                  : undefined
+              }
             />
           ))
         ) : (

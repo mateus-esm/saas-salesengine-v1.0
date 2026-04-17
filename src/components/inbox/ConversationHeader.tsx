@@ -1,9 +1,20 @@
-import { ChatSession } from "@/types/chat";
+import { ChatSession, ConversationStatus } from "@/types/chat";
 import { TeamMember } from "@/types/crm";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Hand, User, ChevronLeft, UserCheck, UserX } from "lucide-react";
+import {
+  Bot,
+  Hand,
+  User,
+  ChevronLeft,
+  UserCheck,
+  UserX,
+  MoreVertical,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -36,9 +47,11 @@ interface ConversationHeaderProps {
   onAssignResponsible?: (userId: string | null) => void;
   onBack?: () => void;
   onOpenLeadDetails?: () => void;
+  /** Epic 1: change the conversation lifecycle status */
+  onStatusChange?: (status: ConversationStatus) => void;
 }
 
-export function ConversationHeader({ session, stages, teamMembers = [], onToggleHandoff, onUpdateCRM, onAssignResponsible, onBack, onOpenLeadDetails }: ConversationHeaderProps) {
+export function ConversationHeader({ session, stages, teamMembers = [], onToggleHandoff, onUpdateCRM, onAssignResponsible, onBack, onOpenLeadDetails, onStatusChange }: ConversationHeaderProps) {
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
@@ -271,6 +284,45 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
             </>
           )}
         </Button>
+
+        {/* Conversation status actions (Epic 1) */}
+        {onStatusChange && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title="Ações da conversa"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs">Conversa</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {session.conversationStatus === "archived" ? (
+                <DropdownMenuItem onClick={() => onStatusChange("active")}>
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                  Reabrir
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => onStatusChange("archived")}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Arquivar
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => onStatusChange("deleted")}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Remover conversa
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useLeads } from "@/hooks/useLeads";
+import { useConversations } from "@/hooks/useConversations";
 import { useMessages } from "@/hooks/useMessages";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { useTasks } from "@/hooks/useTasks";
@@ -7,6 +8,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { supabase } from "@/integrations/supabase/client";
+// Database types lag the new conversations table until `supabase gen types` reruns post-migration.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { ChatInput } from "@/components/inbox/ChatInput";
@@ -16,42 +20,47 @@ import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRigh
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { LeadDetailsModal } from "@/components/crm/LeadDetailsModal";
-import { ChatSession, Task } from "@/types/chat";
+import { ChatSession, ConversationStatus } from "@/types/chat";
 import { Lead } from "@/types/crm";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const Chat = () => {
-  // 0. Auth e Role (Fase 2 — filtro por permissão)
   const { user } = useAuth();
   const { isAdmin } = useRole();
   const currentUserId = user?.id;
   const { teamMembers } = useTeamMembers();
 
-  // 1. Busca Leads Reais do Supabase
+  // Leads still power CRM fields (stage, value, notes) and the details modal.
   const { leads, isLoading: loadingLeads, refetch: refetchLeads, updateLead, deleteLead } = useLeads();
   const { stages } = usePipelineStages();
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
-  const [showLeadModal, setShowLeadModal] = useState(false);
 
-  // Toggle states for panels
+  // Epic 1: Conversations layer is the source of truth for the inbox list.
+  const {
+    conversations,
+    isLoading: loadingConversations,
+    updateStatus,
+  } = useConversations();
+
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [showLeadModal, setShowLeadModal] = useState(false);
   const [showInbox, setShowInbox] = useState(true);
   const [showCRM, setShowCRM] = useState(true);
 
-  // 2. Busca Mensagens do Lead Selecionado (Com Realtime)
-  const selectedLead = leads?.find(l => l.id === selectedLeadId);
+  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+  const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);
+
   const { messages, loading: loadingMessages, addOptimisticMessage } = useMessages(
-    selectedLeadId || undefined,
-    selectedLead?.gpt_maker_chat_id
+    selectedConversationId || undefined,
+    selectedConversation?.gpt_maker_chat_id
   );
 
-  // 3. Busca Tasks do Lead Selecionado (Com Realtime e Persistência)
-  const { tasks, createTask, toggleTask, isLoading: loadingTasks } = useTasks(selectedLeadId);
+  // Tasks still scoped to the underlying lead (CRM-level, not per-conversation)
+  const { tasks, createTask, toggleTask } = useTasks(selectedConversation?.lead_id ?? null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom — useLayoutEffect fires after DOM paint, before browser paints
   const scrollToBottom = () => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
@@ -60,104 +69,106 @@ const Chat = () => {
 
   useLayoutEffect(() => {
     scrollToBottom();
-  }, [messages, selectedLeadId]);
+  }, [messages, selectedConversationId]);
 
-  // Sessão selecionada adaptada para ChatSession
+  /** Map a Conversation → ChatSession for the header/CRM components. */
   const selectedSession = useMemo((): ChatSession | null => {
-    if (!selectedLeadId) return null;
-    const lead = leads?.find(l => l.id === selectedLeadId);
-    if (!lead) return null;
+    if (!selectedConversation) return null;
+    const lead = selectedLead;
 
-    const stageName = stages.find(s => s.id === lead.stage_id)?.name || "Novo Lead";
+    const stageName = stages.find(s => s.id === lead?.stage_id)?.name || "Novo Lead";
 
     return {
-      id: lead.id,
-      leadId: lead.id,
-      customerName: lead.name || "Sem Nome",
-      customerPhone: lead.phone || lead.origem || "WhatsApp",
-      customerAvatar: lead.profile_picture || undefined,
-      status: lead.atendido_por_agente ? 'human_handling' : 'bot_handling',
-      // Online = last message within 24h
-      isOnline: lead.last_message_at
-        ? (Date.now() - new Date(lead.last_message_at).getTime()) < 86_400_000
+      id: selectedConversation.id,
+      conversationId: selectedConversation.id,
+      conversationStatus: selectedConversation.status as ConversationStatus,
+      leadId: selectedConversation.lead_id,
+      customerName: lead?.name || selectedConversation.lead?.name || "Sem Nome",
+      customerPhone: lead?.phone || lead?.origem || "WhatsApp",
+      customerAvatar: lead?.profile_picture || undefined,
+      status: selectedConversation.atendido_por_agente ? 'human_handling' : 'bot_handling',
+      isOnline: selectedConversation.last_message_at
+        ? (Date.now() - new Date(selectedConversation.last_message_at).getTime()) < 86_400_000
         : false,
-      unreadCount: lead.unread_count || 0,
+      unreadCount: selectedConversation.unread_count || 0,
       lastMessage: "Clique para ver",
-      lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
-      tags: lead.tags || [],
-      // Fase 2: Omnichannel
-      channel: lead.channel || 'whatsapp',
-      agentName: lead.agent_name || undefined,
-      responsibleId: lead.responsible_id || lead.assigned_to || undefined,
+      lastMessageTime: new Date(selectedConversation.last_message_at || selectedConversation.created_at || new Date()),
+      tags: lead?.tags || [],
+      channel: selectedConversation.channel || 'whatsapp',
+      agentName: selectedConversation.agent_name || undefined,
+      responsibleId: selectedConversation.responsible_id || undefined,
       crmData: {
-        value: lead.opportunity_value || 0,
-        stage: lead.stage_id || stageName,
-        notes: lead.observations || "",
-        email: lead.email || undefined,
-        company: lead.name,
+        value: lead?.opportunity_value || 0,
+        stage: lead?.stage_id || stageName,
+        notes: lead?.observations || "",
+        email: lead?.email || undefined,
+        company: lead?.name,
         position: undefined,
       },
       messages: [],
     };
-  }, [selectedLeadId, leads, stages]);
+  }, [selectedConversation, selectedLead, stages]);
 
-  // Adaptação dos dados para o componente Sidebar
+  /** Map Conversations → sidebar ExtendedChatSession list. */
   const sessionsAdapter = useMemo(() => {
-    return leads?.map(lead => ({
-      id: lead.id,
-      customerName: lead.name || "Sem Nome",
-      customerPhone: lead.origem || lead.source || 'WhatsApp',
-      customerAvatar: lead.profile_picture || undefined,
-      leadId: lead.id,
-      lastMessage: "Clique para ver",
-      lastMessageTime: new Date(lead.last_message_at || lead.created_at || new Date()),
-      status: lead.atendido_por_agente ? 'human_handling' as const : 'bot_handling' as const,
-      unreadCount: lead.unread_count || 0,
-      leadType: lead.lead_type,
-      responsibleId: lead.responsible_id || lead.assigned_to,
-      // Online = last message within 24h
-      isOnline: lead.last_message_at
-        ? (Date.now() - new Date(lead.last_message_at).getTime()) < 86_400_000
-        : false,
-      // Fase 2: Omnichannel
-      channel: lead.channel || 'whatsapp',
-      agentName: lead.agent_name || undefined,
-      crmData: {
-        value: lead.opportunity_value || 0,
-        stage: lead.stage_id || 'Novo',
-        company: lead.name,
-        notes: lead.observations || '',
-      },
-      tags: lead.tags || [],
-      messages: []
-    })) || [];
-  }, [leads]);
+    return conversations.map(c => {
+      const lead = leads?.find(l => l.id === c.lead_id);
+      const leadSlice = c.lead;
+      return {
+        id: c.id,
+        conversationId: c.id,
+        conversationStatus: c.status as ConversationStatus,
+        leadId: c.lead_id,
+        customerName: lead?.name || leadSlice?.name || "Sem Nome",
+        customerPhone: lead?.phone || lead?.origem || leadSlice?.phone || leadSlice?.origem || 'WhatsApp',
+        customerAvatar: lead?.profile_picture || leadSlice?.profile_picture || undefined,
+        lastMessage: "Clique para ver",
+        lastMessageTime: new Date(c.last_message_at || c.created_at || new Date()),
+        status: (c.atendido_por_agente ? 'human_handling' : 'bot_handling') as 'human_handling' | 'bot_handling',
+        unreadCount: c.unread_count || 0,
+        leadType: (lead?.lead_type || leadSlice?.lead_type || null) as 'lead' | 'contact' | 'spam' | null,
+        responsibleId: c.responsible_id,
+        isOnline: c.last_message_at
+          ? (Date.now() - new Date(c.last_message_at).getTime()) < 86_400_000
+          : false,
+        channel: c.channel || 'whatsapp',
+        agentName: c.agent_name || undefined,
+        crmData: {
+          value: lead?.opportunity_value || 0,
+          stage: lead?.stage_id || 'Novo',
+          company: lead?.name,
+          notes: lead?.observations || '',
+        },
+        tags: lead?.tags || leadSlice?.tags || [],
+        messages: [],
+      };
+    });
+  }, [conversations, leads]);
 
-  // Envio de Mensagem Real (Chama a Edge Function)
   const handleSendMessage = async (content: string, media?: { url: string; type: string }) => {
-    if (!selectedLeadId) return;
+    if (!selectedConversationId || !selectedConversation) return;
 
     try {
-      // Optimistic Update
       const tempId = `temp-${Date.now()}`;
       addOptimisticMessage({
         id: tempId,
         content,
-        lead_id: selectedLeadId,
+        lead_id: selectedConversation.lead_id,
+        conversation_id: selectedConversationId,
         sender_type: 'agent',
         created_at: new Date().toISOString(),
         media_url: media?.url || null,
         media_type: media?.type || null,
       } as any);
 
-      const lead = leads?.find(l => l.id === selectedLeadId);
       const { error } = await supabase.functions.invoke('send-chat-message', {
         body: {
-          lead_id: selectedLeadId,
-          content: content,
+          conversation_id: selectedConversationId,
+          lead_id: selectedConversation.lead_id,
+          content,
           media_type: media ? media.type : 'text',
           media_url: media?.url,
-          chat_id: lead?.gpt_maker_chat_id
+          chat_id: selectedConversation.gpt_maker_chat_id,
         }
       });
 
@@ -168,21 +179,17 @@ const Chat = () => {
     }
   };
 
-  // Toggle atendimento IA/Humano
   const handleToggleHandoff = async () => {
-    if (!selectedLeadId) return;
-    const lead = leads?.find(l => l.id === selectedLeadId);
-    const isHuman = lead?.atendido_por_agente;
+    if (!selectedConversationId || !selectedConversation) return;
+    const isHuman = selectedConversation.atendido_por_agente;
 
     try {
-      // Atualiza no banco
-      await supabase
-        .from('leads')
+      await sb
+        .from('conversations')
         .update({ atendido_por_agente: !isHuman })
-        .eq('id', selectedLeadId);
+        .eq('id', selectedConversationId);
 
-      // Chama API do GPT Maker para controlar bot
-      const chatId = lead?.gpt_maker_chat_id;
+      const chatId = selectedConversation.gpt_maker_chat_id;
       if (chatId) {
         await supabase.functions.invoke('send-chat-message', {
           body: {
@@ -193,16 +200,14 @@ const Chat = () => {
       }
 
       toast.success(isHuman ? "Devolvido ao bot" : "Atendimento assumido");
-      refetchLeads();
     } catch (err) {
       console.error("Erro ao alternar atendimento:", err);
       toast.error("Erro ao alternar atendimento");
     }
   };
 
-  // Atualizar dados do CRM
   const handleUpdateCRM = async (data: Partial<ChatSession["crmData"]>) => {
-    if (!selectedLeadId) return;
+    if (!selectedConversation?.lead_id) return;
 
     const updates: Record<string, unknown> = {};
     if (data.value !== undefined) updates.opportunity_value = data.value;
@@ -213,7 +218,7 @@ const Chat = () => {
       await supabase
         .from('leads')
         .update(updates)
-        .eq('id', selectedLeadId);
+        .eq('id', selectedConversation.lead_id);
 
       refetchLeads();
     } catch (err) {
@@ -222,24 +227,37 @@ const Chat = () => {
     }
   };
 
-  // Assign responsible team member
   const handleAssignResponsible = async (userId: string | null) => {
-    if (!selectedLeadId) return;
+    if (!selectedConversationId) return;
     try {
-      await supabase
-        .from('leads')
-        .update({ responsible_id: userId, assigned_to: userId })
-        .eq('id', selectedLeadId);
-      refetchLeads();
+      await sb
+        .from('conversations')
+        .update({ responsible_id: userId })
+        .eq('id', selectedConversationId);
       toast.success(userId ? 'Responsável atribuído' : 'Responsável removido');
     } catch (err) {
       toast.error('Erro ao atribuir responsável');
     }
   };
 
-  // Tasks handlers - now using the useTasks hook for persistence
+  const handleConversationStatusChange = (
+    conversationId: string,
+    status: ConversationStatus,
+  ) => {
+    updateStatus.mutate(
+      { id: conversationId, status },
+      {
+        onSuccess: () => {
+          if (status === 'deleted' && conversationId === selectedConversationId) {
+            setSelectedConversationId(null);
+          }
+        },
+      }
+    );
+  };
+
   const handleAddTask = async (title: string) => {
-    if (!selectedLeadId) return;
+    if (!selectedConversation?.lead_id) return;
     await createTask(title);
   };
 
@@ -247,7 +265,6 @@ const Chat = () => {
     await toggleTask(taskId);
   };
 
-  // Adapt tasks to CRMContextPanel format
   const currentTasks = tasks.map(t => ({
     id: t.id,
     title: t.title,
@@ -255,11 +272,10 @@ const Chat = () => {
     createdAt: new Date(t.created_at)
   }));
 
-
+  const loadingInbox = loadingLeads || loadingConversations;
 
   return (
     <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background">
-      {/* Toggle Inbox Button (when collapsed) */}
       {!showInbox && (
         <Button
           variant="ghost"
@@ -271,14 +287,13 @@ const Chat = () => {
         </Button>
       )}
 
-      {/* Coluna 1: Inbox (Sidebar de Leads) */}
+      {/* Coluna 1: Inbox */}
       <div className={cn(
         "border-r flex-shrink-0 transition-all duration-300 relative",
         showInbox ? "w-1/4 min-w-[280px] max-w-[360px]" : "w-0 min-w-0 overflow-hidden"
       )}>
         {showInbox && (
           <>
-            {/* Toggle button inside inbox */}
             <Button
               variant="ghost"
               size="icon"
@@ -287,18 +302,20 @@ const Chat = () => {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            {loadingLeads ? (
+            {loadingInbox ? (
               <div className="flex justify-center items-center h-full">
                 <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
               </div>
             ) : (
               <InboxSidebar
                 sessions={sessionsAdapter}
-                selectedSessionId={selectedLeadId}
+                selectedSessionId={selectedConversationId}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin()}
+                teamMembers={teamMembers}
+                onStatusChange={handleConversationStatusChange}
                 onSelectSession={(id) => {
-                  setSelectedLeadId(id);
+                  setSelectedConversationId(id);
                   if (window.innerWidth < 1024) {
                     setShowInbox(false);
                   }
@@ -309,11 +326,10 @@ const Chat = () => {
         )}
       </div>
 
-      {/* Coluna 2: Chat (Mensagens) */}
+      {/* Coluna 2: Chat */}
       <div className="flex-1 flex flex-col min-w-0">
-        {selectedLeadId && selectedSession ? (
+        {selectedConversationId && selectedSession ? (
           <>
-            {/* Header do Chat */}
             <div className="flex items-center justify-between border-b">
               <div className="flex-1">
                 <ConversationHeader
@@ -323,11 +339,13 @@ const Chat = () => {
                   onToggleHandoff={handleToggleHandoff}
                   onUpdateCRM={handleUpdateCRM}
                   onAssignResponsible={handleAssignResponsible}
+                  onStatusChange={(status) =>
+                    handleConversationStatusChange(selectedConversationId, status)
+                  }
                   onBack={() => setShowInbox(true)}
                   onOpenLeadDetails={() => setShowLeadModal(true)}
                 />
               </div>
-              {/* Toggle buttons */}
               <div className="flex items-center gap-1 mr-2">
                 {!showInbox && (
                   <Button variant="ghost" size="icon" onClick={() => setShowInbox(true)}>
@@ -342,7 +360,6 @@ const Chat = () => {
                 >
                   <PanelRight className="h-5 w-5" />
                 </Button>
-                {/* Botão CRM mobile */}
                 <Sheet>
                   <SheetTrigger asChild>
                     <Button variant="ghost" size="icon" className="lg:hidden">
@@ -363,7 +380,6 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Mensagens */}
             <div
               ref={scrollContainerRef}
               className="flex-1 overflow-y-auto bg-muted/30"
@@ -394,7 +410,7 @@ const Chat = () => {
                           mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
                           readAt: msg.read_at ? new Date(msg.read_at) : undefined,
                           senderName: msg.sender_type !== 'customer'
-                            ? (selectedLead?.agent_name || 'Assistente IA')
+                            ? (selectedConversation?.agent_name || 'Assistente IA')
                             : undefined,
                         }}
                       />
@@ -404,7 +420,6 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Input */}
             <ChatInput
               onSend={handleSendMessage}
               placeholder="Digite sua mensagem..."
@@ -415,13 +430,12 @@ const Chat = () => {
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center">
               <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
-              <p>Selecione um lead para iniciar o atendimento</p>
+              <p>Selecione uma conversa para iniciar o atendimento</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Toggle CRM Button (when collapsed on desktop) */}
       {!showCRM && (
         <Button
           variant="ghost"
@@ -433,14 +447,12 @@ const Chat = () => {
         </Button>
       )}
 
-      {/* Coluna 3: Painel CRM (Desktop) */}
       <div className={cn(
         "border-l hidden lg:block flex-shrink-0 overflow-hidden transition-all duration-300 relative",
         showCRM ? "w-80" : "w-0"
       )}>
         {showCRM && (
           <>
-            {/* Toggle button inside CRM panel */}
             <Button
               variant="ghost"
               size="icon"
@@ -462,7 +474,7 @@ const Chat = () => {
       </div>
 
       <LeadDetailsModal
-        lead={leads?.find(l => l.id === selectedLeadId) as Lead || null}
+        lead={(selectedLead as Lead) || null}
         stages={stages}
         open={showLeadModal}
         onClose={() => setShowLeadModal(false)}
@@ -472,7 +484,7 @@ const Chat = () => {
         }}
         onDelete={(id) => {
           deleteLead.mutate(id);
-          setSelectedLeadId(null);
+          setSelectedConversationId(null);
           setShowLeadModal(false);
         }}
       />

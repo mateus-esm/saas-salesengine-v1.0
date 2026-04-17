@@ -6,6 +6,9 @@ export type MessageType = 'text' | 'image' | 'audio' | 'video' | 'document';
 
 export type ChatStatus = 'active' | 'bot_handling' | 'human_handling';
 
+// Epic 1: lifecycle of a conversation row (independent from handling status)
+export type ConversationStatus = 'active' | 'archived' | 'deleted';
+
 export interface Message {
   id: string;
   content: string;
@@ -19,7 +22,9 @@ export interface Message {
 }
 
 export interface ChatSession {
-  id: string;
+  id: string;                         // Epic 1: conversation id (was lead id)
+  conversationId?: string;            // Explicit alias for readability
+  conversationStatus?: ConversationStatus;
   leadId?: string;
   customerName: string;
   customerPhone: string;
