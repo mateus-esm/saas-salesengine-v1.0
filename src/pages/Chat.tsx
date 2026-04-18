@@ -296,7 +296,7 @@ const Chat = () => {
 
       {/* Coluna 1: Inbox */}
       <div className={cn(
-        "border-r flex-shrink-0 transition-all duration-300 relative",
+        "divider-idv-right flex-shrink-0 transition-all duration-300 relative",
         showInbox ? "w-1/4 min-w-[280px] max-w-[360px]" : "w-0 min-w-0 overflow-hidden"
       )}>
         {showInbox && (
@@ -337,7 +337,7 @@ const Chat = () => {
       <div className="flex-1 flex flex-col min-w-0">
         {selectedConversationId && selectedSession ? (
           <>
-            <div className="flex items-center justify-between border-b">
+            <div className="flex items-center justify-between divider-idv-bottom">
               <div className="flex-1">
                 <ConversationHeader
                   session={selectedSession}
@@ -457,7 +457,7 @@ const Chat = () => {
       )}
 
       <div className={cn(
-        "border-l hidden lg:block flex-shrink-0 overflow-hidden transition-all duration-300 relative",
+        "divider-idv-left hidden lg:block flex-shrink-0 overflow-hidden transition-all duration-300 relative",
         showCRM ? "w-80" : "w-0"
       )}>
         {showCRM && (

@@ -79,7 +79,7 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
   const ch = channelLabel(session.channel);
 
   return (
-    <div className="flex items-center justify-between p-3 border-b border-slate-200/60 dark:border-white/5 bg-white dark:bg-zinc-950">
+    <div className="flex items-center justify-between p-3 divider-idv-bottom bg-white dark:bg-zinc-950">
       <div className="flex items-center gap-3">
         {/* Back Button (Mobile) */}
         {onBack && (
