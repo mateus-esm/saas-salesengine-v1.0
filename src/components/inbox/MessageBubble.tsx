@@ -220,7 +220,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {/* AI label — usa o nome real do assistente quando disponível */}
           {isAI && (
             <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-1 uppercase tracking-wider">
-              {message.senderName || 'Assistente IA'}
+              {message.senderName || 'Solo AI'}
             </p>
           )}
 

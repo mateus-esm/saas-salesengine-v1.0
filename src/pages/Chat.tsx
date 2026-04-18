@@ -78,6 +78,15 @@ const Chat = () => {
 
     const stageName = stages.find(s => s.id === lead?.stage_id)?.name || "Novo Lead";
 
+    // EPIC 3: Calculate 24h SLA based on the last message sent by the customer
+    const lastCustomerMsg = [...messages].reverse().find(m => m.sender_type === 'customer');
+    const lastCustomerMsgTime = lastCustomerMsg ? new Date(lastCustomerMsg.created_at || 0) : null;
+    
+    // Check if the elapsed time since the last customer message is <= 24 hours (86_400_000 ms)
+    const isOnline24h = lastCustomerMsgTime
+      ? (Date.now() - lastCustomerMsgTime.getTime()) <= 86_400_000
+      : false;
+
     return {
       id: selectedConversation.id,
       conversationId: selectedConversation.id,
@@ -87,9 +96,7 @@ const Chat = () => {
       customerPhone: lead?.phone || lead?.origem || "WhatsApp",
       customerAvatar: lead?.profile_picture || undefined,
       status: selectedConversation.atendido_por_agente ? 'human_handling' : 'bot_handling',
-      isOnline: selectedConversation.last_message_at
-        ? (Date.now() - new Date(selectedConversation.last_message_at).getTime()) < 86_400_000
-        : false,
+      isOnline: isOnline24h,
       unreadCount: selectedConversation.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(selectedConversation.last_message_at || selectedConversation.created_at || new Date()),
@@ -107,7 +114,7 @@ const Chat = () => {
       },
       messages: [],
     };
-  }, [selectedConversation, selectedLead, stages]);
+  }, [selectedConversation, selectedLead, stages, messages]);
 
   /** Map Conversations → sidebar ExtendedChatSession list. */
   const sessionsAdapter = useMemo(() => {
@@ -199,7 +206,7 @@ const Chat = () => {
         });
       }
 
-      toast.success(isHuman ? "Devolvido ao bot" : "Atendimento assumido");
+      toast.success(isHuman ? "Devolvido ao Solo AI" : "Atendimento assumido");
     } catch (err) {
       console.error("Erro ao alternar atendimento:", err);
       toast.error("Erro ao alternar atendimento");
@@ -409,9 +416,11 @@ const Chat = () => {
                           mediaUrl: msg.media_url,
                           mediaType: msg.media_type as 'image' | 'audio' | 'video' | 'document' | undefined,
                           readAt: msg.read_at ? new Date(msg.read_at) : undefined,
-                          senderName: msg.sender_type !== 'customer'
-                            ? (selectedConversation?.agent_name || 'Assistente IA')
-                            : undefined,
+                          senderName: msg.sender_type === 'ai'
+                            ? (selectedConversation?.agent_name || 'Solo AI')
+                            : msg.sender_type === 'agent'
+                              ? 'Agente'
+                              : undefined,
                         }}
                       />
                     ))
