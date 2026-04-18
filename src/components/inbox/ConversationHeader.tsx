@@ -111,8 +111,13 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
                 {initials}
               </AvatarFallback>
             </Avatar>
-            {session.isOnline && (
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+            {session.isOnline ? (
+              <span className="absolute bottom-0 right-0 flex h-3 w-3 items-center justify-center">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
+              </span>
+            ) : (
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-600 ring-2 ring-white dark:ring-slate-900" />
             )}
           </div>
 
@@ -126,12 +131,16 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
                 {ch.label}
               </Badge>
               {session.isOnline ? (
-                <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                  Online
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20 flex items-center gap-1.5">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                  </span>
+                  Online (24h)
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                  Offline
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                  Janela Fechada
                 </Badge>
               )}
             </div>
