@@ -419,7 +419,7 @@ const Chat = () => {
                           senderName: msg.sender_type === 'ai'
                             ? (selectedConversation?.agent_name || 'Solo AI')
                             : msg.sender_type === 'agent'
-                              ? 'Agente'
+                              ? (selectedConversation?.agent_name || 'Solo AI')
                               : undefined,
                         }}
                       />

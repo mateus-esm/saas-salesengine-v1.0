@@ -219,7 +219,7 @@ export function ChatListItem({
           {session.status === "bot_handling" ? (
             <Badge variant="secondary" className="gap-1 text-xs bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-1 dark:ring-purple-500/20">
               <Bot className="h-3 w-3" />
-              IA
+              {session.agentName || 'Solo AI'}
             </Badge>
           ) : session.status === "human_handling" ? (
             <Badge variant="secondary" className="gap-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300/90 dark:ring-1 dark:ring-orange-500/20">

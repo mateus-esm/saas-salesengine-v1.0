@@ -139,7 +139,7 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
                   Online (24h)
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-slate-100 text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-50 text-amber-700 ring-1 ring-amber-300/50 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20">
                   Janela Fechada
                 </Badge>
               )}

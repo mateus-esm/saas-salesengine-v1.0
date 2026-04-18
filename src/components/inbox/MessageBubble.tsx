@@ -211,7 +211,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {/* Agent name — mostra sempre com fallback */}
           {isAgent && (
             <p className="text-xs font-medium opacity-80 mb-1">
-              {message.senderName || 'Agente'}
+              {message.senderName || 'Solo AI'}
             </p>
           )}
 
