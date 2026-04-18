@@ -225,87 +225,90 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+}
 
-  /* IDV gradient divider — subtle brand-colored structural separator */
-  .divider-idv-right {
-    position: relative;
-    border-right: none !important;
-  }
-  .divider-idv-right::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 1px;
-    height: 100%;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--solo-orange) / 0.12),
-      hsl(var(--solo-yellow) / 0.08),
-      hsl(var(--solo-orange) / 0.12)
-    );
-  }
-  .dark .divider-idv-right::after {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--solo-orange) / 0.10),
-      hsl(var(--solo-yellow) / 0.06),
-      hsl(var(--solo-orange) / 0.10)
-    );
-  }
+/* IDV gradient divider — subtle brand-colored structural separator
+   Placed OUTSIDE @layer to ensure .dark overrides are not purged. */
+.divider-idv-right {
+  position: relative;
+  border-right: none !important;
+}
+.divider-idv-right::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--solo-orange) / 0.12),
+    hsl(var(--solo-yellow) / 0.08),
+    hsl(var(--solo-orange) / 0.12)
+  );
+  z-index: 10;
+}
+.dark .divider-idv-right::after {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--solo-orange) / 0.10),
+    hsl(var(--solo-yellow) / 0.06),
+    hsl(var(--solo-orange) / 0.10)
+  );
+}
 
-  .divider-idv-left {
-    position: relative;
-    border-left: none !important;
-  }
-  .divider-idv-left::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 1px;
-    height: 100%;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--solo-orange) / 0.12),
-      hsl(var(--solo-yellow) / 0.08),
-      hsl(var(--solo-orange) / 0.12)
-    );
-    z-index: 1;
-  }
-  .dark .divider-idv-left::before {
-    background: linear-gradient(
-      180deg,
-      hsl(var(--solo-orange) / 0.10),
-      hsl(var(--solo-yellow) / 0.06),
-      hsl(var(--solo-orange) / 0.10)
-    );
-  }
+.divider-idv-left {
+  position: relative;
+  border-left: none !important;
+}
+.divider-idv-left::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--solo-orange) / 0.12),
+    hsl(var(--solo-yellow) / 0.08),
+    hsl(var(--solo-orange) / 0.12)
+  );
+  z-index: 10;
+}
+.dark .divider-idv-left::before {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--solo-orange) / 0.10),
+    hsl(var(--solo-yellow) / 0.06),
+    hsl(var(--solo-orange) / 0.10)
+  );
+}
 
-  .divider-idv-bottom {
-    position: relative;
-    border-bottom: none !important;
-  }
-  .divider-idv-bottom::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      hsl(var(--solo-orange) / 0.12),
-      hsl(var(--solo-yellow) / 0.08),
-      hsl(var(--solo-orange) / 0.12)
-    );
-  }
-  .dark .divider-idv-bottom::after {
-    background: linear-gradient(
-      90deg,
-      hsl(var(--solo-orange) / 0.10),
-      hsl(var(--solo-yellow) / 0.06),
-      hsl(var(--solo-orange) / 0.10)
-    );
-  }
+.divider-idv-bottom {
+  position: relative;
+  border-bottom: none !important;
+}
+.divider-idv-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--solo-orange) / 0.12),
+    hsl(var(--solo-yellow) / 0.08),
+    hsl(var(--solo-orange) / 0.12)
+  );
+  z-index: 10;
+}
+.dark .divider-idv-bottom::after {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--solo-orange) / 0.10),
+    hsl(var(--solo-yellow) / 0.06),
+    hsl(var(--solo-orange) / 0.10)
+  );
 }

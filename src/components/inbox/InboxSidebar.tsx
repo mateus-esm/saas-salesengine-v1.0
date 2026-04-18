@@ -135,9 +135,9 @@ export function InboxSidebar({
   const unreadCount = visibleSessions.filter((s) => s.unreadCount > 0).length;
 
   return (
-    <div className="h-full flex flex-col border-r border-slate-200/60 dark:border-white/5 bg-white dark:bg-zinc-950">
+    <div className="h-full flex flex-col bg-white dark:bg-zinc-950">
       {/* Header */}
-      <div className="p-3 border-b border-slate-200/60 dark:border-white/5 space-y-3">
+      <div className="p-3 divider-idv-bottom space-y-3">
         <h2 className="font-semibold text-base flex items-center gap-2 text-slate-800 dark:text-slate-200">
           <Inbox className="h-4 w-4 text-primary" />
           Inbox

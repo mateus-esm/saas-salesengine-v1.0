@@ -144,6 +144,12 @@ export function ChatListItem({
             {initials}
           </AvatarFallback>
         </Avatar>
+        {/* Online/Offline dot — top-right */}
+        {session.isOnline ? (
+          <span className="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+        ) : (
+          <span className="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-slate-400 dark:bg-slate-600 ring-2 ring-background" />
+        )}
         {/* Badge do canal — sempre visível */}
         <ChannelBadge channel={session.channel} />
       </div>
@@ -224,7 +230,7 @@ export function ChatListItem({
           ) : session.status === "human_handling" ? (
             <Badge variant="secondary" className="gap-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300/90 dark:ring-1 dark:ring-orange-500/20">
               <User className="h-3 w-3" />
-              Humano
+              {responsibleName || 'Sem Responsável'}
             </Badge>
           ) : null}
 
