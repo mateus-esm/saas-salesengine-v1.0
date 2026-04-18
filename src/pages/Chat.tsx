@@ -282,7 +282,7 @@ const Chat = () => {
   const loadingInbox = loadingLeads || loadingConversations;
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background">
+    <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background dark:bg-zinc-950">
       {!showInbox && (
         <Button
           variant="ghost"
@@ -389,7 +389,7 @@ const Chat = () => {
 
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto bg-muted/30"
+              className="flex-1 overflow-y-auto bg-muted/30 dark:bg-zinc-900/50"
             >
               <div className="max-w-3xl w-full mx-auto p-4 space-y-3">
                 {loadingMessages ? (

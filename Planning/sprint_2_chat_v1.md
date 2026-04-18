@@ -599,3 +599,65 @@ Decouple leads from their messages by introducing a middle layer:
 
 1. Review changes locally in the browser to confirm the aesthetic precision and brand compliance.
 2. **Merge branch → `main`** and signal agents to `git pull`.
+
+---
+
+## 📦 HANDOFF — Epic 4 COMPLETE
+
+- **Agent:** Claude (Opus 4.7)
+- **Branch:** `feat/claude-epic4-precision-os`
+- **Date:** 2026-04-18
+- **Status:** ✅ Ready for Orchestrator to merge into `main`
+
+### ✅ Results (what landed)
+
+**UI — Precision OS aesthetic pass (dark-first; light mode preserved)**
+
+- `Chat.tsx` — root `bg-background dark:bg-zinc-950` (dark glass); message area `bg-muted/30 dark:bg-zinc-900/50` for subtle surface contrast.
+- `InboxSidebar.tsx` — sidebar `dark:bg-zinc-950`, hairline borders `dark:border-white/5`, segmented tabs active state `dark:bg-white/[0.06] dark:ring-1 dark:ring-white/10`, search/unread controls desaturated to `zinc-900/60` + `white/5`.
+- `ConversationHeader.tsx` — `dark:bg-zinc-950`, `dark:border-white/5`; avatar fallback picks up a subtle `ring-orange-500/20` (IDV nod); online-dot ring rebased to `dark:ring-zinc-950`; Responsible avatar desaturated from `bg-primary` to neutral slate + `ring-white/10`. **Emerald SLA ping (Epic 3) left untouched.**
+- `ChatInput.tsx` — composer `dark:bg-zinc-900/60 dark:border-white/5 rounded-md` (was `rounded-xl`); preview chip and file thumb rebased to zinc/white-5. Record UI keeps red (destructive semantics).
+- `ChatListItem.tsx` — selected row `dark:bg-white/[0.04] dark:ring-1 dark:ring-inset dark:ring-white/10`; hover `dark:hover:bg-white/[0.02]`; IA/Humano status pills rebased to `*-500/10 + ring-*/20` desaturated tints; **unread pill is the brand beacon: `bg-gradient-to-br from-solo-orange to-solo-yellow`** (the one load-bearing IDV hit in the sidebar).
+- `MessageBubble.tsx` — full rebuild:
+  - Customer bubble: `dark:bg-zinc-900/60 dark:border-white/5 rounded-md`
+  - AI bubble: `dark:bg-zinc-900/40 dark:border-white/5 rounded-md`
+  - **Agent bubble: removed `bg-primary` entirely** → `dark:bg-slate-800/80 dark:border-white/10 rounded-md` (sober slate, no neon)
+  - Read receipts simplified: read → `text-sky-400`, unread → slate
+  - Agent/customer avatars: subtle rings (`ring-white/5`, `ring-white/10`)
+  - AI avatar ring + bot icon get a low-opacity brand accent (`ring-orange-500/30`, `text-orange-400/90`) — the second IDV hit, reserved for AI identity only
+
+### 💡 Insights
+
+1. **Saturation is earned, not default.** Stripping `bg-primary` from agent bubbles and the `bg-orange-100/700` from the Humano pill turned the surface sober; the orange only re-appears where it carries meaning (unread count, AI identity). The IDV is louder by being rarer.
+2. **`white/5` > slate border tokens in dark mode.** `border-slate-700/60` reads as a soft line at low contrast; `border-white/5` reads as a hairline at high contrast — exactly the "tactile" feel the brief asked for.
+3. **`rounded-md` instead of `rounded-lg/xl` changes the personality more than the color swap.** Sharper corners signal "tool," not "toy."
+4. **Dark-first was the right call.** Adding `dark:` variants instead of replacing the classes preserved light-mode parity with zero regression risk — admin screens and any light-mode users are untouched.
+5. **Emerald SLA stays.** Epic 3 picked emerald because it's the opposite of brand-warm — do not unify. The Online dot should fight the UI for attention.
+
+### ⚖️ Tradeoffs
+
+| Decision | Picked | Alternative | Why |
+|---|---|---|---|
+| Dark-mode scoping | Add `dark:` variants only | Rewrite light mode too | Sprint defines Precision OS as dark-first. Light mode is still usable; no regression risk. |
+| Agent bubble color | Neutral slate | Low-opacity Solo orange/brand bubble | Brand on every outbound message = the exact saturation the brief forbids. Saved brand for AI avatar + unread pill. |
+| Unread pill | Solo gradient | Neutral slate | Needed **one** high-energy beacon in the sidebar; unread count is the right place. |
+| Border token | `white/5` utility | Add CSS var `--border-hairline` | Zero token surface change = zero cross-module ripple. Task said "work in utility classes." |
+| Emoji picker theme | Untouched | Force dark theme | Picker is a popover; keeping its own theme prop avoids touching ChatInput logic. |
+
+### ⚠️ Pending — Orchestrator Actions Before Merge
+
+1. Browser smoke test — dark mode:
+   - Inbox list: selected row pops without looking painted; unread pill orange-yellow is visible but not shouting.
+   - Open conversation: header `bg-zinc-950`, emerald Online dot still pulses (Epic 3 regression check).
+   - Agent message: bubble is slate, **not orange/brand**; read receipt is subtle sky, unread receipt is slate.
+   - AI message: bubble is low-contrast zinc; avatar has faint orange ring.
+   - Composer: `rounded-md`, hairline border, no chunky slate fill.
+2. Light mode spot-check: sidebar + bubbles still readable; no broken contrast.
+3. **Merge `feat/claude-epic4-precision-os` → `main`** and signal agents to `git pull`.
+
+### ❌ Out of Scope
+
+- CRM panel deep restyle (only picks up root `dark:bg-zinc-950` via parent)
+- Light-mode Precision OS parity
+- Token refactor in `index.css` / `tailwind.config.ts`
+- Animation/typography rework

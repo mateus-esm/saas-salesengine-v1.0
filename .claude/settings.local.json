@@ -9,7 +9,10 @@
       "Bash(node:*)",
       "Bash(npm install:*)",
       "Bash(npm info:*)",
-      "Bash(supabase functions:*)"
+      "Bash(supabase functions:*)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

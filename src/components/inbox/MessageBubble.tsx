@@ -137,10 +137,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         className={cn(
           "h-3.5 w-3.5 inline-block ml-1",
           isRead
-            ? "text-blue-500"
-            : isAgent
-              ? "text-primary-foreground/40"
-              : "text-slate-300 dark:text-slate-500"
+            ? "text-sky-400"
+            : "text-slate-400 dark:text-slate-500"
         )}
       />
     );
@@ -191,7 +189,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     >
       {/* Customer avatar on left */}
       {isCustomer && (
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-100 dark:bg-zinc-900 ring-1 ring-slate-200 dark:ring-white/5 flex items-center justify-center">
           <User className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
         </div>
       )}
@@ -205,9 +203,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className={cn(
             "px-3.5 py-2.5 shadow-sm",
-            isCustomer && "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-lg rounded-tl-sm",
-            isAI && "bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-lg rounded-tr-sm",
-            isAgent && "bg-primary text-primary-foreground rounded-lg rounded-tr-sm"
+            isCustomer && "bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100 rounded-md rounded-tl-sm",
+            isAI && "bg-slate-50 dark:bg-zinc-900/40 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm",
+            isAgent && "bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm"
           )}
         >
           {/* Agent name — mostra sempre com fallback */}
@@ -240,7 +238,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               "text-[10px] mt-1.5 text-right font-mono flex items-center justify-end gap-0.5",
               isCustomer && "text-slate-400 dark:text-slate-500",
               isAI && "text-slate-400 dark:text-slate-500",
-              isAgent && "text-primary-foreground/60"
+              isAgent && "text-slate-500 dark:text-slate-400"
             )}
           >
             {time}
@@ -254,14 +252,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className={cn(
             "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center",
-            isAI && "bg-slate-100 dark:bg-slate-800",
-            isAgent && "bg-primary"
+            isAI && "bg-slate-100 dark:bg-zinc-900 ring-1 ring-orange-500/30",
+            isAgent && "bg-slate-200 dark:bg-slate-800 ring-1 ring-white/10"
           )}
         >
           {isAI ? (
-            <Bot className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+            <Bot className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400/90" />
           ) : (
-            <User className="h-3.5 w-3.5 text-primary-foreground" />
+            <User className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
           )}
         </div>
       )}

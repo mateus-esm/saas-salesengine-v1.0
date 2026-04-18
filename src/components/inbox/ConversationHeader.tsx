@@ -79,7 +79,7 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
   const ch = channelLabel(session.channel);
 
   return (
-    <div className="flex items-center justify-between p-3 border-b border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+    <div className="flex items-center justify-between p-3 border-b border-slate-200/60 dark:border-white/5 bg-white dark:bg-zinc-950">
       <div className="flex items-center gap-3">
         {/* Back Button (Mobile) */}
         {onBack && (
@@ -107,17 +107,17 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
                   className="object-cover"
                 />
               )}
-              <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
+              <AvatarFallback className="bg-slate-100 dark:bg-zinc-900 text-slate-600 dark:text-slate-400 font-medium ring-1 ring-orange-500/20">
                 {initials}
               </AvatarFallback>
             </Avatar>
             {session.isOnline ? (
               <span className="absolute bottom-0 right-0 flex h-3 w-3 items-center justify-center">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 ring-2 ring-white dark:ring-zinc-950"></span>
               </span>
             ) : (
-              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-600 ring-2 ring-white dark:ring-slate-900" />
+              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-600 ring-2 ring-white dark:ring-zinc-950" />
             )}
           </div>
 
@@ -166,7 +166,7 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
                   {responsibleMember ? (
                     <>
                       <Avatar className="h-5 w-5">
-                        <AvatarFallback className="text-[9px] bg-primary text-primary-foreground">
+                        <AvatarFallback className="text-[9px] bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 ring-1 ring-white/10">
                           {responsibleInitials}
                         </AvatarFallback>
                       </Avatar>

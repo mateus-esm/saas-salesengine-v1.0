@@ -124,10 +124,10 @@ export function ChatListItem({
     <div
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors border-b border-border/50",
+        "flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors border-b border-border/50 dark:border-white/5",
         isSelected
-          ? "bg-sidebar-accent"
-          : "hover:bg-muted/50"
+          ? "bg-sidebar-accent dark:bg-white/[0.04] dark:ring-1 dark:ring-inset dark:ring-white/10"
+          : "hover:bg-muted/50 dark:hover:bg-white/[0.02]"
       )}
     >
       {/* Avatar com channel badge overlay */}
@@ -217,12 +217,12 @@ export function ChatListItem({
         <div className="flex items-center gap-2 mt-2">
           {/* Status Badge */}
           {session.status === "bot_handling" ? (
-            <Badge variant="secondary" className="gap-1 text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+            <Badge variant="secondary" className="gap-1 text-xs bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300 dark:ring-1 dark:ring-purple-500/20">
               <Bot className="h-3 w-3" />
               IA
             </Badge>
           ) : session.status === "human_handling" ? (
-            <Badge variant="secondary" className="gap-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+            <Badge variant="secondary" className="gap-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300/90 dark:ring-1 dark:ring-orange-500/20">
               <User className="h-3 w-3" />
               Humano
             </Badge>
@@ -240,7 +240,7 @@ export function ChatListItem({
 
           {/* Unread Badge */}
           {session.unreadCount > 0 && (
-            <Badge className="h-5 min-w-5 flex items-center justify-center text-xs bg-primary">
+            <Badge className="h-5 min-w-5 flex items-center justify-center text-xs bg-gradient-to-br from-solo-orange to-solo-yellow text-white border-0 shadow-sm">
               {session.unreadCount}
             </Badge>
           )}

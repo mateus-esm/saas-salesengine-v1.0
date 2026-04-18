@@ -135,9 +135,9 @@ export function InboxSidebar({
   const unreadCount = visibleSessions.filter((s) => s.unreadCount > 0).length;
 
   return (
-    <div className="h-full flex flex-col border-r border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+    <div className="h-full flex flex-col border-r border-slate-200/60 dark:border-white/5 bg-white dark:bg-zinc-950">
       {/* Header */}
-      <div className="p-3 border-b border-slate-200/60 dark:border-slate-700/60 space-y-3">
+      <div className="p-3 border-b border-slate-200/60 dark:border-white/5 space-y-3">
         <h2 className="font-semibold text-base flex items-center gap-2 text-slate-800 dark:text-slate-200">
           <Inbox className="h-4 w-4 text-primary" />
           Inbox
@@ -151,14 +151,14 @@ export function InboxSidebar({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar conversas..."
-              className="pl-9 h-8 text-sm bg-slate-50 dark:bg-slate-800 border-slate-200/50 dark:border-slate-700/50 focus-visible:ring-primary"
+              className="pl-9 h-8 text-sm bg-slate-50 dark:bg-zinc-900/60 border-slate-200/50 dark:border-white/5 focus-visible:ring-primary"
             />
           </div>
           <Button
             variant={showUnreadOnly ? "default" : "outline"}
             size="sm"
             className={cn(
-              "h-8 px-2 gap-1.5 border border-slate-200/50 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors",
+              "h-8 px-2 gap-1.5 border border-slate-200/50 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors",
               showUnreadOnly &&
                 "bg-primary border-primary text-primary-foreground"
             )}
@@ -175,13 +175,13 @@ export function InboxSidebar({
         </div>
 
         {/* Status tabs */}
-        <div className="flex items-center rounded-md border border-slate-200/60 dark:border-slate-700/60 p-0.5 bg-slate-50 dark:bg-slate-800">
+        <div className="flex items-center rounded-md border border-slate-200/60 dark:border-white/5 p-0.5 bg-slate-50 dark:bg-zinc-900/60">
           <button
             onClick={() => setStatusTab("active")}
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 text-xs py-1 rounded transition-colors",
               statusTab === "active"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm"
+                ? "bg-white dark:bg-white/[0.06] text-slate-900 dark:text-slate-100 shadow-sm dark:ring-1 dark:ring-white/10"
                 : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
@@ -193,7 +193,7 @@ export function InboxSidebar({
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 text-xs py-1 rounded transition-colors",
               statusTab === "archived"
-                ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm"
+                ? "bg-white dark:bg-white/[0.06] text-slate-900 dark:text-slate-100 shadow-sm dark:ring-1 dark:ring-white/10"
                 : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >
