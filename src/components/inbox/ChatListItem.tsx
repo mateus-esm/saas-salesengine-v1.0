@@ -124,7 +124,7 @@ export function ChatListItem({
     <div
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors border-b border-border/50 dark:border-white/5",
+        "flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors divider-idv-bottom",
         isSelected
           ? "bg-sidebar-accent dark:bg-white/[0.04] dark:ring-1 dark:ring-inset dark:ring-white/10"
           : "hover:bg-muted/50 dark:hover:bg-white/[0.02]"
