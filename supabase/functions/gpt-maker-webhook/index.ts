@@ -363,6 +363,10 @@ serve(async (req) => {
     //
     // Para mensagens de AGENTE: 5 minutos — ecos do GPT Maker podem chegar com atraso.
     //   Busca em TODOS os sender_types (cobre eco com role errado).
+    //   Match adicional por "fingerprint de saída": qualquer row recente
+    //   com sender_id NOT NULL (enviado pelo send-chat-message) dentro de 120s
+    //   é considerado a origem do eco — mesmo que a URL da mídia tenha sido
+    //   re-hospedada pelo GPT Maker ou que o conteúdo tenha sido esvaziado.
     //
     // Para mensagens de CLIENTE: 60 segundos — janela suficiente para bloquear retries
     //   do GPT Maker (que ocorrem em segundos) mas permite que o cliente envie a mesma
@@ -375,7 +379,7 @@ serve(async (req) => {
 
       let recentQuery = supabase
         .from('messages')
-        .select('id, content, created_at, media_url, sender_type')
+        .select('id, content, created_at, media_url, media_type, sender_type, sender_id')
         .eq('lead_id', lead.id)
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
@@ -389,24 +393,60 @@ serve(async (req) => {
 
       const { data: recentMsgs } = await recentQuery
 
+      console.log('[Webhook] Dedup scan:', {
+        senderType,
+        leadId: lead.id,
+        incomingContent: incomingContent.substring(0, 60),
+        incomingHasMedia: !!mediaUrl,
+        recentCount: recentMsgs?.length || 0,
+        recent: (recentMsgs || []).slice(0, 5).map(r => ({
+          id: r.id,
+          sender_type: r.sender_type,
+          sender_id: r.sender_id,
+          content: (r.content || '').substring(0, 30),
+          hasMedia: !!r.media_url,
+        })),
+      })
+
       if (recentMsgs && recentMsgs.length > 0) {
+        // Janela estreita para o fingerprint de saída: ecos chegam em segundos.
+        // Janelas maiores aumentam falsos positivos contra respostas legítimas da IA.
+        const OUTBOUND_ECHO_WINDOW_MS = 30_000
+
         for (const existing of recentMsgs) {
           const existingContent = (existing.content || '').trim().toLowerCase()
+          const existingAgeMs = Date.now() - new Date(existing.created_at || 0).getTime()
 
           // Match de texto: ambos com conteúdo igual OU ambos vazios (mídia pura)
           const textMatch = incomingContent
             ? existingContent === incomingContent
             : existingContent === ''
 
-          // Match de mídia: URLs iguais (quando presente nos dois lados)
-          const mediaMatch = mediaUrl && existing.media_url
+          // Match de mídia por URL idêntica (raro — GPT Maker re-hospeda)
+          const mediaUrlMatch = mediaUrl && existing.media_url
             ? existing.media_url === mediaUrl
             : false
 
-          if (textMatch || mediaMatch) {
-            console.log('[Webhook] Dedup por conteúdo/mídia — ignorando duplicata:',
-              existing.id, { textMatch, mediaMatch, senderType,
-                snippet: incomingContent.substring(0, 60) })
+          // ── Fingerprint de saída (mídia captioned com URL re-hospedada) ──
+          // Só dispara para mídia: se o agente-webhook chega com mídia e existe
+          // um envio outbound (sender_id != null) nos últimos 30s com o mesmo
+          // media_type, tratamos como eco — as URLs diferem porque o GPT Maker
+          // re-hospeda, mas a assinatura (outbound, recente, mesmo tipo) basta.
+          const outboundMediaEcho =
+            senderType === 'agent' &&
+            !!mediaUrl &&
+            existing.sender_type === 'agent' &&
+            existing.sender_id !== null &&
+            !!existing.media_url &&
+            existing.media_type === mediaType &&
+            existingAgeMs <= OUTBOUND_ECHO_WINDOW_MS
+
+          if (textMatch || mediaUrlMatch || outboundMediaEcho) {
+            console.log('[Webhook] Dedup hit — ignorando duplicata:', existing.id, {
+              textMatch, mediaUrlMatch, outboundMediaEcho,
+              senderType, existingAgeMs,
+              snippet: incomingContent.substring(0, 60)
+            })
             skipInsert = true
             break
           }
