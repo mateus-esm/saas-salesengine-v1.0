@@ -17,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Phone, Mail, DollarSign, User } from "lucide-react";
+import { Phone, Mail, DollarSign, User, AlertTriangle } from "lucide-react";
 import { PipelineStage } from "@/types/crm";
+import type { LeadOrigin } from "@/types/pipelines";
+import { useLeadDuplicateCheck } from "@/hooks/useLeadDuplicateCheck";
 
 interface AddLeadModalProps {
   open: boolean;
@@ -31,9 +33,17 @@ interface AddLeadModalProps {
     stage_id?: string;
     observations?: string;
     source?: string;
+    origin?: LeadOrigin;
     opportunity_value?: number;
   }) => void;
 }
+
+const ORIGIN_OPTIONS: Array<{ value: LeadOrigin; label: string }> = [
+  { value: "manual", label: "Manual" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "web", label: "Site / Web" },
+  { value: "import", label: "Importação" },
+];
 
 export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps) => {
   const [formData, setFormData] = useState({
@@ -44,6 +54,12 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
     valor: "",
     observations: "",
     source: "Manual",
+    origin: "manual" as LeadOrigin,
+  });
+
+  const { matches: duplicateMatches } = useLeadDuplicateCheck({
+    phone: formData.phone,
+    email: formData.email,
   });
 
   const handleSubmit = () => {
@@ -58,10 +74,10 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
       stage_id: formData.stage_id || undefined,
       observations: formData.observations || undefined,
       source: formData.source,
+      origin: formData.origin,
       opportunity_value: valorNumerico,
     });
 
-    // Reset form
     setFormData({
       name: "",
       email: "",
@@ -70,6 +86,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
       valor: "",
       observations: "",
       source: "Manual",
+      origin: "manual",
     });
   };
 
@@ -147,6 +164,34 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
             </div>
           </div>
 
+          {/* Non-blocking duplicate warning */}
+          {duplicateMatches.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <p className="font-medium text-amber-600 dark:text-amber-400">
+                    Possível duplicado{duplicateMatches.length > 1 ? "s" : ""} encontrado
+                    {duplicateMatches.length > 1 ? "s" : ""}:
+                  </p>
+                  <ul className="text-xs text-foreground/80 space-y-0.5">
+                    {duplicateMatches.slice(0, 3).map((m) => (
+                      <li key={m.id}>
+                        <span className="font-medium">{m.name}</span>{" "}
+                        <span className="text-muted-foreground">
+                          ({m.matchedField === "phone" ? "telefone" : "email"}: {m.matchedValue})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground">
+                    Você ainda pode prosseguir — duplicação não é bloqueada.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="add-stage">Etapa</Label>
@@ -195,22 +240,45 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="add-source">Fonte de Captação</Label>
-            <Select
-              value={formData.source}
-              onValueChange={(value) =>
-                setFormData((prev) => ({ ...prev, source: value }))
-              }
-            >
-              <SelectTrigger className="mt-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Manual">Manual</SelectItem>
-                <SelectItem value="Ads">Ads (Tráfego Pago)</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="add-origin">Origem</Label>
+              <Select
+                value={formData.origin}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, origin: value as LeadOrigin }))
+                }
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORIGIN_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="add-source">Fonte de Captação</Label>
+              <Select
+                value={formData.source}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, source: value }))
+                }
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Manual">Manual</SelectItem>
+                  <SelectItem value="Ads">Ads (Tráfego Pago)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>

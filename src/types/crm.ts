@@ -38,6 +38,9 @@ export interface Lead {
   channel: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string | null;
   profile_picture: string | null;
   agent_name: string | null;
+  // Sprint 3 EPIC 1 — Global Lead Database (universal identity)
+  origin: 'whatsapp' | 'manual' | 'web' | 'import' | string | null;
+  deleted_at: string | null;
 }
 
 export interface PipelineStage {
@@ -79,6 +82,7 @@ export interface CreateLeadData {
   tags?: string[];
   observations?: string;
   source?: string;
+  origin?: 'whatsapp' | 'manual' | 'web' | 'import' | string;
   opportunity_value?: number;
   responsible_id?: string;
   meeting_date?: string;

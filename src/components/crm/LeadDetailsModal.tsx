@@ -43,6 +43,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Lead, PipelineStage } from "@/types/crm";
+import { LeadOpportunitiesSection } from "./LeadOpportunitiesSection";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useLeadActivities } from "@/hooks/useLeadActivities";
 import { useTouchpoints } from "@/hooks/useTouchpoints";
@@ -621,6 +622,11 @@ export const LeadDetailsModal = ({
                     })}
                   </p>
                   <p>Origem: {lead.origem || "manual"}</p>
+                </div>
+
+                {/* Sprint 3 EPIC 1+2 — cross-pipeline opportunities for this lead */}
+                <div className="pt-4 border-t border-border">
+                  {lead?.id && <LeadOpportunitiesSection leadId={lead.id} />}
                 </div>
               </div>
             </ScrollArea>
