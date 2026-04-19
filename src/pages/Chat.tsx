@@ -423,9 +423,9 @@ const Chat = () => {
                                   const sid = (msg as any).sender_id;
                                   if (sid) {
                                     const member = teamMembers.find(m => m.id === sid);
-                                    if (member) return member.nome_completo || member.email || 'Agente';
+                                    if (member) return member.nome_completo || member.email || selectedConversation?.agent_name || 'Solo AI';
                                   }
-                                  return 'Agente';
+                                  return selectedConversation?.agent_name || 'Solo AI';
                                 })()
                               : undefined,
                         }}

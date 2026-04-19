@@ -216,7 +216,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {/* Agent name — shows actual sender */}
           {isAgent && (
             <p className="text-xs font-medium mb-1 text-orange-600/80 dark:text-orange-400/80">
-              {message.senderName || 'Agente'}
+              {message.senderName || 'Solo AI'}
             </p>
           )}
 
