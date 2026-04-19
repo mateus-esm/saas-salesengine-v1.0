@@ -163,6 +163,7 @@ const Chat = () => {
         lead_id: selectedConversation.lead_id,
         conversation_id: selectedConversationId,
         sender_type: 'agent',
+        sender_id: currentUserId || null,
         created_at: new Date().toISOString(),
         media_url: media?.url || null,
         media_type: media?.type || null,
@@ -176,6 +177,7 @@ const Chat = () => {
           media_type: media ? media.type : 'text',
           media_url: media?.url,
           chat_id: selectedConversation.gpt_maker_chat_id,
+          sender_id: currentUserId,
         }
       });
 

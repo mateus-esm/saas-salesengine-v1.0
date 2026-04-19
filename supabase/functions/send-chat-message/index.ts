@@ -17,7 +17,7 @@ serve(async (req) => {
     )
 
     // Recebe dados do Frontend
-    const { content, chat_id, lead_id, conversation_id, action, media_url, media_type } = await req.json()
+    const { content, chat_id, lead_id, conversation_id, action, media_url, media_type, sender_id } = await req.json()
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
     // CENÁRIO 1: Botão Manual de Parar/Retomar Robô (Caso queira usar)
@@ -73,6 +73,7 @@ serve(async (req) => {
         conversation_id: resolvedConversationId,
         content,
         sender_type: 'agent',
+        sender_id: sender_id || null,
         media_url: media_url || null,
         media_type: media_type || null
       })
