@@ -7,6 +7,11 @@ import { Lead, CreateLeadData, UpdateLeadData } from "@/types/crm";
 
 export type { Lead, CreateLeadData, UpdateLeadData } from "@/types/crm";
 
+// Sprint 3 EPIC 1 added `origin` + `deleted_at` to leads. Generated types lag
+// the migration until `supabase gen types` reruns. Same pattern as useConversations.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
+
 export const useLeads = () => {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
@@ -21,6 +26,7 @@ export const useLeads = () => {
         .from("leads")
         .select("*")
         .eq("equipe_id", equipeId)
+        .is("deleted_at", null)
         .order("last_message_at", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
@@ -59,7 +65,7 @@ export const useLeads = () => {
     mutationFn: async (leadData: CreateLeadData) => {
       if (!equipeId) throw new Error("No equipe_id");
       
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("leads")
         .insert({
           name: leadData.name,
@@ -69,6 +75,7 @@ export const useLeads = () => {
           observations: leadData.observations,
           source: leadData.source || "Manual",
           origem: leadData.source || "Manual",
+          origin: leadData.origin || "manual",
           creation_source: "manual",
           lead_type: "lead",
           opportunity_value: leadData.opportunity_value || 0,
@@ -94,11 +101,11 @@ export const useLeads = () => {
 
   const updateLead = useMutation({
     mutationFn: async ({ id, ...updateData }: UpdateLeadData) => {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("leads")
         .update({
           ...updateData,
-          custom_fields: updateData.custom_fields as any,
+          custom_fields: updateData.custom_fields,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
@@ -119,7 +126,12 @@ export const useLeads = () => {
 
   const deleteLead = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("leads").delete().eq("id", id);
+      // Soft-delete (Sprint 3 EPIC 1 convention). Hard-deletes are reserved
+      // for admin tooling and would also cascade through opportunities.
+      const { error } = await sb
+        .from("leads")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
