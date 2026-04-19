@@ -161,7 +161,12 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
         </div>
       )}
 
-      <div className="flex items-end gap-2 bg-white dark:bg-zinc-900/60 border border-slate-200/50 dark:border-white/5 rounded-md p-2 shadow-sm">
+      <div
+        className="flex items-end gap-2 bg-white dark:bg-zinc-900/60 rounded-md p-2 shadow-sm border"
+        style={{
+          borderImage: "linear-gradient(90deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14), hsla(14,100%,56%,0.25)) 1",
+        }}
+      >
         {/* Hidden File Input */}
         <input
           type="file"
@@ -281,7 +286,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
               {(message.trim() || pendingFile) ? (
                 <Button
                   size="icon"
-                  className="h-9 w-9"
+                  className="h-9 w-9 bg-gradient-to-br from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-md"
                   onClick={handleSend}
                   disabled={disabled || isUploading}
                 >

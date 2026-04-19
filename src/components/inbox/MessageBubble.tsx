@@ -204,8 +204,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           className={cn(
             "px-3.5 py-2.5 shadow-sm",
             isCustomer && "bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100 rounded-md rounded-tl-sm",
-            isAI && "bg-[hsl(28_100%_50%/0.04)] dark:bg-[hsl(28_100%_50%/0.06)] border border-[hsl(28_100%_50%/0.10)] dark:border-[hsl(28_100%_50%/0.10)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm",
-            isAgent && "bg-[hsl(28_60%_50%/0.05)] dark:bg-[hsl(28_60%_50%/0.07)] border border-[hsl(28_60%_50%/0.08)] dark:border-[hsl(28_60%_50%/0.08)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm"
+            isAI && "bg-[hsl(28_100%_50%/0.08)] dark:bg-[hsl(28_100%_50%/0.12)] border border-[hsl(28_100%_50%/0.20)] dark:border-[hsl(28_100%_50%/0.18)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm",
+            isAgent && "bg-[hsl(28_80%_50%/0.08)] dark:bg-[hsl(28_80%_50%/0.10)] border border-[hsl(28_80%_50%/0.16)] dark:border-[hsl(28_80%_50%/0.14)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm"
           )}
         >
           {/* Agent name — mostra sempre com fallback */}

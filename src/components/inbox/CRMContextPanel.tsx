@@ -96,7 +96,9 @@ export function CRMContextPanel({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Lead Card Header */}
-      <Card className="m-2 mb-0">
+      <Card className="m-2 mb-0 overflow-hidden">
+        {/* Solo IDV gradient top accent */}
+        <div className="h-[2px] w-full" style={{ background: "linear-gradient(90deg, hsla(14,100%,56%,0.6), hsla(48,91%,53%,0.4), hsla(14,100%,56%,0.6))" }} />
         <CardHeader className="p-3 pb-2">
           <div className="flex items-start justify-between">
             <div>
@@ -188,7 +190,12 @@ export function CRMContextPanel({
       </Card>
 
       {/* Quick Data (Editable) */}
-      <div className="p-2 px-3 space-y-2 border-b border-border">
+      <div
+        className="p-2 px-3 space-y-2 border-b"
+        style={{
+          borderImage: "linear-gradient(90deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14), hsla(14,100%,56%,0.25)) 1",
+        }}
+      >
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
             Valor da Oportunidade
@@ -248,7 +255,7 @@ export function CRMContextPanel({
           />
           <Button
             size="sm"
-            className="mt-2 shrink-0"
+            className="mt-2 shrink-0 bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-md"
             onClick={handleNotesBlur}
             disabled={notes === session.crmData.notes}
           >
@@ -267,7 +274,7 @@ export function CRMContextPanel({
                 className="h-9"
                 onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
               />
-              <Button size="sm" onClick={handleAddTask} disabled={!newTask.trim()}>
+              <Button size="sm" onClick={handleAddTask} disabled={!newTask.trim()} className="bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>

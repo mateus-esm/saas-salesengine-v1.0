@@ -160,7 +160,7 @@ export function InboxSidebar({
             className={cn(
               "h-8 px-2 gap-1.5 border border-slate-200/50 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors",
               showUnreadOnly &&
-                "bg-primary border-primary text-primary-foreground"
+                "bg-gradient-to-r from-solo-orange to-solo-yellow border-0 text-white shadow-md"
             )}
             onClick={() => setShowUnreadOnly(!showUnreadOnly)}
             title="Filtrar não lidas"
@@ -181,7 +181,7 @@ export function InboxSidebar({
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 text-xs py-1 rounded transition-colors",
               statusTab === "active"
-                ? "bg-white dark:bg-white/[0.06] text-slate-900 dark:text-slate-100 shadow-sm dark:ring-1 dark:ring-white/10"
+                ? "bg-white dark:bg-white/[0.06] text-slate-900 dark:text-slate-100 shadow-sm dark:ring-1 dark:ring-white/10 border-b-2 border-b-solo-orange"
                 : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
             )}
           >

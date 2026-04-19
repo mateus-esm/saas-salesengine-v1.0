@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PipelineStage } from "@/hooks/usePipelineStages";
+import { cn } from "@/lib/utils";
 
 interface ConversationHeaderProps {
   session: ChatSession & { responsibleId?: string };
@@ -107,7 +108,7 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
                   className="object-cover"
                 />
               )}
-              <AvatarFallback className="bg-slate-100 dark:bg-zinc-900 text-slate-600 dark:text-slate-400 font-medium ring-1 ring-orange-500/20">
+              <AvatarFallback className="bg-slate-100 dark:bg-zinc-900 text-slate-600 dark:text-slate-400 font-medium ring-1 ring-orange-500/30">
                 {initials}
               </AvatarFallback>
             </Avatar>
@@ -151,7 +152,12 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
 
       <div className="flex items-center gap-2">
         {/* Quick Actions Area */}
-        <div className="hidden md:flex items-center gap-2 mr-2 pr-2 border-r border-border/50">
+        <div
+          className="hidden md:flex items-center gap-2 mr-2 pr-2 border-r"
+          style={{
+            borderImage: "linear-gradient(180deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14)) 1",
+          }}
+        >
 
           {/* Responsible Assignment */}
           {onAssignResponsible && (
@@ -279,7 +285,10 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
           onClick={onToggleHandoff}
           variant={isBotHandling ? "default" : "outline"}
           size="sm"
-          className="gap-2 h-8"
+          className={cn(
+            "gap-2 h-8",
+            isBotHandling && "bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-md"
+          )}
         >
           {isBotHandling ? (
             <>
