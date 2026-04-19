@@ -419,7 +419,14 @@ const Chat = () => {
                           senderName: msg.sender_type === 'ai'
                             ? (selectedConversation?.agent_name || 'Solo AI')
                             : msg.sender_type === 'agent'
-                              ? (selectedConversation?.agent_name || 'Solo AI')
+                              ? (() => {
+                                  const sid = (msg as any).sender_id;
+                                  if (sid) {
+                                    const member = teamMembers.find(m => m.id === sid);
+                                    if (member) return member.nome_completo || member.email || 'Agente';
+                                  }
+                                  return 'Agente';
+                                })()
                               : undefined,
                         }}
                       />

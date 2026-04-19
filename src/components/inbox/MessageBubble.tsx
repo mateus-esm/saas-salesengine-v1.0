@@ -203,21 +203,26 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className={cn(
             "px-3.5 py-2.5 shadow-sm",
-            isCustomer && "bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100 rounded-md rounded-tl-sm",
-            isAI && "bg-[hsl(28_100%_50%/0.08)] dark:bg-[hsl(28_100%_50%/0.12)] border border-[hsl(28_100%_50%/0.20)] dark:border-[hsl(28_100%_50%/0.18)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm",
-            isAgent && "bg-[hsl(28_80%_50%/0.08)] dark:bg-[hsl(28_80%_50%/0.10)] border border-[hsl(28_80%_50%/0.16)] dark:border-[hsl(28_80%_50%/0.14)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm"
+            isCustomer && "bg-white dark:bg-zinc-900/60 border border-slate-200/80 dark:border-[hsl(28_100%_50%/0.08)] text-slate-800 dark:text-slate-100 rounded-md rounded-tl-sm",
+            isAI && "bg-[hsl(28_100%_50%/0.06)] dark:bg-[hsl(28_100%_50%/0.10)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm",
+            isAgent && "bg-[hsl(28_80%_50%/0.06)] dark:bg-[hsl(28_80%_50%/0.08)] text-slate-800 dark:text-slate-100 rounded-md rounded-tr-sm"
           )}
+          style={
+            isOutbound
+              ? { border: '1px solid transparent', borderImage: 'linear-gradient(135deg, hsla(14,100%,56%,0.28), hsla(48,91%,53%,0.16), hsla(14,100%,56%,0.28)) 1' }
+              : undefined
+          }
         >
-          {/* Agent name — mostra sempre com fallback */}
+          {/* Agent name — shows actual sender */}
           {isAgent && (
-            <p className="text-xs font-medium opacity-80 mb-1">
-              {message.senderName || 'Solo AI'}
+            <p className="text-xs font-medium mb-1 text-orange-600/80 dark:text-orange-400/80">
+              {message.senderName || 'Agente'}
             </p>
           )}
 
-          {/* AI label — usa o nome real do assistente quando disponível */}
+          {/* AI label */}
           {isAI && (
-            <p className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mb-1 uppercase tracking-wider">
+            <p className="text-[10px] font-mono mb-1 uppercase tracking-wider text-orange-500/60 dark:text-orange-400/50">
               {message.senderName || 'Solo AI'}
             </p>
           )}
