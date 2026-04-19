@@ -46,39 +46,45 @@ serve(async (req) => {
     console.log('[Webhook] Canal detectado:', channel, '| rawChannel:', rawChannel, '| conversationType:', payload.conversationType, '| platform:', payload.platform, '| source:', payload.source)
 
     // 3. Extrair dados de mídia do payload
-    // GPT Maker pode enviar mídia em diferentes formatos
-    let mediaUrl = payload.mediaUrl || payload.media?.url || payload.fileUrl || payload.audioUrl || payload.imageUrl || null
-    let mediaType = normalizeMediaType(
-      payload.mediaType || payload.media?.type || payload.type || payload.messageType || null,
-      mediaUrl
-    )
-
-    // Fallback: Inferir mediaType a partir do texto (WPP default placeholders) e limpar texto inútil
-    if (messageContent) {
-        const lowerMsg = messageContent.toLowerCase();
-        if (!mediaType) {
-            if (lowerMsg.includes('[imagem') || lowerMsg.includes('foto')) mediaType = 'image';
-            else if (lowerMsg.includes('[áudio') || lowerMsg.includes('[audio') || lowerMsg.includes('voz')) mediaType = 'audio';
-            else if (lowerMsg.includes('[documento') || lowerMsg.includes('[arquivo') || lowerMsg.includes('[vídeo') || lowerMsg.includes('[video')) {
-                 mediaType = (lowerMsg.includes('vídeo') || lowerMsg.includes('video')) ? 'video' : 'document';
-            }
-        }
-        
-        // Se temos mídia, limpar a string inútil '[Imagem Encaminhada]' para não poluir UI
-        if (mediaUrl || mediaType) {
-            if (messageContent === '[Imagem Encaminhada]' || 
-                messageContent === '[Mensagem de voz]' || 
-                messageContent === '[Mensagem de Voz]' || 
-                messageContent === '[Áudio Encaminhado]' || 
-                messageContent === '[Documento Anexo]' ||
-                messageContent === '[Imagem]' ||
-                messageContent === '[Áudio]') {
-                messageContent = '';
-            }
-        }
+    // GPT Maker sends media as plural arrays of URL strings:
+    //   images: ["https://..."], audios: [...], documents: [...], videos: [...]
+    // Entries may be bare URL strings or { url, ... } objects.
+    const extractFirstUrl = (arr: unknown): string | null => {
+      if (!Array.isArray(arr) || arr.length === 0) return null
+      const first = arr[0]
+      if (typeof first === 'string') return first
+      if (first && typeof first === 'object') {
+        const o = first as Record<string, unknown>
+        return (o.url as string) || (o.fileUrl as string) || (o.href as string) || null
+      }
+      return null
     }
-    
-    console.log('[Webhook] Mídia detectada:', { mediaUrl, mediaType, cleanContent: messageContent })
+
+    let mediaUrl: string | null = null
+    let mediaType: string | null = null
+
+    if (Array.isArray(payload.images) && payload.images.length > 0) {
+      mediaUrl = extractFirstUrl(payload.images)
+      mediaType = 'image'
+    } else if (Array.isArray(payload.audios) && payload.audios.length > 0) {
+      mediaUrl = extractFirstUrl(payload.audios)
+      mediaType = 'audio'
+    } else if (Array.isArray(payload.documents) && payload.documents.length > 0) {
+      mediaUrl = extractFirstUrl(payload.documents)
+      mediaType = 'document'
+    } else if (Array.isArray(payload.videos) && payload.videos.length > 0) {
+      mediaUrl = extractFirstUrl(payload.videos)
+      mediaType = 'video'
+    } else {
+      // Fallback to singular/alternate shapes (legacy / non-GPT-Maker providers)
+      mediaUrl = payload.mediaUrl || payload.media?.url || payload.fileUrl || payload.attachment?.url || null
+      mediaType = normalizeMediaType(
+        payload.mediaType || payload.media?.type || payload.type || payload.messageType || null,
+        mediaUrl
+      )
+    }
+
+    console.log('[Webhook] Mídia detectada:', { mediaUrl, mediaType, content: messageContent })
 
     // 4. Ignorar mensagens vazias (mas permitir mensagens com mídia)
     // Relaxed check: senderPhone CAN be null/empty now, as long as we have chatId

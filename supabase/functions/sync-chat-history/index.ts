@@ -74,49 +74,69 @@ serve(async (req) => {
     let savedCount = 0
 
     // 2. Loop Adaptado ao Payload Real
+    // GPT Maker list-messages may return arrays (images[], audios[], documents[], videos[])
+    // OR legacy singular fields (imageUrl, audioUrl, documentUrl). Handle both.
+    const extractFirstUrl = (arr: unknown): string | null => {
+      if (!Array.isArray(arr) || arr.length === 0) return null
+      const first = arr[0]
+      if (typeof first === 'string') return first
+      if (first && typeof first === 'object') {
+        const o = first as Record<string, unknown>
+        return (o.url as string) || (o.fileUrl as string) || (o.href as string) || null
+      }
+      return null
+    }
+
     for (const msg of messagesArray) {
-        let content = msg.text;
-        
-        let mediaUrl = null;
-        let mediaType = null;
-        
-        if (msg.imageUrl) {
-            mediaUrl = msg.imageUrl;
-            mediaType = 'image';
-            content = content || '';
+        let content = msg.text ?? msg.message ?? '';
+
+        let mediaUrl: string | null = null;
+        let mediaType: string | null = null;
+
+        if (Array.isArray(msg.images) && msg.images.length > 0) {
+            mediaUrl = extractFirstUrl(msg.images); mediaType = 'image';
+        } else if (Array.isArray(msg.audios) && msg.audios.length > 0) {
+            mediaUrl = extractFirstUrl(msg.audios); mediaType = 'audio';
+        } else if (Array.isArray(msg.documents) && msg.documents.length > 0) {
+            mediaUrl = extractFirstUrl(msg.documents); mediaType = 'document';
+        } else if (Array.isArray(msg.videos) && msg.videos.length > 0) {
+            mediaUrl = extractFirstUrl(msg.videos); mediaType = 'video';
+        } else if (msg.imageUrl) {
+            mediaUrl = msg.imageUrl; mediaType = 'image';
         } else if (msg.audioUrl) {
-            mediaUrl = msg.audioUrl;
-            mediaType = 'audio';
-            content = content || '';
+            mediaUrl = msg.audioUrl; mediaType = 'audio';
         } else if (msg.documentUrl) {
-            mediaUrl = msg.documentUrl;
-            mediaType = 'document';
-            content = content || '';
+            mediaUrl = msg.documentUrl; mediaType = 'document';
+        } else if (msg.videoUrl) {
+            mediaUrl = msg.videoUrl; mediaType = 'video';
         }
-        
+
         if (!content && !mediaUrl) continue;
 
         const senderType = (msg.role === 'user' || msg.role === 'customer') ? 'customer' : 'agent';
-        const externalId = msg.id; 
+        const externalId = msg.id;
         const messageDate = msg.time ? new Date(msg.time).toISOString() : new Date().toISOString();
 
-        if (externalId) {
-            const { error } = await supabase.from('messages').upsert({
-                lead_id: resolvedLeadId,
-                conversation_id: resolvedConversationId,
-                content: content,
-                sender_type: senderType,
-                gpt_message_id: externalId,
-                created_at: messageDate,
-                media_url: mediaUrl,
-                media_type: mediaType
-            }, {
-                onConflict: 'gpt_message_id',
-                ignoreDuplicates: true
-            })
+        if (!externalId) continue;
 
-            if (!error) savedCount++
-        }
+        // Heal-friendly upsert: if the row already exists (e.g. written by the
+        // webhook before media-array parsing was fixed) we overwrite so media_url
+        // / media_type get filled in. ignoreDuplicates=true would swallow the fix.
+        const { error } = await supabase.from('messages').upsert({
+            lead_id: resolvedLeadId,
+            conversation_id: resolvedConversationId,
+            content: content,
+            sender_type: senderType,
+            gpt_message_id: externalId,
+            created_at: messageDate,
+            media_url: mediaUrl,
+            media_type: mediaType
+        }, {
+            onConflict: 'gpt_message_id',
+            ignoreDuplicates: false
+        })
+
+        if (!error) savedCount++
     }
 
     // 3. Fase 2 — Enriquecimento de metadados do chat
