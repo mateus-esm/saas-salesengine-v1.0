@@ -41,8 +41,9 @@ serve(async (req) => {
     const profilePicture: string | null = payload.picture || payload.contactPicture || payload.profilePic || null
     const agentName: string | null = payload.agentName || payload.assistantName || null
     // Canal: conversationType (WHATSAPP, INSTAGRAM, WIDGET...) ou type do payload
-    const rawChannel = payload.conversationType || payload.channelType || payload.type || null
-    const channel: string = normalizeChannel(rawChannel)
+    const rawChannel = payload.conversationType || payload.channelType || payload.platform || payload.source || payload.channel || payload.origin || null
+    const channel: string = normalizeChannel(rawChannel, payload)
+    console.log('[Webhook] Canal detectado:', channel, '| rawChannel:', rawChannel, '| conversationType:', payload.conversationType, '| platform:', payload.platform, '| source:', payload.source)
 
     // 3. Extrair dados de mídia do payload
     // GPT Maker pode enviar mídia em diferentes formatos
@@ -526,12 +527,21 @@ function normalizeMediaType(type: string | null, url: string | null): string | n
  * Normaliza o canal de comunicação
  * GPT Maker retorna conversationType como: WHATSAPP, INSTAGRAM, WIDGET, TELEGRAM, etc.
  */
-function normalizeChannel(raw: string | null): string {
-  if (!raw) return 'whatsapp'
-  const lower = raw.toLowerCase()
-  if (lower.includes('instagram')) return 'instagram'
-  if (lower.includes('telegram')) return 'telegram'
-  if (lower.includes('widget') || lower.includes('web')) return 'web'
-  if (lower.includes('messenger') || lower.includes('facebook')) return 'messenger'
+function normalizeChannel(raw: string | null, payload?: any): string {
+  if (raw) {
+    const lower = raw.toLowerCase()
+    if (lower.includes('instagram')) return 'instagram'
+    if (lower.includes('telegram')) return 'telegram'
+    if (lower.includes('widget') || lower.includes('web')) return 'web'
+    if (lower.includes('messenger') || lower.includes('facebook')) return 'messenger'
+    if (lower.includes('whatsapp')) return 'whatsapp'
+  }
+  // Deep scan: check entire payload for channel hints
+  if (payload) {
+    const payloadStr = JSON.stringify(payload).toLowerCase()
+    if (payloadStr.includes('instagram')) return 'instagram'
+    if (payloadStr.includes('telegram')) return 'telegram'
+    if (payloadStr.includes('messenger')) return 'messenger'
+  }
   return 'whatsapp' // default
 }
