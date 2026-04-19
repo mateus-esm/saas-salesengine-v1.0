@@ -119,9 +119,55 @@ serve(async (req) => {
 
         if (!externalId) continue;
 
-        // Heal-friendly upsert: if the row already exists (e.g. written by the
-        // webhook before media-array parsing was fixed) we overwrite so media_url
-        // / media_type get filled in. ignoreDuplicates=true would swallow the fix.
+        // ── Anti-duplicação contra linha já escrita pelo send-chat-message ──
+        // send-chat-message insere a linha com sender_id preenchido mas, quando
+        // o GPT Maker responde apenas com {success:true} (sem messageId), a linha
+        // fica com gpt_message_id NULL. Sem essa checagem, o upsert abaixo (que
+        // resolve conflito só por gpt_message_id) insere uma SEGUNDA linha —
+        // exibida como "Solo AI" porque não tem sender_id. Procuramos a linha
+        // outbound correspondente e apenas preenchemos o gpt_message_id ausente.
+        if (senderType === 'agent') {
+          const msgTimeMs = new Date(messageDate).getTime()
+          const windowStart = new Date(msgTimeMs - 120_000).toISOString()
+          const windowEnd = new Date(msgTimeMs + 120_000).toISOString()
+
+          let outboundQuery = supabase
+            .from('messages')
+            .select('id, content, media_url, media_type, gpt_message_id, sender_id, created_at')
+            .eq('sender_type', 'agent')
+            .not('sender_id', 'is', null)
+            .is('gpt_message_id', null)
+            .gte('created_at', windowStart)
+            .lte('created_at', windowEnd)
+
+          if (resolvedConversationId) {
+            outboundQuery = outboundQuery.eq('conversation_id', resolvedConversationId)
+          } else if (resolvedLeadId) {
+            outboundQuery = outboundQuery.eq('lead_id', resolvedLeadId)
+          }
+
+          const { data: outboundCandidates } = await outboundQuery
+
+          const match = (outboundCandidates || []).find((row) => {
+            const contentEq = (row.content || '').trim().toLowerCase() === content.trim().toLowerCase()
+            // Media-only echo: conteúdo vazio de ambos lados, mesmo tipo.
+            const mediaEq = !!mediaUrl && !!row.media_url && row.media_type === mediaType
+            return contentEq || mediaEq
+          })
+
+          if (match) {
+            await supabase
+              .from('messages')
+              .update({ gpt_message_id: externalId })
+              .eq('id', match.id)
+            console.log('[SyncHistory] Outbound healed (gpt_message_id attached):', match.id, '→', externalId)
+            savedCount++
+            continue
+          }
+        }
+
+        // Upsert padrão: cria se novo, atualiza media_url/media_type se já existia
+        // com mesmo gpt_message_id (cenário de heal pós-array-fix).
         const { error } = await supabase.from('messages').upsert({
             lead_id: resolvedLeadId,
             conversation_id: resolvedConversationId,
