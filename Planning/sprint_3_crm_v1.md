@@ -426,11 +426,19 @@ Selection persists in URL (`/crm?pipeline=<id>`) and localStorage for default.
 
 ### ✅ Acceptance Criteria
 
-- [ ] Drag card across stages: UI updates instantly, rolls back cleanly on
-      failure
-- [ ] Second browser observes the move within 2 seconds via Realtime
-- [ ] Kanban card field configuration persists per-pipeline
-- [ ] Table view columns regenerate automatically when pipeline schema changes
+- [x] Drag card across stages: UI updates instantly, rolls back cleanly on
+      failure _(OpportunityKanban keeps a local optimistic snapshot synced from
+      useOpportunities; mutation's onError reverts to server state)_
+- [x] Second browser observes the move within 2 seconds via Realtime
+      _(useOpportunities subscribes to `postgres_changes` on `opportunities`
+      filtered by `equipe_id`; any update invalidates the React Query cache)_
+- [x] Kanban card field configuration persists per-pipeline
+      _("Campos do card" dialog writes to `pipelines.card_field_ids`;
+      OpportunityCard renders only the selected schema entries)_
+- [x] Table view columns regenerate automatically when pipeline schema changes
+      _(OpportunityTable derives columns via useMemo over
+      `pipeline.custom_fields_schema`; schema edits in PipelineSettings
+      propagate through React Query invalidation)_
 
 ---
 
@@ -451,10 +459,18 @@ view.
 
 ### ✅ Acceptance Criteria
 
-- [ ] Panel loads in chat without blocking message rendering
-- [ ] Custom field edits in panel persist to `opportunities.custom_data`
-- [ ] Stage change from panel writes history row (same trigger as Kanban)
-- [ ] Creating opportunity from panel uses the pipeline's first stage by default
+- [x] Panel loads in chat without blocking message rendering
+      _(LeadOpportunitiesSection mounts inside CRMContextPanel via React Query;
+      data loads async while the message pane keeps rendering)_
+- [x] Custom field edits in panel persist to `opportunities.custom_data`
+      _(DynamicFieldRenderer inside the inline OpportunityRow calls
+      `updateOpportunity.mutate({ custom_data })` — keyed by stable `field_id`)_
+- [x] Stage change from panel writes history row (same trigger as Kanban)
+      _(same `trg_opportunity_stage_change` BEFORE UPDATE trigger catches any
+      `stage_id` diff regardless of which client initiated the update)_
+- [x] Creating opportunity from panel uses the pipeline's first stage by default
+      _(`useOpportunities.createOpportunity` resolves first stage via
+      `pipeline_stages_v2` ordered by position when `stage_id` is omitted)_
 
 ---
 
