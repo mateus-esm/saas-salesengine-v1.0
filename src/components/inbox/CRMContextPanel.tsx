@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import {
   Copy,
-  ExternalLink,
   Mail,
   Phone,
   Building,
@@ -24,11 +23,13 @@ import {
   Plus,
   X,
   MessageCircle,
+  Sparkles,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { TouchpointsList } from "@/components/crm/TouchpointsList";
-import { SLAIndicator } from "@/components/crm/SLAIndicator";
+import { LeadOpportunitiesSection } from "@/components/crm/LeadOpportunitiesSection";
 
 interface CRMContextPanelProps {
   session: ChatSession | null;
@@ -46,7 +47,6 @@ export function CRMContextPanel({
   onUpdateCRM,
   onAddTask,
   onToggleTask,
-  stageEnteredAt,
   onOpenLeadDetails,
 }: CRMContextPanelProps) {
   const [activeTab, setActiveTab] = useState("notes");
@@ -54,7 +54,6 @@ export function CRMContextPanel({
   const [notes, setNotes] = useState(session?.crmData.notes || "");
   const { stages } = usePipelineStages();
 
-  // Atualiza notes quando session muda
   useEffect(() => {
     setNotes(session?.crmData.notes || "");
   }, [session?.crmData.notes]);
@@ -95,16 +94,21 @@ export function CRMContextPanel({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Lead Card Header */}
+      {/* SECTION 1 · Lead Identity */}
       <Card className="m-2 mb-0 overflow-hidden">
-        {/* Solo IDV gradient top accent */}
-        <div className="h-[2px] w-full" style={{ background: "linear-gradient(90deg, hsla(14,100%,56%,0.6), hsla(48,91%,53%,0.4), hsla(14,100%,56%,0.6))" }} />
+        <div
+          className="h-[2px] w-full"
+          style={{
+            background:
+              "linear-gradient(90deg, hsla(14,100%,56%,0.6), hsla(48,91%,53%,0.4), hsla(14,100%,56%,0.6))",
+          }}
+        />
         <CardHeader className="p-3 pb-2">
           <div className="flex items-start justify-between">
             <div>
               <CardTitle className="text-lg">
-                <button 
-                  onClick={onOpenLeadDetails} 
+                <button
+                  onClick={onOpenLeadDetails}
                   className="hover:underline focus:outline-none text-left w-full truncate max-w-[200px] xl:max-w-[240px]"
                 >
                   {session.customerName}
@@ -123,14 +127,14 @@ export function CRMContextPanel({
                 </p>
               )}
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               className="gap-1"
               onClick={() => {
-                const phone = session.customerPhone.replace(/\D/g, '');
-                const phoneWithCountry = phone.startsWith('55') ? phone : `55${phone}`;
-                window.open(`https://wa.me/${phoneWithCountry}`, '_blank');
+                const phone = session.customerPhone.replace(/\D/g, "");
+                const phoneWithCountry = phone.startsWith("55") ? phone : `55${phone}`;
+                window.open(`https://wa.me/${phoneWithCountry}`, "_blank");
               }}
             >
               <MessageCircle className="h-3 w-3" />
@@ -139,7 +143,6 @@ export function CRMContextPanel({
           </div>
         </CardHeader>
         <CardContent className="p-3 pt-0 space-y-2">
-          {/* Contact info */}
           <div className="space-y-2">
             {session.crmData.email && (
               <div className="flex items-center justify-between text-sm">
@@ -173,7 +176,6 @@ export function CRMContextPanel({
             </div>
           </div>
 
-          {/* Tags */}
           {session.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {session.tags.map((tag) => (
@@ -189,16 +191,17 @@ export function CRMContextPanel({
         </CardContent>
       </Card>
 
-      {/* Quick Data (Editable) */}
+      {/* Legacy quick edits — kept for chat operators during Sprint 3 cutover */}
       <div
         className="p-2 px-3 space-y-2 border-b"
         style={{
-          borderImage: "linear-gradient(90deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14), hsla(14,100%,56%,0.25)) 1",
+          borderImage:
+            "linear-gradient(90deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14), hsla(14,100%,56%,0.25)) 1",
         }}
       >
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
-            Valor da Oportunidade
+            Valor da Oportunidade (legado)
           </label>
           <Input
             type="text"
@@ -213,7 +216,7 @@ export function CRMContextPanel({
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
-            Etapa do Funil
+            Etapa do Funil (legado)
           </label>
           <Select
             value={session.crmData.stage}
@@ -233,6 +236,35 @@ export function CRMContextPanel({
         </div>
       </div>
 
+      {/* SECTIONS 2 + 3 + 4 · Action Bar / Active Opportunities / Opportunity Detail */}
+      {session.leadId && (
+        <div className="p-3 border-b border-border">
+          <LeadOpportunitiesSection leadId={session.leadId} />
+        </div>
+      )}
+
+      {/* SECTION 5 · AI Commercial Copilot (skeleton) */}
+      <div className="p-3 border-b border-border">
+        <Card className="bg-muted/30 border-dashed">
+          <CardHeader className="p-3 pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
+              Copiloto Comercial
+              <Badge variant="outline" className="text-[10px] ml-auto flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Em breve
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 pt-0">
+            <p className="text-xs text-muted-foreground">
+              Sugestões de próximas ações, resumo da conversa e coaching em tempo real
+              vão aparecer aqui.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Notes / Tasks / History tabs — preserved from the legacy panel */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
         <TabsList className="mx-2 mt-2 w-auto">
           <TabsTrigger value="notes" className="flex-1">
@@ -246,7 +278,10 @@ export function CRMContextPanel({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="notes" className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0 flex flex-col">
+        <TabsContent
+          value="notes"
+          className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0 flex flex-col"
+        >
           <Textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -263,9 +298,11 @@ export function CRMContextPanel({
           </Button>
         </TabsContent>
 
-        <TabsContent value="tasks" className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0">
+        <TabsContent
+          value="tasks"
+          className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0"
+        >
           <div className="space-y-2">
-            {/* Add task input */}
             <div className="flex gap-2">
               <Input
                 value={newTask}
@@ -274,12 +311,16 @@ export function CRMContextPanel({
                 className="h-9"
                 onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
               />
-              <Button size="sm" onClick={handleAddTask} disabled={!newTask.trim()} className="bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm">
+              <Button
+                size="sm"
+                onClick={handleAddTask}
+                disabled={!newTask.trim()}
+                className="bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
 
-            {/* Task list */}
             <div className="space-y-2 mt-3">
               {tasks.map((task) => (
                 <div
@@ -308,7 +349,10 @@ export function CRMContextPanel({
           </div>
         </TabsContent>
 
-        <TabsContent value="touchpoints" className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0">
+        <TabsContent
+          value="touchpoints"
+          className="flex-1 h-full min-h-0 overflow-y-auto p-2 m-0"
+        >
           {session?.leadId && <TouchpointsList leadId={session.leadId} />}
         </TabsContent>
       </Tabs>

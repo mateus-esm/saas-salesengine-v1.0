@@ -1,0 +1,103 @@
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+
+import type { Lead } from "@/types/crm";
+import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
+import { OpportunityCard } from "./OpportunityCard";
+
+interface OpportunityKanbanColumnProps {
+  stage: PipelineStageV2;
+  opportunities: Opportunity[];
+  leadsById: Record<string, Lead>;
+  cardFields: CustomFieldSchema[];
+  onCardClick: (opp: Opportunity) => void;
+}
+
+const sumValues = (opps: Opportunity[]) =>
+  opps.reduce((acc, o) => acc + (o.value ?? 0), 0);
+
+const formatCompactBRL = (v: number) =>
+  v === 0
+    ? null
+    : new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        notation: "compact",
+      }).format(v);
+
+export const OpportunityKanbanColumn = ({
+  stage,
+  opportunities,
+  leadsById,
+  cardFields,
+  onCardClick,
+}: OpportunityKanbanColumnProps) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+    data: { type: "stage", stageId: stage.id },
+  });
+
+  const total = formatCompactBRL(sumValues(opportunities));
+  const dimmed = stage.stage_type === "lost";
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col min-w-[300px] max-w-[300px] rounded-lg bg-card border border-border transition-all duration-200",
+        isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        dimmed && "opacity-80",
+      )}
+    >
+      <div
+        className="p-3 border-b border-border rounded-t-lg"
+        style={{ borderTopColor: stage.color, borderTopWidth: "3px" }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className="w-3 h-3 rounded-full shrink-0"
+              style={{ backgroundColor: stage.color }}
+            />
+            <h3 className="font-semibold text-sm text-foreground truncate">{stage.name}</h3>
+          </div>
+          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+            {opportunities.length}
+          </span>
+        </div>
+        {total && (
+          <p className="text-xs text-muted-foreground mt-1.5">
+            Total: <span className="font-medium text-green-600 dark:text-green-400">{total}</span>
+          </p>
+        )}
+      </div>
+
+      <ScrollArea className="flex-1 p-2" ref={setNodeRef}>
+        <SortableContext
+          items={opportunities.map((o) => o.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-2 min-h-[100px]">
+            {opportunities.length === 0 ? (
+              <div className="flex items-center justify-center h-24 text-xs text-muted-foreground border-2 border-dashed border-muted rounded-md">
+                Arraste oportunidades aqui
+              </div>
+            ) : (
+              opportunities.map((opp) => (
+                <OpportunityCard
+                  key={opp.id}
+                  opportunity={opp}
+                  lead={leadsById[opp.lead_id]}
+                  cardFields={cardFields}
+                  onClick={() => onCardClick(opp)}
+                />
+              ))
+            )}
+          </div>
+        </SortableContext>
+      </ScrollArea>
+    </div>
+  );
+};
