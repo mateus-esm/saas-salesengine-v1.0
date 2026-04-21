@@ -12,7 +12,14 @@
       "Bash(supabase functions:*)",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npx eslint *)",
+      "Bash(npx vite *)",
+      "Bash(echo \"TSC=$?\")",
+      "Bash(echo \"ESLINT=$?\")",
+      "Bash(grep -E \"\\(OpportunityKanban|OpportunityTable|OpportunityCard|OpportunityDetail|OpportunityKanbanColumn|PipelineSelector|usePipelineSelection|CardFieldsPicker|LeadOpportunitiesSection|CRMContextPanel|pages.CRM|pages\\\\\\\\\\\\\\\\CRM\\)\")",
+      "Bash(git *)"
     ]
   }
 }
