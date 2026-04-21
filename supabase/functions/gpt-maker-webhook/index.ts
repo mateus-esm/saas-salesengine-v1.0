@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -333,6 +334,28 @@ serve(async (req) => {
         }
         conversationId = newConv.id
         console.log('[Webhook] Nova conversa criada:', conversationId)
+      }
+    }
+
+    // 9c. Sprint 4 EPIC 0 — garantir Opportunity para contatos inbound.
+    // Clientes criam a identidade (lead) AQUI; se a equipe tem
+    // default_pipeline_id configurado, o contato vira uma Opportunity
+    // no primeiro stage 'open'. Idempotente: só cria se não houver uma
+    // Opportunity aberta para o lead. Mensagens de agente NÃO disparam.
+    if (senderType === 'customer') {
+      try {
+        const opp = await resolveActiveOpportunity(supabase, {
+          equipe_id: equipeId,
+          lead_id: lead.id,
+          createIfMissing: true,
+        })
+        if (opp?.created) {
+          console.log('[Webhook] Opportunity criada para lead:', lead.id, '→', opp.opportunity_id)
+        }
+      } catch (oppErr) {
+        // Não derruba o webhook — mensagem precisa ser salva mesmo que a
+        // criação da Opportunity falhe. Log serve para diagnóstico.
+        console.error('[Webhook] Falha ao garantir opportunity:', oppErr)
       }
     }
 
