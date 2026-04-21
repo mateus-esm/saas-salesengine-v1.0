@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Save } from "lucide-react";
+import { Loader2, Plus, Save, Star, StarOff } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,7 @@ import {
 import { toast } from "sonner";
 
 import { usePipelines } from "@/hooks/usePipelines";
+import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
 import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
 import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
@@ -220,6 +222,9 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const [schema, setSchema] = useState<CustomFieldSchema[]>(pipeline.custom_fields_schema);
   const [cardFieldIds, setCardFieldIds] = useState<string[]>(pipeline.card_field_ids);
 
+  const { defaultPipelineId, setDefault } = useDefaultPipeline();
+  const isDefault = defaultPipelineId === pipeline.id;
+
   const dirty =
     name !== pipeline.name ||
     (description || "") !== (pipeline.description || "") ||
@@ -245,16 +250,44 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle>Configurações da Pipeline</CardTitle>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <CardTitle>Configurações da Pipeline</CardTitle>
+                {isDefault && (
+                  <Badge variant="secondary" className="gap-1">
+                    <Star className="h-3 w-3" />
+                    Padrão
+                  </Badge>
+                )}
+              </div>
               <CardDescription>
                 Identidade e descrição. Use a coluna esquerda para arquivar ou
-                excluir.
+                excluir. Marque como padrão para rotear novos contatos inbound
+                aqui automaticamente.
               </CardDescription>
             </div>
-            <Button onClick={handleSave} disabled={!dirty}>
-              <Save className="h-4 w-4 mr-2" /> Salvar
-            </Button>
+            <div className="flex gap-2">
+              {isDefault ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setDefault.mutate(null)}
+                  disabled={setDefault.isPending}
+                >
+                  <StarOff className="h-4 w-4 mr-2" /> Remover padrão
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => setDefault.mutate(pipeline.id)}
+                  disabled={setDefault.isPending}
+                >
+                  <Star className="h-4 w-4 mr-2" /> Tornar padrão
+                </Button>
+              )}
+              <Button onClick={handleSave} disabled={!dirty}>
+                <Save className="h-4 w-4 mr-2" /> Salvar
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
