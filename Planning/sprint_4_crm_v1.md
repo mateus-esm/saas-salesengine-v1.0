@@ -138,11 +138,11 @@ Nothing routes to them. They confuse future work.
       pipeline's first stage
 - [x] AI agent moves the Kanban card (opportunity), not the legacy lead
 - [x] `get_dashboard_kpis` returns identical numeric shape, reading only from
-      new tables (meeting KPIs still read legacy `leads.meeting_done` until
-      Epic 3 backfill; flagged with TODO in the function body)
+      new tables (meeting KPIs still read legacy `leads.meeting_done` until Epic
+      3 backfill; flagged with TODO in the function body)
 - [x] Legacy Kanban files deleted from codebase (KanbanBoard, KanbanColumn,
-      LeadCard, StageManagerModal; `usePipelineStages.ts` kept — still
-      consumed by Chat / CRMContextPanel / DatabaseView / ExportModal /
+      LeadCard, StageManagerModal; `usePipelineStages.ts` kept — still consumed
+      by Chat / CRMContextPanel / DatabaseView / ExportModal /
       ConversationHeader; retires Sprint 5 with the rename)
 - [x] Deprecation comments present on all legacy columns
 - [x] Seed script creates 2 tenants × 2 pipelines × 30 opportunities × 60
@@ -353,22 +353,20 @@ are keyed by target entity id.
 
 ### ✅ EPIC 1 Acceptance Criteria
 
-- [x] All new tables created, RLS enabled, tenant-isolation tested
-      (migration `20260422000000_sprint4_epic1_foundations.sql`; same
-      `equipe_id IN (profiles…)` policy as Sprint 3 EPIC 2 — live
-      integration test is an **Orchestrator task** once the migration
-      deploys)
+- [x] All new tables created, RLS enabled, tenant-isolation tested (migration
+      `20260422000000_sprint4_epic1_foundations.sql`; same
+      `equipe_id IN (profiles…)` policy as Sprint 3 EPIC 2 — live integration
+      test is an **Orchestrator task** once the migration deploys)
 - [x] `DynamicFieldRenderer` renders every new field type (`address`,
       `property_ref`, `company_ref`, `contact_ref`, `multi_select`, `url`,
       `phone`) — `*_ref` ship with a Popover+Command picker today; Epic 4
       replaces it with the shared `EntityLinker`
 - [x] Dropdown editor bug **fixed**: textarea accepts Enter → new line per
-      option (`CustomFieldsEditor.tsx` — extracted into `OptionsEditor`
-      with local raw state so `filter(Boolean)` only runs on emit, never
-      on display)
-- [x] `ai_decisions.rule_id` column added; `analyze-message` now writes it
-      (NULL until Epic 5 wires rule matching — column & passthrough exist
-      so Epic 5 is a one-line change)
+      option (`CustomFieldsEditor.tsx` — extracted into `OptionsEditor` with
+      local raw state so `filter(Boolean)` only runs on emit, never on display)
+- [x] `ai_decisions.rule_id` column added; `analyze-message` now writes it (NULL
+      until Epic 5 wires rule matching — column & passthrough exist so Epic 5 is
+      a one-line change)
 
 ---
 
