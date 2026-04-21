@@ -7,7 +7,27 @@ export type CustomFieldType =
   | "currency"
   | "date"
   | "boolean"
-  | "select";
+  | "select"
+  // Sprint 4 EPIC 1 additions
+  | "multi_select"
+  | "url"
+  | "phone"
+  | "address"
+  | "property_ref"
+  | "company_ref"
+  | "contact_ref";
+
+/** Structured value for type === "address". Persisted as JSON object. */
+export interface AddressValue {
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
 
 export interface CustomFieldSchema {
   field_id: string;        // stable uuid — never change
@@ -15,7 +35,10 @@ export interface CustomFieldSchema {
   label: string;           // user-facing label (mutable)
   type: CustomFieldType;
   required: boolean;
-  options?: string[];      // only for type === "select"
+  /** Only for select / multi_select. */
+  options?: string[];
+  /** Only for *_ref types. Always 'tenant' in Sprint 4 (RLS scopes by equipe_id). */
+  target_scope?: "tenant";
   position: number;
   is_deleted?: boolean;    // soft-deleted; data preserved
   description?: string;
@@ -141,4 +164,164 @@ export interface UpdateOpportunityData {
 export interface LeadGlobalAdditions {
   origin: LeadOrigin | null;
   deleted_at: string | null;
+}
+
+// ───────────────────────────────────────────────────────────────
+// Sprint 4 EPIC 1 — identity-layer entities
+// ───────────────────────────────────────────────────────────────
+
+export type CompanySizeBracket =
+  | "solo"
+  | "2-10"
+  | "11-50"
+  | "51-200"
+  | "201-1000"
+  | "1000+";
+
+export interface Company {
+  id: string;
+  equipe_id: string;
+  name: string;
+  legal_name: string | null;
+  cnpj: string | null;
+  website: string | null;
+  industry: string | null;
+  size_bracket: CompanySizeBracket | null;
+  custom_data: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type PropertyType = "address" | "site" | "unit" | "custom";
+
+export interface Property {
+  id: string;
+  equipe_id: string;
+  label: string;
+  property_type: PropertyType;
+  address: AddressValue | null;
+  latitude: number | null;
+  longitude: number | null;
+  attributes: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type ContactCompanyRole =
+  | "owner"
+  | "decision_maker"
+  | "employee"
+  | "former"
+  | "advisor"
+  | "other";
+
+export interface ContactCompanyLink {
+  id: string;
+  equipe_id: string;
+  contact_id: string;
+  company_id: string;
+  role: ContactCompanyRole;
+  is_primary: boolean;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export type PropertyOwnerType = "contact" | "company";
+
+export interface PropertyOwnerLink {
+  id: string;
+  equipe_id: string;
+  property_id: string;
+  owner_type: PropertyOwnerType;
+  owner_id: string;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export type OpportunityLinkType = "company" | "property" | "contact";
+
+export interface OpportunityLink {
+  id: string;
+  equipe_id: string;
+  opportunity_id: string;
+  linked_type: OpportunityLinkType;
+  linked_id: string;
+  relation: string;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+// ───────────────────────────────────────────────────────────────
+// Sprint 4 EPIC 1 — Agent Rules (structured triggers + NL hints)
+// ───────────────────────────────────────────────────────────────
+
+export type AgentTriggerType =
+  | "intent_detected"
+  | "message_contains"
+  | "media_received"
+  | "stage_entered"
+  | "idle_in_stage"
+  | "custom_field_set";
+
+export type AgentIntent =
+  | "meeting_scheduled"
+  | "interested"
+  | "disqualified"
+  | "objection_price"
+  | "objection_timing";
+
+export type AgentMediaType = "image" | "audio" | "document" | "video";
+
+export type AgentTriggerWhen =
+  | { type: "intent_detected"; intent: AgentIntent }
+  | { type: "message_contains"; pattern: string; is_regex?: boolean }
+  | { type: "media_received"; media_type: AgentMediaType }
+  | { type: "stage_entered"; stage_id: string }
+  | { type: "idle_in_stage"; stage_id?: string; hours: number }
+  | { type: "custom_field_set"; field_id: string };
+
+export type AgentActionType =
+  | "move_stage"
+  | "set_status"
+  | "set_field"
+  | "set_contact_field"
+  | "add_touchpoint"
+  | "add_note"
+  | "create_task"
+  | "add_tag"
+  | "trigger_webhook";
+
+export type AgentAction =
+  | { action: "move_stage"; stage_type: StageType; stage_name_hint?: string }
+  | { action: "set_status"; status: OpportunityStatus }
+  | { action: "set_field"; field_id: string; value: unknown }
+  | { action: "set_contact_field"; key: string; value: unknown }
+  | { action: "add_touchpoint"; touchpoint_type: string; content_template: string }
+  | { action: "add_note"; content_template: string }
+  | { action: "create_task"; title_template: string; due_in_hours?: number }
+  | { action: "add_tag"; tag: string }
+  | { action: "trigger_webhook"; url: string; body_template?: string };
+
+export interface AgentRuleTrigger {
+  id: string;           // stable uuid; referenced by ai_decisions.rule_id
+  name: string;
+  when: AgentTriggerWhen;
+  do: AgentAction[];
+  active: boolean;
+}
+
+export interface PipelineAgentRules {
+  id: string;
+  equipe_id: string;
+  pipeline_id: string;
+  triggers: AgentRuleTrigger[];
+  extraction_hints: string | null;
+  auto_create_opportunity: boolean;
+  auto_advance_stages: boolean;
+  auto_extract_custom_fields: boolean;
+  cooldown_minutes: number;
+  created_at: string;
+  updated_at: string;
 }

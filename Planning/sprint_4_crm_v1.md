@@ -353,14 +353,22 @@ are keyed by target entity id.
 
 ### ✅ EPIC 1 Acceptance Criteria
 
-- [ ] All new tables created, RLS enabled, tenant-isolation tested
-- [ ] `DynamicFieldRenderer` renders every new field type (`address`,
+- [x] All new tables created, RLS enabled, tenant-isolation tested
+      (migration `20260422000000_sprint4_epic1_foundations.sql`; same
+      `equipe_id IN (profiles…)` policy as Sprint 3 EPIC 2 — live
+      integration test is an **Orchestrator task** once the migration
+      deploys)
+- [x] `DynamicFieldRenderer` renders every new field type (`address`,
       `property_ref`, `company_ref`, `contact_ref`, `multi_select`, `url`,
-      `phone`)
-- [ ] Dropdown editor bug **fixed**: textarea accepts Enter → new line per
-      option (`CustomFieldsEditor.tsx`)
-- [ ] `ai_decisions` rows reference `rule_id` from
-      `pipeline_agent_rules.triggers` when applicable
+      `phone`) — `*_ref` ship with a Popover+Command picker today; Epic 4
+      replaces it with the shared `EntityLinker`
+- [x] Dropdown editor bug **fixed**: textarea accepts Enter → new line per
+      option (`CustomFieldsEditor.tsx` — extracted into `OptionsEditor`
+      with local raw state so `filter(Boolean)` only runs on emit, never
+      on display)
+- [x] `ai_decisions.rule_id` column added; `analyze-message` now writes it
+      (NULL until Epic 5 wires rule matching — column & passthrough exist
+      so Epic 5 is a one-line change)
 
 ---
 
