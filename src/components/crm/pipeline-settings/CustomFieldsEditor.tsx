@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -41,7 +41,21 @@ const TYPE_LABELS: Record<CustomFieldType, string> = {
   date: "Data",
   boolean: "Sim/Não",
   select: "Seleção",
+  multi_select: "Seleção múltipla",
+  url: "URL",
+  phone: "Telefone",
+  address: "Endereço",
+  company_ref: "Empresa",
+  property_ref: "Propriedade",
+  contact_ref: "Contato",
 };
+
+const TYPES_WITH_OPTIONS: CustomFieldType[] = ["select", "multi_select"];
+const TYPES_AS_REF: CustomFieldType[] = [
+  "company_ref",
+  "property_ref",
+  "contact_ref",
+];
 
 const slugify = (s: string) =>
   s
@@ -97,7 +111,8 @@ export const CustomFieldsEditor = ({
       type: draftType,
       required: false,
       position: visible.length,
-      options: draftType === "select" ? ["Opção 1"] : undefined,
+      options: TYPES_WITH_OPTIONS.includes(draftType) ? ["Opção 1"] : undefined,
+      target_scope: TYPES_AS_REF.includes(draftType) ? "tenant" : undefined,
     };
     emit([...schema, field]);
     setDraftLabel("");
@@ -340,25 +355,57 @@ const SortableFieldRow = ({
         </div>
       </div>
 
-      {field.type === "select" && (
-        <div>
-          <Label className="text-xs">Opções (uma por linha)</Label>
-          <Textarea
-            value={(field.options || []).join("\n")}
-            onChange={(e) =>
-              onPatch({
-                options: e.target.value
-                  .split("\n")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            rows={3}
-            className="text-xs font-mono mt-1"
-            placeholder="Opção 1&#10;Opção 2"
-          />
-        </div>
+      {(field.type === "select" || field.type === "multi_select") && (
+        <OptionsEditor
+          field={field}
+          onPatch={(opts) => onPatch({ options: opts })}
+        />
       )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// OptionsEditor — keeps a raw textarea string in local state so pressing
+// Enter creates a real new line. The parsed `options` array (trimmed,
+// blanks dropped) is what gets emitted; the in-flight text only flushes
+// back from props when the field_id changes.
+// ─────────────────────────────────────────────────────────────────────
+
+interface OptionsEditorProps {
+  field: CustomFieldSchema;
+  onPatch: (options: string[]) => void;
+}
+
+const OptionsEditor = ({ field, onPatch }: OptionsEditorProps) => {
+  const [text, setText] = useState(() => (field.options ?? []).join("\n"));
+
+  // Resync when switching to a different field. Deliberately keyed by
+  // field_id only — we don't want prop churn to reset user typing.
+  useEffect(() => {
+    setText((field.options ?? []).join("\n"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field.field_id]);
+
+  const handleChange = (raw: string) => {
+    setText(raw);
+    const parsed = raw
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    onPatch(parsed);
+  };
+
+  return (
+    <div>
+      <Label className="text-xs">Opções (uma por linha)</Label>
+      <Textarea
+        value={text}
+        onChange={(e) => handleChange(e.target.value)}
+        rows={3}
+        className="text-xs font-mono mt-1"
+        placeholder="Opção 1&#10;Opção 2"
+      />
     </div>
   );
 };

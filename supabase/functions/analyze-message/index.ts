@@ -67,6 +67,10 @@ serve(async (req) => {
     lead_id: null as string | null,
     equipe_id: null as string | null,
     opportunity_id: null as string | null,
+    // Sprint 4 EPIC 1: points at pipeline_agent_rules.triggers[].id.
+    // Stays null until Epic 5 wires rule matching; column exists now so
+    // downstream analytics and the audit UI don't need a second migration.
+    rule_id: null as string | null,
     decision_type: 'started',
     input_summary: '',
     output_action: {} as Record<string, unknown>,
@@ -387,6 +391,7 @@ serve(async (req) => {
         status: auditLog.status,
         error_details: auditLog.error_details,
         confidence_score: auditLog.confidence_score,
+        rule_id: auditLog.rule_id,
       });
       if (auditError) console.error("Erro Auditoria:", auditError);
     }
