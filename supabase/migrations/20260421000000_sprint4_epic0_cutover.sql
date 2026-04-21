@@ -74,8 +74,18 @@ COMMENT ON COLUMN public.leads.assigned_to IS
   'DEPRECATED Sprint 4. Moves to opportunities.owner_id in Epic 3. Removed Sprint 5.';
 COMMENT ON COLUMN public.leads.stage_entered_at IS
   'DEPRECATED Sprint 4. Use opportunities.stage_entered_at. Removed Sprint 5.';
-COMMENT ON COLUMN public.leads.lead_score IS
-  'DEPRECATED Sprint 4. Moves to opportunities in Epic 3. Removed Sprint 5.';
+-- lead_score may not exist in all environments (it was never added by a
+-- prior migration). Conditionally deprecate only if the column is present.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'lead_score'
+  ) THEN
+    COMMENT ON COLUMN public.leads.lead_score IS
+      'DEPRECATED Sprint 4. Moves to opportunities in Epic 3. Removed Sprint 5.';
+  END IF;
+END $$;
 
 -- ============================================================================
 -- 4. get_dashboard_kpis — rewritten against the new model (0.3)
