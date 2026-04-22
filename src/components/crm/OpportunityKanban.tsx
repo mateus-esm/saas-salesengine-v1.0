@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragEndEvent,
@@ -24,13 +25,16 @@ import {
 import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 
+import { LeadDetailsModal } from "./LeadDetailsModal";
 import { OpportunityCard } from "./OpportunityCard";
 import { OpportunityKanbanColumn } from "./OpportunityKanbanColumn";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { CardFieldsPicker } from "./pipeline-settings/CardFieldsPicker";
 
+import type { Lead } from "@/types/crm";
 import type { Opportunity } from "@/types/pipelines";
 
 interface OpportunityKanbanProps {
@@ -43,7 +47,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const { opportunities, isLoading: oppsLoading, updateOpportunity } = useOpportunities({
     pipelineId,
   });
-  const { leads } = useLeads();
+  const { leads, updateLead, deleteLead } = useLeads();
+  // Legacy v1 stages still feed the LeadDetailsModal — its stage picker is a
+  // contact-level field that retires Sprint 5 with the leads→contacts rename.
+  const { stages: legacyStages } = usePipelineStages();
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -54,8 +61,30 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
+  const [contactDrawerLead, setContactDrawerLead] = useState<Lead | null>(null);
   const [showCardConfig, setShowCardConfig] = useState(false);
   const [cardFieldDraft, setCardFieldDraft] = useState<string[]>([]);
+
+  // Sprint 4 EPIC 2 §2.3 — deep-link `?opp=<id>` opens the matching card.
+  // Resolution waits for opportunities to load; when the user closes the modal
+  // we strip the param so reload doesn't re-open it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkOppId = searchParams.get("opp");
+
+  useEffect(() => {
+    if (!deepLinkOppId || selectedOpp?.id === deepLinkOppId) return;
+    const match = opportunities.find((o) => o.id === deepLinkOppId);
+    if (match) setSelectedOpp(match);
+  }, [deepLinkOppId, opportunities, selectedOpp?.id]);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedOpp(null);
+    if (searchParams.has("opp")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("opp");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -235,7 +264,26 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         pipeline={pipeline}
         stages={orderedStages}
         lead={selectedOpp ? leadsById[selectedOpp.lead_id] : undefined}
-        onClose={() => setSelectedOpp(null)}
+        onClose={handleCloseDetail}
+        onOpenContact={(contactId) => {
+          const target = leadsById[contactId];
+          if (target) setContactDrawerLead(target);
+        }}
+      />
+
+      <LeadDetailsModal
+        lead={contactDrawerLead}
+        stages={legacyStages}
+        open={!!contactDrawerLead}
+        onClose={() => setContactDrawerLead(null)}
+        onSave={(data) => {
+          updateLead.mutate(data);
+          setContactDrawerLead(null);
+        }}
+        onDelete={(id) => {
+          deleteLead.mutate(id);
+          setContactDrawerLead(null);
+        }}
       />
 
       <Dialog open={showCardConfig} onOpenChange={setShowCardConfig}>

@@ -23,6 +23,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 
 import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer";
+import { EntityChips } from "./EntityChips";
 import type { Lead } from "@/types/crm";
 import type {
   Opportunity,
@@ -39,6 +40,12 @@ interface OpportunityDetailModalProps {
   stages: PipelineStageV2[];
   lead: Lead | undefined;
   onClose: () => void;
+  /**
+   * Sprint 4 EPIC 2 §2.3 — bidirectional chip navigation. When the Contact
+   * chip is clicked we ask the parent to swap this drawer for the contact
+   * drawer. The parent owns both drawers so neither leaks state across pipelines.
+   */
+  onOpenContact?: (contactId: string) => void;
 }
 
 /**
@@ -53,6 +60,7 @@ export const OpportunityDetailModal = ({
   stages,
   lead,
   onClose,
+  onOpenContact,
 }: OpportunityDetailModalProps) => {
   const { updateOpportunity, deleteOpportunity } = useOpportunities({
     pipelineId: opportunity?.pipeline_id,
@@ -116,6 +124,16 @@ export const OpportunityDetailModal = ({
           <DialogDescription>
             Editar dados específicos desta oportunidade. Dados do lead são compartilhados entre pipelines.
           </DialogDescription>
+          <div className="pt-2">
+            <EntityChips
+              opportunityId={opportunity.id}
+              primaryContact={lead}
+              onOpenContact={(contactId) => {
+                onClose();
+                onOpenContact?.(contactId);
+              }}
+            />
+          </div>
         </DialogHeader>
 
         <ScrollArea className="flex-1 -mx-6 px-6">

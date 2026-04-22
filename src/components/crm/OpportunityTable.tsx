@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ColumnDef,
   SortingState,
@@ -31,8 +32,10 @@ import {
 import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 
+import { LeadDetailsModal } from "./LeadDetailsModal";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import type { Lead } from "@/types/crm";
 import type {
@@ -85,7 +88,9 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const { pipelines } = usePipelines();
   const { stages } = usePipelineStagesV2(pipelineId);
   const { opportunities, isLoading, updateOpportunity } = useOpportunities({ pipelineId });
-  const { leads } = useLeads();
+  const { leads, updateLead, deleteLead } = useLeads();
+  // Legacy v1 stages still feed LeadDetailsModal (Sprint 5 cleanup).
+  const { stages: legacyStages } = usePipelineStages();
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -94,6 +99,26 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
+  const [contactDrawerLead, setContactDrawerLead] = useState<Lead | null>(null);
+
+  // Sprint 4 EPIC 2 §2.3 — same `?opp=<id>` deep-link contract as the Kanban.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkOppId = searchParams.get("opp");
+
+  useEffect(() => {
+    if (!deepLinkOppId || selectedOpp?.id === deepLinkOppId) return;
+    const match = opportunities.find((o) => o.id === deepLinkOppId);
+    if (match) setSelectedOpp(match);
+  }, [deepLinkOppId, opportunities, selectedOpp?.id]);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedOpp(null);
+    if (searchParams.has("opp")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("opp");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const leadsById = useMemo(() => {
     const map: Record<string, Lead> = {};
@@ -371,7 +396,26 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         pipeline={pipeline}
         stages={stages}
         lead={selectedOpp ? leadsById[selectedOpp.lead_id] : undefined}
-        onClose={() => setSelectedOpp(null)}
+        onClose={handleCloseDetail}
+        onOpenContact={(contactId) => {
+          const target = leadsById[contactId];
+          if (target) setContactDrawerLead(target);
+        }}
+      />
+
+      <LeadDetailsModal
+        lead={contactDrawerLead}
+        stages={legacyStages}
+        open={!!contactDrawerLead}
+        onClose={() => setContactDrawerLead(null)}
+        onSave={(data) => {
+          updateLead.mutate(data);
+          setContactDrawerLead(null);
+        }}
+        onDelete={(id) => {
+          deleteLead.mutate(id);
+          setContactDrawerLead(null);
+        }}
       />
     </div>
   );
