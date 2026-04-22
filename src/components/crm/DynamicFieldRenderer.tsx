@@ -64,7 +64,7 @@ interface DynamicFieldRendererProps {
  * The single source of truth for rendering tenant-defined custom fields.
  * Used by:
  *   • PipelineSettings → custom field preview / value editor
- *   • LeadDetailsModal → opportunity custom_data section
+ *   • ContactDetailsModal → personal_custom_data enrichment block
  *   • CRMContextPanel (Sprint 3 EPIC 4)
  *   • Kanban card (Sprint 3 EPIC 3)
  *

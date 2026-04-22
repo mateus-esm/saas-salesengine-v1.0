@@ -40,7 +40,7 @@ interface LeadOpportunitiesSectionProps {
  *   • Inline editor (DynamicFieldRenderer + stage changer + value)
  *   • "Add to Pipeline" dialog (first-stage-default)
  *
- * Used in LeadDetailsModal (CRM) and CRMContextPanel (chat).
+ * Used in ContactDetailsModal (CRM) and CRMContextPanel (chat).
  */
 export const LeadOpportunitiesSection = ({
   leadId,
@@ -76,7 +76,7 @@ export const LeadOpportunitiesSection = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Briefcase className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Oportunidades</h3>
+          <h3 className="text-sm font-medium">Leads</h3>
           <Badge variant="outline" className="text-xs">
             {opportunities.length}
           </Badge>
@@ -88,7 +88,7 @@ export const LeadOpportunitiesSection = ({
           disabled={activePipelines.length === 0}
           title={
             activePipelines.length === 0
-              ? "Crie uma pipeline antes de adicionar oportunidades"
+              ? "Crie uma pipeline antes de adicionar leads"
               : "Adicionar a uma pipeline"
           }
         >
@@ -142,7 +142,7 @@ export const LeadOpportunitiesSection = ({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
-                A oportunidade será criada na primeira etapa da pipeline escolhida.
+                O lead será criado na primeira etapa da pipeline escolhida.
               </p>
             </div>
           </div>

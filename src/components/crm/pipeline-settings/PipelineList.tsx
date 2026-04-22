@@ -104,7 +104,7 @@ export const PipelineList = ({
                     <AlertDialogHeader>
                       <AlertDialogTitle>Excluir pipeline “{p.name}”?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Oportunidades associadas continuarão existindo, mas a pipeline
+                        Leads associados continuarão existindo, mas a pipeline
                         ficará indisponível. Considere arquivar antes de excluir.
                       </AlertDialogDescription>
                     </AlertDialogHeader>

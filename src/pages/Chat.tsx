@@ -19,7 +19,7 @@ import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
 import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { LeadDetailsModal } from "@/components/crm/LeadDetailsModal";
+import { ContactDetailsModal } from "@/components/crm/ContactDetailsModal";
 import { ChatSession, ConversationStatus } from "@/types/chat";
 import { Lead } from "@/types/crm";
 import { toast } from "sonner";
@@ -491,9 +491,8 @@ const Chat = () => {
         )}
       </div>
 
-      <LeadDetailsModal
+      <ContactDetailsModal
         lead={(selectedLead as Lead) || null}
-        stages={stages}
         open={showLeadModal}
         onClose={() => setShowLeadModal(false)}
         onSave={(data) => {

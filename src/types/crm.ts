@@ -1,5 +1,27 @@
 // CRM Types - shared across components
 
+// Sprint 4 EPIC 3 §1.2 — MECE origin taxonomy. 12 categories covering inbound,
+// outbound, network, and system sources. Physical column check constraint
+// lives on `leads.origin_category` (see migration 20260422000000).
+export type OriginCategory =
+  | 'organic_search'
+  | 'organic_social'
+  | 'paid_search'
+  | 'paid_social'
+  | 'direct_brand'
+  | 'outbound_phone'
+  | 'outbound_message'
+  | 'outbound_email'
+  | 'referral'
+  | 'partner_channel'
+  | 'offline_event'
+  | 'api_import';
+
+// Sprint 4 EPIC 1 — identity lifecycle flag. Independent from opportunity status.
+export type ContactType = 'lead' | 'opportunity' | 'contact' | 'spam' | 'archived';
+
+export type CreatedByType = 'team' | 'automation' | 'ai' | 'import' | 'webhook';
+
 export interface Lead {
   id: string;
   equipe_id: string;
@@ -41,7 +63,20 @@ export interface Lead {
   // Sprint 3 EPIC 1 — Global Lead Database (universal identity)
   origin: 'whatsapp' | 'manual' | 'web' | 'import' | string | null;
   deleted_at: string | null;
+  // Sprint 4 EPIC 1 — identity-layer extensions. Physical columns landed in
+  // migration 20260422000000_sprint4_epic1_foundations.sql.
+  contact_type: ContactType | null;
+  personal_custom_data: Record<string, unknown> | null;
+  created_by_type: CreatedByType | null;
+  created_by_id: string | null;
+  origin_category: OriginCategory | null;
+  origin_detail: string | null;
 }
+
+// Sprint 4 EPIC 3 §3.1 — table stays `leads` physically until Sprint 5; new
+// code uses the `Contact` name to signal the enterprise taxonomy. Drop the
+// alias once the physical rename lands.
+export type Contact = Lead;
 
 export interface PipelineStage {
   id: string;
@@ -110,6 +145,12 @@ export interface UpdateLeadData {
   meeting_date?: string | null;
   meeting_notes?: string | null;
   lead_type?: 'lead' | 'contact' | 'spam';
+  // Sprint 4 EPIC 3 — identity-layer editables
+  contact_type?: ContactType;
+  channel?: string | null;
+  origin_category?: OriginCategory | null;
+  origin_detail?: string | null;
+  personal_custom_data?: Record<string, unknown>;
 }
 
 export interface WebhookConfig {

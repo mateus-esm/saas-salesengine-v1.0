@@ -146,9 +146,9 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
-      toast.success("Oportunidade criada!");
+      toast.success("Lead criado!");
     },
-    onError: (e: Error) => toast.error("Erro ao criar oportunidade: " + e.message),
+    onError: (e: Error) => toast.error("Erro ao criar lead: " + e.message),
   });
 
   const updateOpportunity = useMutation({
@@ -178,7 +178,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
-      toast.success("Oportunidade removida");
+      toast.success("Lead removido");
     },
     onError: (e: Error) => toast.error("Erro ao remover: " + e.message),
   });

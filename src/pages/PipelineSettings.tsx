@@ -311,7 +311,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
           <CardTitle>Etapas</CardTitle>
           <CardDescription>
             Arraste para reordenar. O tipo da etapa (aberto / ganho / perdido)
-            controla quais oportunidades aparecem nos relatórios futuros.
+            controla quais leads aparecem nos relatórios futuros.
           </CardDescription>
         </CardHeader>
         <CardContent>

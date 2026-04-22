@@ -109,7 +109,7 @@ export const OpportunityDetailModal = ({
   };
 
   const handleDelete = () => {
-    if (!confirm("Excluir esta oportunidade?")) return;
+    if (!confirm("Excluir este lead?")) return;
     deleteOpportunity.mutate(opportunity.id);
     onClose();
   };
@@ -119,10 +119,10 @@ export const OpportunityDetailModal = ({
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
-            {lead?.name ?? "Oportunidade"} · {pipeline?.name ?? "Pipeline"}
+            {lead?.name ?? "Lead"} · {pipeline?.name ?? "Pipeline"}
           </DialogTitle>
           <DialogDescription>
-            Editar dados específicos desta oportunidade. Dados do lead são compartilhados entre pipelines.
+            Editar dados específicos deste lead. Dados do contato são compartilhados entre pipelines.
           </DialogDescription>
           <div className="pt-2">
             <EntityChips

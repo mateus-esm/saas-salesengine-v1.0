@@ -78,7 +78,7 @@ const EmptyPipelinesState = () => (
       <LayoutGrid className="h-10 w-10 mx-auto text-muted-foreground" />
       <h2 className="text-lg font-semibold">Nenhuma pipeline ativa</h2>
       <p className="text-sm text-muted-foreground">
-        Crie sua primeira pipeline para começar a organizar oportunidades por
+        Crie sua primeira pipeline para começar a organizar leads por
         processo comercial. Cada pipeline tem suas próprias etapas e campos personalizados.
       </p>
       <Button asChild>

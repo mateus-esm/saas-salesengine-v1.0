@@ -18,7 +18,7 @@ interface DuplicateMatch {
 /**
  * Non-blocking duplicate detection — fires a debounced lookup against the
  * tenant's live leads (deleted_at IS NULL) for exact phone or email matches.
- * Used by AddLeadModal to surface a warning, never to block submission.
+ * Used by AddContactModal to surface a warning, never to block submission.
  */
 export const useLeadDuplicateCheck = ({
   phone,

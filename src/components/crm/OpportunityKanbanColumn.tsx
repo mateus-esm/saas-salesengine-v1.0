@@ -82,7 +82,7 @@ export const OpportunityKanbanColumn = ({
           <div className="space-y-2 min-h-[100px]">
             {opportunities.length === 0 ? (
               <div className="flex items-center justify-center h-24 text-xs text-muted-foreground border-2 border-dashed border-muted rounded-md">
-                Arraste oportunidades aqui
+                Arraste leads aqui
               </div>
             ) : (
               opportunities.map((opp) => (
