@@ -43,6 +43,7 @@ import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
 import { ContactDetailsModal } from "./ContactDetailsModal";
+import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
 import {
   ArrowUpDown,
   Columns,
@@ -54,6 +55,7 @@ import {
   ChevronRight,
   Loader2,
   MessageCircle,
+  Briefcase,
   Check,
   X,
   ExternalLink,
@@ -198,6 +200,10 @@ export const DatabaseView = () => {
   // users can jump from Base de Contatos to a contact's Opportunities.
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
+  // Sprint 4 EPIC 4 §4.3.1 — "Assign Contact to Pipeline" single-row flow.
+  // Bulk flow (same dialog, multiple ids) runs through BulkActions.
+  const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
+
   // Filter states
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [responsibleFilter, setResponsibleFilter] = useState<string>("all");
@@ -273,18 +279,33 @@ export const DatabaseView = () => {
       id: "open",
       header: "",
       cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Abrir detalhes do contato"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedLead(row.original);
-          }}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Abrir detalhes do contato"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedLead(row.original);
+            }}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Adicionar a uma pipeline"
+            title="Adicionar a uma pipeline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setAssigningLead(row.original);
+            }}
+          >
+            <Briefcase className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       ),
       enableSorting: false,
       enableHiding: false,
@@ -795,6 +816,12 @@ export const DatabaseView = () => {
           deleteLead.mutate(id);
           setSelectedLead(null);
         }}
+      />
+      <AssignToPipelineDialog
+        open={!!assigningLead}
+        onClose={() => setAssigningLead(null)}
+        contactIds={assigningLead ? [assigningLead.id] : []}
+        label={assigningLead?.name ?? undefined}
       />
     </div>
   );

@@ -1,10 +1,18 @@
-import { Building2, Home, Plus, User } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { Building2, Home, User } from "lucide-react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 import type { Lead } from "@/types/crm";
 import { useOpportunityLinks } from "@/hooks/useOpportunityLinks";
+import { CompanySection } from "./companies/CompanySection";
+import { PropertySection } from "./properties/PropertySection";
 
 interface EntityChipsProps {
   opportunityId: string;
@@ -18,15 +26,15 @@ interface EntityChipsProps {
 }
 
 /**
- * Sprint 4 EPIC 2 — header chips on `OpportunityDetailModal`.
+ * Header chips on `OpportunityDetailModal`.
  *
- * Contact chip: fully wired this sprint (clicking closes the opp modal and
- * opens `ContactDetailsModal`).
+ * Contact chip (Sprint 4 EPIC 2): clicking closes the opp modal and opens
+ * `ContactDetailsModal`.
  *
- * Company / Property chips: render counts from `opportunity_links` and the
- * "+ Vincular" affordance, but the actual drawers + linker arrive in Epic 4.
- * We surface a toast so users know the link is shipping next sprint instead of
- * silently no-op'ing.
+ * Company / Property chips (Sprint 4 EPIC 4): clicking opens a compact manage
+ * dialog that embeds the matching section (list + EntityLinker for adds).
+ * The Opportunity body also carries those sections for direct editing — the
+ * chips provide a quick-access affordance at the header level.
  */
 export const EntityChips = ({
   opportunityId,
@@ -34,9 +42,7 @@ export const EntityChips = ({
   onOpenContact,
 }: EntityChipsProps) => {
   const { companyIds, propertyIds, isLoading } = useOpportunityLinks(opportunityId);
-
-  const epic4ComingSoon = (entity: "Empresa" | "Imóvel/Site") =>
-    toast.info(`Vinculador de ${entity} chega em Sprint 4 · EPIC 4.`);
+  const [openManager, setOpenManager] = useState<"company" | "property" | null>(null);
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -67,9 +73,8 @@ export const EntityChips = ({
               : "Vincular empresa"
         }
         tone={companyIds.length > 0 ? "company" : "muted"}
-        rightIcon={companyIds.length === 0 ? <Plus className="h-3 w-3" /> : undefined}
-        onClick={() => epic4ComingSoon("Empresa")}
-        title="Disponível em Sprint 4 · EPIC 4"
+        onClick={() => setOpenManager("company")}
+        title="Gerenciar empresas vinculadas"
       />
 
       <Chip
@@ -82,17 +87,39 @@ export const EntityChips = ({
               : "Vincular imóvel"
         }
         tone={propertyIds.length > 0 ? "property" : "muted"}
-        rightIcon={propertyIds.length === 0 ? <Plus className="h-3 w-3" /> : undefined}
-        onClick={() => epic4ComingSoon("Imóvel/Site")}
-        title="Disponível em Sprint 4 · EPIC 4"
+        onClick={() => setOpenManager("property")}
+        title="Gerenciar propriedades vinculadas"
       />
+
+      <Dialog
+        open={openManager === "company"}
+        onOpenChange={(o) => !o && setOpenManager(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Empresas vinculadas</DialogTitle>
+          </DialogHeader>
+          <CompanySection mode={{ kind: "opportunity", opportunityId }} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={openManager === "property"}
+        onOpenChange={(o) => !o && setOpenManager(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Propriedades vinculadas</DialogTitle>
+          </DialogHeader>
+          <PropertySection mode={{ kind: "opportunity", opportunityId }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 interface ChipProps {
   icon: React.ReactNode;
-  rightIcon?: React.ReactNode;
   label: string;
   tone: "contact" | "company" | "property" | "muted";
   onClick?: () => void;
@@ -107,7 +134,7 @@ const toneClasses: Record<ChipProps["tone"], string> = {
   muted: "border-border text-muted-foreground hover:bg-muted/50",
 };
 
-const Chip = ({ icon, rightIcon, label, tone, onClick, disabled, title }: ChipProps) => {
+const Chip = ({ icon, label, tone, onClick, disabled, title }: ChipProps) => {
   return (
     <button
       type="button"
@@ -123,8 +150,6 @@ const Chip = ({ icon, rightIcon, label, tone, onClick, disabled, title }: ChipPr
     >
       {icon}
       <span className="truncate max-w-[160px]">{label}</span>
-      {rightIcon}
     </button>
   );
 };
-
