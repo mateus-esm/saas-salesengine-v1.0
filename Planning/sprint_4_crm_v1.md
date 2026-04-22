@@ -502,12 +502,43 @@ WITH backfill AS (
 
 ### ✅ EPIC 3 Acceptance Criteria
 
-- [ ] Every UI string updated ("Leads" → "Base de Contatos", "Opportunities" →
-      "Leads")
-- [ ] Contact detail modal primary view shows zero legacy sales fields
-- [ ] Backfill migration moves 100% of legacy sales data into Opportunities
-- [ ] Origin picker in `AddLeadModal` (now `AddContactModal`) uses MECE taxonomy
-- [ ] `personal_custom_data` enrichment fields render and persist
+- [x] Every UI string updated ("Leads" → "Base de Contatos", "Opportunities" →
+      "Leads") — top tab already shipped in EPIC 2; EPIC 3 completes the pass
+      on pipeline-card contexts (`OpportunityKanban` count, `KanbanColumn`
+      empty state, `OpportunityDetailModal` title/description/confirm,
+      `LeadOpportunitiesSection` heading + hint, `OpportunityTable` header +
+      empty state, `useOpportunities` toasts, `DatabaseView` header rebrand to
+      "Base de Contatos", `CRM` empty pipeline state, `PipelineSettings` stage
+      helper). Legacy labels on `CRMContextPanel`/`ConversationHeader`
+      annotated with "(legado)" stay put — Sprint 5 retires them with the
+      physical rename.
+- [x] Contact detail modal primary view shows zero legacy sales fields
+      (`ContactDetailsModal` replaces `LeadDetailsModal` — drops stage picker,
+      responsible, opportunity_value, meeting_date, meeting_notes,
+      meeting_scheduled/meeting_done/no_show, next_contact, niche
+      `custom_fields`. Identity block now carries channel + origin_category
+      (grouped select) + origin_detail + contact_type. Per-pipeline sales
+      fields stay editable via the embedded `LeadOpportunitiesSection`.)
+- [x] Backfill migration moves 100% of legacy sales data into Opportunities
+      (`20260423000000_sprint4_epic3_backfill.sql` — idempotent via
+      `custom_data.legacy_backfilled` marker; UPDATE path merges legacy
+      flags/dates into the most-recent open opp; INSERT path synthesizes a
+      new opp in the tenant's `default_pipeline_id` first stage for contacts
+      with no open opps; tenants lacking a default pipeline are reported via
+      `RAISE NOTICE`. Run against staging; manual regression is an
+      **Orchestrator task**.)
+- [x] Origin picker in `AddLeadModal` (now `AddContactModal`) uses MECE
+      taxonomy (grouped Select over the 12-value
+      `origin_category` check constraint, split into Inbound/Outbound/Rede/
+      Sistema; free-text `origin_detail` input persists alongside. Dialog
+      title + CTA retitled.)
+- [x] `personal_custom_data` enrichment fields render and persist
+      (`src/config/contactEnrichmentSchema.ts` defines the fixed schema —
+      Aniversário / Cargo / LinkedIn / Instagram / Foto de Perfil (URL) —
+      fed into the existing `DynamicFieldRenderer`; persisted via
+      `useLeads.updateLead` which now threads `personal_custom_data`,
+      `origin_category`, `origin_detail`, `contact_type`, `channel` through
+      the spread update.)
 
 ---
 

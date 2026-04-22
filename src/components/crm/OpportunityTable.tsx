@@ -32,10 +32,9 @@ import {
 import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
-import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 
-import { LeadDetailsModal } from "./LeadDetailsModal";
+import { ContactDetailsModal } from "./ContactDetailsModal";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import type { Lead } from "@/types/crm";
 import type {
@@ -89,8 +88,6 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const { stages } = usePipelineStagesV2(pipelineId);
   const { opportunities, isLoading, updateOpportunity } = useOpportunities({ pipelineId });
   const { leads, updateLead, deleteLead } = useLeads();
-  // Legacy v1 stages still feed LeadDetailsModal (Sprint 5 cleanup).
-  const { stages: legacyStages } = usePipelineStages();
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -304,7 +301,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           <div>
             <h1 className="text-xl font-bold">{pipeline?.name ?? "Pipeline"}</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {rows.length} oportunidades · {schema.length} campos personalizados
+              {rows.length} leads · {schema.length} campos personalizados
             </p>
           </div>
         </div>
@@ -381,7 +378,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-24 text-center">
-                    Nenhuma oportunidade encontrada.
+                    Nenhum lead encontrado nesta pipeline.
                   </TableCell>
                 </TableRow>
               )}
@@ -403,9 +400,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         }}
       />
 
-      <LeadDetailsModal
+      <ContactDetailsModal
         lead={contactDrawerLead}
-        stages={legacyStages}
         open={!!contactDrawerLead}
         onClose={() => setContactDrawerLead(null)}
         onSave={(data) => {

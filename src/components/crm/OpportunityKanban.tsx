@@ -25,10 +25,9 @@ import {
 import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
-import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 
-import { LeadDetailsModal } from "./LeadDetailsModal";
+import { ContactDetailsModal } from "./ContactDetailsModal";
 import { OpportunityCard } from "./OpportunityCard";
 import { OpportunityKanbanColumn } from "./OpportunityKanbanColumn";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
@@ -48,9 +47,6 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     pipelineId,
   });
   const { leads, updateLead, deleteLead } = useLeads();
-  // Legacy v1 stages still feed the LeadDetailsModal — its stage picker is a
-  // contact-level field that retires Sprint 5 with the leads→contacts rename.
-  const { stages: legacyStages } = usePipelineStages();
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -213,7 +209,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
             {pipeline?.name ?? "Pipeline"}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {opportunities.length} oportunidades · {orderedStages.length} etapas
+            {opportunities.length} leads · {orderedStages.length} etapas
           </p>
         </div>
         <div className="flex gap-2">
@@ -271,9 +267,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         }}
       />
 
-      <LeadDetailsModal
+      <ContactDetailsModal
         lead={contactDrawerLead}
-        stages={legacyStages}
         open={!!contactDrawerLead}
         onClose={() => setContactDrawerLead(null)}
         onSave={(data) => {

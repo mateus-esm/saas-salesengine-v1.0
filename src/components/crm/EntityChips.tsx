@@ -21,7 +21,7 @@ interface EntityChipsProps {
  * Sprint 4 EPIC 2 — header chips on `OpportunityDetailModal`.
  *
  * Contact chip: fully wired this sprint (clicking closes the opp modal and
- * opens `LeadDetailsModal`).
+ * opens `ContactDetailsModal`).
  *
  * Company / Property chips: render counts from `opportunity_links` and the
  * "+ Vincular" affordance, but the actual drawers + linker arrive in Epic 4.

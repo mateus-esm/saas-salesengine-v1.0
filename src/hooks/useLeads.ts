@@ -92,20 +92,22 @@ export const useLeads = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
-      toast.success("Lead criado com sucesso!");
+      toast.success("Contato criado com sucesso!");
     },
     onError: (error) => {
-      toast.error("Erro ao criar lead: " + error.message);
+      toast.error("Erro ao criar contato: " + error.message);
     },
   });
 
   const updateLead = useMutation({
     mutationFn: async ({ id, ...updateData }: UpdateLeadData) => {
+      // Sprint 4 EPIC 3 — identity-layer columns (personal_custom_data,
+      // origin_category, origin_detail, contact_type, channel) flow through
+      // the spread below since UpdateLeadData now includes them.
       const { data, error } = await sb
         .from("leads")
         .update({
           ...updateData,
-          custom_fields: updateData.custom_fields,
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
@@ -117,10 +119,10 @@ export const useLeads = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
-      toast.success("Lead atualizado!");
+      toast.success("Contato atualizado!");
     },
     onError: (error) => {
-      toast.error("Erro ao atualizar lead: " + error.message);
+      toast.error("Erro ao atualizar contato: " + error.message);
     },
   });
 
@@ -136,10 +138,10 @@ export const useLeads = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
-      toast.success("Lead removido!");
+      toast.success("Contato removido!");
     },
     onError: (error) => {
-      toast.error("Erro ao remover lead: " + error.message);
+      toast.error("Erro ao remover contato: " + error.message);
     },
   });
 

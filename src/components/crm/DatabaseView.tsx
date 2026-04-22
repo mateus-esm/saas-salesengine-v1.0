@@ -42,7 +42,7 @@ import {
 import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
-import { LeadDetailsModal } from "./LeadDetailsModal";
+import { ContactDetailsModal } from "./ContactDetailsModal";
 import {
   ArrowUpDown,
   Columns,
@@ -556,10 +556,10 @@ export const DatabaseView = () => {
       <div className="flex items-center justify-between p-4 border-b border-border bg-card">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Database <span className="text-primary">Leads</span>
+            Base de <span className="text-primary">Contatos</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredLeads.length} leads • {selectedLeads.length} selecionados • Clique para editar
+            {filteredLeads.length} contatos • {selectedLeads.length} selecionados • Clique para editar
           </p>
         </div>
         <div className="flex gap-2">
@@ -732,7 +732,7 @@ export const DatabaseView = () => {
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-24 text-center">
-                    Nenhum lead encontrado.
+                    Nenhum contato encontrado.
                   </TableCell>
                 </TableRow>
               )}
@@ -783,9 +783,8 @@ export const DatabaseView = () => {
         allLeads={filteredLeads}
         selectedCount={selectedLeads.length}
       />
-      <LeadDetailsModal
+      <ContactDetailsModal
         lead={selectedLead}
-        stages={stages}
         open={!!selectedLead}
         onClose={() => setSelectedLead(null)}
         onSave={(data) => {

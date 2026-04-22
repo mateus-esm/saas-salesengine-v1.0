@@ -13,48 +13,51 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Phone, Mail, DollarSign, User, AlertTriangle } from "lucide-react";
-import { PipelineStage } from "@/types/crm";
-import type { LeadOrigin } from "@/types/pipelines";
+import { Phone, Mail, User, AlertTriangle } from "lucide-react";
+import type { OriginCategory } from "@/types/crm";
+import {
+  ORIGIN_GROUPS,
+  ORIGIN_GROUP_LABELS,
+  originOptionsByGroup,
+} from "@/config/originTaxonomy";
 import { useLeadDuplicateCheck } from "@/hooks/useLeadDuplicateCheck";
 
-interface AddLeadModalProps {
+interface AddContactModalProps {
   open: boolean;
-  stages: PipelineStage[];
   onClose: () => void;
   onAdd: (data: {
     name: string;
     email?: string;
     phone?: string;
-    stage_id?: string;
     observations?: string;
-    source?: string;
-    origin?: LeadOrigin;
-    opportunity_value?: number;
+    origin_category?: OriginCategory | null;
+    origin_detail?: string | null;
   }) => void;
 }
 
-const ORIGIN_OPTIONS: Array<{ value: LeadOrigin; label: string }> = [
-  { value: "manual", label: "Manual" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "web", label: "Site / Web" },
-  { value: "import", label: "Importação" },
-];
-
-export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps) => {
+/**
+ * Sprint 4 EPIC 3 §3.3 — MECE origin picker replaces the Sprint 3 single
+ * `origin` enum. Users now tag contacts with an inbound / outbound / network /
+ * system category plus a free-text detail (campaign name, referrer, event).
+ *
+ * Legacy stage picker and opportunity_value were dropped: Contacts are identity
+ * only; the follow-up "Adicionar a Pipeline" flow (Epic 4) creates the
+ * Opportunity with stage + value.
+ */
+export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
-    stage_id: "",
-    valor: "",
     observations: "",
-    source: "Manual",
-    origin: "manual" as LeadOrigin,
+    origin_category: "" as OriginCategory | "",
+    origin_detail: "",
   });
 
   const { matches: duplicateMatches } = useLeadDuplicateCheck({
@@ -65,51 +68,30 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
   const handleSubmit = () => {
     if (!formData.name.trim()) return;
 
-    const valorNumerico = formData.valor ? parseCurrency(formData.valor) : undefined;
-
     onAdd({
       name: formData.name,
       email: formData.email || undefined,
       phone: formData.phone || undefined,
-      stage_id: formData.stage_id || undefined,
       observations: formData.observations || undefined,
-      source: formData.source,
-      origin: formData.origin,
-      opportunity_value: valorNumerico,
+      origin_category: formData.origin_category || null,
+      origin_detail: formData.origin_detail || null,
     });
 
     setFormData({
       name: "",
       email: "",
       phone: "",
-      stage_id: stages[0]?.id || "",
-      valor: "",
       observations: "",
-      source: "Manual",
-      origin: "manual",
+      origin_category: "",
+      origin_detail: "",
     });
-  };
-
-  const formatCurrency = (value: string) => {
-    const numericValue = value.replace(/\D/g, "");
-    if (!numericValue) return "";
-    const number = parseInt(numericValue, 10) / 100;
-    return number.toLocaleString("pt-BR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
-  const parseCurrency = (value: string): number => {
-    const numericValue = value.replace(/\D/g, "");
-    return parseInt(numericValue, 10) / 100;
   };
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Novo Lead</DialogTitle>
+          <DialogTitle>Novo Contato</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -124,7 +106,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, name: e.target.value }))
                 }
-                placeholder="Nome do lead"
+                placeholder="Nome do contato"
               />
             </div>
           </div>
@@ -164,7 +146,6 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
             </div>
           </div>
 
-          {/* Non-blocking duplicate warning */}
           {duplicateMatches.length > 0 && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <div className="flex items-start gap-2">
@@ -192,93 +173,47 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="add-stage">Etapa</Label>
-              <Select
-                value={formData.stage_id}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, stage_id: value }))
-                }
-              >
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: stage.color }}
-                        />
-                        {stage.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="add-valor">Valor</Label>
-              <div className="relative mt-1.5">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="add-valor"
-                  className="pl-9"
-                  value={formData.valor}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      valor: formatCurrency(e.target.value),
-                    }))
-                  }
-                  placeholder="0,00"
-                />
-              </div>
-            </div>
+          <div>
+            <Label htmlFor="add-origin">Origem</Label>
+            <Select
+              value={formData.origin_category || "__none__"}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  origin_category: value === "__none__" ? "" : (value as OriginCategory),
+                }))
+              }
+            >
+              <SelectTrigger className="mt-1.5">
+                <SelectValue placeholder="Selecione a origem" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">—</SelectItem>
+                {ORIGIN_GROUPS.map((group) => (
+                  <SelectGroup key={group}>
+                    <SelectLabel>{ORIGIN_GROUP_LABELS[group]}</SelectLabel>
+                    {originOptionsByGroup(group).map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="add-origin">Origem</Label>
-              <Select
-                value={formData.origin}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, origin: value as LeadOrigin }))
-                }
-              >
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ORIGIN_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="add-source">Fonte de Captação</Label>
-              <Select
-                value={formData.source}
-                onValueChange={(value) =>
-                  setFormData((prev) => ({ ...prev, source: value }))
-                }
-              >
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Manual">Manual</SelectItem>
-                  <SelectItem value="Ads">Ads (Tráfego Pago)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label htmlFor="add-origin-detail">Detalhe da Origem</Label>
+            <Input
+              id="add-origin-detail"
+              className="mt-1.5"
+              value={formData.origin_detail}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, origin_detail: e.target.value }))
+              }
+              placeholder="Ex.: nome da campanha, evento, indicador..."
+            />
           </div>
 
           <div>
@@ -291,7 +226,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
               }
               rows={3}
               className="mt-1.5 resize-none"
-              placeholder="Notas sobre este lead..."
+              placeholder="Notas sobre este contato..."
             />
           </div>
         </div>
@@ -305,7 +240,7 @@ export const AddLeadModal = ({ open, stages, onClose, onAdd }: AddLeadModalProps
             onClick={handleSubmit}
             disabled={!formData.name.trim()}
           >
-            Adicionar Lead
+            Adicionar Contato
           </Button>
         </DialogFooter>
       </DialogContent>
