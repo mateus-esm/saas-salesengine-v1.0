@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Briefcase, ChevronDown, ChevronRight, Loader2, Plus, Save } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Briefcase, ChevronDown, ChevronRight, ExternalLink, Loader2, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -237,44 +238,57 @@ const OpportunityRow = ({
 
   return (
     <div className="border border-border rounded-md bg-card">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 p-2 text-left hover:bg-muted/30 transition-colors"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium truncate">
-              {pipeline?.name ?? "Pipeline removida"}
-            </span>
-            {stage && (
-              <Badge
-                variant="outline"
-                className="text-xs"
-                style={{ borderColor: stage.color, color: stage.color }}
-              >
-                {stage.name}
-              </Badge>
-            )}
-            {opportunity.status !== "open" && (
-              <Badge
-                variant={opportunity.status === "won" ? "default" : "secondary"}
-                className="text-xs"
-              >
-                {opportunity.status === "won" ? "Ganho" : "Perdido"}
-              </Badge>
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 min-w-0 flex items-center justify-between gap-2 p-2 text-left hover:bg-muted/30 transition-colors"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium truncate">
+                {pipeline?.name ?? "Pipeline removida"}
+              </span>
+              {stage && (
+                <Badge
+                  variant="outline"
+                  className="text-xs"
+                  style={{ borderColor: stage.color, color: stage.color }}
+                >
+                  {stage.name}
+                </Badge>
+              )}
+              {opportunity.status !== "open" && (
+                <Badge
+                  variant={opportunity.status === "won" ? "default" : "secondary"}
+                  className="text-xs"
+                >
+                  {opportunity.status === "won" ? "Ganho" : "Perdido"}
+                </Badge>
+              )}
+            </div>
+            {fmtValue && (
+              <p className="text-xs text-muted-foreground mt-0.5">{fmtValue}</p>
             )}
           </div>
-          {fmtValue && (
-            <p className="text-xs text-muted-foreground mt-0.5">{fmtValue}</p>
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
-        </div>
-        {expanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        </button>
+        {pipeline && (
+          // Sprint 4 EPIC 2 §2.3 — deep-link from a contact's opportunity
+          // straight into the pipeline's Kanban with this card pre-opened.
+          <Link
+            to={`/crm?tab=pipeline&pipeline=${pipeline.id}&view=kanban&opp=${opportunity.id}`}
+            title="Abrir no Kanban"
+            className="px-2 flex items-center justify-center border-l border-border text-muted-foreground hover:text-primary hover:bg-muted/30 transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
         )}
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-border p-3 space-y-3">

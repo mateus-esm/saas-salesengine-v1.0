@@ -42,6 +42,7 @@ import {
 import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
+import { LeadDetailsModal } from "./LeadDetailsModal";
 import {
   ArrowUpDown,
   Columns,
@@ -55,6 +56,7 @@ import {
   MessageCircle,
   Check,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -192,6 +194,10 @@ export const DatabaseView = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
+  // Sprint 4 EPIC 2 — clicking the row's open icon pops the contact drawer so
+  // users can jump from Base de Contatos to a contact's Opportunities.
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
   // Filter states
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [responsibleFilter, setResponsibleFilter] = useState<string>("all");
@@ -259,6 +265,26 @@ export const DatabaseView = () => {
           aria-label="Selecionar linha"
           onClick={(e) => e.stopPropagation()}
         />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      id: "open",
+      header: "",
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          aria-label="Abrir detalhes do contato"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedLead(row.original);
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Button>
       ),
       enableSorting: false,
       enableHiding: false,
@@ -756,6 +782,20 @@ export const DatabaseView = () => {
         leads={selectedLeads.length > 0 ? selectedLeads : filteredLeads}
         allLeads={filteredLeads}
         selectedCount={selectedLeads.length}
+      />
+      <LeadDetailsModal
+        lead={selectedLead}
+        stages={stages}
+        open={!!selectedLead}
+        onClose={() => setSelectedLead(null)}
+        onSave={(data) => {
+          updateLead.mutate(data);
+          setSelectedLead(null);
+        }}
+        onDelete={(id) => {
+          deleteLead.mutate(id);
+          setSelectedLead(null);
+        }}
       />
     </div>
   );

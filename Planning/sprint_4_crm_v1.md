@@ -401,11 +401,22 @@ URL: `/crm?pipeline=<id>&view=kanban|leads|agent`.
 
 ### ✅ EPIC 2 Acceptance Criteria
 
-- [ ] Tabs render correctly, URL persistence works, tab state survives page
-      reload
-- [ ] Deep-link from Contact → Opportunity card opens modal directly
-- [ ] Chip navigation between Contact / Company / Property / Opportunity is
-      bidirectional
+- [x] Tabs render correctly, URL persistence works, tab state survives page
+      reload (`/crm?tab=pipeline|contacts` + per-pipeline
+      `?view=kanban|leads|agent`; both backed by `useSearchParams` and validated
+      against typed unions in `CRM.tsx` and `PipelineWorkspace.tsx`)
+- [x] Deep-link from Contact → Opportunity card opens modal directly
+      (`LeadOpportunitiesSection` row gains an "Abrir no Kanban" link →
+      `/crm?tab=pipeline&pipeline=<id>&view=kanban&opp=<id>`; both
+      `OpportunityKanban` and `OpportunityTable` resolve `?opp=` on mount and
+      strip it on close so reload doesn't re-open)
+- [x] Chip navigation between Contact / Company / Property / Opportunity is
+      bidirectional (`EntityChips` in `OpportunityDetailModal` header — Contact
+      chip fully wired to `LeadDetailsModal` via `onOpenContact` callback in
+      Kanban + Table; Company/Property chips render counts from
+      `opportunity_links` and toast "EPIC 4" until `EntityLinker` lands. Reverse
+      direction — Contact drawer → Opportunity card — flows through the deep-link
+      added to `LeadOpportunitiesSection`)
 
 ---
 
