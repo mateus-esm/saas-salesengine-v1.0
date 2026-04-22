@@ -584,12 +584,40 @@ three consumers.
 
 ### ✅ EPIC 4 Acceptance Criteria
 
-- [ ] Companies module CRUD works end-to-end
-- [ ] Properties module CRUD works end-to-end
-- [ ] `EntityLinker` component used in all three assignment flows
-- [ ] Contact with 3 Companies displays all 3 with distinct roles
-- [ ] Solar Opportunity can link multiple Properties (primary + additional
-      sites)
+- [x] Companies module CRUD works end-to-end (`useCompanies` hook +
+      `CompaniesDatabaseView` table + `AddCompanyModal` + `CompanyDetailModal`
+      — identity edit + soft-delete + realtime invalidation. Accessed via the
+      new `/crm?tab=companies` top-level tab; deep-link `?company=<id>` opens
+      the detail drawer.)
+- [x] Properties module CRUD works end-to-end (`useProperties` hook +
+      `AddPropertyModal` + `PropertyDetailModal` — identity + structured
+      address + lat/lng + soft-delete. Properties are accessed *from* the
+      parent entities — no top-level tab, per §4.2.)
+- [x] `EntityLinker` component used in all three assignment flows
+      (`src/components/crm/EntityLinker.tsx` — generic search+create Popover
+      over `companies`/`properties`/`leads`; also swapped in as the engine
+      behind `EntityRefField` inside `DynamicFieldRenderer` so custom-field
+      references share the UX. Flows:
+      1. `AssignToPipelineDialog` (single row action + `BulkActions` bulk) —
+         promotes `contact_type='lead'` to `'opportunity'` on success.
+      2. `CompanySection` inside `ContactDetailsModal` — contact↔company via
+         `contact_company_links` + role + `is_primary` toggle.
+      3. `PropertySection` inside `OpportunityDetailModal` — opportunity→
+         property via `opportunity_links`; sibling `CompanySection` added in
+         the same pass for opportunity→company.
+      `EntityChips` header in `OpportunityDetailModal` now opens the matching
+      manager dialog instead of toasting "EPIC 4 coming soon".)
+- [x] Contact with 3 Companies displays all 3 with distinct roles
+      (`CompanySection contact` mode + `useContactCompanyLinks` — UNIQUE
+      (contact_id, company_id, role) lets the same pair coexist with different
+      roles; row selector wires `updateRole` per link; `setPrimary` is
+      advisory and clears sibling flags atomically.)
+- [x] Solar Opportunity can link multiple Properties (primary + additional
+      sites) (`PropertySection opportunity` mode + extended
+      `useOpportunityLinks` with `linkEntity`/`unlinkEntity`; UNIQUE
+      (opportunity_id, linked_type, linked_id, relation) allows many
+      properties per opp. `relation` defaults to "related"; future work can
+      distinguish primary/secondary per-relation without schema changes.)
 
 ---
 

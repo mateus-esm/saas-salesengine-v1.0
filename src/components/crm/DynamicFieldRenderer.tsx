@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, Check, ChevronsUpDown, X } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,8 +26,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+
+import { EntityLinker, type EntityKind } from "./EntityLinker";
 
 import type {
   AddressValue,
@@ -45,9 +44,6 @@ type CustomDataValue =
   | string[]
   | AddressValue;
 type CustomDataMap = Record<string, unknown>;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sb = supabase as any;
 
 interface DynamicFieldRendererProps {
   schema: CustomFieldSchema[];
@@ -338,7 +334,6 @@ const FieldInput = ({ field, value, onChange, disabled }: FieldInputProps) => {
         <div className="space-y-1.5">
           {labelNode}
           <EntityRefField
-            inputId={inputId}
             entity="company"
             value={(value as string) ?? null}
             onChange={(next) => onChange(next)}
@@ -352,7 +347,6 @@ const FieldInput = ({ field, value, onChange, disabled }: FieldInputProps) => {
         <div className="space-y-1.5">
           {labelNode}
           <EntityRefField
-            inputId={inputId}
             entity="property"
             value={(value as string) ?? null}
             onChange={(next) => onChange(next)}
@@ -366,7 +360,6 @@ const FieldInput = ({ field, value, onChange, disabled }: FieldInputProps) => {
         <div className="space-y-1.5">
           {labelNode}
           <EntityRefField
-            inputId={inputId}
             entity="contact"
             value={(value as string) ?? null}
             onChange={(next) => onChange(next)}
@@ -538,180 +531,29 @@ const AddressField = ({ value, onChange, disabled }: AddressFieldProps) => {
   );
 };
 
-// Tenant-scoped entity picker (company / property / contact). Epic 4 will
-// refine this with the shared EntityLinker (search + create-inline).
-type EntityKind = "company" | "property" | "contact";
+// Tenant-scoped entity picker — thin wrapper around the shared EntityLinker.
+// EPIC 1 introduced a bespoke Popover+Command for ref fields; EPIC 4 promoted
+// that logic into `EntityLinker` so assignment flows and custom-field values
+// share the same UX. Custom fields don't support create-inline today (users
+// create entities from Companies / Contacts pages); we pass no `onCreateStart`.
 
 interface EntityRefFieldProps {
-  inputId: string;
   entity: EntityKind;
   value: string | null;
   onChange: (next: string | null) => void;
   disabled: boolean;
 }
 
-interface EntityOption {
-  id: string;
-  label: string;
-  sublabel?: string;
-}
-
-const ENTITY_META: Record<EntityKind, { table: string; placeholder: string }> = {
-  company:  { table: "companies",  placeholder: "Buscar empresa..."  },
-  property: { table: "properties", placeholder: "Buscar propriedade..." },
-  contact:  { table: "leads",      placeholder: "Buscar contato..."  },
-};
-
-const EntityRefField = ({ inputId, entity, value, onChange, disabled }: EntityRefFieldProps) => {
-  const { profile } = useAuth();
-  const equipeId = profile?.equipe_id;
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const meta = ENTITY_META[entity];
-
-  // Load currently-selected row (for label when closed).
-  const { data: selected } = useQuery<EntityOption | null>({
-    queryKey: ["ref_selected", entity, value],
-    enabled: !!value && !!equipeId,
-    queryFn: async () => {
-      if (!value) return null;
-      const cols =
-        entity === "property" ? "id,label,property_type" :
-        entity === "contact"  ? "id,name,phone" :
-                                "id,name,industry";
-      const { data, error } = await sb
-        .from(meta.table)
-        .select(cols)
-        .eq("id", value)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      return toOption(entity, data);
-    },
-  });
-
-  // Search results.
-  const { data: options = [], isFetching } = useQuery<EntityOption[]>({
-    queryKey: ["ref_search", entity, equipeId, search],
-    enabled: open && !!equipeId,
-    queryFn: async () => {
-      const labelCol = entity === "property" ? "label" : "name";
-      const cols =
-        entity === "property" ? "id,label,property_type" :
-        entity === "contact"  ? "id,name,phone" :
-                                "id,name,industry";
-      let q = sb
-        .from(meta.table)
-        .select(cols)
-        .eq("equipe_id", equipeId)
-        .is("deleted_at", null)
-        .order(labelCol, { ascending: true })
-        .limit(20);
-      if (search.trim()) {
-        q = q.ilike(labelCol, `%${search.trim()}%`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []).map((row: unknown) => toOption(entity, row as Record<string, unknown>));
-    },
-  });
-
+const EntityRefField = ({ entity, value, onChange, disabled }: EntityRefFieldProps) => {
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={inputId}
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="w-full justify-between"
-        >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? selected.label : meta.placeholder}
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            {value && !disabled && (
-              <span
-                role="button"
-                aria-label="Limpar seleção"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onChange(null);
-                }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </span>
-            )}
-            <ChevronsUpDown className="h-4 w-4 opacity-50" />
-          </div>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={meta.placeholder}
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList>
-            <CommandEmpty>
-              {isFetching ? "Buscando..." : "Nenhum resultado."}
-            </CommandEmpty>
-            <CommandGroup>
-              {options.map((opt) => (
-                <CommandItem
-                  key={opt.id}
-                  value={opt.id}
-                  onSelect={() => {
-                    onChange(opt.id);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === opt.id ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-sm">{opt.label}</span>
-                    {opt.sublabel && (
-                      <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <EntityLinker
+      entity={entity}
+      selected={value}
+      onSelect={(id) => onChange(id)}
+      onClear={() => onChange(null)}
+      disabled={disabled}
+    />
   );
-};
-
-const toOption = (entity: EntityKind, row: Record<string, unknown>): EntityOption => {
-  if (entity === "property") {
-    return {
-      id: row.id as string,
-      label: (row.label as string) || "(sem rótulo)",
-      sublabel: row.property_type as string | undefined,
-    };
-  }
-  if (entity === "contact") {
-    return {
-      id: row.id as string,
-      label: (row.name as string) || "(sem nome)",
-      sublabel: row.phone as string | undefined,
-    };
-  }
-  return {
-    id: row.id as string,
-    label: (row.name as string) || "(sem nome)",
-    sublabel: row.industry as string | undefined,
-  };
 };
 
 // ─────────────────────────────────────────────────────────────────────

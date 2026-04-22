@@ -153,6 +153,129 @@ export interface UpdateLeadData {
   personal_custom_data?: Record<string, unknown>;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Sprint 4 EPIC 4 — Companies, Properties, Associations
+// ─────────────────────────────────────────────────────────────────────
+
+export type CompanySizeBracket =
+  | 'solo'
+  | '2-10'
+  | '11-50'
+  | '51-200'
+  | '201-1000'
+  | '1000+';
+
+export interface Company {
+  id: string;
+  equipe_id: string;
+  name: string;
+  legal_name: string | null;
+  cnpj: string | null;
+  website: string | null;
+  industry: string | null;
+  size_bracket: CompanySizeBracket | null;
+  custom_data: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface CreateCompanyData {
+  name: string;
+  legal_name?: string | null;
+  cnpj?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  size_bracket?: CompanySizeBracket | null;
+  custom_data?: Record<string, unknown>;
+}
+
+export interface UpdateCompanyData {
+  id: string;
+  name?: string;
+  legal_name?: string | null;
+  cnpj?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  size_bracket?: CompanySizeBracket | null;
+  custom_data?: Record<string, unknown>;
+}
+
+export type PropertyType = 'address' | 'site' | 'unit' | 'custom';
+
+export interface PropertyAddress {
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
+
+export interface Property {
+  id: string;
+  equipe_id: string;
+  label: string;
+  property_type: PropertyType;
+  address: PropertyAddress | null;
+  latitude: number | null;
+  longitude: number | null;
+  attributes: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface CreatePropertyData {
+  label: string;
+  property_type?: PropertyType;
+  address?: PropertyAddress | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  attributes?: Record<string, unknown>;
+}
+
+export interface UpdatePropertyData {
+  id: string;
+  label?: string;
+  property_type?: PropertyType;
+  address?: PropertyAddress | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  attributes?: Record<string, unknown>;
+}
+
+export type ContactCompanyRole =
+  | 'owner'
+  | 'decision_maker'
+  | 'employee'
+  | 'former'
+  | 'advisor'
+  | 'other';
+
+export interface ContactCompanyLink {
+  id: string;
+  equipe_id: string;
+  contact_id: string;
+  company_id: string;
+  role: ContactCompanyRole;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export type PropertyOwnerType = 'contact' | 'company';
+
+export interface PropertyOwnerLink {
+  id: string;
+  equipe_id: string;
+  property_id: string;
+  owner_type: PropertyOwnerType;
+  owner_id: string;
+  created_at: string;
+}
+
 export interface WebhookConfig {
   id: string;
   equipe_id: string;

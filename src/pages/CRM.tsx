@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { LayoutGrid, Plus, Users } from "lucide-react";
+import { Building2, LayoutGrid, Plus, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { AIAgentToggle } from "@/components/AIAgentToggle";
 import { DatabaseView } from "@/components/crm/DatabaseView";
 import { PipelineWorkspace } from "@/components/crm/PipelineWorkspace";
+import { CompaniesDatabaseView } from "@/components/crm/companies/CompaniesDatabaseView";
 import { usePipelineSelection } from "@/hooks/usePipelineSelection";
 
-type TopTab = "pipeline" | "contacts";
+type TopTab = "pipeline" | "contacts" | "companies";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
@@ -30,11 +31,15 @@ const CRM = () => {
       if (!isTopTab(next)) return;
       const params = new URLSearchParams(searchParams);
       params.set("tab", next);
-      // Switching to global Base de Contatos drops pipeline-scoped state so the
-      // URL is honest about what's on screen.
-      if (next === "contacts") {
+      // Switching away from Pipeline drops pipeline-scoped state so the URL
+      // is honest about what's on screen. Switching away from Companies drops
+      // the `company` deep-link param for the same reason.
+      if (next !== "pipeline") {
         params.delete("view");
         params.delete("opp");
+      }
+      if (next !== "companies") {
+        params.delete("company");
       }
       setSearchParams(params, { replace: false });
     },
@@ -54,6 +59,10 @@ const CRM = () => {
               <Users className="h-4 w-4" />
               Base de Contatos
             </TabsTrigger>
+            <TabsTrigger value="companies" className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Empresas
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         <AIAgentToggle />
@@ -62,6 +71,8 @@ const CRM = () => {
       <div className="flex-1 overflow-hidden">
         {tab === "contacts" ? (
           <DatabaseView />
+        ) : tab === "companies" ? (
+          <CompaniesDatabaseView />
         ) : !isLoading && pipelines.length === 0 ? (
           <EmptyPipelinesState />
         ) : pipelineId ? (

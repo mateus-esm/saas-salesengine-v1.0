@@ -24,6 +24,8 @@ import { toast } from "sonner";
 
 import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer";
 import { EntityChips } from "./EntityChips";
+import { CompanySection } from "./companies/CompanySection";
+import { PropertySection } from "./properties/PropertySection";
 import type { Lead } from "@/types/crm";
 import type {
   Opportunity,
@@ -189,6 +191,14 @@ export const OpportunityDetailModal = ({
                 Campos personalizados
               </h4>
               <DynamicFieldRenderer schema={schema} value={customData} onChange={setCustomData} />
+            </div>
+
+            {/* Sprint 4 EPIC 4 — secondary attachments (companies, properties) */}
+            <div className="pt-3 border-t border-border">
+              <CompanySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
+            </div>
+            <div className="pt-3 border-t border-border">
+              <PropertySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
             </div>
           </div>
         </ScrollArea>

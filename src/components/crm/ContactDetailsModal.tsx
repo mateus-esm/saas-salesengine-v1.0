@@ -44,6 +44,8 @@ import { toast } from "sonner";
 import type { Lead, ContactType, OriginCategory } from "@/types/crm";
 import { LeadOpportunitiesSection } from "./LeadOpportunitiesSection";
 import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
+import { CompanySection } from "./companies/CompanySection";
+import { PropertySection } from "./properties/PropertySection";
 import { CONTACT_ENRICHMENT_SCHEMA } from "@/config/contactEnrichmentSchema";
 import {
   ORIGIN_CATEGORY_OPTIONS,
@@ -466,6 +468,21 @@ export const ContactDetailsModal = ({
                     })}
                   </p>
                 </div>
+
+                {/* Sprint 4 EPIC 4 — companies + properties linked to this contact */}
+                {lead?.id && (
+                  <div className="pt-4 border-t border-border">
+                    <CompanySection mode={{ kind: "contact", contactId: lead.id }} />
+                  </div>
+                )}
+
+                {lead?.id && (
+                  <div className="pt-4 border-t border-border">
+                    <PropertySection
+                      mode={{ kind: "owner", ownerType: "contact", ownerId: lead.id }}
+                    />
+                  </div>
+                )}
 
                 {/* Cross-pipeline opportunities — users edit per-pipeline sales data here */}
                 <div className="pt-4 border-t border-border">
