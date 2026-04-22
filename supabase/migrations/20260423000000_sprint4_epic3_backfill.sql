@@ -80,7 +80,6 @@ WITH target AS (
     l.meeting_date,
     l.no_show,
     l.next_contact,
-    l.lead_score,
     l.responsible_id
   FROM public.opportunities o
   JOIN public.leads l ON l.id = o.lead_id
@@ -98,7 +97,6 @@ WITH target AS (
       OR COALESCE(l.no_show, false)
       OR l.meeting_date IS NOT NULL
       OR l.next_contact IS NOT NULL
-      OR COALESCE(l.lead_score, 0) > 0
       OR l.responsible_id IS NOT NULL
     )
   ORDER BY o.lead_id, o.updated_at DESC
@@ -121,7 +119,6 @@ SET
       'legacy_meeting_date',      t.meeting_date,
       'legacy_no_show',           CASE WHEN t.no_show           IS NOT NULL THEN to_jsonb(t.no_show)           END,
       'legacy_next_contact',      t.next_contact,
-      'legacy_lead_score',        CASE WHEN t.lead_score        IS NOT NULL THEN to_jsonb(t.lead_score)        END,
       'legacy_responsible_id',    t.responsible_id
     )),
   updated_at = now()
@@ -153,7 +150,6 @@ WITH eligible AS (
     l.meeting_date,
     l.no_show,
     l.next_contact,
-    l.lead_score,
     l.responsible_id,
     e.default_pipeline_id
   FROM public.leads l
@@ -174,7 +170,6 @@ WITH eligible AS (
       OR COALESCE(l.no_show, false)
       OR l.meeting_date IS NOT NULL
       OR l.next_contact IS NOT NULL
-      OR COALESCE(l.lead_score, 0) > 0
       OR l.responsible_id IS NOT NULL
     )
 ),
@@ -209,7 +204,6 @@ SELECT
     'legacy_meeting_date',      e.meeting_date,
     'legacy_no_show',           CASE WHEN e.no_show           IS NOT NULL THEN to_jsonb(e.no_show)           END,
     'legacy_next_contact',      e.next_contact,
-    'legacy_lead_score',        CASE WHEN e.lead_score        IS NOT NULL THEN to_jsonb(e.lead_score)        END,
     'legacy_responsible_id',    e.responsible_id
   )),
   now(),
@@ -244,7 +238,6 @@ BEGIN
       OR COALESCE(l.no_show, false)
       OR l.meeting_date IS NOT NULL
       OR l.next_contact IS NOT NULL
-      OR COALESCE(l.lead_score, 0) > 0
       OR l.responsible_id IS NOT NULL
     );
 
