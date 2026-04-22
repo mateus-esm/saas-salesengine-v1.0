@@ -24,6 +24,7 @@ Always read this file (`Planning/agent_workflow.md`) and the active sprint docum
 
 ### 5. ✅ Completion & Handoff
 - Mark your specific sub-task as completed (`[x]`) in the active sprint document (e.g., `Planning/sprint_chat_v1.md`).
+- **💰 Log your execution cost:** Open `Planning/billing.md` and add a new row to the tracking table. Calculate your token usage for the task and estimate the cost in BRL (R$).
 - Commit your changes locally to your branch.
 - Explicitly tell the Orchestrator your work is done.
 - The Orchestrator will handle the merge back to main and command agents to synchronize (`git pull`).
