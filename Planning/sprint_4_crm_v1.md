@@ -685,11 +685,30 @@ not critical for V1.
 
 ### ✅ EPIC 5 Acceptance Criteria
 
-- [ ] Admin can create a rule with all 6 trigger types and all 9 action types
-- [ ] Rule changes persist and take effect on the next inbound message
-- [ ] `ai_decisions` audit log references the firing rule id
-- [ ] Extraction hints flow into the AI prompt and influence field extraction
-- [ ] Cooldown respected per-Contact (existing behavior preserved)
+- [x] Admin can create a rule with all 6 trigger types and all 9 action types
+      (`AgentRulesPanel.tsx` — full rewrite from placeholder; `RuleCard` with
+      `TriggerEditor` (6 types: intent_detected, message_contains,
+      media_received, stage_entered, idle_in_stage, custom_field_set) +
+      `ActionEditor` (9 types: move_stage, set_status, set_field,
+      set_contact_field, add_touchpoint, add_note, create_task, add_tag,
+      trigger_webhook). `stage_entered`/`idle_in_stage` are configurable in
+      UI but noted as Sprint 5 event/cron-driven.)
+- [x] Rule changes persist and take effect on the next inbound message
+      (`useAgentRules.ts` — upsert mutation against `pipeline_agent_rules`;
+      `analyze-message` fetches rules via `fetchPipelineAgentRules`,
+      evaluates triggers via `evaluateTriggers`, executes actions via
+      `executeActions` — all in `_shared/rule-engine.ts`.)
+- [x] `ai_decisions` audit log references the firing rule id
+      (`analyze-message` writes `rule_id` to main audit row; multi-rule
+      firing produces one `ai_decisions` row per rule with
+      `decision_type='rule_fired'`.)
+- [x] Extraction hints flow into the AI prompt and influence field extraction
+      (`analyze-message` appends `rules.extraction_hints` as system prompt
+      suffix: "Instruções adicionais da pipeline:\n...")
+- [x] Cooldown respected per-Contact (existing behavior preserved)
+      (`analyze-message` reads `rules.cooldown_minutes` with fallback to
+      `CONFIG.DEFAULT_COOLDOWN_MINUTES = 3`; per-contact cooldown logic
+      unchanged.)
 
 ---
 
@@ -710,17 +729,17 @@ not critical for V1.
 
 ## ✅ SPRINT 4 DEFINITION OF DONE
 
-- [ ] Epic 0 cutover complete and regression-tested before any Epic 1–5 work
+- [x] Epic 0 cutover complete and regression-tested before any Epic 1–5 work
       ships
-- [ ] All new tables RLS-protected and tenant-isolation integration-tested
-- [ ] All migrations forward + reversible; Sprint 3 reversibility debt paid
-- [ ] `DynamicFieldRenderer` renders 13 field types (6 existing + 7 new)
-- [ ] Seed script: 2 tenants × 2 pipelines × 30 opportunities × 60 contacts × 20
+- [x] All new tables RLS-protected and tenant-isolation integration-tested
+- [x] All migrations forward + reversible; Sprint 3 reversibility debt paid
+- [x] `DynamicFieldRenderer` renders 13 field types (6 existing + 7 new)
+- [x] Seed script: 2 tenants × 2 pipelines × 30 opportunities × 60 contacts × 20
       companies × 15 properties
-- [ ] `CustomFieldsEditor` dropdown-option bug fixed (Enter creates new line)
-- [ ] Zero new external dependencies beyond Supabase-native features
-- [ ] Legacy lead-centric Kanban code deleted from codebase
-- [ ] Dashboard KPIs read from new model; dashboard UI unchanged
+- [x] `CustomFieldsEditor` dropdown-option bug fixed (Enter creates new line)
+- [x] Zero new external dependencies beyond Supabase-native features
+- [x] Legacy lead-centric Kanban code deleted from codebase
+- [x] Dashboard KPIs read from new model; dashboard UI unchanged
 
 ---
 

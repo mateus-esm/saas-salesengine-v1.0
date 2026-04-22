@@ -19,7 +19,8 @@
       "Bash(echo \"TSC=$?\")",
       "Bash(echo \"ESLINT=$?\")",
       "Bash(grep -E \"\\(OpportunityKanban|OpportunityTable|OpportunityCard|OpportunityDetail|OpportunityKanbanColumn|PipelineSelector|usePipelineSelection|CardFieldsPicker|LeadOpportunitiesSection|CRMContextPanel|pages.CRM|pages\\\\\\\\\\\\\\\\CRM\\)\")",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }

@@ -5,6 +5,12 @@ import {
   resolveActiveOpportunity,
   resolveStageByTypeAndName,
 } from "../_shared/opportunities.ts";
+import {
+  fetchPipelineAgentRules,
+  evaluateTriggers,
+  executeActions,
+} from "../_shared/rule-engine.ts";
+import type { RuleEvalContext, ActionContext } from "../_shared/rule-engine.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,11 +22,12 @@ const CONFIG = {
   MIN_NEW_MESSAGES: 2,
   CONTEXT_MESSAGES: 5,
   NEW_MESSAGES_LIMIT: 10,
-  COOLDOWN_MINUTES: 3,
+  DEFAULT_COOLDOWN_MINUTES: 3,
 };
 
-// Sprint 4 EPIC 0 — stage name hints are hardcoded this sprint. Epic 4/5
-// moves them to pipeline_agent_rules so admins can customize per pipeline.
+// Sprint 4 EPIC 5 — stage name hints are now loaded from pipeline_agent_rules
+// when available. These hardcoded hints remain as fallback for pipelines that
+// haven't configured agent rules yet.
 const STAGE_NAME_HINTS = {
   scheduled: 'Reunião Agendada',
   qualified: 'Qualificação',
@@ -49,7 +56,7 @@ const EXTRACTION_TOOL = {
   }
 };
 
-const SYSTEM_PROMPT = `Analise o chat de energia solar. Msgs novas marcadas com [NOVO].
+const BASE_SYSTEM_PROMPT = `Analise o chat de energia solar. Msgs novas marcadas com [NOVO].
 - meeting_scheduled=true se CONFIRMOU horário
 - intent: SCHEDULED/INTERESTED/DISQUALIFIED/SPAM ou UNCHANGED se nada relevante
 - Extraia dados mencionados: nome, email, consumo, telhado, valor
@@ -67,9 +74,7 @@ serve(async (req) => {
     lead_id: null as string | null,
     equipe_id: null as string | null,
     opportunity_id: null as string | null,
-    // Sprint 4 EPIC 1: points at pipeline_agent_rules.triggers[].id.
-    // Stays null until Epic 5 wires rule matching; column exists now so
-    // downstream analytics and the audit UI don't need a second migration.
+    // Sprint 4 EPIC 5: set to the firing rule's id when rules are evaluated.
     rule_id: null as string | null,
     decision_type: 'started',
     input_summary: '',
@@ -80,9 +85,39 @@ serve(async (req) => {
     tokens_used: 0
   };
 
+  // Collect additional audit rows for multi-rule firing.
+  const extraAuditRows: typeof auditLog[] = [];
+
   try {
     const { lead_id, force = false } = await req.json();
     auditLog.lead_id = lead_id;
+
+    // ============ LOAD CONTACT (identity only) ============
+    const { data: lead, error: leadError } = await supabase
+      .from('leads')
+      .select('id, name, email, equipe_id')
+      .eq('id', lead_id)
+      .maybeSingle();
+
+    if (leadError || !lead) throw new Error(`Lead not found`);
+    auditLog.equipe_id = lead.equipe_id;
+
+    // ============ RESOLVE ACTIVE OPPORTUNITY ============
+    const opp = await resolveActiveOpportunity(supabase, {
+      equipe_id: lead.equipe_id,
+      lead_id: lead.id,
+      createIfMissing: true,
+    });
+    auditLog.opportunity_id = opp?.opportunity_id ?? null;
+
+    // ============ FETCH AGENT RULES ============
+    // Sprint 4 EPIC 5: per-pipeline rules override hardcoded behavior.
+    const agentRules = opp
+      ? await fetchPipelineAgentRules(supabase, opp.pipeline_id)
+      : null;
+
+    // Use per-pipeline cooldown or fall back to default.
+    const cooldownMinutes = agentRules?.cooldown_minutes ?? CONFIG.DEFAULT_COOLDOWN_MINUTES;
 
     // ============ COOLDOWN ============
     const { data: lastAnalysis } = await supabase
@@ -97,7 +132,7 @@ serve(async (req) => {
     const lastAnalyzedAt = lastAnalysis?.created_at || '1970-01-01';
 
     if (!force && lastAnalysis) {
-      const cooldownMs = CONFIG.COOLDOWN_MINUTES * 60 * 1000;
+      const cooldownMs = cooldownMinutes * 60 * 1000;
       const timeSinceLastAnalysis = Date.now() - new Date(lastAnalyzedAt).getTime();
 
       if (timeSinceLastAnalysis < cooldownMs) {
@@ -130,29 +165,6 @@ serve(async (req) => {
       }), { headers: corsHeaders });
     }
 
-    // ============ LOAD CONTACT (identity only) ============
-    // Sprint 4 EPIC 0 — stop reading lead.pipeline_stages(name) / lead.stage_id.
-    // Current stage + sales state live on the Opportunity now.
-    const { data: lead, error: leadError } = await supabase
-      .from('leads')
-      .select('id, name, email, equipe_id')
-      .eq('id', lead_id)
-      .maybeSingle();
-
-    if (leadError || !lead) throw new Error(`Lead not found`);
-    auditLog.equipe_id = lead.equipe_id;
-
-    // ============ RESOLVE ACTIVE OPPORTUNITY ============
-    // Auto-create when the tenant has a default_pipeline_id configured
-    // (mirrors webhook behavior). Epic 5 replaces this with the per-pipeline
-    // `auto_create_opportunity` flag from pipeline_agent_rules.
-    const opp = await resolveActiveOpportunity(supabase, {
-      equipe_id: lead.equipe_id,
-      lead_id: lead.id,
-      createIfMissing: true,
-    });
-    auditLog.opportunity_id = opp?.opportunity_id ?? null;
-
     if (!opp) {
       console.log('[Pipeline] Sem Opportunity ativa e sem default_pipeline_id. Apenas identidade será atualizada.');
     }
@@ -181,7 +193,7 @@ serve(async (req) => {
 
     const { data: newMsgs } = await supabase
       .from('messages')
-      .select('content, sender_type, created_at')
+      .select('content, sender_type, created_at, media_type')
       .eq('lead_id', lead_id)
       .gt('created_at', lastAnalyzedAt)
       .order('created_at', { ascending: true })
@@ -209,14 +221,25 @@ serve(async (req) => {
     auditLog.input_summary = `${contextMsgs?.length || 0}ctx+${newMsgs.length}new`;
     console.log(`[Pipeline] ${auditLog.input_summary} msgs`);
 
+    // Collect media types from new messages for rule evaluation.
+    const mediaTypes: string[] = newMsgs
+      .map(m => m.media_type)
+      .filter((t): t is string => !!t);
+
     // ============ CALL AI ============
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
     const today = new Date().toISOString().split('T')[0];
 
+    // Sprint 4 EPIC 5: append extraction_hints to system prompt when available.
+    let systemPrompt = BASE_SYSTEM_PROMPT + today;
+    if (agentRules?.extraction_hints) {
+      systemPrompt += `\n\nInstruções adicionais da pipeline:\n${agentRules.extraction_hints}`;
+    }
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT + today },
+        { role: "system", content: systemPrompt },
         { role: "user", content: history }
       ],
       tools: [EXTRACTION_TOOL],
@@ -255,23 +278,22 @@ serve(async (req) => {
     if (data.name && data.name !== lead.name) leadUpdates.name = data.name;
     if (data.email && data.email !== lead.email) leadUpdates.email = data.email;
 
-    // DISQUALIFIED → identity: mark as contact + qualification_status.
-    // Opportunity (below) is marked status='lost'.
     if (data.intent === 'DISQUALIFIED') {
       leadUpdates.lead_type = 'contact';
       leadUpdates.qualification_status = 'disqualified';
     }
 
-    // ============ OPPORTUNITY UPDATES ============
+    // ============ OPPORTUNITY UPDATES (legacy flow) ============
     const oppPatch: Record<string, unknown> = {};
     const oppCustomPatch: Record<string, unknown> = {};
 
-    // Extracted custom fields — legacy keys for now; Epic 1 maps to field_id.
     if (data.consumo_medio) oppCustomPatch.consumo_medio = data.consumo_medio;
     if (data.tipo_telhado) oppCustomPatch.tipo_telhado = data.tipo_telhado;
     if (data.valor_conta) oppCustomPatch.valor_conta = data.valor_conta;
 
     const isScheduled = data.meeting_scheduled || data.intent === 'SCHEDULED';
+    // Sprint 4 EPIC 5: respect auto_advance_stages flag.
+    const shouldAutoAdvance = agentRules?.auto_advance_stages !== false;
 
     if (isScheduled) {
       oppCustomPatch.meeting_scheduled = true;
@@ -282,7 +304,7 @@ serve(async (req) => {
       }
       if (data.meeting_link) oppCustomPatch.meeting_notes = `[IA] ${data.meeting_link}`;
 
-      if (opp) {
+      if (opp && shouldAutoAdvance) {
         const target = await resolveStageByTypeAndName(supabase, {
           equipe_id: lead.equipe_id,
           pipeline_id: opp.pipeline_id,
@@ -294,8 +316,7 @@ serve(async (req) => {
           console.log(`[Pipeline] Opp → stage SCHEDULED: ${target.name}`);
         }
       }
-    } else if (data.intent === 'INTERESTED' && opp) {
-      // Only advance if we're still sitting on the pipeline's first open stage.
+    } else if (data.intent === 'INTERESTED' && opp && shouldAutoAdvance) {
       const { data: firstStage } = await supabase
         .from('pipeline_stages_v2')
         .select('id')
@@ -330,7 +351,7 @@ serve(async (req) => {
       oppPatch.custom_data = { ...currentCustomData, ...oppCustomPatch };
     }
 
-    // ============ APPLY ============
+    // ============ APPLY LEGACY UPDATES ============
     let appliedLead = false;
     let appliedOpp = false;
 
@@ -349,14 +370,85 @@ serve(async (req) => {
       else appliedOpp = true;
     }
 
-    if (appliedLead || appliedOpp) {
-      auditLog.decision_type = 'crm_update';
+    // ============ EPIC 5: EVALUATE & EXECUTE RULES ============
+    let rulesFired = 0;
+    if (opp && agentRules && agentRules.triggers.length > 0) {
+      const newCustom = oppPatch.custom_data
+        ? (oppPatch.custom_data as Record<string, unknown>)
+        : currentCustomData;
+
+      const newMessagesText = newMsgs.map(m => m.content || "").join(" ");
+
+      const evalCtx: RuleEvalContext = {
+        aiIntent: data.intent,
+        newMessagesText,
+        mediaTypes,
+        previousCustomData: currentCustomData,
+        newCustomData: newCustom,
+        currentStageId,
+      };
+
+      const fired = evaluateTriggers(agentRules.triggers, evalCtx);
+      rulesFired = fired.length;
+
+      if (fired.length > 0) {
+        console.log(`[Pipeline] ${fired.length} regra(s) disparada(s): ${fired.map(f => f.rule.name || f.ruleId).join(', ')}`);
+
+        const actionCtx: ActionContext = {
+          supabase,
+          equipe_id: lead.equipe_id,
+          lead_id: lead.id,
+          opportunity_id: opp.opportunity_id,
+          pipeline_id: opp.pipeline_id,
+          contact_name: lead.name,
+        };
+
+        for (const { rule, ruleId } of fired) {
+          const actionResults = await executeActions(rule.do, actionCtx);
+
+          // First fired rule goes into the main audit log.
+          if (rulesFired === 1 || extraAuditRows.length === 0) {
+            auditLog.rule_id = ruleId;
+            auditLog.output_action = {
+              ...auditLog.output_action,
+              rule_name: rule.name,
+              rule_actions: actionResults,
+            };
+          } else {
+            // Additional fired rules get their own audit rows.
+            extraAuditRows.push({
+              lead_id: lead.id,
+              equipe_id: lead.equipe_id,
+              opportunity_id: opp.opportunity_id,
+              rule_id: ruleId,
+              decision_type: 'rule_fired',
+              input_summary: auditLog.input_summary,
+              output_action: {
+                intent: data.intent,
+                rule_name: rule.name,
+                rule_actions: actionResults,
+              },
+              status: 'success',
+              error_details: null,
+              confidence_score: 1.0,
+              tokens_used: 0,
+            });
+          }
+        }
+      }
+    }
+
+    // ============ FINALIZE AUDIT ============
+    if (appliedLead || appliedOpp || rulesFired > 0) {
+      auditLog.decision_type = rulesFired > 0 ? 'rule_fired' : 'crm_update';
       auditLog.output_action = {
+        ...auditLog.output_action,
         intent: data.intent,
         lead_changes: Object.keys(leadUpdates),
         opp_changes: Object.keys(oppPatch),
         opportunity_id: opp?.opportunity_id ?? null,
         tokens: auditLog.tokens_used,
+        rules_fired: rulesFired,
       };
       auditLog.status = 'success';
     } else {
@@ -371,7 +463,8 @@ serve(async (req) => {
       lead_updates: Object.keys(leadUpdates).length,
       opp_updates: Object.keys(oppPatch).length,
       opportunity_id: opp?.opportunity_id ?? null,
-      tokens: auditLog.tokens_used
+      tokens: auditLog.tokens_used,
+      rules_fired: rulesFired,
     }), { headers: corsHeaders });
 
   } catch (error) {
@@ -381,6 +474,7 @@ serve(async (req) => {
     auditLog.error_details = (error as Error).message;
     return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: corsHeaders });
   } finally {
+    // Write main audit row.
     if (auditLog.lead_id) {
       const { error: auditError } = await supabase.from('ai_decisions').insert({
         lead_id: auditLog.lead_id,
@@ -394,6 +488,22 @@ serve(async (req) => {
         rule_id: auditLog.rule_id,
       });
       if (auditError) console.error("Erro Auditoria:", auditError);
+
+      // Write extra audit rows for additional fired rules.
+      for (const extra of extraAuditRows) {
+        const { error: extraErr } = await supabase.from('ai_decisions').insert({
+          lead_id: extra.lead_id,
+          equipe_id: extra.equipe_id,
+          decision_type: extra.decision_type,
+          input_summary: extra.input_summary,
+          output_action: extra.output_action || {},
+          status: extra.status,
+          error_details: extra.error_details,
+          confidence_score: extra.confidence_score,
+          rule_id: extra.rule_id,
+        });
+        if (extraErr) console.error("Erro Auditoria (extra):", extraErr);
+      }
     }
   }
 });
