@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import {
   Building2, Users, Edit, Coins, Shield, Loader2, Plus, Trash2,
   RefreshCw, UserCog, Globe, LayoutGrid, Key, Webhook, Home,
-  CreditCard, Bot, ChevronRight, UserMinus,
+  CreditCard, Bot, ChevronRight, UserMinus, UserPlus, Copy, RefreshCcw,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -128,6 +128,14 @@ const Admin = () => {
   // ── User dialog state
   const [userDialog, setUserDialog] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ProfileWithRole | null>(null);
+
+  // ── Sprint 5.5 EPIC 4 — Add member dialog state
+  const [addMemberDialog, setAddMemberDialog] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberPassword, setNewMemberPassword] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<string>("user");
+  const [creatingMember, setCreatingMember] = useState(false);
 
   // ─── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -397,6 +405,76 @@ const Admin = () => {
       toast.success(`${member.email} removido da equipe`);
     } catch {
       toast.error("Erro ao remover membro");
+    }
+  };
+
+  // ─── Add Member (EPIC 4) ─────────────────────────────────────────────────────
+
+  const generateTempPassword = useCallback(() => {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    const bytes = crypto.getRandomValues(new Uint8Array(12));
+    let out = "";
+    for (let i = 0; i < bytes.length; i++) {
+      out += alphabet[bytes[i] % alphabet.length];
+    }
+    setNewMemberPassword(out);
+  }, []);
+
+  const openAddMemberDialog = () => {
+    setNewMemberEmail("");
+    setNewMemberName("");
+    setNewMemberPassword("");
+    setNewMemberRole("user");
+    setAddMemberDialog(true);
+    // Pre-fill a temp password so the admin doesn't have to think of one.
+    generateTempPassword();
+  };
+
+  const handleCreateMember = async () => {
+    if (!membersEquipe) return;
+    if (!newMemberEmail.trim() || !newMemberPassword || newMemberPassword.length < 8) {
+      toast.error("Email e senha (mín. 8 caracteres) são obrigatórios");
+      return;
+    }
+    setCreatingMember(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "create-equipe-member",
+        {
+          body: {
+            email: newMemberEmail.trim().toLowerCase(),
+            password: newMemberPassword,
+            full_name: newMemberName.trim() || null,
+            equipe_id: membersEquipe.id,
+            role: newMemberRole,
+          },
+        }
+      );
+      if (error) throw new Error(error.message || "Erro ao criar membro");
+      if ((data as any)?.error) throw new Error((data as any).error);
+
+      // Show the temp password to the admin so they can hand it off.
+      const tempPw = newMemberPassword;
+      toast.success(
+        `${newMemberEmail} criado! Senha temporária: ${tempPw}`,
+        {
+          duration: 20000,
+          action: {
+            label: "Copiar senha",
+            onClick: () => navigator.clipboard.writeText(tempPw),
+          },
+        }
+      );
+
+      setAddMemberDialog(false);
+      // Refresh the members list and global data so the new user appears.
+      await fetchData();
+      if (membersEquipe) await openMembersSheet(membersEquipe);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao criar membro";
+      toast.error(msg);
+    } finally {
+      setCreatingMember(false);
     }
   };
 
@@ -990,8 +1068,12 @@ const Admin = () => {
             )}
           </ScrollArea>
           <div className="pt-4 border-t">
-            <p className="text-xs text-muted-foreground">
-              Para adicionar um membro, edite o usuário na aba <strong>Usuários</strong> e atribua esta equipe.
+            <Button className="w-full" onClick={openAddMemberDialog}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Adicionar Membro
+            </Button>
+            <p className="text-[10px] text-muted-foreground mt-2 text-center">
+              O membro recebe uma senha temporária para o primeiro login.
             </p>
           </div>
         </SheetContent>
@@ -1032,6 +1114,131 @@ const Admin = () => {
             <Button variant="outline" onClick={() => setCreditsDialog(false)}>Cancelar</Button>
             <Button onClick={handleAddCredits} disabled={!creditsToAdd || parseInt(creditsToAdd) <= 0}>
               <Coins className="h-4 w-4 mr-2" /> Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          DIALOG: ADD MEMBER (Sprint 5.5 EPIC 4)
+      ════════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={addMemberDialog} onOpenChange={setAddMemberDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Adicionar Membro
+            </DialogTitle>
+            <DialogDescription>
+              Cria a conta direto, sem email. Você entrega a senha temporária
+              para <strong>{membersEquipe?.nome}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-member-email">Email *</Label>
+              <Input
+                id="new-member-email"
+                type="email"
+                value={newMemberEmail}
+                onChange={(e) => setNewMemberEmail(e.target.value)}
+                placeholder="novo.membro@empresa.com"
+                disabled={creatingMember}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-member-name">Nome completo</Label>
+              <Input
+                id="new-member-name"
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                placeholder="Maria Silva"
+                disabled={creatingMember}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-member-password">Senha temporária *</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="new-member-password"
+                  value={newMemberPassword}
+                  onChange={(e) => setNewMemberPassword(e.target.value)}
+                  placeholder="Mín. 8 caracteres"
+                  disabled={creatingMember}
+                  className="font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Gerar nova senha"
+                  onClick={generateTempPassword}
+                  disabled={creatingMember}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Copiar senha"
+                  onClick={() => {
+                    if (newMemberPassword) {
+                      navigator.clipboard.writeText(newMemberPassword);
+                      toast.success("Senha copiada");
+                    }
+                  }}
+                  disabled={creatingMember || !newMemberPassword}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                O membro deve trocar a senha no primeiro login.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={newMemberRole}
+                onValueChange={setNewMemberRole}
+                disabled={creatingMember}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.filter((r) =>
+                    isSuperAdmin ? true : r !== "super_admin"
+                  ).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddMemberDialog(false)}
+              disabled={creatingMember}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateMember} disabled={creatingMember}>
+              {creatingMember ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Criar Membro
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
