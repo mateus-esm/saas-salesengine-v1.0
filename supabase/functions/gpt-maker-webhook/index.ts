@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
+import { normalizePhone } from "../_shared/phone.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -31,6 +32,8 @@ serve(async (req) => {
     const rawContent = payload.message || payload.content || payload.text || ''
     let messageContent = typeof rawContent === 'string' ? rawContent.trim() : ''
     const senderPhone = payload.contactPhone || payload.phone || payload.from || ''
+    // Sprint 5.5 EPIC 1 — normalize so "+5511..." and "5511..." resolve to one lead.
+    const phoneNorm = normalizePhone(senderPhone)
     const senderName = payload.contactName || payload.pushName || 'Desconhecido'
     const messageDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
     const chatId = payload.contextId || null
@@ -141,23 +144,23 @@ serve(async (req) => {
       })
     }
 
-    // 8. Buscar lead existente
-    // Strategy: 
-    // - Try by phone AND equipe_id first (if phone exists)
-    // - If not found (or no phone), try by gpt_maker_chat_id AND equipe_id
+    // 8. Buscar lead existente — Sprint 5.5 EPIC 1
+    // Lookup by NORMALIZED phone (canonical form) so "+5511..." and "5511..."
+    // resolve to the same lead. Falls back to gpt_maker_chat_id when no phone.
     let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null } | null = null
-    
-    if (senderPhone) {
+
+    if (phoneNorm) {
       const { data: leadByPhone } = await supabase
         .from('leads')
         .select('id, gpt_maker_chat_id, phone')
-        .eq('phone', senderPhone)
+        .eq('phone_normalized', phoneNorm)
         .eq('equipe_id', equipeId)
+        .is('deleted_at', null)
         .maybeSingle()
-      
+
       if (leadByPhone) {
         lead = leadByPhone
-        console.log('[Webhook] Lead encontrado por telefone:', lead.id)
+        console.log('[Webhook] Lead encontrado por telefone normalizado:', lead.id)
       }
     }
 
@@ -167,60 +170,33 @@ serve(async (req) => {
         .select('id, gpt_maker_chat_id, phone')
         .eq('gpt_maker_chat_id', chatId)
         .eq('equipe_id', equipeId)
+        .is('deleted_at', null)
         .maybeSingle()
-      
+
       if (leadByChat) {
         lead = leadByChat
         console.log('[Webhook] Lead encontrado por Chat ID:', lead.id)
       }
     }
 
-    // 9. Criar novo lead se não existir
+    // 9. Criar novo lead se não existir.
+    // The DB UNIQUE INDEX (equipe_id, phone_normalized) WHERE phone_normalized
+    // IS NOT NULL atomically prevents races. If two parallel webhooks both
+    // miss the SELECT and both INSERT, only the first commits; the loser
+    // catches the 23505 violation and re-reads the winning row.
+    let leadIsNew = false
     if (!lead) {
-      // ── RETRY anti-race-condition ─────────────────────────────────────────
-      // Quando mensagens chegam em sequência rápida, dois webhooks concorrentes
-      // podem AMBOS chegar aqui sem encontrar o lead (a primeira INSERT ainda não
-      // fez commit quando a segunda SELECT rodou). Esperamos 250ms e tentamos
-      // novamente ANTES de criar, evitando leads duplicados para o mesmo contacto.
-      await new Promise(resolve => setTimeout(resolve, 250))
+      console.log('[Webhook] Lead não encontrado, criando novo...')
 
-      if (senderPhone) {
-        const { data: retryByPhone } = await supabase
-          .from('leads')
-          .select('id, gpt_maker_chat_id, phone')
-          .eq('phone', senderPhone)
-          .eq('equipe_id', equipeId)
-          .maybeSingle()
-        if (retryByPhone) {
-          lead = retryByPhone
-          console.log('[Webhook] Lead encontrado no retry por telefone:', lead.id)
-        }
-      }
-
-      if (!lead && chatId) {
-        const { data: retryByChat } = await supabase
-          .from('leads')
-          .select('id, gpt_maker_chat_id, phone')
-          .eq('gpt_maker_chat_id', chatId)
-          .eq('equipe_id', equipeId)
-          .maybeSingle()
-        if (retryByChat) {
-          lead = retryByChat
-          console.log('[Webhook] Lead encontrado no retry por Chat ID:', lead.id)
-        }
-      }
-    }
-
-    if (!lead) {
-      console.log('[Webhook] Lead não encontrado após retry, criando novo...')
-
-      // Fallback name if missing
       const finalName = senderName || (senderPhone ? `Lead ${senderPhone}` : 'Novo Visitante')
 
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
           phone: senderPhone || null,
+          // Trigger trg_leads_sync_phone_normalized will set this; we set it
+          // explicitly too so older clients don't break the conflict check.
+          phone_normalized: phoneNorm,
           name: finalName,
           equipe_id: equipeId,
           gpt_maker_chat_id: chatId,
@@ -229,21 +205,41 @@ serve(async (req) => {
           source: 'IA',
           origem: 'IA',
           last_message_at: messageDate,
-          // Fase 2: Enriquecimento omnichannel
           channel: channel,
           profile_picture: profilePicture,
-          agent_name: agentName
+          agent_name: agentName,
         })
         .select('id, gpt_maker_chat_id, phone')
         .single()
 
       if (createError) {
-        console.error('[Webhook] Erro ao criar lead:', createError)
-        throw createError
+        const pgCode = (createError as { code?: string }).code
+        if (pgCode === '23505' && phoneNorm) {
+          console.log('[Webhook] Race detectada (23505), re-buscando lead vencedor...')
+          const { data: winner } = await supabase
+            .from('leads')
+            .select('id, gpt_maker_chat_id, phone')
+            .eq('phone_normalized', phoneNorm)
+            .eq('equipe_id', equipeId)
+            .is('deleted_at', null)
+            .maybeSingle()
+          if (!winner) {
+            console.error('[Webhook] 23505 mas sem winner — abortando.', createError)
+            throw createError
+          }
+          lead = winner
+        } else {
+          console.error('[Webhook] Erro ao criar lead:', createError)
+          throw createError
+        }
+      } else {
+        lead = newLead
+        leadIsNew = true
+        console.log('[Webhook] Novo lead criado:', lead.id)
       }
-      lead = newLead
-      console.log('[Webhook] Novo lead criado:', lead.id)
-    } else {
+    }
+
+    if (!leadIsNew && lead) {
       // Atualizar chat_id, last_message_at e metadados de enriquecimento se necessário
       const updates: Record<string, unknown> = { last_message_at: messageDate }
       
