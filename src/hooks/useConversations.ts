@@ -175,6 +175,20 @@ export const useConversations = () => {
     onError: () => toast.error("Erro ao atribuir responsável"),
   });
 
+  const markRead = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { error } = await sb
+        .from("conversations")
+        .update({ unread_count: 0 })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
+    },
+    onError: () => toast.error("Erro ao marcar como lida"),
+  });
+
   const toggleHandoff = useMutation({
     mutationFn: async ({
       id,
@@ -202,5 +216,6 @@ export const useConversations = () => {
     updateStatus,
     assignResponsible,
     toggleHandoff,
+    markRead,
   };
 };

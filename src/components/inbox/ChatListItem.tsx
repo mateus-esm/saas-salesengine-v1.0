@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,11 @@ interface ChatListItemProps {
   conversationStatus?: ConversationStatus;
   /** Called when user picks Archive / Reopen / Delete from the kebab. */
   onStatusChange?: (status: ConversationStatus) => void;
+  /** Sprint 5.5 EPIC 3 — bulk selection state. When defined, renders checkbox. */
+  isChecked?: boolean;
+  onToggleSelect?: () => void;
+  /** Force the checkbox visible (e.g. when at least one row is selected). */
+  showCheckbox?: boolean;
 }
 
 /** Ícone do canal em overlay no canto inferior-direito do avatar */
@@ -96,6 +102,9 @@ export function ChatListItem({
   responsibleName,
   conversationStatus,
   onStatusChange,
+  isChecked,
+  onToggleSelect,
+  showCheckbox,
 }: ChatListItemProps) {
   const initials = session.customerName
     .split(" ")
@@ -120,16 +129,39 @@ export function ChatListItem({
 
   const timeAgo = getFormattedDate(session.lastMessageTime);
 
+  const checkboxAvailable = !!onToggleSelect;
+
   return (
     <div
       onClick={onClick}
       className={cn(
-        "flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors divider-idv-bottom",
+        "group flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors divider-idv-bottom",
         isSelected
           ? "bg-sidebar-accent dark:bg-white/[0.04] dark:ring-1 dark:ring-inset dark:ring-white/10"
           : "hover:bg-muted/50 dark:hover:bg-white/[0.02]"
       )}
     >
+      {checkboxAvailable && (
+        <div
+          className={cn(
+            "flex items-center pt-1 transition-opacity",
+            showCheckbox || isChecked
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.();
+          }}
+        >
+          <Checkbox
+            checked={!!isChecked}
+            onCheckedChange={() => onToggleSelect?.()}
+            aria-label="Selecionar conversa"
+          />
+        </div>
+      )}
+
       {/* Avatar com channel badge overlay */}
       <div className="relative flex-shrink-0">
         <Avatar className="h-10 w-10">

@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ChatSession, ConversationStatus } from "@/types/chat";
 import { ChatListItem } from "./ChatListItem";
+import { InboxBulkActions } from "./InboxBulkActions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -70,10 +71,20 @@ export function InboxSidebar({
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<StatusTab>("active");
   const [channelFilter, setChannelFilter] = useState<string>(CHANNEL_ALL);
-  const [responsibleFilter, setResponsibleFilter] = useState<string>(
-    isAdmin ? RESP_ALL : RESP_MINE
-  );
+  const [responsibleFilter, setResponsibleFilter] = useState<string>(RESP_ALL);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   // Non-admin sellers only see their own chats — enforced regardless of filter
   const visibleSessions = isAdmin
@@ -250,6 +261,14 @@ export function InboxSidebar({
         </div>
       </div>
 
+      {/* Bulk actions bar — visible when at least one conversation is selected */}
+      {selectedIds.size > 0 && (
+        <InboxBulkActions
+          selectedIds={[...selectedIds]}
+          onClearSelection={clearSelection}
+        />
+      )}
+
       {/* Chat List */}
       <ScrollArea className="flex-1">
         {filteredSessions.length > 0 ? (
@@ -270,6 +289,9 @@ export function InboxSidebar({
                   ? (status) => onStatusChange(session.id, status)
                   : undefined
               }
+              isChecked={selectedIds.has(session.id)}
+              onToggleSelect={() => toggleSelect(session.id)}
+              showCheckbox={selectedIds.size > 0}
             />
           ))
         ) : (
