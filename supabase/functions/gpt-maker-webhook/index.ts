@@ -272,19 +272,64 @@ serve(async (req) => {
     if (!lead) throw new Error("Falha inesperada: Lead nulo após processamento");
 
     // 9b. EPIC 1 — Upsert conversation
-    // Strategy: look for an existing conversation for (lead_id, channel) that is
-    // not deleted. If archived, auto-reopen on new inbound (per product decision).
+    // Strategy: multi-level fallback to avoid creating duplicate conversations.
+    //   1. Match by (lead_id, channel) — ideal case.
+    //   2. Match by gpt_maker_chat_id — catches channel-mismatch scenarios.
+    //   3. Match by lead_id alone (any non-deleted) — last resort.
+    //   4. Create new only if all lookups fail.
     let conversationId: string | null = null
     {
-      const { data: existingConv } = await supabase
+      // --- Attempt 1: lead_id + channel ---
+      let existingConv: { id: string; status: string; gpt_maker_chat_id: string | null; agent_name: string | null; atendido_por_agente: boolean; channel: string } | null = null
+
+      const { data: byChannel } = await supabase
         .from('conversations')
-        .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente')
+        .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
         .eq('lead_id', lead.id)
         .eq('channel', channel)
         .neq('status', 'deleted')
         .order('last_message_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle()
+
+      if (byChannel) {
+        existingConv = byChannel
+        console.log('[Webhook] Conversa encontrada por lead+channel:', existingConv.id)
+      }
+
+      // --- Attempt 2: gpt_maker_chat_id ---
+      if (!existingConv && chatId) {
+        const { data: byChatId } = await supabase
+          .from('conversations')
+          .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
+          .eq('gpt_maker_chat_id', chatId)
+          .neq('status', 'deleted')
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (byChatId) {
+          existingConv = byChatId
+          console.log('[Webhook] Conversa encontrada por gpt_maker_chat_id:', existingConv.id)
+        }
+      }
+
+      // --- Attempt 3: any non-deleted conversation for this lead ---
+      if (!existingConv) {
+        const { data: byLead } = await supabase
+          .from('conversations')
+          .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
+          .eq('lead_id', lead.id)
+          .neq('status', 'deleted')
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (byLead) {
+          existingConv = byLead
+          console.log('[Webhook] Conversa encontrada por lead_id (fallback):', existingConv.id)
+        }
+      }
 
       if (existingConv) {
         conversationId = existingConv.id
@@ -302,6 +347,11 @@ serve(async (req) => {
         }
         if (agentName && existingConv.agent_name !== agentName) {
           convUpdates.agent_name = agentName
+        }
+        // Fix channel if it was wrong on the existing conversation
+        if (channel && existingConv.channel !== channel && channel !== 'whatsapp') {
+          // Only overwrite if we have a specific (non-default) channel detection
+          convUpdates.channel = channel
         }
         await supabase
           .from('conversations')
@@ -591,8 +641,13 @@ function normalizeMediaType(type: string | null, url: string | null): string | n
 /**
  * Normaliza o canal de comunicação
  * GPT Maker retorna conversationType como: WHATSAPP, INSTAGRAM, WIDGET, TELEGRAM, etc.
+ *
+ * IMPORTANT: We intentionally do NOT deep-scan the entire payload JSON.
+ * Deep-scanning caused false positives — e.g. a message mentioning the word
+ * "instagram" in its content would misclassify the channel, which in turn
+ * caused the conversation upsert to create a new conversation every message.
  */
-function normalizeChannel(raw: string | null, payload?: any): string {
+function normalizeChannel(raw: string | null, _payload?: any): string {
   if (raw) {
     const lower = raw.toLowerCase()
     if (lower.includes('instagram')) return 'instagram'
@@ -601,12 +656,6 @@ function normalizeChannel(raw: string | null, payload?: any): string {
     if (lower.includes('messenger') || lower.includes('facebook')) return 'messenger'
     if (lower.includes('whatsapp')) return 'whatsapp'
   }
-  // Deep scan: check entire payload for channel hints
-  if (payload) {
-    const payloadStr = JSON.stringify(payload).toLowerCase()
-    if (payloadStr.includes('instagram')) return 'instagram'
-    if (payloadStr.includes('telegram')) return 'telegram'
-    if (payloadStr.includes('messenger')) return 'messenger'
-  }
+  // No deep scan — rely only on explicit channel fields to avoid false positives.
   return 'whatsapp' // default
 }

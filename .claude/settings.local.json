@@ -20,7 +20,13 @@
       "Bash(echo \"ESLINT=$?\")",
       "Bash(grep -E \"\\(OpportunityKanban|OpportunityTable|OpportunityCard|OpportunityDetail|OpportunityKanbanColumn|PipelineSelector|usePipelineSelection|CardFieldsPicker|LeadOpportunitiesSection|CRMContextPanel|pages.CRM|pages\\\\\\\\\\\\\\\\CRM\\)\")",
       "Bash(git *)",
-      "Bash(echo \"exit=$?\")"
+      "Bash(echo \"exit=$?\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\mateus\\\\SaaS Sales Engine - v1.0 \\(Supabase\\)\\\\saas-salesengine-v1.0\\\\supabase\\\\functions\" -Recurse -Filter \"*.ts\" -o Name)",
+      "Bash(echo \"EXITCODE=$?\")",
+      "Bash(supabase --version)",
+      "Bash(supabase status *)",
+      "Bash(supabase projects *)",
+      "Bash(supabase db *)"
     ]
   }
 }
