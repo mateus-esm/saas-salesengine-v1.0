@@ -38,6 +38,8 @@ interface ChatListItemProps {
   onToggleSelect?: () => void;
   /** Force the checkbox visible (e.g. when at least one row is selected). */
   showCheckbox?: boolean;
+  /** Sprint 5.5 1.3 — fired on hover to warm the message cache. */
+  onPrefetch?: () => void;
 }
 
 /** Ícone do canal em overlay no canto inferior-direito do avatar */
@@ -105,6 +107,7 @@ export function ChatListItem({
   isChecked,
   onToggleSelect,
   showCheckbox,
+  onPrefetch,
 }: ChatListItemProps) {
   const initials = session.customerName
     .split(" ")
@@ -134,6 +137,8 @@ export function ChatListItem({
   return (
     <div
       onClick={onClick}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
       className={cn(
         "group flex items-start gap-3 p-3 pr-6 cursor-pointer transition-colors divider-idv-bottom",
         isSelected

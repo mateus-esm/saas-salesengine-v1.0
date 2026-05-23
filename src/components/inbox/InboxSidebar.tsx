@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { ChatSession, ConversationStatus } from "@/types/chat";
 import { ChatListItem } from "./ChatListItem";
 import { InboxBulkActions } from "./InboxBulkActions";
+import { prefetchConversationMessages } from "@/hooks/useMessages";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -299,6 +300,9 @@ export function InboxSidebar({
               isChecked={selectedIds.has(session.id)}
               onToggleSelect={() => toggleSelect(session.id)}
               showCheckbox={selectedIds.size > 0}
+              onPrefetch={() => {
+                void prefetchConversationMessages(session.id);
+              }}
             />
           ))
         ) : (
