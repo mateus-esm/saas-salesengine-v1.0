@@ -34,7 +34,27 @@ serve(async (req) => {
     const senderPhone = payload.contactPhone || payload.phone || payload.from || ''
     // Sprint 5.5 EPIC 1 — normalize so "+5511..." and "5511..." resolve to one lead.
     const phoneNorm = normalizePhone(senderPhone)
-    const senderName = payload.contactName || payload.pushName || 'Desconhecido'
+    // Sprint 5.5 — refuse Meta technical IDs (e.g. "264162450083898@lid") as
+    // the contact name. When GPT Maker can't read a real pushName it forwards
+    // the raw account identifier, which then surfaces in every UI as a broken
+    // string. Treat those as "no name" so the existing phone-based fallback
+    // ("Lead 5511...", "Novo Visitante") kicks in instead.
+    const rawSenderName: string = payload.contactName || payload.pushName || ''
+    const isTechnicalSenderId = (() => {
+      const t = rawSenderName.trim().toLowerCase()
+      if (!t) return false
+      if (t.endsWith('@lid')) return true
+      if (t.endsWith('@s.whatsapp.net')) return true
+      if (t.endsWith('@c.us')) return true
+      if (t.endsWith('@g.us')) return true
+      if (t.endsWith('@broadcast')) return true
+      if (/^\d{8,}$/.test(t)) return true
+      return false
+    })()
+    const senderName = isTechnicalSenderId ? '' : (rawSenderName || 'Desconhecido')
+    if (isTechnicalSenderId) {
+      console.log('[Webhook] contactName parecia um Meta ID técnico — descartado:', rawSenderName)
+    }
     const messageDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
     const chatId = payload.contextId || null
     const assistantId = payload.assistantId || null

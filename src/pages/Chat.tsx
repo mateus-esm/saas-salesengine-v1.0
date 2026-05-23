@@ -24,6 +24,7 @@ import { ChatSession, ConversationStatus } from "@/types/chat";
 import { Lead } from "@/types/crm";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatDisplayName } from "@/lib/displayName";
 
 const Chat = () => {
   const { user } = useAuth();
@@ -92,7 +93,11 @@ const Chat = () => {
       conversationId: selectedConversation.id,
       conversationStatus: selectedConversation.status as ConversationStatus,
       leadId: selectedConversation.lead_id,
-      customerName: lead?.name || selectedConversation.lead?.name || "Sem Nome",
+      customerName: formatDisplayName(
+        lead?.name || selectedConversation.lead?.name,
+        lead?.phone,
+        "Sem Nome",
+      ),
       customerPhone: lead?.phone || lead?.origem || "WhatsApp",
       customerAvatar: lead?.profile_picture || undefined,
       status: selectedConversation.atendido_por_agente ? 'human_handling' : 'bot_handling',
@@ -126,7 +131,11 @@ const Chat = () => {
         conversationId: c.id,
         conversationStatus: c.status as ConversationStatus,
         leadId: c.lead_id,
-        customerName: lead?.name || leadSlice?.name || "Sem Nome",
+        customerName: formatDisplayName(
+          lead?.name || leadSlice?.name,
+          lead?.phone || leadSlice?.phone,
+          "Sem Nome",
+        ),
         customerPhone: lead?.phone || lead?.origem || leadSlice?.phone || leadSlice?.origem || 'WhatsApp',
         customerAvatar: lead?.profile_picture || leadSlice?.profile_picture || undefined,
         lastMessage: "Clique para ver",
