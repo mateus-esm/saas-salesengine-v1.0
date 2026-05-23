@@ -4,7 +4,6 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   ColumnDef,
   SortingState,
   ColumnFiltersState,
@@ -51,8 +50,6 @@ import {
   Download,
   Upload,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   MessageCircle,
   Briefcase,
@@ -551,7 +548,11 @@ export const DatabaseView = () => {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    // Sprint 5.5 2.1 — Infinite scroll: pagination model removed so all
+    // filtered rows render under one scrollable viewport. Filtering at the
+    // useLeads layer (deleted_at IS NULL + equipe_id) keeps the working set
+    // bounded; if a tenant ever crosses ~5k contacts we'll layer row
+    // virtualization on top — but for now this beats the pagination clicks.
     enableRowSelection: true,
   });
 
@@ -759,34 +760,6 @@ export const DatabaseView = () => {
               )}
             </TableBody>
           </Table>
-        </div>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-card">
-        <div className="text-sm text-muted-foreground">
-          Página {table.getState().pagination.pageIndex + 1} de{" "}
-          {table.getPageCount() || 1}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Anterior
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Próxima
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
         </div>
       </div>
 
