@@ -233,6 +233,24 @@ export const DatabaseView = () => {
     { id: "archived", label: "Arquivado" },
   ];
 
+  // Sprint 5.5 2.3 — surface Canal + Enriquecimento as first-class columns
+  // so operators can scan the entire pipeline-origin landscape from the
+  // ledger view without opening each contact's drawer.
+  const channelOptions = [
+    { id: "whatsapp", label: "WhatsApp" },
+    { id: "instagram", label: "Instagram" },
+    { id: "telegram", label: "Telegram" },
+    { id: "messenger", label: "Messenger" },
+    { id: "web", label: "Web / Widget" },
+  ];
+
+  const creationSourceOptions = [
+    { id: "ai_agent", label: "IA (Solo Agent)" },
+    { id: "manual", label: "Manual" },
+    { id: "webhook", label: "Webhook" },
+    { id: "import", label: "Import (CSV)" },
+  ];
+
   const filteredLeads = useMemo(() => {
     let result = leads;
 
@@ -449,6 +467,35 @@ export const DatabaseView = () => {
       ),
     },
     {
+      // Sprint 5.5 2.3
+      accessorKey: "channel",
+      header: "Canal",
+      cell: ({ row }) => (
+        <EditableSelect
+          value={(row.getValue("channel") as string) || null}
+          options={channelOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "channel", val)}
+          placeholder="Canal"
+          allowClear
+        />
+      ),
+    },
+    {
+      // Sprint 5.5 2.3 — creation_source = "Enriquecimento" (how this
+      // identity arrived: IA agent ingestion, manual entry, webhook, CSV).
+      accessorKey: "creation_source",
+      header: "Enriquecimento",
+      cell: ({ row }) => (
+        <EditableSelect
+          value={(row.getValue("creation_source") as string) || null}
+          options={creationSourceOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "creation_source", val)}
+          placeholder="Enriquecimento"
+          allowClear
+        />
+      ),
+    },
+    {
       accessorKey: "observations",
       header: "Observações",
       cell: ({ row }) => (
@@ -528,7 +575,7 @@ export const DatabaseView = () => {
         return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [stages, members, stageOptions, memberOptions, sourceOptions, typeOptions, handleUpdateField]);
+  ], [stages, members, stageOptions, memberOptions, sourceOptions, typeOptions, channelOptions, creationSourceOptions, handleUpdateField]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -684,6 +731,8 @@ export const DatabaseView = () => {
                     responsible_id: "Responsável",
                     opportunity_value: "Valor",
                     source: "Origem",
+                    channel: "Canal",
+                    creation_source: "Enriquecimento",
                     observations: "Observações",
                     tags: "Tags",
                     meeting_scheduled: "Reunião Ag.",
