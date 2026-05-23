@@ -4,7 +4,6 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   ColumnDef,
   SortingState,
   ColumnFiltersState,
@@ -44,6 +43,7 @@ import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
+import { AddContactModal } from "./AddContactModal";
 import {
   ArrowUpDown,
   Columns,
@@ -51,8 +51,7 @@ import {
   Download,
   Upload,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
+  UserPlus,
   Loader2,
   MessageCircle,
   Briefcase,
@@ -184,7 +183,7 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
 };
 
 export const DatabaseView = () => {
-  const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
+  const { leads, isLoading, updateLead, deleteLead, refetch, createLead } = useLeads();
   const { stages } = usePipelineStages();
   const { teamMembers: members } = useTeamMembers();
 
@@ -196,6 +195,11 @@ export const DatabaseView = () => {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  // Sprint 5.5 2.4 — Quick Add Contact drawer. Single-row manual entry
+  // sits next to the bulk Importar/Exportar buttons. The batch upload
+  // engine is the existing ImportModal (Sprint 4); Quick Add is the
+  // companion micro-flow for "just one contact now".
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Sprint 4 EPIC 2 — clicking the row's open icon pops the contact drawer so
   // users can jump from Base de Contatos to a contact's Opportunities.
@@ -235,6 +239,24 @@ export const DatabaseView = () => {
     { id: "contact", label: "Contato" },
     { id: "spam", label: "Spam" },
     { id: "archived", label: "Arquivado" },
+  ];
+
+  // Sprint 5.5 2.3 — surface Canal + Enriquecimento as first-class columns
+  // so operators can scan the entire pipeline-origin landscape from the
+  // ledger view without opening each contact's drawer.
+  const channelOptions = [
+    { id: "whatsapp", label: "WhatsApp" },
+    { id: "instagram", label: "Instagram" },
+    { id: "telegram", label: "Telegram" },
+    { id: "messenger", label: "Messenger" },
+    { id: "web", label: "Web / Widget" },
+  ];
+
+  const creationSourceOptions = [
+    { id: "ai_agent", label: "IA (Solo Agent)" },
+    { id: "manual", label: "Manual" },
+    { id: "webhook", label: "Webhook" },
+    { id: "import", label: "Import (CSV)" },
   ];
 
   const filteredLeads = useMemo(() => {
@@ -462,6 +484,35 @@ export const DatabaseView = () => {
       ),
     },
     {
+      // Sprint 5.5 2.3
+      accessorKey: "channel",
+      header: "Canal",
+      cell: ({ row }) => (
+        <EditableSelect
+          value={(row.getValue("channel") as string) || null}
+          options={channelOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "channel", val)}
+          placeholder="Canal"
+          allowClear
+        />
+      ),
+    },
+    {
+      // Sprint 5.5 2.3 — creation_source = "Enriquecimento" (how this
+      // identity arrived: IA agent ingestion, manual entry, webhook, CSV).
+      accessorKey: "creation_source",
+      header: "Enriquecimento",
+      cell: ({ row }) => (
+        <EditableSelect
+          value={(row.getValue("creation_source") as string) || null}
+          options={creationSourceOptions}
+          onSave={(val) => handleUpdateField(row.original.id, "creation_source", val)}
+          placeholder="Enriquecimento"
+          allowClear
+        />
+      ),
+    },
+    {
       accessorKey: "observations",
       header: "Observações",
       cell: ({ row }) => (
@@ -541,7 +592,7 @@ export const DatabaseView = () => {
         return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [stages, members, stageOptions, memberOptions, sourceOptions, typeOptions, handleUpdateField]);
+  ], [stages, members, stageOptions, memberOptions, sourceOptions, typeOptions, channelOptions, creationSourceOptions, handleUpdateField]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -561,7 +612,11 @@ export const DatabaseView = () => {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    // Sprint 5.5 2.1 — Infinite scroll: pagination model removed so all
+    // filtered rows render under one scrollable viewport. Filtering at the
+    // useLeads layer (deleted_at IS NULL + equipe_id) keeps the working set
+    // bounded; if a tenant ever crosses ~5k contacts we'll layer row
+    // virtualization on top — but for now this beats the pagination clicks.
     enableRowSelection: true,
   });
 
@@ -594,6 +649,14 @@ export const DatabaseView = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={() => setShowAddModal(true)}
+            className="bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Adicionar Contato
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
             <Upload className="h-4 w-4 mr-2" />
             Importar
@@ -693,6 +756,8 @@ export const DatabaseView = () => {
                     responsible_id: "Responsável",
                     opportunity_value: "Valor",
                     source: "Origem",
+                    channel: "Canal",
+                    creation_source: "Enriquecimento",
                     observations: "Observações",
                     tags: "Tags",
                     meeting_scheduled: "Reunião Ag.",
@@ -772,35 +837,27 @@ export const DatabaseView = () => {
         </div>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-card">
-        <div className="text-sm text-muted-foreground">
-          Página {table.getState().pagination.pageIndex + 1} de{" "}
-          {table.getPageCount() || 1}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Anterior
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Próxima
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      </div>
-
       {/* Modals */}
+      <AddContactModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={(data) => {
+          createLead.mutate(
+            {
+              name: data.name,
+              email: data.email,
+              phone: data.phone,
+              observations: data.observations,
+              source: data.origin_category || "Manual",
+              origin: "manual",
+              lead_type: "lead",
+            },
+            {
+              onSuccess: () => setShowAddModal(false),
+            },
+          );
+        }}
+      />
       <ImportModal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
