@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { useLeads } from "@/hooks/useLeads";
 import { useConversations } from "@/hooks/useConversations";
 import { useMessages } from "@/hooks/useMessages";
@@ -16,7 +16,7 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { ChatInput } from "@/components/inbox/ChatInput";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
-import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ContactDetailsModal } from "@/components/crm/ContactDetailsModal";
@@ -61,16 +61,51 @@ const Chat = () => {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Sprint 5.5 1.1 — Scroll Anchor.
+  // The previous behavior force-scrolled to the bottom on every messages
+  // update, which violently snapped operators out of historical context. We
+  // now track whether the user is parked near the bottom; auto-scroll only
+  // happens when they are, OR when the conversation changes (a deliberate
+  // navigation, where landing at the bottom is the right default). A
+  // floating "ir para o final" button surfaces when they've scrolled up.
+  const isNearBottomRef = useRef(true);
+  const lastConversationIdRef = useRef<string | null>(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
 
-  const scrollToBottom = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-    }
-  };
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    isNearBottomRef.current = true;
+    setShowJumpToLatest(false);
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // 80px tolerance — covers the input bar height and avoids flickering the
+    // "jump" button when the user is essentially at the bottom.
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const near = distanceFromBottom < 80;
+    isNearBottomRef.current = near;
+    setShowJumpToLatest(!near);
+  }, []);
 
   useLayoutEffect(() => {
-    scrollToBottom();
-  }, [messages, selectedConversationId]);
+    const switchedConversation =
+      lastConversationIdRef.current !== selectedConversationId;
+    lastConversationIdRef.current = selectedConversationId;
+    if (switchedConversation) {
+      // New conversation → reset anchor and land at the bottom.
+      isNearBottomRef.current = true;
+      setShowJumpToLatest(false);
+      scrollToBottom();
+      return;
+    }
+    if (isNearBottomRef.current) {
+      scrollToBottom();
+    }
+  }, [messages, selectedConversationId, scrollToBottom]);
 
   /** Map a Conversation → ChatSession for the header/CRM components. */
   const selectedSession = useMemo((): ChatSession | null => {
@@ -400,7 +435,8 @@ const Chat = () => {
 
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto bg-muted/30 dark:bg-zinc-900/50"
+              onScroll={handleMessagesScroll}
+              className="flex-1 overflow-y-auto bg-muted/30 dark:bg-zinc-900/50 relative"
             >
               <div className="max-w-3xl w-full mx-auto p-4 space-y-3">
                 {loadingMessages ? (
@@ -445,6 +481,17 @@ const Chat = () => {
                 )}
                 <div ref={messagesEndRef} />
               </div>
+              {showJumpToLatest && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => scrollToBottom("smooth")}
+                  className="sticky bottom-3 left-1/2 -translate-x-1/2 z-10 h-8 gap-1.5 px-3 rounded-full shadow-md ring-1 ring-border bg-background/90 backdrop-blur"
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  Ir para o final
+                </Button>
+              )}
             </div>
 
             <ChatInput

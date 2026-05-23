@@ -11,34 +11,40 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useConversations } from "@/hooks/useConversations";
-import { Archive, Trash2, MailCheck, X } from "lucide-react";
-import { toast } from "sonner";
+import { Archive, Trash2, MailCheck, X, CheckSquare } from "lucide-react";
 
 interface InboxBulkActionsProps {
   selectedIds: string[];
+  /** IDs currently visible after sidebar filters (status tab, channel, etc). */
+  visibleIds: string[];
   onClearSelection: () => void;
+  onSelectAllVisible: () => void;
 }
 
 export function InboxBulkActions({
   selectedIds,
+  visibleIds,
   onClearSelection,
+  onSelectAllVisible,
 }: InboxBulkActionsProps) {
-  const { updateStatus, markRead } = useConversations();
+  // Sprint 5.5 1.2 — single-round-trip bulk mutations with optimistic cache
+  // removal. Previously this looped per-id (N HTTP calls); now one PATCH
+  // covers the whole selection and the rows vanish from the viewport
+  // before the request even completes.
+  const { bulkUpdateStatus, bulkMarkRead } = useConversations();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const count = selectedIds.length;
+  const canSelectAll = visibleIds.length > count;
 
   const handleArchive = async () => {
     setIsProcessing(true);
     try {
-      for (const id of selectedIds) {
-        await updateStatus.mutateAsync({ id, status: "archived" });
-      }
-      toast.success(`${count} conversa${count > 1 ? "s" : ""} arquivada${count > 1 ? "s" : ""}`);
+      await bulkUpdateStatus.mutateAsync({ ids: selectedIds, status: "archived" });
       onClearSelection();
     } catch {
-      toast.error("Erro ao arquivar conversas");
+      // toast already raised by mutation onError
     } finally {
       setIsProcessing(false);
     }
@@ -47,13 +53,10 @@ export function InboxBulkActions({
   const handleMarkRead = async () => {
     setIsProcessing(true);
     try {
-      for (const id of selectedIds) {
-        await markRead.mutateAsync({ id });
-      }
-      toast.success(`${count} conversa${count > 1 ? "s" : ""} marcada${count > 1 ? "s" : ""} como lida${count > 1 ? "s" : ""}`);
+      await bulkMarkRead.mutateAsync({ ids: selectedIds });
       onClearSelection();
     } catch {
-      toast.error("Erro ao marcar como lida");
+      // toast already raised by mutation onError
     } finally {
       setIsProcessing(false);
     }
@@ -62,13 +65,10 @@ export function InboxBulkActions({
   const handleDelete = async () => {
     setIsProcessing(true);
     try {
-      for (const id of selectedIds) {
-        await updateStatus.mutateAsync({ id, status: "deleted" });
-      }
-      toast.success(`${count} conversa${count > 1 ? "s" : ""} removida${count > 1 ? "s" : ""}`);
+      await bulkUpdateStatus.mutateAsync({ ids: selectedIds, status: "deleted" });
       onClearSelection();
     } catch {
-      toast.error("Erro ao remover conversas");
+      // toast already raised by mutation onError
     } finally {
       setIsProcessing(false);
       setShowDeleteDialog(false);
@@ -81,6 +81,19 @@ export function InboxBulkActions({
         <span className="text-xs font-medium text-primary whitespace-nowrap">
           {count} selecionada{count > 1 ? "s" : ""}
         </span>
+        {canSelectAll && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={onSelectAllVisible}
+            disabled={isProcessing}
+            title="Selecionar todas as conversas visíveis"
+          >
+            <CheckSquare className="h-3.5 w-3.5 mr-1" />
+            Todas ({visibleIds.length})
+          </Button>
+        )}
         <div className="h-3 w-px bg-border" />
         <Button
           variant="ghost"

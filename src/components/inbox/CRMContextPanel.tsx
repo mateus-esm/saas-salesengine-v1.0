@@ -8,13 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Copy,
   Mail,
   Phone,
@@ -27,7 +20,6 @@ import {
   Lock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { usePipelineStages } from "@/hooks/usePipelineStages";
 import { TouchpointsList } from "@/components/crm/TouchpointsList";
 import { LeadOpportunitiesSection } from "@/components/crm/LeadOpportunitiesSection";
 
@@ -52,7 +44,6 @@ export function CRMContextPanel({
   const [activeTab, setActiveTab] = useState("notes");
   const [newTask, setNewTask] = useState("");
   const [notes, setNotes] = useState(session?.crmData.notes || "");
-  const { stages } = usePipelineStages();
 
   useEffect(() => {
     setNotes(session?.crmData.notes || "");
@@ -85,15 +76,13 @@ export function CRMContextPanel({
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
-  };
-
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Sprint 5.5 1.4 — Identity + Connected Properties + Copilot scroll
+          independently from the Notes/Tasks/History tabs below. Legacy
+          quick-edit fields (opportunity value, stage) have been removed:
+          they belong on the Opportunity, not the contact identity. */}
+      <div className="flex-1 min-h-0 overflow-y-auto pb-2 space-y-3">
       {/* SECTION 1 · Lead Identity */}
       <Card className="m-2 mb-0 overflow-hidden">
         <div
@@ -191,60 +180,15 @@ export function CRMContextPanel({
         </CardContent>
       </Card>
 
-      {/* Legacy quick edits — kept for chat operators during Sprint 3 cutover */}
-      <div
-        className="p-2 px-3 space-y-2 border-b"
-        style={{
-          borderImage:
-            "linear-gradient(90deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14), hsla(14,100%,56%,0.25)) 1",
-        }}
-      >
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Valor da Oportunidade (legado)
-          </label>
-          <Input
-            type="text"
-            value={formatCurrency(session.crmData.value)}
-            className="h-9"
-            onChange={(e) => {
-              const value = parseFloat(e.target.value.replace(/\D/g, "")) / 100;
-              onUpdateCRM({ value });
-            }}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Etapa do Funil (legado)
-          </label>
-          <Select
-            value={session.crmData.stage}
-            onValueChange={(stage) => onUpdateCRM({ stage })}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {stages.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  {stage.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       {/* SECTIONS 2 + 3 + 4 · Action Bar / Active Opportunities / Opportunity Detail */}
       {session.leadId && (
-        <div className="p-3 border-b border-border">
+        <div className="px-3 pt-1">
           <LeadOpportunitiesSection leadId={session.leadId} />
         </div>
       )}
 
       {/* SECTION 5 · AI Commercial Copilot (skeleton) */}
-      <div className="p-3 border-b border-border">
+      <div className="px-3 pt-1">
         <Card className="bg-muted/30 border-dashed">
           <CardHeader className="p-3 pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -263,9 +207,14 @@ export function CRMContextPanel({
           </CardContent>
         </Card>
       </div>
+      </div>
 
-      {/* Notes / Tasks / History tabs — preserved from the legacy panel */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
+      {/* Notes / Tasks / History tabs — independent scroll region. */}
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-shrink-0 flex flex-col border-t border-border/60 max-h-[45%] min-h-[260px]"
+      >
         <TabsList className="mx-2 mt-2 w-auto">
           <TabsTrigger value="notes" className="flex-1">
             Notas
