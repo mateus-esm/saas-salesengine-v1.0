@@ -183,6 +183,48 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     onError: (e: Error) => toast.error("Erro ao remover: " + e.message),
   });
 
+  // Sprint 5.5 3.1 — Mass purge for deals.
+  // Single round-trip soft delete: when a marketing channel pollutes a
+  // pipeline with junk leads, operators select rows and we PATCH them in
+  // one go via .in('id', ids). Optimistic cache update so the rows vanish
+  // from the Kanban / table before the network resolves; rollback on error.
+  const bulkDeleteOpportunities = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return;
+      const { error } = await sb
+        .from(TABLE)
+        .update({ deleted_at: new Date().toISOString() })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: ["opportunities", equipeId] });
+      const previous = queryClient.getQueryData<Opportunity[]>([
+        "opportunities",
+        equipeId,
+      ]);
+      if (previous) {
+        const idSet = new Set(ids);
+        const next = previous.filter((o) => !idSet.has(o.id));
+        queryClient.setQueryData(["opportunities", equipeId], next);
+      }
+      return { previous };
+    },
+    onError: (e: Error, _ids, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["opportunities", equipeId], ctx.previous);
+      }
+      toast.error("Erro ao remover: " + e.message);
+    },
+    onSuccess: (_data, ids) => {
+      const n = ids.length;
+      toast.success(`${n} lead${n > 1 ? "s removidos" : " removido"}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+    },
+  });
+
   return {
     opportunities: query.data || [],
     isLoading: query.isLoading,
@@ -190,6 +232,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     createOpportunity,
     updateOpportunity,
     deleteOpportunity,
+    bulkDeleteOpportunities,
     refetch: query.refetch,
   };
 };

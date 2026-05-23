@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ColumnDef,
+  RowSelectionState,
   SortingState,
   flexRender,
   getCoreRowModel,
@@ -9,10 +10,21 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Loader2 } from "lucide-react";
+import { ArrowUpDown, Loader2, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -86,7 +98,8 @@ const formatCustom = (field: CustomFieldSchema, raw: unknown): string => {
 export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const { pipelines } = usePipelines();
   const { stages } = usePipelineStagesV2(pipelineId);
-  const { opportunities, isLoading, updateOpportunity } = useOpportunities({ pipelineId });
+  const { opportunities, isLoading, updateOpportunity, bulkDeleteOpportunities } =
+    useOpportunities({ pipelineId });
   const { leads, updateLead, deleteLead } = useLeads();
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
@@ -97,6 +110,10 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
   const [contactDrawerLead, setContactDrawerLead] = useState<Lead | null>(null);
+  // Sprint 5.5 3.1 — Mass purge selection state. Keyed by opportunity id
+  // (not table row index) so it survives sorting + filtering.
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   // Sprint 4 EPIC 2 §2.3 — same `?opp=<id>` deep-link contract as the Kanban.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -159,6 +176,31 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
 
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const fixed: ColumnDef<Row>[] = [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected()
+                ? true
+                : table.getIsSomePageRowsSelected()
+                  ? "indeterminate"
+                  : false
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Selecionar todos"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Selecionar linha"
+          />
+        ),
+        enableSorting: false,
+      },
       {
         id: "lead",
         header: ({ column }) => (
@@ -278,13 +320,32 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const table = useReactTable({
     data: rows,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (r) => r.opp.id,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    enableRowSelection: true,
   });
+
+  const selectedOppIds = useMemo(
+    () => Object.keys(rowSelection).filter((id) => rowSelection[id]),
+    [rowSelection],
+  );
+
+  const handleBulkDelete = async () => {
+    try {
+      await bulkDeleteOpportunities.mutateAsync(selectedOppIds);
+      setRowSelection({});
+    } catch {
+      // toast handled by mutation
+    } finally {
+      setShowBulkDelete(false);
+    }
+  };
 
   if (isLoading && opportunities.length === 0) {
     return (
@@ -335,6 +396,38 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Sprint 5.5 3.1 — bulk action bar surfaces when ≥1 row is selected */}
+        {selectedOppIds.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border border-destructive/20 rounded-md">
+            <span className="text-xs font-medium text-destructive whitespace-nowrap">
+              {selectedOppIds.length} selecionada{selectedOppIds.length > 1 ? "s" : ""}
+            </span>
+            <div className="h-3 w-px bg-border" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={() => setShowBulkDelete(true)}
+              disabled={bulkDeleteOpportunities.isPending}
+              title="Remover leads selecionados"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Excluir
+            </Button>
+            <div className="flex-1" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setRowSelection({})}
+              disabled={bulkDeleteOpportunities.isPending}
+              title="Limpar seleção"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto p-4">
@@ -364,8 +457,13 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
                         key={cell.id}
                         className="py-1.5"
                         onClick={(e) => {
-                          // Let inline Selects capture their own clicks without opening the drawer.
-                          if (cell.column.id === "stage" || cell.column.id === "status") {
+                          // Let inline Selects / checkboxes capture their own clicks
+                          // without opening the opportunity drawer.
+                          if (
+                            cell.column.id === "stage" ||
+                            cell.column.id === "status" ||
+                            cell.column.id === "select"
+                          ) {
                             e.stopPropagation();
                           }
                         }}
@@ -413,6 +511,30 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           setContactDrawerLead(null);
         }}
       />
+
+      <AlertDialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover leads selecionados?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedOppIds.length} lead{selectedOppIds.length > 1 ? "s serão removidos" : " será removido"}
+              {" "}desta pipeline. Os contatos por trás continuam na Base de Contatos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleteOpportunities.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              disabled={bulkDeleteOpportunities.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {bulkDeleteOpportunities.isPending ? "Removendo..." : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

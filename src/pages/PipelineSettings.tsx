@@ -28,6 +28,7 @@ import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
 import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
 import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
+import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
 import type { CustomFieldSchema, Pipeline } from "@/types/pipelines";
 
 const PipelineSettings = () => {
@@ -323,8 +324,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
         <CardHeader>
           <CardTitle>Campos Personalizados</CardTitle>
           <CardDescription>
-            Defina os campos exclusivos desta pipeline. Use o ícone de olho para
-            escolher quais aparecem nos cards do Kanban. Lembre de salvar.
+            Defina os campos exclusivos desta pipeline. Lembre de salvar.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -335,6 +335,28 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
               setSchema(s);
               setCardFieldIds(c);
             }}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Sprint 5.5 3.3 — Kanban card cover customization, surfaced as a
+          dedicated panel instead of being buried behind per-field eye
+          icons inside CustomFieldsEditor. The picker writes to the same
+          `card_field_ids` array that the Kanban cards already read. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Card do Kanban</CardTitle>
+          <CardDescription>
+            Escolha quais campos personalizados aparecem no rosto do card —
+            por exemplo, kWp para Solo Energia ou Apartamentos Totais para
+            Be My Guest. Nome e valor são sempre mostrados. Lembre de salvar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CardFieldsPicker
+            schema={schema}
+            cardFieldIds={cardFieldIds}
+            onChange={setCardFieldIds}
           />
         </CardContent>
       </Card>
