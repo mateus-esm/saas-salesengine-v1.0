@@ -43,6 +43,7 @@ import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
+import { AddContactModal } from "./AddContactModal";
 import {
   ArrowUpDown,
   Columns,
@@ -50,6 +51,7 @@ import {
   Download,
   Upload,
   RefreshCw,
+  UserPlus,
   Loader2,
   MessageCircle,
   Briefcase,
@@ -180,7 +182,7 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
 };
 
 export const DatabaseView = () => {
-  const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
+  const { leads, isLoading, updateLead, deleteLead, refetch, createLead } = useLeads();
   const { stages } = usePipelineStages();
   const { teamMembers: members } = useTeamMembers();
 
@@ -192,6 +194,11 @@ export const DatabaseView = () => {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  // Sprint 5.5 2.4 — Quick Add Contact drawer. Single-row manual entry
+  // sits next to the bulk Importar/Exportar buttons. The batch upload
+  // engine is the existing ImportModal (Sprint 4); Quick Add is the
+  // companion micro-flow for "just one contact now".
+  const [showAddModal, setShowAddModal] = useState(false);
 
   // Sprint 4 EPIC 2 — clicking the row's open icon pops the contact drawer so
   // users can jump from Base de Contatos to a contact's Opportunities.
@@ -632,6 +639,14 @@ export const DatabaseView = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={() => setShowAddModal(true)}
+            className="bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Adicionar Contato
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
             <Upload className="h-4 w-4 mr-2" />
             Importar
@@ -813,6 +828,26 @@ export const DatabaseView = () => {
       </div>
 
       {/* Modals */}
+      <AddContactModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={(data) => {
+          createLead.mutate(
+            {
+              name: data.name,
+              email: data.email,
+              phone: data.phone,
+              observations: data.observations,
+              source: data.origin_category || "Manual",
+              origin: "manual",
+              lead_type: "lead",
+            },
+            {
+              onSuccess: () => setShowAddModal(false),
+            },
+          );
+        }}
+      />
       <ImportModal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
