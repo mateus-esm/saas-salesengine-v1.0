@@ -261,11 +261,18 @@ export function InboxSidebar({
         </div>
       </div>
 
-      {/* Bulk actions bar — visible when at least one conversation is selected */}
+      {/* Bulk actions bar — visible when at least one conversation is selected.
+          Sprint 5.5 1.2: now exposes "Selecionar todas (N)" so operators can
+          sweep an entire filtered view (e.g. all 150 spam threads) in two
+          clicks instead of one-by-one. */}
       {selectedIds.size > 0 && (
         <InboxBulkActions
           selectedIds={[...selectedIds]}
+          visibleIds={filteredSessions.map((s) => s.id)}
           onClearSelection={clearSelection}
+          onSelectAllVisible={() =>
+            setSelectedIds(new Set(filteredSessions.map((s) => s.id)))
+          }
         />
       )}
 

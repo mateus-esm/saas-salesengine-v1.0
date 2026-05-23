@@ -155,6 +155,86 @@ export const useConversations = () => {
     onError: () => toast.error("Erro ao atualizar conversa"),
   });
 
+  // Sprint 5.5 1.2 — Multi-Select Demolition.
+  // Bulk actions used to loop N round trips ("await updateStatus.mutateAsync"
+  // per id), which felt sluggish and could partially fail. Now one PATCH
+  // with `.in('id', ids)` covers the whole selection. Optimistic update
+  // removes the rows from cache so they vanish from the viewport before the
+  // network round-trip resolves; we roll back on error.
+  const bulkUpdateStatus = useMutation({
+    mutationFn: async ({
+      ids,
+      status,
+    }: {
+      ids: string[];
+      status: ConversationStatus;
+    }) => {
+      if (ids.length === 0) return;
+      const patch: Record<string, unknown> = { status };
+      if (status === "archived") patch.archived_at = new Date().toISOString();
+      if (status === "deleted") patch.deleted_at = new Date().toISOString();
+      if (status === "active") {
+        patch.archived_at = null;
+        patch.deleted_at = null;
+      }
+      const { error } = await sb
+        .from("conversations")
+        .update(patch)
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onMutate: async ({ ids, status }) => {
+      await queryClient.cancelQueries({ queryKey: ["conversations", equipeId] });
+      const previous = queryClient.getQueryData<Conversation[]>([
+        "conversations",
+        equipeId,
+      ]);
+      if (previous) {
+        const idSet = new Set(ids);
+        const next = previous.map((c) =>
+          idSet.has(c.id) ? { ...c, status } : c,
+        );
+        queryClient.setQueryData(["conversations", equipeId], next);
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(["conversations", equipeId], ctx.previous);
+      }
+      toast.error("Erro ao atualizar conversas");
+    },
+    onSuccess: (_data, vars) => {
+      const label: Record<ConversationStatus, string> = {
+        active: "reabertas",
+        archived: "arquivadas",
+        deleted: "removidas",
+      };
+      const n = vars.ids.length;
+      toast.success(`${n} conversa${n > 1 ? "s" : ""} ${label[vars.status]}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
+    },
+  });
+
+  const bulkMarkRead = useMutation({
+    mutationFn: async ({ ids }: { ids: string[] }) => {
+      if (ids.length === 0) return;
+      const { error } = await sb
+        .from("conversations")
+        .update({ unread_count: 0 })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
+      const n = vars.ids.length;
+      toast.success(`${n} conversa${n > 1 ? "s" : ""} marcada${n > 1 ? "s" : ""} como lida${n > 1 ? "s" : ""}`);
+    },
+    onError: () => toast.error("Erro ao marcar como lida"),
+  });
+
   const assignResponsible = useMutation({
     mutationFn: async ({
       id,
@@ -214,8 +294,10 @@ export const useConversations = () => {
     isLoading: conversationsQuery.isLoading,
     refetch: conversationsQuery.refetch,
     updateStatus,
+    bulkUpdateStatus,
     assignResponsible,
     toggleHandoff,
     markRead,
+    bulkMarkRead,
   };
 };
