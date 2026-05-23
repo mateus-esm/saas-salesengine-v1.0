@@ -63,6 +63,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { isTechnicalId, formatBrPhone } from "@/lib/displayName";
 
 // Componente de célula editável inline
 interface EditableCellProps {
@@ -322,13 +323,22 @@ export const DatabaseView = () => {
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
-        <EditableCell
-          value={row.getValue("name")}
-          onSave={(val) => handleUpdateField(row.original.id, "name", val)}
-          placeholder="Nome..."
-        />
-      ),
+      cell: ({ row }) => {
+        // Sprint 5.5 — mask Meta technical IDs (e.g. "264162...@lid") so they
+        // never reach the user. The raw value stays editable; only the read
+        // view is blanked, and the phone is offered as a helpful placeholder.
+        const rawName = row.getValue("name") as string | null;
+        const phone = row.original.phone as string | null;
+        const isMasked = isTechnicalId(rawName);
+        const phoneHint = formatBrPhone(phone);
+        return (
+          <EditableCell
+            value={isMasked ? "" : (rawName ?? "")}
+            onSave={(val) => handleUpdateField(row.original.id, "name", val)}
+            placeholder={isMasked ? (phoneHint || "[Lead Anônimo]") : "Nome..."}
+          />
+        );
+      },
     },
     {
       accessorKey: "phone",
