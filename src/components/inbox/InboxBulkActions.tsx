@@ -77,68 +77,75 @@ export function InboxBulkActions({
 
   return (
     <>
-      <div className="flex items-center gap-2 px-3 py-2 bg-primary/10 border-y border-primary/20">
-        <span className="text-xs font-medium text-primary whitespace-nowrap">
-          {count} selecionada{count > 1 ? "s" : ""}
-        </span>
-        {canSelectAll && (
+      {/* Sprint 5.5 polish #2 — two-row compact layout. The inbox sidebar
+          is only 280–360px wide, so a single row of labeled buttons
+          overflowed the column. Top row: status + "Todas" + close.
+          Bottom row: icon-only action buttons sharing the width evenly. */}
+      <div className="px-3 py-2 bg-primary/10 border-y border-primary/20 space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-primary whitespace-nowrap">
+            {count} selecionada{count > 1 ? "s" : ""}
+          </span>
+          {canSelectAll && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px]"
+              onClick={onSelectAllVisible}
+              disabled={isProcessing}
+              title={`Selecionar todas as ${visibleIds.length} conversas visíveis`}
+            >
+              <CheckSquare className="h-3 w-3 mr-1" />
+              Todas {visibleIds.length}
+            </Button>
+          )}
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onClearSelection}
+            disabled={isProcessing}
+            title="Limpar seleção"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-3 gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={onSelectAllVisible}
+            className="h-7 px-1 text-[11px] justify-center"
+            onClick={handleMarkRead}
             disabled={isProcessing}
-            title="Selecionar todas as conversas visíveis"
+            title="Marcar como lida"
           >
-            <CheckSquare className="h-3.5 w-3.5 mr-1" />
-            Todas ({visibleIds.length})
+            <MailCheck className="h-3.5 w-3.5 mr-1" />
+            Ler
           </Button>
-        )}
-        <div className="h-3 w-px bg-border" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={handleMarkRead}
-          disabled={isProcessing}
-          title="Marcar como lida"
-        >
-          <MailCheck className="h-3.5 w-3.5 mr-1" />
-          Ler
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={handleArchive}
-          disabled={isProcessing}
-          title="Arquivar"
-        >
-          <Archive className="h-3.5 w-3.5 mr-1" />
-          Arquivar
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-          onClick={() => setShowDeleteDialog(true)}
-          disabled={isProcessing}
-          title="Remover"
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-1" />
-          Remover
-        </Button>
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={onClearSelection}
-          disabled={isProcessing}
-          title="Limpar seleção"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-1 text-[11px] justify-center"
+            onClick={handleArchive}
+            disabled={isProcessing}
+            title="Arquivar conversas"
+          >
+            <Archive className="h-3.5 w-3.5 mr-1" />
+            Arquivar
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-1 text-[11px] justify-center text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => setShowDeleteDialog(true)}
+            disabled={isProcessing}
+            title="Remover conversas"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Excluir
+          </Button>
+        </div>
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

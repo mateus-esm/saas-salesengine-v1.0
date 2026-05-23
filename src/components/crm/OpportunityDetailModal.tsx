@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Building2, Home, Settings2 } from "lucide-react";
 
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -20,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer";
@@ -116,101 +116,159 @@ export const OpportunityDetailModal = ({
     onClose();
   };
 
+  const hasCustomFields = schema.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>
-            {lead?.name ?? "Lead"} · {pipeline?.name ?? "Pipeline"}
-          </DialogTitle>
-          <DialogDescription>
-            Editar dados específicos deste lead. Dados do contato são compartilhados entre pipelines.
-          </DialogDescription>
-          <div className="pt-2">
-            <EntityChips
-              opportunityId={opportunity.id}
-              primaryContact={lead}
-              onOpenContact={(contactId) => {
-                onClose();
-                onOpenContact?.(contactId);
-              }}
-            />
+      {/* Sprint 5.5 polish #2 — modal restructured into tabs (Dados / Vínculos)
+          so the vertical scroll surface is cut in half. Tighter header with
+          chips inline, lighter dividers, consistent spacing. */}
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
+          <div className="space-y-1">
+            <DialogTitle className="text-base font-semibold leading-tight">
+              {lead?.name ?? "Lead"}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              em <span className="font-medium text-foreground/70">{pipeline?.name ?? "Pipeline"}</span>
+            </p>
           </div>
+          <EntityChips
+            opportunityId={opportunity.id}
+            primaryContact={lead}
+            onOpenContact={(contactId) => {
+              onClose();
+              onOpenContact?.(contactId);
+            }}
+          />
         </DialogHeader>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Etapa</Label>
-                <Select value={stageId} onValueChange={setStageId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stages.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                          {s.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as OpportunityStatus)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="open">Aberta</SelectItem>
-                    <SelectItem value="won">Ganha</SelectItem>
-                    <SelectItem value="lost">Perdida</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5 col-span-2">
-                <Label>Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder="0,00"
-                />
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-border">
-              <h4 className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
-                Campos personalizados
-              </h4>
-              <DynamicFieldRenderer schema={schema} value={customData} onChange={setCustomData} />
-            </div>
-
-            {/* Sprint 4 EPIC 4 — secondary attachments (companies, properties) */}
-            <div className="pt-3 border-t border-border">
-              <CompanySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
-            </div>
-            <div className="pt-3 border-t border-border">
-              <PropertySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
-            </div>
+        <Tabs defaultValue="dados" className="flex-1 min-h-0 flex flex-col">
+          <div className="px-5 border-b border-border/60">
+            <TabsList className="bg-transparent p-0 h-auto gap-1">
+              <TabsTrigger
+                value="dados"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 py-2 text-xs gap-1.5"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                Dados
+              </TabsTrigger>
+              <TabsTrigger
+                value="empresas"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 py-2 text-xs gap-1.5"
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Empresas
+              </TabsTrigger>
+              <TabsTrigger
+                value="imoveis"
+                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 py-2 text-xs gap-1.5"
+              >
+                <Home className="h-3.5 w-3.5" />
+                Imóveis
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </ScrollArea>
 
-        <DialogFooter className="flex items-center sm:justify-between gap-2 pt-2 border-t border-border">
-          <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive">
-            <Trash2 className="h-4 w-4 mr-1.5" />
+          <TabsContent value="dados" className="flex-1 min-h-0 m-0 data-[state=inactive]:hidden">
+            <ScrollArea className="h-full">
+              <div className="px-5 py-4 space-y-5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Etapa</Label>
+                    <Select value={stageId} onValueChange={setStageId}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stages.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                              {s.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Status</Label>
+                    <Select value={status} onValueChange={(v) => setStatus(v as OpportunityStatus)}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Aberta</SelectItem>
+                        <SelectItem value="won">Ganha</SelectItem>
+                        <SelectItem value="lost">Perdida</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5 col-span-2">
+                    <Label className="text-xs">Valor (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      placeholder="0,00"
+                      className="h-9 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {hasCustomFields && (
+                  <div className="space-y-3">
+                    <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
+                      Campos personalizados
+                    </h4>
+                    <DynamicFieldRenderer schema={schema} value={customData} onChange={setCustomData} />
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="empresas" className="flex-1 min-h-0 m-0 data-[state=inactive]:hidden">
+            <ScrollArea className="h-full">
+              <div className="px-5 py-4">
+                <CompanySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="imoveis" className="flex-1 min-h-0 m-0 data-[state=inactive]:hidden">
+            <ScrollArea className="h-full">
+              <div className="px-5 py-4">
+                <PropertySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
+              </div>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter className="flex items-center sm:justify-between gap-2 px-5 py-3 border-t border-border/60 bg-muted/30">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDelete}
+            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
             Excluir
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={updateOpportunity.isPending}>
+            <Button variant="outline" size="sm" onClick={onClose} className="h-8">
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={updateOpportunity.isPending}
+              className="h-8 bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
+            >
               Salvar
             </Button>
           </div>
