@@ -16,13 +16,6 @@ import {
   Trash2,
 } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -36,12 +29,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PipelineStage } from "@/hooks/usePipelineStages";
 import { cn } from "@/lib/utils";
 
 interface ConversationHeaderProps {
   session: ChatSession & { responsibleId?: string };
-  stages: PipelineStage[];
   teamMembers?: TeamMember[];
   onToggleHandoff: () => void;
   onUpdateCRM: (data: Partial<ChatSession['crmData']>) => void;
@@ -52,7 +43,7 @@ interface ConversationHeaderProps {
   onStatusChange?: (status: ConversationStatus) => void;
 }
 
-export function ConversationHeader({ session, stages, teamMembers = [], onToggleHandoff, onUpdateCRM, onAssignResponsible, onBack, onOpenLeadDetails, onStatusChange }: ConversationHeaderProps) {
+export function ConversationHeader({ session, teamMembers = [], onToggleHandoff, onUpdateCRM, onAssignResponsible, onBack, onOpenLeadDetails, onStatusChange }: ConversationHeaderProps) {
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
@@ -224,28 +215,12 @@ export function ConversationHeader({ session, stages, teamMembers = [], onToggle
             </DropdownMenu>
           )}
 
-          {/* Stage Selector */}
-          <Select 
-            value={session.crmData.stage} 
-            onValueChange={(value) => onUpdateCRM({ stage: value })}
-          >
-            <SelectTrigger className="h-8 w-[140px] text-xs bg-muted/50 border-none shadow-none focus:ring-0">
-              <SelectValue placeholder="Etapa" />
-            </SelectTrigger>
-            <SelectContent>
-              {stages.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-2 h-2 rounded-full" 
-                      style={{ backgroundColor: stage.color }}
-                    />
-                    {stage.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Sprint 5.5 polish #2 — Stage selector removed from the chat
+              header. Stage now lives only in the CRM sidebar (per
+              Opportunity in LeadOpportunitiesSection), which is the
+              canonical source. Having it twice was a redundant click target
+              and made it easy to write to the legacy lead.stage_id while
+              the opportunity stage stayed unchanged. */}
 
           {/* Value Editor (Popover) */}
           <Popover>

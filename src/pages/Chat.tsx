@@ -387,7 +387,6 @@ const Chat = () => {
               <div className="flex-1">
                 <ConversationHeader
                   session={selectedSession}
-                  stages={stages}
                   teamMembers={teamMembers}
                   onToggleHandoff={handleToggleHandoff}
                   onUpdateCRM={handleUpdateCRM}

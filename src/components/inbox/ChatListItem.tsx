@@ -154,10 +154,11 @@ export function ChatListItem({
               ? "opacity-100"
               : "opacity-0 group-hover:opacity-100"
           )}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelect?.();
-          }}
+          // Stop click bubbling so the row doesn't switch conversations, but
+          // do NOT call onToggleSelect here — Checkbox's onCheckedChange
+          // already fires it. Calling both makes the toggle fire twice and
+          // cancel out (the bug Sprint 5.5 polish #1 fixes).
+          onClick={(e) => e.stopPropagation()}
         >
           <Checkbox
             checked={!!isChecked}
