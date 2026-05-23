@@ -19,12 +19,16 @@ This document tracks the cumulative cost of AI agents executing sprints and epic
 | 2026-04-22 | CRM V1   | Sprint 4 | Epic 3      | OPUS 4.7      | ~220k / ~18k    | $4.65           | R$ 23,25       |
 | 2026-04-22 | CRM V1   | Sprint 4 | Epic 4      | OPUS 4.7      | ~260k / ~22k    | $5.55           | R$ 27,75       |
 | 2026-04-22 | CRM V1   | Sprint 4 | Epic 5      | OPUS 4.6      | ~180k / ~25k    | $4.10           | R$ 20,50       |
-| 2026-05-22 | CRM V1   | Sprint 5.5 | 2.2 metaid-unmask | OPUS 4.7    | ~55k / ~6k      | $1.28           | R$ 6,40        |
+| 2026-05-22 | CRM V1   | Sprint 5.5 | 2.2 metaid-unmask              | OPUS 4.7   | ~55k / ~6k     | $1.28          | R$ 6,40        |
+| 2026-05-22 | CRM V1   | Sprint 5.5 | 1.1–1.4 inbox-precision        | OPUS 4.7   | ~140k / ~16k   | $3.30          | R$ 16,50       |
+| 2026-05-22 | CRM V1   | Sprint 5.5 | 2.1+2.3+2.4 contacts-ledger    | OPUS 4.7   | ~110k / ~12k   | $2.55          | R$ 12,75       |
+| 2026-05-23 | CRM V1   | Sprint 5.5 | 3.1+3.3 pipeline-warroom       | OPUS 4.7   | ~90k / ~11k    | $2.18          | R$ 10,90       |
+| 2026-05-23 | CRM V1   | Sprint 5.5 | Merge + finalization (main)    | OPUS 4.7   | ~25k / ~3k     | $0.60          | R$ 3,00        |
 
 ## 📊 Summary Totals
 
 | Module   | Total Cost (USD) | Total Cost (R$) |
 | :------- | :--------------- | :-------------- |
-| CRM V1   | $25.58           | R$ 127,90       |
+| CRM V1   | $34.21           | R$ 171,05       |
 
 *(Agents: Please update the Summary Totals table as well when adding a new row to the Cost Ledger)*

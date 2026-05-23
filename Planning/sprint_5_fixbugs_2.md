@@ -230,21 +230,25 @@ Decomposed into 4 branches per `Planning/agent_workflow.md` convention. Merge in
 
 | # | Branch | Scope | Status |
 |---|--------|-------|--------|
-| 1 | `feat/claude-sprint5-metaid-unmask` | 2.2 only — surgical bug fix, merge first | [x] **Ready for merge** |
-| 2 | `feat/claude-sprint5-inbox-precision` | 1.1, 1.2, 1.3, 1.4 — chat domain | [ ] Pending |
-| 3 | `feat/claude-sprint5-contacts-ledger` | 2.1, 2.3, 2.4 — Base de Contatos | [ ] Pending |
-| 4 | `feat/claude-sprint5-pipeline-warroom` | 3.1, 3.2, 3.3 — Pipeline | [ ] Pending |
+| 1 | `feat/claude-sprint5-metaid-unmask` | 2.2 only — surgical bug fix, merge first | [x] **Merged** (`b83176b`) |
+| 2 | `feat/claude-sprint5-inbox-precision` | 1.1, 1.2, 1.3, 1.4 — chat domain | [x] **Merged** (`6f25bfb`) |
+| 3 | `feat/claude-sprint5-contacts-ledger` | 2.1, 2.3, 2.4 — Base de Contatos | [x] **Merged** (`bee725c`) |
+| 4 | `feat/claude-sprint5-pipeline-warroom` | 3.1, 3.2, 3.3 — Pipeline | [x] **Merged** (`f3bd724`) |
 
 ### Sub-task Checklist
 
 - [x] **2.2** Meta `@lid` unmask — webhook refuses technical IDs, `formatDisplayName` util normalizes display in Chat + Contacts table (branch 1)
-- [ ] **1.1** Scroll anchor (branch 2)
-- [ ] **1.2** Multi-select bulk delete wired to backend (branch 2)
-- [ ] **1.3** Message-feed cache / latency (branch 2)
-- [ ] **1.4** Chat Context HUD sidebar refinement (branch 2)
-- [ ] **2.1** Infinite scroll Contacts table (branch 3)
-- [ ] **2.3** Column customization for Canal/Origem/Enriquecimento (branch 3)
-- [ ] **2.4** Multi-entity link chips + Quick Add drawer + batch upload (branch 3)
-- [ ] **3.1** Mass purge deals (branch 4)
-- [ ] **3.2** Lead Matrix — custom params as visible columns (branch 4)
-- [ ] **3.3** Kanban card cover customization (branch 4)
+- [x] **1.1** Scroll anchor — `isNearBottomRef` + `onScroll`; auto-scroll gated on user-at-bottom OR conversation-switched; "Ir para o final" pill (branch 2)
+- [x] **1.2** Multi-select bulk delete — `bulkUpdateStatus` + `bulkMarkRead` single-PATCH mutations with optimistic cache, plus "Todas (N)" selector that respects filters (branch 2)
+- [x] **1.3** Message-feed cache / latency — `prefetchConversationMessages` warms cache on hover, in-flight dedup (branch 2)
+- [x] **1.4** Chat Context HUD sidebar refinement — legacy quick-edit block removed; Identity/Properties/Copiloto scroll independently from Tabs (branch 2)
+- [x] **2.1** Infinite scroll Contacts table — pagination model + footer dropped (branch 3)
+- [x] **2.3** Column customization for Canal/Origem/Enriquecimento — Canal + Enriquecimento are now first-class columns; Origem already existed (branch 3)
+- [x] **2.4** Quick Add drawer wired into Base de Contatos header; batch upload already in `ImportModal`. Multi-entity link chips column **deferred** — needs new per-lead link queries (`useOpportunityLinks` is keyed by opportunity_id) (branch 3)
+- [x] **3.1** Mass purge deals — `bulkDeleteOpportunities` + select column + bulk action bar + confirm dialog (branch 4)
+- [x] **3.2** Lead Matrix — already implemented in `OpportunityTable.tsx:268-273` (dynamic column per custom field); no code change needed (branch 4)
+- [x] **3.3** Kanban card cover customization — wired existing `CardFieldsPicker` as dedicated "Card do Kanban" section in `PipelineSettings` (branch 4)
+
+### Deferred for Sprint 6+
+
+- **2.4 multi-entity chips column** — show Associated Company chip + Properties count directly in the Contacts table row. Requires a per-lead links hook (analog of `useOpportunityLinks` but keyed by `lead_id`) plus a dedicated table column. Captured here so the sprint vision isn't lost.
