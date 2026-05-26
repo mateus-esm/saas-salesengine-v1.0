@@ -13,7 +13,6 @@ import {
 import { useLeads, Lead } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
-import { ContactType } from "@/types/crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -61,11 +60,12 @@ import {
   Check,
   X,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
-import { isTechnicalId, formatBrPhone } from "@/lib/displayName";
+import { isTechnicalId, formatBrPhone, formatDisplayName } from "@/lib/displayName";
 
 // Componente de célula editável inline
 interface EditableCellProps {
@@ -215,19 +215,9 @@ export const DatabaseView = () => {
   const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
 
   // Filter states
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-
   const handleUpdateField = useCallback((leadId: string, field: string, value: LeadUpdateValue) => {
     updateLead.mutate({ id: leadId, [field]: value });
   }, [updateLead]);
-
-  const typeOptions: { id: ContactType; label: string }[] = [
-    { id: "lead", label: "Lead" },
-    { id: "opportunity", label: "Oportunidade" },
-    { id: "contact", label: "Contato" },
-    { id: "spam", label: "Spam" },
-    { id: "archived", label: "Arquivado" },
-  ];
 
   // Sprint 5.5 2.3 — surface Canal + Enriquecimento as first-class columns
   // so operators can scan the entire pipeline-origin landscape from the
@@ -248,20 +238,25 @@ export const DatabaseView = () => {
   ];
 
   const filteredLeads = useMemo(() => {
-    let result = leads;
-
-    if (typeFilter && typeFilter !== "all") {
-      result = result.filter(lead => lead.contact_type === typeFilter);
-    }
-
-    return result;
-  }, [leads, typeFilter]);
+    return leads;
+  }, [leads]);
 
   const filteredLeadIds = useMemo(
     () => filteredLeads.map((lead) => lead.id),
     [filteredLeads],
   );
   const { data: entitySummary = {} } = useLeadEntitySummary(filteredLeadIds);
+
+  const summarizeEnrichment = (data: Record<string, unknown> | null | undefined): string | null => {
+    if (!data) return null;
+    const fragments: string[] = [];
+    if (typeof data["job_title"] === "string" && data["job_title"]) fragments.push(String(data["job_title"]));
+    if (typeof data["linkedin_url"] === "string" && data["linkedin_url"]) fragments.push("LinkedIn");
+    if (typeof data["instagram_url"] === "string" && data["instagram_url"]) fragments.push("Instagram");
+    if (typeof data["birthday"] === "string" && data["birthday"]) fragments.push("Aniv.");
+    if (fragments.length === 0) return null;
+    return fragments.slice(0, 3).join(" · ");
+  };
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
     {
@@ -437,58 +432,6 @@ export const DatabaseView = () => {
       enableSorting: false,
     },
     {
-      accessorKey: "contact_type",
-      header: "Tipo",
-      cell: ({ row }) => (
-        <EditableSelect
-          value={row.original.contact_type ?? null}
-          options={typeOptions}
-          onSave={(val) => handleUpdateField(row.original.id, "contact_type", val)}
-          placeholder="Tipo"
-        />
-      ),
-    },
-    {
-      id: "opportunity_count",
-      header: "Pipelines",
-      cell: ({ row }) => {
-        const count = entitySummary[row.original.id]?.opportunityCount ?? 0;
-        return (
-          <Badge
-            variant={count > 0 ? "default" : "outline"}
-            className="text-xs gap-1 min-w-[44px] justify-center"
-            title={`${count} oportunidade${count === 1 ? "" : "s"} em pipeline${count === 1 ? "" : "s"}`}
-          >
-            <Briefcase className="h-3 w-3" />
-            {count}
-          </Badge>
-        );
-      },
-      enableSorting: false,
-    },
-    {
-      id: "opportunity_total_value",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="p-0 hover:bg-transparent font-semibold"
-        >
-          Valor Total
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => {
-        const value = entitySummary[row.original.id]?.opportunityTotalValue ?? 0;
-        if (value === 0) return <span className="text-muted-foreground">-</span>;
-        return (
-          <span className="text-sm font-medium">
-            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)}
-          </span>
-        );
-      },
-    },
-    {
       accessorKey: "origin_category",
       header: "Origem",
       cell: ({ row }) => (
@@ -514,6 +457,21 @@ export const DatabaseView = () => {
           allowClear
         />
       ),
+    },
+    {
+      id: "enrichment_summary",
+      header: "Enriquecimento IA",
+      cell: ({ row }) => {
+        const summary = summarizeEnrichment(row.original.personal_custom_data as Record<string, unknown> | null | undefined);
+        if (!summary) return <span className="text-muted-foreground">-</span>;
+        return (
+          <Badge variant="outline" className="text-[11px] gap-1 max-w-[200px] truncate" title={summary}>
+            <Sparkles className="h-3 w-3 shrink-0" />
+            <span className="truncate">{summary}</span>
+          </Badge>
+        );
+      },
+      enableSorting: false,
     },
     {
       accessorKey: "observations",
@@ -565,7 +523,7 @@ export const DatabaseView = () => {
         return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [typeOptions, channelOptions, entitySummary, handleUpdateField]);
+  ], [channelOptions, entitySummary, handleUpdateField]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -659,21 +617,6 @@ export const DatabaseView = () => {
             />
           </div>
 
-          {/* Type Filter */}
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os tipos</SelectItem>
-              {typeOptions.map((opt) => (
-                <SelectItem key={opt.id} value={opt.id}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           {/* Column Visibility */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -693,11 +636,9 @@ export const DatabaseView = () => {
                     phone: "Telefone",
                     company_link: "Empresa",
                     property_count: "Imóveis",
-                    contact_type: "Tipo",
-                    opportunity_count: "Pipelines",
-                    opportunity_total_value: "Valor Total",
                     origin_category: "Origem",
                     channel: "Canal",
+                    enrichment_summary: "Enriquecimento IA",
                     observations: "Observações",
                     tags: "Tags",
                     created_at: "Criado em",
@@ -821,7 +762,7 @@ export const DatabaseView = () => {
         open={!!assigningLead}
         onClose={() => setAssigningLead(null)}
         contactIds={assigningLead ? [assigningLead.id] : []}
-        label={assigningLead?.name ?? undefined}
+        label={assigningLead ? formatDisplayName(assigningLead.name, assigningLead.phone, "[Novo Contato - WhatsApp]") : undefined}
       />
     </div>
   );

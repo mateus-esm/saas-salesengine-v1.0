@@ -26,6 +26,7 @@ import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer
 import { EntityChips } from "./EntityChips";
 import { CompanySection } from "./companies/CompanySection";
 import { PropertySection } from "./properties/PropertySection";
+import { formatDisplayName } from "@/lib/displayName";
 import type { Lead } from "@/types/crm";
 import type {
   Opportunity,
@@ -127,7 +128,7 @@ export const OpportunityDetailModal = ({
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3">
           <div className="space-y-1">
             <DialogTitle className="text-base font-semibold leading-tight">
-              {lead?.name ?? "Lead"}
+              {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
               em <span className="font-medium text-foreground/70">{pipeline?.name ?? "Pipeline"}</span>

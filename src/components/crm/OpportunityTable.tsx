@@ -45,6 +45,7 @@ import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
+import { formatDisplayName } from "@/lib/displayName";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
@@ -162,7 +163,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         if (globalFilter) {
           const lead = leadsById[o.lead_id];
           const needle = globalFilter.toLowerCase();
-          const hay = `${lead?.name ?? ""} ${lead?.phone ?? ""} ${lead?.email ?? ""}`.toLowerCase();
+          const hay = `${formatDisplayName(lead?.name, lead?.phone) ?? ""} ${lead?.phone ?? ""} ${lead?.email ?? ""}`.toLowerCase();
           if (!hay.includes(needle)) return false;
         }
         return true;
@@ -212,9 +213,11 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             Lead <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         ),
-        accessorFn: (r) => r.lead?.name ?? "",
+        accessorFn: (r) => formatDisplayName(r.lead?.name, r.lead?.phone, ""),
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.lead?.name ?? "—"}</span>
+          <span className="font-medium">
+            {formatDisplayName(row.original.lead?.name, row.original.lead?.phone, "[Novo Contato - WhatsApp]")}
+          </span>
         ),
       },
       {
