@@ -28,15 +28,14 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useLeads } from "@/hooks/useLeads";
-import { PipelineStage, TeamMember } from "@/types/crm";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ImportModalProps {
   open: boolean;
   onClose: () => void;
-  stages: PipelineStage[];
-  members: TeamMember[];
 }
 
 const CRM_FIELDS = [
@@ -51,10 +50,10 @@ const CRM_FIELDS = [
 export const ImportModal = ({
   open,
   onClose,
-  stages,
-  members,
 }: ImportModalProps) => {
   const { createLead } = useLeads();
+  const { stages } = usePipelineStages();
+  const { members } = useTeamMembers();
 
   const [step, setStep] = useState<"upload" | "mapping" | "preview" | "importing">("upload");
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);

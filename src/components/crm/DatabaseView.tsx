@@ -11,8 +11,9 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import { useLeads, Lead } from "@/hooks/useLeads";
-import { usePipelineStages } from "@/hooks/usePipelineStages";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
+import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
+import { ContactType } from "@/types/crm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +55,9 @@ import {
   UserPlus,
   Loader2,
   MessageCircle,
+  Building2,
   Briefcase,
+  Home,
   Check,
   X,
   ExternalLink,
@@ -182,6 +185,8 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
   );
 };
 
+type LeadUpdateValue = string | number | boolean | null | string[] | undefined;
+
 export const DatabaseView = () => {
   const { leads, isLoading, updateLead, deleteLead, refetch, createLead } = useLeads();
   const { stages } = usePipelineStages();
@@ -210,32 +215,15 @@ export const DatabaseView = () => {
   const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
 
   // Filter states
-  const [stageFilter, setStageFilter] = useState<string>("all");
-  const [responsibleFilter, setResponsibleFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
-  const handleUpdateField = useCallback((leadId: string, field: string, value: any) => {
+  const handleUpdateField = useCallback((leadId: string, field: string, value: LeadUpdateValue) => {
     updateLead.mutate({ id: leadId, [field]: value });
   }, [updateLead]);
 
-  const stageOptions = useMemo(() => 
-    stages.map(s => ({ id: s.id, label: s.name, color: s.color })),
-    [stages]
-  );
-
-  const memberOptions = useMemo(() => 
-    members.map(m => ({ id: m.id, label: m.nome_completo || m.email || "Usuário" })),
-    [members]
-  );
-
-  const sourceOptions = [
-    { id: "Manual", label: "Manual" },
-    { id: "IA", label: "IA" },
-    { id: "Ads", label: "Ads" },
-  ];
-
-  const typeOptions = [
+  const typeOptions: { id: ContactType; label: string }[] = [
     { id: "lead", label: "Lead" },
+    { id: "opportunity", label: "Oportunidade" },
     { id: "contact", label: "Contato" },
     { id: "spam", label: "Spam" },
     { id: "archived", label: "Arquivado" },
@@ -262,20 +250,18 @@ export const DatabaseView = () => {
   const filteredLeads = useMemo(() => {
     let result = leads;
 
-    if (stageFilter && stageFilter !== "all") {
-      result = result.filter(lead => lead.stage_id === stageFilter);
-    }
-
-    if (responsibleFilter && responsibleFilter !== "all") {
-      result = result.filter(lead => lead.responsible_id === responsibleFilter);
-    }
-
     if (typeFilter && typeFilter !== "all") {
-      result = result.filter(lead => lead.lead_type === typeFilter);
+      result = result.filter(lead => lead.contact_type === typeFilter);
     }
 
     return result;
-  }, [leads, stageFilter, responsibleFilter, typeFilter]);
+  }, [leads, typeFilter]);
+
+  const filteredLeadIds = useMemo(
+    () => filteredLeads.map((lead) => lead.id),
+    [filteredLeads],
+  );
+  const { data: entitySummary = {} } = useLeadEntitySummary(filteredLeadIds);
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
     {
@@ -405,79 +391,111 @@ export const DatabaseView = () => {
       ),
     },
     {
-      accessorKey: "lead_type",
+      id: "company_link",
+      header: "Empresa",
+      cell: ({ row }) => {
+        const summary = entitySummary[row.original.id];
+        if (!summary?.companyName) {
+          return <span className="text-muted-foreground">-</span>;
+        }
+        return (
+          <div className="flex items-center gap-1.5 max-w-[180px]">
+            <Badge
+              variant="outline"
+              className="text-xs gap-1 max-w-full justify-start"
+              title={summary.companyName}
+            >
+              <Building2 className="h-3 w-3 shrink-0" />
+              <span className="truncate">{summary.companyName}</span>
+            </Badge>
+            {summary.companyCount > 1 && (
+              <Badge variant="secondary" className="text-[10px] px-1.5">
+                +{summary.companyCount - 1}
+              </Badge>
+            )}
+          </div>
+        );
+      },
+      enableSorting: false,
+    },
+    {
+      id: "property_count",
+      header: "Imóveis",
+      cell: ({ row }) => {
+        const count = entitySummary[row.original.id]?.propertyCount ?? 0;
+        return (
+          <Badge
+            variant={count > 0 ? "secondary" : "outline"}
+            className="text-xs gap-1 min-w-[44px] justify-center"
+            title={`${count} imóvel${count === 1 ? "" : "is"} vinculado${count === 1 ? "" : "s"}`}
+          >
+            <Home className="h-3 w-3" />
+            {count}
+          </Badge>
+        );
+      },
+      enableSorting: false,
+    },
+    {
+      accessorKey: "contact_type",
       header: "Tipo",
       cell: ({ row }) => (
         <EditableSelect
-          value={row.getValue("lead_type")}
+          value={row.original.contact_type ?? null}
           options={typeOptions}
-          onSave={(val) => handleUpdateField(row.original.id, "lead_type", val)}
+          onSave={(val) => handleUpdateField(row.original.id, "contact_type", val)}
           placeholder="Tipo"
         />
       ),
     },
     {
-      accessorKey: "stage_id",
-      header: "Etapa",
+      id: "opportunity_count",
+      header: "Pipelines",
       cell: ({ row }) => {
-        const stageId = row.getValue("stage_id") as string | null;
-        const stage = stages.find(s => s.id === stageId);
+        const count = entitySummary[row.original.id]?.opportunityCount ?? 0;
         return (
-          <EditableSelect
-            value={stageId}
-            options={stageOptions}
-            onSave={(val) => handleUpdateField(row.original.id, "stage_id", val)}
-            placeholder="Etapa"
-            allowClear
-          />
+          <Badge
+            variant={count > 0 ? "default" : "outline"}
+            className="text-xs gap-1 min-w-[44px] justify-center"
+            title={`${count} oportunidade${count === 1 ? "" : "s"} em pipeline${count === 1 ? "" : "s"}`}
+          >
+            <Briefcase className="h-3 w-3" />
+            {count}
+          </Badge>
         );
       },
+      enableSorting: false,
     },
     {
-      accessorKey: "responsible_id",
-      header: "Responsável",
-      cell: ({ row }) => (
-        <EditableSelect
-          value={row.getValue("responsible_id")}
-          options={memberOptions}
-          onSave={(val) => handleUpdateField(row.original.id, "responsible_id", val)}
-          placeholder="Responsável"
-          allowClear
-        />
-      ),
-    },
-    {
-      accessorKey: "opportunity_value",
+      id: "opportunity_total_value",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           className="p-0 hover:bg-transparent font-semibold"
         >
-          Valor
+          Valor Total
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => {
-        const value = row.getValue("opportunity_value") as number | null;
+        const value = entitySummary[row.original.id]?.opportunityTotalValue ?? 0;
+        if (value === 0) return <span className="text-muted-foreground">-</span>;
         return (
-          <EditableCell
-            value={value?.toString() || ""}
-            onSave={(val) => handleUpdateField(row.original.id, "opportunity_value", parseFloat(val) || 0)}
-            type="currency"
-            placeholder="-"
-          />
+          <span className="text-sm font-medium">
+            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)}
+          </span>
         );
       },
     },
     {
-      accessorKey: "source",
+      accessorKey: "origin_category",
       header: "Origem",
       cell: ({ row }) => (
         <EditableSelect
-          value={row.getValue("source")}
-          options={sourceOptions}
-          onSave={(val) => handleUpdateField(row.original.id, "source", val)}
+          value={row.original.origin_category ?? null}
+          options={ORIGIN_CATEGORY_OPTIONS}
+          onSave={(val) => handleUpdateField(row.original.id, "origin_category", val)}
           placeholder="Origem"
           allowClear
         />
@@ -498,21 +516,6 @@ export const DatabaseView = () => {
       ),
     },
     {
-      // Sprint 5.5 2.3 — creation_source = "Enriquecimento" (how this
-      // identity arrived: IA agent ingestion, manual entry, webhook, CSV).
-      accessorKey: "creation_source",
-      header: "Enriquecimento",
-      cell: ({ row }) => (
-        <EditableSelect
-          value={(row.getValue("creation_source") as string) || null}
-          options={creationSourceOptions}
-          onSave={(val) => handleUpdateField(row.original.id, "creation_source", val)}
-          placeholder="Enriquecimento"
-          allowClear
-        />
-      ),
-    },
-    {
       accessorKey: "observations",
       header: "Observações",
       cell: ({ row }) => (
@@ -520,36 +523,6 @@ export const DatabaseView = () => {
           value={row.getValue("observations")}
           onSave={(val) => handleUpdateField(row.original.id, "observations", val)}
           placeholder="-"
-        />
-      ),
-    },
-    {
-      accessorKey: "meeting_scheduled",
-      header: "Reunião Ag.",
-      cell: ({ row }) => (
-        <EditableCheckbox
-          checked={row.getValue("meeting_scheduled") || false}
-          onSave={(val) => handleUpdateField(row.original.id, "meeting_scheduled", val)}
-        />
-      ),
-    },
-    {
-      accessorKey: "meeting_done",
-      header: "Reunião Ok",
-      cell: ({ row }) => (
-        <EditableCheckbox
-          checked={row.getValue("meeting_done") || false}
-          onSave={(val) => handleUpdateField(row.original.id, "meeting_done", val)}
-        />
-      ),
-    },
-    {
-      accessorKey: "no_show",
-      header: "No Show",
-      cell: ({ row }) => (
-        <EditableCheckbox
-          checked={row.getValue("no_show") || false}
-          onSave={(val) => handleUpdateField(row.original.id, "no_show", val)}
         />
       ),
     },
@@ -592,7 +565,7 @@ export const DatabaseView = () => {
         return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [stages, members, stageOptions, memberOptions, sourceOptions, typeOptions, channelOptions, creationSourceOptions, handleUpdateField]);
+  ], [typeOptions, channelOptions, entitySummary, handleUpdateField]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -701,39 +674,6 @@ export const DatabaseView = () => {
             </SelectContent>
           </Select>
 
-          {/* Stage Filter */}
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Etapa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as etapas</SelectItem>
-              {stages.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
-                    {stage.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Responsible Filter */}
-          <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Responsável" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {members.map((member) => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.nome_completo || member.email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           {/* Column Visibility */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -751,18 +691,15 @@ export const DatabaseView = () => {
                     name: "Nome",
                     email: "Email",
                     phone: "Telefone",
-                    lead_type: "Tipo",
-                    stage_id: "Etapa",
-                    responsible_id: "Responsável",
-                    opportunity_value: "Valor",
-                    source: "Origem",
+                    company_link: "Empresa",
+                    property_count: "Imóveis",
+                    contact_type: "Tipo",
+                    opportunity_count: "Pipelines",
+                    opportunity_total_value: "Valor Total",
+                    origin_category: "Origem",
                     channel: "Canal",
-                    creation_source: "Enriquecimento",
                     observations: "Observações",
                     tags: "Tags",
-                    meeting_scheduled: "Reunião Ag.",
-                    meeting_done: "Reunião Ok",
-                    no_show: "No Show",
                     created_at: "Criado em",
                   };
                   return (
@@ -783,8 +720,6 @@ export const DatabaseView = () => {
         {selectedLeads.length > 0 && (
           <BulkActions
             selectedLeads={selectedLeads}
-            stages={stages}
-            members={members}
             onClearSelection={() => setRowSelection({})}
           />
         )}
@@ -861,8 +796,6 @@ export const DatabaseView = () => {
       <ImportModal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
-        stages={stages}
-        members={members}
       />
       <ExportModal
         open={showExportModal}
