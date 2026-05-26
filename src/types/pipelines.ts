@@ -69,6 +69,8 @@ export interface PipelineStageV2 {
   color: string;
   position: number;
   stage_type: StageType;
+  /** Sprint 5.1 section 3.1 - null = no SLA; positive integer = hours before red-pulse. */
+  max_idle_hours: number | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -127,6 +129,7 @@ export interface CreateStageV2Data {
   color?: string;
   position?: number;
   stage_type?: StageType;
+  max_idle_hours?: number | null;
 }
 
 export interface UpdateStageV2Data {
@@ -135,6 +138,7 @@ export interface UpdateStageV2Data {
   color?: string;
   position?: number;
   stage_type?: StageType;
+  max_idle_hours?: number | null;
 }
 
 export interface CreateOpportunityData {
