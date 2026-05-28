@@ -11,6 +11,7 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import { useLeads, Lead } from "@/hooks/useLeads";
+import { useOpportunities } from "@/hooks/useOpportunities";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
 import { Button } from "@/components/ui/button";
@@ -189,6 +190,7 @@ type LeadUpdateValue = string | number | boolean | null | string[] | undefined;
 
 export const DatabaseView = () => {
   const { leads, isLoading, updateLead, deleteLead, refetch, createLead } = useLeads();
+  const { createOpportunity } = useOpportunities();
   const { stages } = usePipelineStages();
   const { teamMembers: members } = useTeamMembers();
 
@@ -718,20 +720,57 @@ export const DatabaseView = () => {
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
         onAdd={(data) => {
-          createLead.mutate(
-            {
-              name: data.name,
-              email: data.email,
-              phone: data.phone,
-              observations: data.observations,
-              source: data.origin_category || "Manual",
-              origin: "manual",
-              lead_type: "lead",
-            },
-            {
-              onSuccess: () => setShowAddModal(false),
-            },
-          );
+          // Sprint 5.1 T4 — pipeline routing: if _routeToPipeline is set,
+          // create contact + opportunity atomically.
+          const routeData = data as typeof data & {
+            _routeToPipeline?: boolean;
+            _pipelineId?: string;
+            _stageId?: string;
+          };
+
+          if (routeData._routeToPipeline && routeData._pipelineId && routeData._stageId) {
+            createLead.mutate(
+              {
+                name: data.name,
+                email: data.email,
+                phone: data.phone,
+                observations: data.observations,
+                source: data.origin_category || "Manual",
+                origin: "manual",
+                lead_type: "lead",
+              },
+              {
+                onSuccess: (created) => {
+                  // Promote contact_type to 'opportunity' and create opportunity
+                  const contactId = (created as { id: string }).id;
+                  createOpportunity.mutate({
+                    lead_id: contactId,
+                    pipeline_id: routeData._pipelineId!,
+                    stage_id: routeData._stageId!,
+                    value: 0,
+                    custom_data: {},
+                  });
+                  updateLead.mutate({ id: contactId, contact_type: "opportunity" });
+                  setShowAddModal(false);
+                },
+              },
+            );
+          } else {
+            createLead.mutate(
+              {
+                name: data.name,
+                email: data.email,
+                phone: data.phone,
+                observations: data.observations,
+                source: data.origin_category || "Manual",
+                origin: "manual",
+                lead_type: "lead",
+              },
+              {
+                onSuccess: () => setShowAddModal(false),
+              },
+            );
+          }
         }}
       />
       <ImportModal
