@@ -1325,6 +1325,7 @@ export type Database = {
           deleted_at: string | null
           equipe_id: string
           id: string
+          max_idle_hours: number | null
           name: string
           pipeline_id: string
           position: number
@@ -1336,6 +1337,7 @@ export type Database = {
           deleted_at?: string | null
           equipe_id: string
           id?: string
+          max_idle_hours?: number | null
           name: string
           pipeline_id: string
           position: number
@@ -1347,6 +1349,7 @@ export type Database = {
           deleted_at?: string | null
           equipe_id?: string
           id?: string
+          max_idle_hours?: number | null
           name?: string
           pipeline_id?: string
           position?: number

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, ChevronRight, ChevronLeft, Zap, Globe, Code, ToggleLeft } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Zap, Globe, Code, ToggleLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 

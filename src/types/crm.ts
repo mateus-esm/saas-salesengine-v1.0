@@ -113,17 +113,10 @@ export interface CreateLeadData {
   name: string;
   email?: string;
   phone?: string;
-  stage_id?: string;
   tags?: string[];
   observations?: string;
   source?: string;
   origin?: 'whatsapp' | 'manual' | 'web' | 'import' | string;
-  opportunity_value?: number;
-  responsible_id?: string;
-  meeting_date?: string;
-  meeting_notes?: string;
-  custom_fields?: Record<string, unknown>;
-  lead_type?: 'lead' | 'contact' | 'spam';
 }
 
 export interface UpdateLeadData {
@@ -131,20 +124,8 @@ export interface UpdateLeadData {
   name?: string;
   email?: string | null;
   phone?: string | null;
-  stage_id?: string | null;
   tags?: string[];
   observations?: string | null;
-  next_contact?: string | null;
-  meeting_scheduled?: boolean;
-  meeting_done?: boolean;
-  no_show?: boolean;
-  opportunity_value?: number | null;
-  custom_fields?: Record<string, unknown>;
-  // New fields for PRD v2.2
-  responsible_id?: string | null;
-  meeting_date?: string | null;
-  meeting_notes?: string | null;
-  lead_type?: 'lead' | 'contact' | 'spam';
   // Sprint 4 EPIC 3 — identity-layer editables
   contact_type?: ContactType;
   channel?: string | null;

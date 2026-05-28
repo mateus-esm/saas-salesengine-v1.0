@@ -34,11 +34,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     // Try to load the niche registry from DB (allows dynamic tenant creation without redeployment)
     const hostname = window.location.hostname.split(':')[0];
 
-    supabase
-      .from('niches' as any)
-      .select('id, nome, domain, description, primary_color, custom_fields')
-      .eq('active', true)
-      .then(({ data, error }) => {
+    const loadTenant = async () => {
+      const { data, error } = await supabase
+        .from('niches' as any)
+        .select('id, nome, domain, description, primary_color, custom_fields')
+        .eq('active', true);
+
         if (error || !data || data.length === 0) return;
 
         // Find match: exact domain or subdomain slug included in hostname
@@ -60,8 +61,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           };
           setTenant(dynamic);
         }
-      })
-      .finally(() => setIsLoading(false));
+    };
+
+    loadTenant().finally(() => setIsLoading(false));
   }, []);
 
   return (
@@ -78,4 +80,3 @@ export function useTenant() {
   }
   return context;
 }
-

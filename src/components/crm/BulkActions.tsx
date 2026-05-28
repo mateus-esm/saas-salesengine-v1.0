@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -17,63 +10,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Lead, PipelineStage, TeamMember } from "@/types/crm";
+import { Lead } from "@/types/crm";
 import { useLeads } from "@/hooks/useLeads";
-import { X, Trash2, MoveRight, UserPlus, Briefcase } from "lucide-react";
+import { X, Trash2, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
 
 interface BulkActionsProps {
   selectedLeads: Lead[];
-  stages: PipelineStage[];
-  members: TeamMember[];
   onClearSelection: () => void;
 }
 
 export const BulkActions = ({
   selectedLeads,
-  stages,
-  members,
   onClearSelection,
 }: BulkActionsProps) => {
-  const { updateLead, deleteLead } = useLeads();
+  const { deleteLead } = useLeads();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  const handleBulkMoveStage = async (stageId: string) => {
-    if (!stageId) return;
-    
-    setIsProcessing(true);
-    try {
-      for (const lead of selectedLeads) {
-        await updateLead.mutateAsync({ id: lead.id, stage_id: stageId });
-      }
-      toast.success(`${selectedLeads.length} leads movidos com sucesso!`);
-      onClearSelection();
-    } catch (error) {
-      toast.error("Erro ao mover leads");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleBulkAssign = async (responsibleId: string) => {
-    if (!responsibleId) return;
-    
-    setIsProcessing(true);
-    try {
-      for (const lead of selectedLeads) {
-        await updateLead.mutateAsync({ id: lead.id, responsible_id: responsibleId });
-      }
-      toast.success(`${selectedLeads.length} leads atribuídos com sucesso!`);
-      onClearSelection();
-    } catch (error) {
-      toast.error("Erro ao atribuir leads");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const handleBulkDelete = async () => {
     setIsProcessing(true);
@@ -99,36 +54,6 @@ export const BulkActions = ({
         </span>
 
         <div className="h-4 w-px bg-border" />
-
-        {/* Move to Stage */}
-        <Select onValueChange={handleBulkMoveStage} disabled={isProcessing}>
-          <SelectTrigger className="w-[160px] h-8">
-            <MoveRight className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Mover para..." />
-          </SelectTrigger>
-          <SelectContent>
-            {stages.map((stage) => (
-              <SelectItem key={stage.id} value={stage.id}>
-                {stage.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Assign Responsible */}
-        <Select onValueChange={handleBulkAssign} disabled={isProcessing}>
-          <SelectTrigger className="w-[160px] h-8">
-            <UserPlus className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Atribuir..." />
-          </SelectTrigger>
-          <SelectContent>
-            {members.map((member) => (
-              <SelectItem key={member.id} value={member.id}>
-                {member.nome_completo || member.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         {/* Add to Pipeline */}
         <Button

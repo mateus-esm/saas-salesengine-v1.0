@@ -3,6 +3,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { User, DollarSign } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatDisplayName } from "@/lib/displayName";
 import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity } from "@/types/pipelines";
 
@@ -85,7 +86,7 @@ export const OpportunityCard = ({
     >
       <div className="flex items-center gap-1.5 text-sm font-medium truncate">
         <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="truncate">{lead?.name ?? "Lead sem nome"}</span>
+        <span className="truncate">{formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}</span>
       </div>
 
       {valueText && (

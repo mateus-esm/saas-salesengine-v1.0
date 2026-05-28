@@ -154,7 +154,7 @@ const Admin = () => {
         supabase.from("user_roles").select("*"),
       ]);
 
-      if (nichesRes.data) setNiches(nichesRes.data as Niche[]);
+      if (nichesRes.data) setNiches(nichesRes.data as unknown as Niche[]);
       if (equipesRes.data) setEquipes(equipesRes.data as Equipe[]);
 
       const roles = (rolesRes.data || []) as UserRole[];
