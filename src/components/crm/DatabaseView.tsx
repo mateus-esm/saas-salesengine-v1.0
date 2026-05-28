@@ -67,7 +67,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { isTechnicalId, formatBrPhone, formatDisplayName } from "@/lib/displayName";
 
-// Componente de cÃ©lula editÃ¡vel inline
+// Componente de célula editável inline
 interface EditableCellProps {
   value: string;
   onSave: (value: string) => void;
@@ -131,7 +131,7 @@ const EditableCell = ({ value, onSave, type = "text", placeholder = "-" }: Edita
   );
 };
 
-// Componente de select editÃ¡vel inline
+// Componente de select editável inline
 interface EditableSelectProps {
   value: string | null;
   options: { id: string; label: string; color?: string }[];
@@ -166,7 +166,7 @@ const EditableSelect = ({ value, options, onSave, placeholder = "Selecionar", al
   );
 };
 
-// Componente de checkbox editÃ¡vel
+// Componente de checkbox editável
 interface EditableCheckboxProps {
   checked: boolean;
   onSave: (checked: boolean) => void;
@@ -198,17 +198,17 @@ export const DatabaseView = () => {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  // Sprint 5.5 2.4 â€” Quick Add Contact drawer. Single-row manual entry
+  // Sprint 5.5 2.4 — Quick Add Contact drawer. Single-row manual entry
   // sits next to the bulk Importar/Exportar buttons. The batch upload
   // engine is the existing ImportModal (Sprint 4); Quick Add is the
   // companion micro-flow for "just one contact now".
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Sprint 4 EPIC 2 â€” clicking the row's open icon pops the contact drawer so
+  // Sprint 4 EPIC 2 — clicking the row's open icon pops the contact drawer so
   // users can jump from Base de Contatos to a contact's Opportunities.
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
-  // Sprint 4 EPIC 4 Â§4.3.1 â€” "Assign Contact to Pipeline" single-row flow.
+  // Sprint 4 EPIC 4 §4.3.1 — "Assign Contact to Pipeline" single-row flow.
   // Bulk flow (same dialog, multiple ids) runs through BulkActions.
   const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
 
@@ -217,7 +217,7 @@ export const DatabaseView = () => {
     updateLead.mutate({ id: leadId, [field]: value });
   }, [updateLead]);
 
-  // Sprint 5.5 2.3 â€” surface Canal + Enriquecimento as first-class columns
+  // Sprint 5.5 2.3 — surface Canal + Enriquecimento as first-class columns
   // so operators can scan the entire pipeline-origin landscape from the
   // ledger view without opening each contact's drawer.
   const channelOptions = [
@@ -258,7 +258,7 @@ export const DatabaseView = () => {
     if (typeof data["instagram_url"] === "string" && data["instagram_url"]) fragments.push("Instagram");
     if (typeof data["birthday"] === "string" && data["birthday"]) fragments.push("Aniv.");
     if (fragments.length === 0) return null;
-    return fragments.slice(0, 3).join(" Â· ");
+    return fragments.slice(0, 3).join(" · ");
   };
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
@@ -330,7 +330,7 @@ export const DatabaseView = () => {
         </Button>
       ),
       cell: ({ row }) => {
-        // Sprint 5.5 â€” mask Meta technical IDs (e.g. "264162...@lid") so they
+        // Sprint 5.5 — mask Meta technical IDs (e.g. "264162...@lid") so they
         // never reach the user. The raw value stays editable; only the read
         // view is blanked, and the phone is offered as a helpful placeholder.
         const rawName = row.getValue("name") as string | null;
@@ -341,7 +341,7 @@ export const DatabaseView = () => {
           <EditableCell
             value={isMasked ? "" : (rawName ?? "")}
             onSave={(val) => handleUpdateField(row.original.id, "name", val)}
-            placeholder={isMasked ? (phoneHint || "[Lead AnÃ´nimo]") : "Nome..."}
+            placeholder={isMasked ? (phoneHint || "[Lead Anônimo]") : "Nome..."}
           />
         );
       },
@@ -418,14 +418,14 @@ export const DatabaseView = () => {
     },
     {
       id: "property_count",
-      header: "ImÃ³veis",
+      header: "Imóveis",
       cell: ({ row }) => {
         const count = entitySummary[row.original.id]?.propertyCount ?? 0;
         return (
           <Badge
             variant={count > 0 ? "secondary" : "outline"}
             className="text-xs gap-1 min-w-[44px] justify-center"
-            title={`${count} imÃ³vel${count === 1 ? "" : "is"} vinculado${count === 1 ? "" : "s"}`}
+            title={`${count} imóvel${count === 1 ? "" : "is"} vinculado${count === 1 ? "" : "s"}`}
           >
             <Home className="h-3 w-3" />
             {count}
@@ -478,7 +478,7 @@ export const DatabaseView = () => {
     },
     {
       accessorKey: "observations",
-      header: "ObservaÃ§Ãµes",
+      header: "Observações",
       cell: ({ row }) => (
         <EditableCell
           value={row.getValue("observations")}
@@ -546,11 +546,11 @@ export const DatabaseView = () => {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    // Sprint 5.5 2.1 â€” Infinite scroll: pagination model removed so all
+    // Sprint 5.5 2.1 — Infinite scroll: pagination model removed so all
     // filtered rows render under one scrollable viewport. Filtering at the
     // useLeads layer (deleted_at IS NULL + equipe_id) keeps the working set
     // bounded; if a tenant ever crosses ~5k contacts we'll layer row
-    // virtualization on top â€” but for now this beats the pagination clicks.
+    // virtualization on top — but for now this beats the pagination clicks.
     enableRowSelection: true,
   });
 
@@ -579,7 +579,7 @@ export const DatabaseView = () => {
             Base de <span className="text-primary">Contatos</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredLeads.length} contatos â€¢ {selectedLeads.length} selecionados â€¢ Clique para editar
+            {filteredLeads.length} contatos • {selectedLeads.length} selecionados • Clique para editar
           </p>
         </div>
         <div className="flex gap-2">
@@ -638,11 +638,11 @@ export const DatabaseView = () => {
                     email: "Email",
                     phone: "Telefone",
                     company_link: "Empresa",
-                    property_count: "ImÃ³veis",
+                    property_count: "Imóveis",
                     origin_category: "Origem",
                     channel: "Canal",
                     enrichment_summary: "Enriquecimento IA",
-                    observations: "ObservaÃ§Ãµes",
+                    observations: "Observações",
                     tags: "Tags",
                     created_at: "Criado em",
                   };

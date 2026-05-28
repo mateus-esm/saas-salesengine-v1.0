@@ -40,7 +40,7 @@ interface AddContactModalProps {
 }
 
 /**
- * Sprint 4 EPIC 3 Â§3.3 â€” MECE origin picker replaces the Sprint 3 single
+ * Sprint 4 EPIC 3 §3.3 — MECE origin picker replaces the Sprint 3 single
  * `origin` enum. Users now tag contacts with an inbound / outbound / network /
  * system category plus a free-text detail (campaign name, referrer, event).
  *
@@ -48,7 +48,7 @@ interface AddContactModalProps {
  * only; the follow-up "Adicionar a Pipeline" flow (Epic 4) creates the
  * Opportunity with stage + value.
  *
- * Sprint 5.1 T4 â€” Pipeline routing toggle: users can now optionally route the
+ * Sprint 5.1 T4 — Pipeline routing toggle: users can now optionally route the
  * new contact directly into a pipeline stage, creating the contact and
  * opportunity atomically in one transaction.
  */
@@ -62,7 +62,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
     origin_detail: "",
   });
 
-  // Sprint 5.1 T4 â€” pipeline routing state
+  // Sprint 5.1 T4 — pipeline routing state
   const [routeToPipeline, setRouteToPipeline] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [selectedStageId, setSelectedStageId] = useState<string>("");
@@ -193,7 +193,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
                 <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                 <div className="space-y-1">
                   <p className="font-medium text-amber-600 dark:text-amber-400">
-                    PossÃ­vel duplicado{duplicateMatches.length > 1 ? "s" : ""} encontrado
+                    Possível duplicado{duplicateMatches.length > 1 ? "s" : ""} encontrado
                     {duplicateMatches.length > 1 ? "s" : ""}:
                   </p>
                   <ul className="text-xs text-foreground/80 space-y-0.5">
@@ -207,7 +207,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
                     ))}
                   </ul>
                   <p className="text-xs text-muted-foreground">
-                    VocÃª ainda pode prosseguir â€” duplicaÃ§Ã£o nÃ£o Ã© bloqueada.
+                    Você ainda pode prosseguir — duplicação não é bloqueada.
                   </p>
                 </div>
               </div>
@@ -229,7 +229,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
                 <SelectValue placeholder="Selecione a origem" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">â€”</SelectItem>
+                <SelectItem value="__none__">—</SelectItem>
                 {ORIGIN_GROUPS.map((group) => (
                   <SelectGroup key={group}>
                     <SelectLabel>{ORIGIN_GROUP_LABELS[group]}</SelectLabel>
@@ -258,7 +258,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
           </div>
 
           <div>
-            <Label htmlFor="add-observations">ObservaÃ§Ãµes</Label>
+            <Label htmlFor="add-observations">Observações</Label>
             <Textarea
               id="add-observations"
               value={formData.observations}
@@ -271,7 +271,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
             />
           </div>
 
-          {/* Sprint 5.1 T4 â€” Pipeline routing toggle */}
+          {/* Sprint 5.1 T4 — Pipeline routing toggle */}
           <div className="rounded-lg border border-border bg-card p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -281,7 +281,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
                     Encaminhar para Funil de Vendas
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Criar contato e jÃ¡ adicionÃ¡-lo a uma etapa
+                    Criar contato e já adicioná-lo a uma etapa
                   </p>
                 </div>
               </div>

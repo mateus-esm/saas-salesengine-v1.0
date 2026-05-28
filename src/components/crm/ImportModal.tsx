@@ -40,8 +40,8 @@ const CRM_FIELDS = [
   { key: "name", label: "Nome", required: true },
   { key: "email", label: "Email", required: false },
   { key: "phone", label: "Telefone", required: false },
-  { key: "observations", label: "ObservaÃ§Ãµes", required: false },
-  { key: "tags", label: "Tags (separadas por vÃ­rgula)", required: false },
+  { key: "observations", label: "Observações", required: false },
+  { key: "tags", label: "Tags (separadas por vírgula)", required: false },
 ];
 
 export const ImportModal = ({
@@ -110,7 +110,7 @@ export const ImportModal = ({
 
   const handleImport = async () => {
     if (!columnMapping.name) {
-      toast.error("O campo Nome Ã© obrigatÃ³rio");
+      toast.error("O campo Nome é obrigatório");
       return;
     }
 
@@ -162,7 +162,7 @@ export const ImportModal = ({
       setImportProgress({ current: i + 1, total, success, errors });
     }
 
-    toast.success(`ImportaÃ§Ã£o concluÃ­da: ${success} leads importados, ${errors} erros`);
+    toast.success(`Importação concluída: ${success} leads importados, ${errors} erros`);
 
     setTimeout(() => {
       resetState();
@@ -186,7 +186,7 @@ export const ImportModal = ({
             Importar Leads via CSV
           </DialogTitle>
           <DialogDescription>
-            {step === "upload" && "FaÃ§a upload de um arquivo CSV com os dados dos leads"}
+            {step === "upload" && "Faça upload de um arquivo CSV com os dados dos leads"}
             {step === "mapping" && "Mapeie as colunas do CSV para os campos do CRM"}
             {step === "preview" && "Confira os dados antes de importar"}
             {step === "importing" && "Importando leads..."}
@@ -208,7 +208,7 @@ export const ImportModal = ({
                 className="max-w-xs"
               />
               <p className="text-xs text-muted-foreground mt-4">
-                Formatos aceitos: CSV (separado por vÃ­rgula)
+                Formatos aceitos: CSV (separado por vírgula)
               </p>
             </div>
           )}
@@ -233,7 +233,7 @@ export const ImportModal = ({
                         <SelectValue placeholder="Selecionar coluna..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">NÃ£o mapear</SelectItem>
+                        <SelectItem value="">Não mapear</SelectItem>
                         {csvHeaders.map((header) => (
                           <SelectItem key={header} value={header}>
                             {header}
