@@ -11,7 +11,6 @@ import {
   flexRender,
 } from "@tanstack/react-table";
 import { useLeads, Lead } from "@/hooks/useLeads";
-import { useOpportunities } from "@/hooks/useOpportunities";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
 import { Button } from "@/components/ui/button";
@@ -68,7 +67,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { isTechnicalId, formatBrPhone, formatDisplayName } from "@/lib/displayName";
 
-// Componente de célula editável inline
+// Componente de cÃ©lula editÃ¡vel inline
 interface EditableCellProps {
   value: string;
   onSave: (value: string) => void;
@@ -132,7 +131,7 @@ const EditableCell = ({ value, onSave, type = "text", placeholder = "-" }: Edita
   );
 };
 
-// Componente de select editável inline
+// Componente de select editÃ¡vel inline
 interface EditableSelectProps {
   value: string | null;
   options: { id: string; label: string; color?: string }[];
@@ -167,7 +166,7 @@ const EditableSelect = ({ value, options, onSave, placeholder = "Selecionar", al
   );
 };
 
-// Componente de checkbox editável
+// Componente de checkbox editÃ¡vel
 interface EditableCheckboxProps {
   checked: boolean;
   onSave: (checked: boolean) => void;
@@ -189,10 +188,7 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
 type LeadUpdateValue = string | number | boolean | null | string[] | undefined;
 
 export const DatabaseView = () => {
-  const { leads, isLoading, updateLead, deleteLead, refetch, createLead } = useLeads();
-  const { createOpportunity } = useOpportunities();
-  const { stages } = usePipelineStages();
-  const { teamMembers: members } = useTeamMembers();
+  const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -202,17 +198,17 @@ export const DatabaseView = () => {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  // Sprint 5.5 2.4 — Quick Add Contact drawer. Single-row manual entry
+  // Sprint 5.5 2.4 â€” Quick Add Contact drawer. Single-row manual entry
   // sits next to the bulk Importar/Exportar buttons. The batch upload
   // engine is the existing ImportModal (Sprint 4); Quick Add is the
   // companion micro-flow for "just one contact now".
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Sprint 4 EPIC 2 — clicking the row's open icon pops the contact drawer so
+  // Sprint 4 EPIC 2 â€” clicking the row's open icon pops the contact drawer so
   // users can jump from Base de Contatos to a contact's Opportunities.
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
-  // Sprint 4 EPIC 4 §4.3.1 — "Assign Contact to Pipeline" single-row flow.
+  // Sprint 4 EPIC 4 Â§4.3.1 â€” "Assign Contact to Pipeline" single-row flow.
   // Bulk flow (same dialog, multiple ids) runs through BulkActions.
   const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
 
@@ -221,7 +217,7 @@ export const DatabaseView = () => {
     updateLead.mutate({ id: leadId, [field]: value });
   }, [updateLead]);
 
-  // Sprint 5.5 2.3 — surface Canal + Enriquecimento as first-class columns
+  // Sprint 5.5 2.3 â€” surface Canal + Enriquecimento as first-class columns
   // so operators can scan the entire pipeline-origin landscape from the
   // ledger view without opening each contact's drawer.
   const channelOptions = [
@@ -231,6 +227,11 @@ export const DatabaseView = () => {
     { id: "messenger", label: "Messenger" },
     { id: "web", label: "Web / Widget" },
   ];
+
+  const originCategoryOptions = useMemo(
+    () => ORIGIN_CATEGORY_OPTIONS.map((option) => ({ id: option.value, label: option.label })),
+    [],
+  );
 
   const creationSourceOptions = [
     { id: "ai_agent", label: "IA (Solo Agent)" },
@@ -257,7 +258,7 @@ export const DatabaseView = () => {
     if (typeof data["instagram_url"] === "string" && data["instagram_url"]) fragments.push("Instagram");
     if (typeof data["birthday"] === "string" && data["birthday"]) fragments.push("Aniv.");
     if (fragments.length === 0) return null;
-    return fragments.slice(0, 3).join(" · ");
+    return fragments.slice(0, 3).join(" Â· ");
   };
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
@@ -329,7 +330,7 @@ export const DatabaseView = () => {
         </Button>
       ),
       cell: ({ row }) => {
-        // Sprint 5.5 — mask Meta technical IDs (e.g. "264162...@lid") so they
+        // Sprint 5.5 â€” mask Meta technical IDs (e.g. "264162...@lid") so they
         // never reach the user. The raw value stays editable; only the read
         // view is blanked, and the phone is offered as a helpful placeholder.
         const rawName = row.getValue("name") as string | null;
@@ -340,7 +341,7 @@ export const DatabaseView = () => {
           <EditableCell
             value={isMasked ? "" : (rawName ?? "")}
             onSave={(val) => handleUpdateField(row.original.id, "name", val)}
-            placeholder={isMasked ? (phoneHint || "[Lead Anônimo]") : "Nome..."}
+            placeholder={isMasked ? (phoneHint || "[Lead AnÃ´nimo]") : "Nome..."}
           />
         );
       },
@@ -417,14 +418,14 @@ export const DatabaseView = () => {
     },
     {
       id: "property_count",
-      header: "Imóveis",
+      header: "ImÃ³veis",
       cell: ({ row }) => {
         const count = entitySummary[row.original.id]?.propertyCount ?? 0;
         return (
           <Badge
             variant={count > 0 ? "secondary" : "outline"}
             className="text-xs gap-1 min-w-[44px] justify-center"
-            title={`${count} imóvel${count === 1 ? "" : "is"} vinculado${count === 1 ? "" : "s"}`}
+            title={`${count} imÃ³vel${count === 1 ? "" : "is"} vinculado${count === 1 ? "" : "s"}`}
           >
             <Home className="h-3 w-3" />
             {count}
@@ -439,7 +440,7 @@ export const DatabaseView = () => {
       cell: ({ row }) => (
         <EditableSelect
           value={row.original.origin_category ?? null}
-          options={ORIGIN_CATEGORY_OPTIONS}
+          options={originCategoryOptions}
           onSave={(val) => handleUpdateField(row.original.id, "origin_category", val)}
           placeholder="Origem"
           allowClear
@@ -477,7 +478,7 @@ export const DatabaseView = () => {
     },
     {
       accessorKey: "observations",
-      header: "Observações",
+      header: "ObservaÃ§Ãµes",
       cell: ({ row }) => (
         <EditableCell
           value={row.getValue("observations")}
@@ -525,7 +526,7 @@ export const DatabaseView = () => {
         return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [channelOptions, entitySummary, handleUpdateField]);
+  ], [channelOptions, entitySummary, handleUpdateField, originCategoryOptions]);
 
   const table = useReactTable({
     data: filteredLeads,
@@ -545,11 +546,11 @@ export const DatabaseView = () => {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    // Sprint 5.5 2.1 — Infinite scroll: pagination model removed so all
+    // Sprint 5.5 2.1 â€” Infinite scroll: pagination model removed so all
     // filtered rows render under one scrollable viewport. Filtering at the
     // useLeads layer (deleted_at IS NULL + equipe_id) keeps the working set
     // bounded; if a tenant ever crosses ~5k contacts we'll layer row
-    // virtualization on top — but for now this beats the pagination clicks.
+    // virtualization on top â€” but for now this beats the pagination clicks.
     enableRowSelection: true,
   });
 
@@ -578,7 +579,7 @@ export const DatabaseView = () => {
             Base de <span className="text-primary">Contatos</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredLeads.length} contatos • {selectedLeads.length} selecionados • Clique para editar
+            {filteredLeads.length} contatos â€¢ {selectedLeads.length} selecionados â€¢ Clique para editar
           </p>
         </div>
         <div className="flex gap-2">
@@ -637,11 +638,11 @@ export const DatabaseView = () => {
                     email: "Email",
                     phone: "Telefone",
                     company_link: "Empresa",
-                    property_count: "Imóveis",
+                    property_count: "ImÃ³veis",
                     origin_category: "Origem",
                     channel: "Canal",
                     enrichment_summary: "Enriquecimento IA",
-                    observations: "Observações",
+                    observations: "ObservaÃ§Ãµes",
                     tags: "Tags",
                     created_at: "Criado em",
                   };
@@ -719,59 +720,7 @@ export const DatabaseView = () => {
       <AddContactModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onAdd={(data) => {
-          // Sprint 5.1 T4 — pipeline routing: if _routeToPipeline is set,
-          // create contact + opportunity atomically.
-          const routeData = data as typeof data & {
-            _routeToPipeline?: boolean;
-            _pipelineId?: string;
-            _stageId?: string;
-          };
-
-          if (routeData._routeToPipeline && routeData._pipelineId && routeData._stageId) {
-            createLead.mutate(
-              {
-                name: data.name,
-                email: data.email,
-                phone: data.phone,
-                observations: data.observations,
-                source: data.origin_category || "Manual",
-                origin: "manual",
-                lead_type: "lead",
-              },
-              {
-                onSuccess: (created) => {
-                  // Promote contact_type to 'opportunity' and create opportunity
-                  const contactId = (created as { id: string }).id;
-                  createOpportunity.mutate({
-                    lead_id: contactId,
-                    pipeline_id: routeData._pipelineId!,
-                    stage_id: routeData._stageId!,
-                    value: 0,
-                    custom_data: {},
-                  });
-                  updateLead.mutate({ id: contactId, contact_type: "opportunity" });
-                  setShowAddModal(false);
-                },
-              },
-            );
-          } else {
-            createLead.mutate(
-              {
-                name: data.name,
-                email: data.email,
-                phone: data.phone,
-                observations: data.observations,
-                source: data.origin_category || "Manual",
-                origin: "manual",
-                lead_type: "lead",
-              },
-              {
-                onSuccess: () => setShowAddModal(false),
-              },
-            );
-          }
-        }}
+        onCreated={() => setShowAddModal(false)}
       />
       <ImportModal
         open={showImportModal}

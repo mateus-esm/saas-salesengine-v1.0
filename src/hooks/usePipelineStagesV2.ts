@@ -23,6 +23,7 @@ interface StageRow {
   color: string | null;
   position: number | null;
   stage_type: string | null;
+  max_idle_hours: number | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -35,6 +36,7 @@ const normalize = (row: StageRow): PipelineStageV2 => ({
   color: row.color || "#64748b",
   position: row.position ?? 0,
   stage_type: (row.stage_type as PipelineStageV2["stage_type"]) || "open",
+  max_idle_hours: row.max_idle_hours ?? null,
   created_at: row.created_at,
   deleted_at: row.deleted_at ?? null,
 });
@@ -78,6 +80,7 @@ export const usePipelineStagesV2 = (pipelineId?: string) => {
           color: input.color || "#64748b",
           position: input.position ?? max + 1,
           stage_type: input.stage_type || "open",
+          max_idle_hours: input.max_idle_hours ?? null,
         })
         .select()
         .single();

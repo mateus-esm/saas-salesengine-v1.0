@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Phone, Mail, User, AlertTriangle, Briefcase, ChevronDown, ChevronUp } from "lucide-react";
+import { Phone, Mail, User, AlertTriangle, Briefcase } from "lucide-react";
 import type { OriginCategory } from "@/types/crm";
 import {
   ORIGIN_GROUPS,
@@ -30,25 +30,17 @@ import {
 import { useLeadDuplicateCheck } from "@/hooks/useLeadDuplicateCheck";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
-import { useOpportunities } from "@/hooks/useOpportunities";
-import { useLeads } from "@/hooks/useLeads";
+import { useCreateContactAtomic, type CreateContactAtomicResult } from "@/hooks/useCreateContactAtomic";
 import { toast } from "sonner";
 
 interface AddContactModalProps {
   open: boolean;
   onClose: () => void;
-  onAdd: (data: {
-    name: string;
-    email?: string;
-    phone?: string;
-    observations?: string;
-    origin_category?: OriginCategory | null;
-    origin_detail?: string | null;
-  }) => void;
+  onCreated?: (result: CreateContactAtomicResult) => void;
 }
 
 /**
- * Sprint 4 EPIC 3 §3.3 — MECE origin picker replaces the Sprint 3 single
+ * Sprint 4 EPIC 3 Â§3.3 â€” MECE origin picker replaces the Sprint 3 single
  * `origin` enum. Users now tag contacts with an inbound / outbound / network /
  * system category plus a free-text detail (campaign name, referrer, event).
  *
@@ -56,11 +48,11 @@ interface AddContactModalProps {
  * only; the follow-up "Adicionar a Pipeline" flow (Epic 4) creates the
  * Opportunity with stage + value.
  *
- * Sprint 5.1 T4 — Pipeline routing toggle: users can now optionally route the
+ * Sprint 5.1 T4 â€” Pipeline routing toggle: users can now optionally route the
  * new contact directly into a pipeline stage, creating the contact and
  * opportunity atomically in one transaction.
  */
-export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) => {
+export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalProps) => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -70,75 +62,21 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
     origin_detail: "",
   });
 
-  // Sprint 5.1 T4 — pipeline routing state
+  // Sprint 5.1 T4 â€” pipeline routing state
   const [routeToPipeline, setRouteToPipeline] = useState(false);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [selectedStageId, setSelectedStageId] = useState<string>("");
 
   const { activePipelines } = usePipelines();
   const { stages } = usePipelineStagesV2(selectedPipelineId || undefined);
-  const { createOpportunity } = useOpportunities();
-  const { leads, updateLead } = useLeads();
+  const createAtomic = useCreateContactAtomic();
 
   const { matches: duplicateMatches } = useLeadDuplicateCheck({
     phone: formData.phone,
     email: formData.email,
   });
 
-  const handleSubmit = async () => {
-    if (!formData.name.trim()) return;
-
-    // Build the contact payload (identity fields only — no stage_id/opportunity_value)
-    const contactPayload = {
-      name: formData.name,
-      email: formData.email || undefined,
-      phone: formData.phone || undefined,
-      observations: formData.observations || undefined,
-      origin_category: formData.origin_category || null,
-      origin_detail: formData.origin_detail || null,
-    };
-
-    if (routeToPipeline && selectedPipelineId && selectedStageId) {
-      // Sprint 5.1 T4 — atomic: create contact + opportunity together.
-      // We create the contact first, then the opportunity, then promote
-      // contact_type from 'lead' to 'opportunity'.
-      try {
-        // The onAdd callback creates the contact via useLeads.createLead.
-        // We pass a callback to be notified of the created contact id.
-        let createdContactId: string | null = null;
-
-        await new Promise<void>((resolve, reject) => {
-          // We need to create contact and get its id. Since onAdd is a callback
-          // that calls useLeads.createLead internally, we use a temporary
-          // override: pass an extra field that signals pipeline routing.
-          // The parent (DatabaseView) handles the atomic create + opportunity.
-          onAdd({
-            ...contactPayload,
-            _routeToPipeline: true,
-            _pipelineId: selectedPipelineId,
-            _stageId: selectedStageId,
-          } as typeof contactPayload & {
-            _routeToPipeline?: boolean;
-            _pipelineId?: string;
-            _stageId?: string;
-          });
-          // The parent will call us back with the created contact id via
-          // a window event or we resolve immediately and let the parent handle
-          // the opportunity creation. For simplicity, we resolve and let the
-          // parent (DatabaseView) handle the opportunity creation after the
-          // contact is saved.
-          resolve();
-        });
-
-        toast.success("Contato criado e adicionado à pipeline!");
-      } catch {
-        toast.error("Erro ao criar contato e oportunidade.");
-      }
-    } else {
-      onAdd(contactPayload);
-    }
-
-    // Reset form
+  const resetForm = () => {
     setFormData({
       name: "",
       email: "",
@@ -152,18 +90,41 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
     setSelectedStageId("");
   };
 
+  const handleSubmit = () => {
+    if (!formData.name.trim()) return;
+    if (routeToPipeline && !selectedPipelineId) {
+      toast.error("Selecione uma pipeline ou desligue o encaminhamento.");
+      return;
+    }
+
+    createAtomic.mutate(
+      {
+        contact: {
+          name: formData.name,
+          email: formData.email || undefined,
+          phone: formData.phone || undefined,
+          observations: formData.observations || undefined,
+          source: formData.origin_category || "Manual",
+          origin: "manual",
+          origin_category: formData.origin_category || null,
+          origin_detail: formData.origin_detail || null,
+        },
+        routing: routeToPipeline
+          ? { pipelineId: selectedPipelineId, stageId: selectedStageId || null }
+          : undefined,
+      },
+      {
+        onSuccess: (result) => {
+          onCreated?.(result);
+          resetForm();
+          onClose();
+        },
+      },
+    );
+  };
+
   const handleClose = () => {
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      observations: "",
-      origin_category: "",
-      origin_detail: "",
-    });
-    setRouteToPipeline(false);
-    setSelectedPipelineId("");
-    setSelectedStageId("");
+    resetForm();
     onClose();
   };
 
@@ -232,7 +193,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
                 <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                 <div className="space-y-1">
                   <p className="font-medium text-amber-600 dark:text-amber-400">
-                    Possível duplicado{duplicateMatches.length > 1 ? "s" : ""} encontrado
+                    PossÃ­vel duplicado{duplicateMatches.length > 1 ? "s" : ""} encontrado
                     {duplicateMatches.length > 1 ? "s" : ""}:
                   </p>
                   <ul className="text-xs text-foreground/80 space-y-0.5">
@@ -246,7 +207,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
                     ))}
                   </ul>
                   <p className="text-xs text-muted-foreground">
-                    Você ainda pode prosseguir — duplicação não é bloqueada.
+                    VocÃª ainda pode prosseguir â€” duplicaÃ§Ã£o nÃ£o Ã© bloqueada.
                   </p>
                 </div>
               </div>
@@ -268,7 +229,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
                 <SelectValue placeholder="Selecione a origem" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">—</SelectItem>
+                <SelectItem value="__none__">â€”</SelectItem>
                 {ORIGIN_GROUPS.map((group) => (
                   <SelectGroup key={group}>
                     <SelectLabel>{ORIGIN_GROUP_LABELS[group]}</SelectLabel>
@@ -297,7 +258,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
           </div>
 
           <div>
-            <Label htmlFor="add-observations">Observações</Label>
+            <Label htmlFor="add-observations">ObservaÃ§Ãµes</Label>
             <Textarea
               id="add-observations"
               value={formData.observations}
@@ -310,7 +271,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
             />
           </div>
 
-          {/* Sprint 5.1 T4 — Pipeline routing toggle */}
+          {/* Sprint 5.1 T4 â€” Pipeline routing toggle */}
           <div className="rounded-lg border border-border bg-card p-3 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -320,7 +281,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
                     Encaminhar para Funil de Vendas
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Criar contato e já adicioná-lo a uma etapa
+                    Criar contato e jÃ¡ adicionÃ¡-lo a uma etapa
                   </p>
                 </div>
               </div>
@@ -378,7 +339,7 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
                       <SelectContent>
                         {stages
                           .filter((s) => s.pipeline_id === selectedPipelineId)
-                          .sort((a, b) => a.order - b.order)
+                          .sort((a, b) => a.position - b.position)
                           .map((s) => (
                             <SelectItem key={s.id} value={s.id}>
                               <div className="flex items-center gap-2">
@@ -408,7 +369,8 @@ export const AddContactModal = ({ open, onClose, onAdd }: AddContactModalProps) 
             onClick={handleSubmit}
             disabled={
               !formData.name.trim() ||
-              (routeToPipeline && (!selectedPipelineId || !selectedStageId))
+              createAtomic.isPending ||
+              (routeToPipeline && !selectedPipelineId)
             }
           >
             {routeToPipeline ? "Criar e Encaminhar" : "Adicionar Contato"}

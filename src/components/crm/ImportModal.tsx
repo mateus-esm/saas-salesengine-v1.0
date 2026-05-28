@@ -28,8 +28,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useLeads } from "@/hooks/useLeads";
-import { usePipelineStages } from "@/hooks/usePipelineStages";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,9 +40,8 @@ const CRM_FIELDS = [
   { key: "name", label: "Nome", required: true },
   { key: "email", label: "Email", required: false },
   { key: "phone", label: "Telefone", required: false },
-  { key: "observations", label: "Observações", required: false },
-  { key: "opportunity_value", label: "Valor", required: false },
-  { key: "tags", label: "Tags (separadas por vírgula)", required: false },
+  { key: "observations", label: "ObservaÃ§Ãµes", required: false },
+  { key: "tags", label: "Tags (separadas por vÃ­rgula)", required: false },
 ];
 
 export const ImportModal = ({
@@ -52,15 +49,11 @@ export const ImportModal = ({
   onClose,
 }: ImportModalProps) => {
   const { createLead } = useLeads();
-  const { stages } = usePipelineStages();
-  const { members } = useTeamMembers();
 
   const [step, setStep] = useState<"upload" | "mapping" | "preview" | "importing">("upload");
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
-  const [defaultStage, setDefaultStage] = useState<string>("");
-  const [defaultResponsible, setDefaultResponsible] = useState<string>("");
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0, success: 0, errors: 0 });
 
@@ -69,8 +62,6 @@ export const ImportModal = ({
     setCsvData([]);
     setCsvHeaders([]);
     setColumnMapping({});
-    setDefaultStage("");
-    setDefaultResponsible("");
     setImportProgress({ current: 0, total: 0, success: 0, errors: 0 });
   };
 
@@ -104,8 +95,6 @@ export const ImportModal = ({
             autoMapping["phone"] = header;
           } else if (lowerHeader.includes("observ") || lowerHeader.includes("notes")) {
             autoMapping["observations"] = header;
-          } else if (lowerHeader.includes("valor") || lowerHeader.includes("value")) {
-            autoMapping["opportunity_value"] = header;
           } else if (lowerHeader.includes("tag")) {
             autoMapping["tags"] = header;
           }
@@ -121,7 +110,7 @@ export const ImportModal = ({
 
   const handleImport = async () => {
     if (!columnMapping.name) {
-      toast.error("O campo Nome é obrigatório");
+      toast.error("O campo Nome Ã© obrigatÃ³rio");
       return;
     }
 
@@ -160,23 +149,8 @@ export const ImportModal = ({
           leadData.observations = row[columnMapping.observations].trim();
         }
 
-        if (columnMapping.opportunity_value && row[columnMapping.opportunity_value]) {
-          const value = parseFloat(row[columnMapping.opportunity_value].replace(/[^\d.,]/g, "").replace(",", "."));
-          if (!isNaN(value)) {
-            leadData.opportunity_value = value;
-          }
-        }
-
         if (columnMapping.tags && row[columnMapping.tags]) {
           leadData.tags = row[columnMapping.tags].split(",").map((t: string) => t.trim()).filter(Boolean);
-        }
-
-        if (defaultStage) {
-          leadData.stage_id = defaultStage;
-        }
-
-        if (defaultResponsible) {
-          leadData.responsible_id = defaultResponsible;
         }
 
         await createLead.mutateAsync(leadData as import("@/types/crm").CreateLeadData);
@@ -188,7 +162,7 @@ export const ImportModal = ({
       setImportProgress({ current: i + 1, total, success, errors });
     }
 
-    toast.success(`Importação concluída: ${success} leads importados, ${errors} erros`);
+    toast.success(`ImportaÃ§Ã£o concluÃ­da: ${success} leads importados, ${errors} erros`);
 
     setTimeout(() => {
       resetState();
@@ -212,7 +186,7 @@ export const ImportModal = ({
             Importar Leads via CSV
           </DialogTitle>
           <DialogDescription>
-            {step === "upload" && "Faça upload de um arquivo CSV com os dados dos leads"}
+            {step === "upload" && "FaÃ§a upload de um arquivo CSV com os dados dos leads"}
             {step === "mapping" && "Mapeie as colunas do CSV para os campos do CRM"}
             {step === "preview" && "Confira os dados antes de importar"}
             {step === "importing" && "Importando leads..."}
@@ -234,7 +208,7 @@ export const ImportModal = ({
                 className="max-w-xs"
               />
               <p className="text-xs text-muted-foreground mt-4">
-                Formatos aceitos: CSV (separado por vírgula)
+                Formatos aceitos: CSV (separado por vÃ­rgula)
               </p>
             </div>
           )}
@@ -259,7 +233,7 @@ export const ImportModal = ({
                         <SelectValue placeholder="Selecionar coluna..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Não mapear</SelectItem>
+                        <SelectItem value="">NÃ£o mapear</SelectItem>
                         {csvHeaders.map((header) => (
                           <SelectItem key={header} value={header}>
                             {header}
@@ -270,42 +244,6 @@ export const ImportModal = ({
                   </div>
                 ))}
               </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                <div className="space-y-2">
-                  <Label>Etapa padrão</Label>
-                  <Select value={defaultStage} onValueChange={setDefaultStage}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar etapa..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stages.map((stage) => (
-                        <SelectItem key={stage.id} value={stage.id}>
-                          {stage.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Responsável padrão</Label>
-                  <Select value={defaultResponsible} onValueChange={setDefaultResponsible}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar responsável..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Nenhum</SelectItem>
-                      {members.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.nome_completo || member.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="skip-duplicates"
