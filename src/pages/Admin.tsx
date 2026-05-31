@@ -137,6 +137,15 @@ const Admin = () => {
   const [newMemberRole, setNewMemberRole] = useState<string>("user");
   const [creatingMember, setCreatingMember] = useState(false);
 
+  // ── Add User dialog state (standalone — Usuários tab)
+  const [addUserDialog, setAddUserDialog] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<string>("user");
+  const [newUserEquipe, setNewUserEquipe] = useState<string>("");
+  const [creatingUser, setCreatingUser] = useState(false);
+
   // ─── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (loadingRole) return;
@@ -478,6 +487,70 @@ const Admin = () => {
     }
   };
 
+  // ─── Add User (standalone — Usuários tab) ───────────────────────────────────
+
+  const generateUserPassword = useCallback(() => {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    const bytes = crypto.getRandomValues(new Uint8Array(12));
+    let out = "";
+    for (let i = 0; i < bytes.length; i++) {
+      out += alphabet[bytes[i] % alphabet.length];
+    }
+    setNewUserPassword(out);
+  }, []);
+
+  const openAddUserDialog = () => {
+    setNewUserEmail("");
+    setNewUserName("");
+    setNewUserPassword("");
+    setNewUserRole("user");
+    setNewUserEquipe("");
+    setAddUserDialog(true);
+    generateUserPassword();
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUserEmail.trim() || !newUserPassword || newUserPassword.length < 8) {
+      toast.error("Email e senha (mín. 8 caracteres) são obrigatórios");
+      return;
+    }
+    if (!newUserEquipe) {
+      toast.error("Selecione uma equipe");
+      return;
+    }
+    setCreatingUser(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-equipe-member", {
+        body: {
+          email: newUserEmail.trim().toLowerCase(),
+          password: newUserPassword,
+          full_name: newUserName.trim() || null,
+          equipe_id: newUserEquipe,
+          role: newUserRole,
+        },
+      });
+      if (error) throw new Error(error.message || "Erro ao criar usuário");
+      if ((data as any)?.error) throw new Error((data as any).error);
+
+      const tempPw = newUserPassword;
+      toast.success(`${newUserEmail} criado! Senha temporária: ${tempPw}`, {
+        duration: 20000,
+        action: {
+          label: "Copiar senha",
+          onClick: () => navigator.clipboard.writeText(tempPw),
+        },
+      });
+
+      setAddUserDialog(false);
+      await fetchData();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao criar usuário";
+      toast.error(msg);
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   // ─── User handlers ───────────────────────────────────────────────────────────
 
   const handleUpdateProfile = async () => {
@@ -690,9 +763,14 @@ const Admin = () => {
         ══════════════════════════════════════════════════════════════════════ */}
         <TabsContent value="usuarios" className="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Gestão de Usuários</CardTitle>
-              <CardDescription>Gerencie usuários, suas equipes e permissões.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Gestão de Usuários</CardTitle>
+                <CardDescription>Gerencie usuários, suas equipes e permissões.</CardDescription>
+              </div>
+              <Button onClick={openAddUserDialog} className="flex items-center gap-2">
+                <UserPlus className="h-4 w-4" /> Adicionar Usuário
+              </Button>
             </CardHeader>
             <CardContent>
               <Table>
@@ -1237,6 +1315,145 @@ const Admin = () => {
                 <>
                   <UserPlus className="h-4 w-4 mr-2" />
                   Criar Membro
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ════════════════════════════════════════════════════════════════════════
+          DIALOG: ADD USER (standalone — Usuários tab)
+      ════════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={addUserDialog} onOpenChange={setAddUserDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Adicionar Usuário
+            </DialogTitle>
+            <DialogDescription>
+              Cria a conta direto, sem email. Você entrega a senha temporária para o novo membro.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-user-email">Email *</Label>
+              <Input
+                id="new-user-email"
+                type="email"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+                placeholder="novo.membro@empresa.com"
+                disabled={creatingUser}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-user-name">Nome completo</Label>
+              <Input
+                id="new-user-name"
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
+                placeholder="Maria Silva"
+                disabled={creatingUser}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-user-password">Senha temporária *</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="new-user-password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Mín. 8 caracteres"
+                  disabled={creatingUser}
+                  className="font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Gerar nova senha"
+                  onClick={generateUserPassword}
+                  disabled={creatingUser}
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Copiar senha"
+                  onClick={() => {
+                    if (newUserPassword) {
+                      navigator.clipboard.writeText(newUserPassword);
+                      toast.success("Senha copiada");
+                    }
+                  }}
+                  disabled={creatingUser || !newUserPassword}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                O membro deve trocar a senha no primeiro login.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Equipe *</Label>
+              <Select value={newUserEquipe} onValueChange={setNewUserEquipe} disabled={creatingUser}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar equipe…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {equipes.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.nome} {e.niche ? `(${e.niche})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={newUserRole}
+                onValueChange={setNewUserRole}
+                disabled={creatingUser}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.filter((r) =>
+                    isSuperAdmin ? true : r !== "super_admin"
+                  ).map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddUserDialog(false)}
+              disabled={creatingUser}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateUser} disabled={creatingUser}>
+              {creatingUser ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Criar Usuário
                 </>
               )}
             </Button>
