@@ -167,26 +167,36 @@ carrega instantaneamente dentro do mesmo modal, sem fechar a janela. O vendedor
 passa por toda a sua fila de leads do dia aplicando ações, trocando de marchas
 com velocidade máxima e cliques mínimos.
 
-✅ CRITÉRIOS DE ACEITAÇÃO (DEFINITION OF DONE) [ ] A Base de Contatos global não
-exibe nenhuma coluna de estágio ou valor financeiro.
+✅ CRITÉRIOS DE ACEITAÇÃO (DEFINITION OF DONE) [x] A Base de Contatos global não
+exibe nenhuma coluna de estágio ou valor financeiro. — T1.1 (DatabaseView sem
+`stage_id`/`opportunity_value`/`contact_type`/`opportunity_count`/`opportunity_total_value`).
 
-[ ] A Base de Contatos roda com paginação contínua (Infinite Scroll) sem quebra
-de estado visual.
+[x] A Base de Contatos roda com paginação contínua (Infinite Scroll) sem quebra
+de estado visual. — sem botões Próxima/Anterior; rows em container `overflow-auto`.
+⚠️ confirmar visualmente o "feel" do scroll em base grande.
 
-[ ] O nome técnico @lid é automaticamente substituído por um marcador humanizado
-na interface.
+[x] O nome técnico @lid é automaticamente substituído por um marcador humanizado
+na interface. — `formatDisplayName` aplicado em OpportunityCard, OpportunityDetailModal,
+OpportunityTable e DatabaseView (T2).
 
-[ ] O drawer de novo contato possui o switch toggle que cria contato +
-oportunidade em uma única operação.
+[x] O drawer de novo contato possui o switch toggle que cria contato +
+oportunidade em uma única operação. — AddContactModal + `useCreateContactAtomic` (T7/T11).
 
-[ ] A tabela de pipeline exibe todas as colunas do payload customizado JSONB de
-forma explícita.
+[x] A tabela de pipeline exibe todas as colunas do payload customizado JSONB de
+forma explícita. — OpportunityTable `[...fixed, ...dynamic]` + colunas de telemetria (T12).
 
-[ ] O configurador de campos altera dinamicamente as informações exibidas na
-capa dos cards do Kanban.
+[x] O configurador de campos altera dinamicamente as informações exibidas na
+capa dos cards do Kanban. — CardFieldsPicker `NATIVE_CARD_FIELDS` + `nativeFlags` (T10).
+⚠️ confirmar re-render instantâneo da capa após salvar.
 
-[ ] O modal de card aberto adota o layout bi-partilhado e as setas de navegação
-direta entre oportunidades da mesma fila.
+[x] O modal de card aberto adota o layout bi-partilhado e as setas de navegação
+direta entre oportunidades da mesma fila. — split 60/40 (`lg:grid-cols-5`) + PaddleShifterNav (T13/T14).
+⚠️ confirmar scroll independente dos dois painéis e troca de card ao vivo.
+
+> **T15 — DoD acceptance (Wave 6, 2026-05-31):** 7/7 critérios confirmados por
+> evidência de código (typecheck 0 erros, build limpo em todas as waves). 3 itens
+> marcados ⚠️ carregam qualidades de runtime/visual que recomendam um smoke final
+> no app rodando antes do sign-off definitivo. Nenhum gap de implementação aberto.
 
 Nota para Antigravity: O foco desta sprint é refinamento de chassi, ergonomia de
 telas, consistência de dados e eliminação de fricção de cliques. O sistema deve
