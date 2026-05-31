@@ -30,6 +30,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | 2026-05-31 | Sprint 5.1 | T11 AddContactModal switch-toggle + atomic create | Claude / Opus | M | R$ 12 |
 | 2026-05-31 | Sprint 5.1 | T12 OpportunityTable telemetry parity | Codex / GPT-5 | M | R$ 12 |
 | 2026-05-31 | Sprint 5.1 | T13 OpportunityDetailModal bi-partilhado 60/40 | Claude / Opus | L | R$ 20 |
+| 2026-05-31 | Sprint 5.1 | T14 useSiblingNavigation + paddle-shifter nav | Claude / Opus | L | R$ 20 |
 
 ## 📊 Summary Totals
 
@@ -38,6 +39,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Sprint 5.1 — Wave 2 | T6, T7 | R$ 32 |
 | Sprint 5.1 — Wave 3 | T8, T9, T10, T11 | R$ 56 |
 | Sprint 5.1 — Wave 4 | T12, T13 | R$ 32 |
+| Sprint 5.1 — Wave 5 | T14 | R$ 20 |
 
 ---
 
