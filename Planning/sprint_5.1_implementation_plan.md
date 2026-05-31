@@ -906,7 +906,7 @@ git commit -m "feat(crm): add useCreateContactAtomic identity router hook (Sprin
 - Modify: `src/components/crm/OpportunityCard.tsx`
 - Modify: `src/components/crm/OpportunityKanban.tsx` (only to pass batched touchpoint counts down)
 
-- [ ] **Step 1: Create the pillars component**
+- [x] **Step 1: Create the pillars component**
 
 Create `src/components/crm/CardTelemetryPillars.tsx`:
 
@@ -1000,7 +1000,7 @@ export const CardTelemetryPillars = ({
 };
 ```
 
-- [ ] **Step 2: Update OpportunityCard signature**
+- [x] **Step 2: Update OpportunityCard signature**
 
 In `src/components/crm/OpportunityCard.tsx`, extend the props:
 
@@ -1023,7 +1023,7 @@ import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import type { PipelineStageV2 } from "@/types/pipelines";
 ```
 
-- [ ] **Step 3: Wire OpportunityKanban**
+- [x] **Step 3: Wire OpportunityKanban**
 
 In `src/components/crm/OpportunityKanban.tsx`:
 
@@ -1061,7 +1061,7 @@ In `src/components/crm/OpportunityKanban.tsx`:
    />
    ```
 
-- [ ] **Step 4: Patch OpportunityKanbanColumn**
+- [x] **Step 4: Patch OpportunityKanbanColumn**
 
 In `src/components/crm/OpportunityKanbanColumn.tsx`, extend props with `touchpointCounts: Record<string, number>` and pass each card:
 ```tsx
@@ -1076,11 +1076,11 @@ In `src/components/crm/OpportunityKanbanColumn.tsx`, extend props with `touchpoi
 />
 ```
 
-- [ ] **Step 5: Verify build + visual smoke test**
+- [x] **Step 5: Verify build + visual smoke test**
 
 Run: `npm run build` then `npm run dev`. Open a Kanban with at least one opportunity. Confirm: time-in-phase chip, touchpoint count, next-contact chip (if set), WhatsApp pill. If you have an SLA set on a stage, the time chip pulses red when the threshold is breached.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/crm/CardTelemetryPillars.tsx src/components/crm/OpportunityCard.tsx src/components/crm/OpportunityKanban.tsx src/components/crm/OpportunityKanbanColumn.tsx
@@ -1098,7 +1098,7 @@ git commit -m "feat(crm): kanban card telemetry pillars (Sprint 5.1 §3.1)"
 **Files:**
 - Modify: `src/components/crm/OpportunityKanbanColumn.tsx`
 
-- [ ] **Step 1: Show a column-level SLA badge**
+- [x] **Step 1: Show a column-level SLA badge**
 
 In `src/components/crm/OpportunityKanbanColumn.tsx`, in the column header (right next to the row count badge), conditionally render:
 
@@ -1110,12 +1110,12 @@ In `src/components/crm/OpportunityKanbanColumn.tsx`, in the column header (right
 )}
 ```
 
-- [ ] **Step 2: Verify build**
+- [x] **Step 2: Verify build**
 
 Run: `npm run build`
 Expected: SUCCESS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/components/crm/OpportunityKanbanColumn.tsx
@@ -1137,7 +1137,7 @@ git commit -m "feat(crm): show stage SLA threshold in column header (Sprint 5.1 
 - Modify: `src/components/crm/OpportunityCard.tsx` (read flags)
 - Modify: `src/components/crm/OpportunityKanban.tsx` (compute the merged list once)
 
-- [ ] **Step 1: Define native fields**
+- [x] **Step 1: Define native fields**
 
 Inside `CardFieldsPicker.tsx`, top-of-file:
 
@@ -1153,7 +1153,7 @@ export const NATIVE_CARD_FIELDS = [
 export type NativeCardFieldId = (typeof NATIVE_CARD_FIELDS)[number]["field_id"];
 ```
 
-- [ ] **Step 2: Render native + custom together**
+- [x] **Step 2: Render native + custom together**
 
 Replace the JSX body with a two-section matrix (Nativo / Personalizado). Keep the existing custom-field branch; prefix it with the native section:
 
@@ -1177,11 +1177,11 @@ Replace the JSX body with a two-section matrix (Nativo / Personalizado). Keep th
 </div>
 ```
 
-- [ ] **Step 3: Make OpportunityCard respect the flags**
+- [x] **Step 3: Make OpportunityCard respect the flags**
 
 In `OpportunityCard.tsx`, accept a `nativeFlags: { value: boolean; timeInPhase: boolean; touchpoints: boolean; nextContact: boolean; whatsapp: boolean }` prop. Render each block only when its flag is true. Inside `CardTelemetryPillars`, accept the four boolean flags and short-circuit the pillars that are toggled off.
 
-- [ ] **Step 4: Compute flags in OpportunityKanban once**
+- [x] **Step 4: Compute flags in OpportunityKanban once**
 
 In `OpportunityKanban.tsx`, after the `cardFields` memo, derive:
 
@@ -1198,7 +1198,7 @@ const nativeFlags = {
 
 Pass `nativeFlags` down to each `OpportunityKanbanColumn` → `OpportunityCard`.
 
-- [ ] **Step 5: Backfill defaults**
+- [x] **Step 5: Backfill defaults**
 
 For pipelines that have an empty or pre-existing `card_field_ids`, default the four telemetry pillars to ON in `OpportunityKanban`:
 ```tsx
@@ -1209,11 +1209,11 @@ const effectiveNativeFlags = hasNativeConfig ? nativeFlags : {
 ```
 Use `effectiveNativeFlags` downstream.
 
-- [ ] **Step 6: Verify build + dev test**
+- [x] **Step 6: Verify build + dev test**
 
 Run: `npm run build` and `npm run dev`. Open the picker, toggle "Tempo na Fase" off, save. Confirm cards now hide that pillar.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/components/crm/pipeline-settings/CardFieldsPicker.tsx src/components/crm/OpportunityCard.tsx src/components/crm/OpportunityKanban.tsx src/components/crm/OpportunityKanbanColumn.tsx src/components/crm/CardTelemetryPillars.tsx

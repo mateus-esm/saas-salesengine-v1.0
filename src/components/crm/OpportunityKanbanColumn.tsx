@@ -6,13 +6,15 @@ import { cn } from "@/lib/utils";
 
 import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
-import { OpportunityCard } from "./OpportunityCard";
+import { OpportunityCard, type NativeCardFlags } from "./OpportunityCard";
 
 interface OpportunityKanbanColumnProps {
   stage: PipelineStageV2;
   opportunities: Opportunity[];
   leadsById: Record<string, Lead>;
   cardFields: CustomFieldSchema[];
+  touchpointCounts: Record<string, number>;      // NEW
+  nativeFlags: NativeCardFlags;
   onCardClick: (opp: Opportunity) => void;
 }
 
@@ -33,6 +35,8 @@ export const OpportunityKanbanColumn = ({
   opportunities,
   leadsById,
   cardFields,
+  touchpointCounts,
+  nativeFlags,
   onCardClick,
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
@@ -63,9 +67,16 @@ export const OpportunityKanbanColumn = ({
             />
             <h3 className="font-semibold text-sm text-foreground truncate">{stage.name}</h3>
           </div>
-          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-            {opportunities.length}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {stage.max_idle_hours && (
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-full">
+                SLA {stage.max_idle_hours}h
+              </span>
+            )}
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+              {opportunities.length}
+            </span>
+          </div>
         </div>
         {total && (
           <p className="text-xs text-muted-foreground mt-1.5">
@@ -90,7 +101,10 @@ export const OpportunityKanbanColumn = ({
                   key={opp.id}
                   opportunity={opp}
                   lead={leadsById[opp.lead_id]}
+                  stage={stage}
                   cardFields={cardFields}
+                  touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
+                  nativeFlags={nativeFlags}
                   onClick={() => onCardClick(opp)}
                 />
               ))
