@@ -1137,7 +1137,7 @@ git commit -m "feat(crm): show stage SLA threshold in column header (Sprint 5.1 
 - Modify: `src/components/crm/OpportunityCard.tsx` (read flags)
 - Modify: `src/components/crm/OpportunityKanban.tsx` (compute the merged list once)
 
-- [ ] **Step 1: Define native fields**
+- [x] **Step 1: Define native fields**
 
 Inside `CardFieldsPicker.tsx`, top-of-file:
 
@@ -1153,7 +1153,7 @@ export const NATIVE_CARD_FIELDS = [
 export type NativeCardFieldId = (typeof NATIVE_CARD_FIELDS)[number]["field_id"];
 ```
 
-- [ ] **Step 2: Render native + custom together**
+- [x] **Step 2: Render native + custom together**
 
 Replace the JSX body with a two-section matrix (Nativo / Personalizado). Keep the existing custom-field branch; prefix it with the native section:
 
@@ -1177,11 +1177,11 @@ Replace the JSX body with a two-section matrix (Nativo / Personalizado). Keep th
 </div>
 ```
 
-- [ ] **Step 3: Make OpportunityCard respect the flags**
+- [x] **Step 3: Make OpportunityCard respect the flags**
 
 In `OpportunityCard.tsx`, accept a `nativeFlags: { value: boolean; timeInPhase: boolean; touchpoints: boolean; nextContact: boolean; whatsapp: boolean }` prop. Render each block only when its flag is true. Inside `CardTelemetryPillars`, accept the four boolean flags and short-circuit the pillars that are toggled off.
 
-- [ ] **Step 4: Compute flags in OpportunityKanban once**
+- [x] **Step 4: Compute flags in OpportunityKanban once**
 
 In `OpportunityKanban.tsx`, after the `cardFields` memo, derive:
 
@@ -1198,7 +1198,7 @@ const nativeFlags = {
 
 Pass `nativeFlags` down to each `OpportunityKanbanColumn` → `OpportunityCard`.
 
-- [ ] **Step 5: Backfill defaults**
+- [x] **Step 5: Backfill defaults**
 
 For pipelines that have an empty or pre-existing `card_field_ids`, default the four telemetry pillars to ON in `OpportunityKanban`:
 ```tsx
@@ -1209,11 +1209,11 @@ const effectiveNativeFlags = hasNativeConfig ? nativeFlags : {
 ```
 Use `effectiveNativeFlags` downstream.
 
-- [ ] **Step 6: Verify build + dev test**
+- [x] **Step 6: Verify build + dev test**
 
 Run: `npm run build` and `npm run dev`. Open the picker, toggle "Tempo na Fase" off, save. Confirm cards now hide that pillar.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/components/crm/pipeline-settings/CardFieldsPicker.tsx src/components/crm/OpportunityCard.tsx src/components/crm/OpportunityKanban.tsx src/components/crm/OpportunityKanbanColumn.tsx src/components/crm/CardTelemetryPillars.tsx
