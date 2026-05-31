@@ -10,7 +10,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Loader2, Trash2, X } from "lucide-react";
+import { ArrowUpDown, Clock, Loader2, MessageSquare, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -45,6 +45,8 @@ import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
+import { computeStageTelemetry, useTouchpointCounts } from "@/hooks/useStageTelemetry";
+import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
@@ -146,6 +148,12 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     for (const s of stages) map[s.id] = s;
     return map;
   }, [stages]);
+
+  const leadIds = useMemo(
+    () => Array.from(new Set(opportunities.map((o) => o.lead_id))),
+    [opportunities],
+  );
+  const touchpointCounts = useTouchpointCounts(leadIds);
 
   const schema = useMemo(
     () =>
@@ -265,6 +273,43 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         },
       },
       {
+        id: "time_in_phase",
+        header: "Tempo na Fase",
+        accessorFn: (r) => new Date(r.opp.stage_entered_at).getTime(),
+        cell: ({ row }) => {
+          const t = computeStageTelemetry({
+            stageEnteredAt: row.original.opp.stage_entered_at,
+            maxIdleHours: row.original.stage?.max_idle_hours ?? null,
+            touchpointCount: 0,
+            nextContact: null,
+          });
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-xs",
+                t.slaBreached
+                  ? "text-destructive font-medium animate-pulse"
+                  : "text-muted-foreground",
+              )}
+            >
+              <Clock className="h-3 w-3" />
+              {t.hoursInPhaseLabel}
+            </span>
+          );
+        },
+      },
+      {
+        id: "touchpoints",
+        header: "Interações",
+        accessorFn: (r) => touchpointCounts[r.opp.lead_id] ?? 0,
+        cell: ({ row }) => (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <MessageSquare className="h-3 w-3" />
+            {touchpointCounts[row.original.opp.lead_id] ?? 0}
+          </span>
+        ),
+      },
+      {
         id: "status",
         header: "Status",
         accessorFn: (r) => r.opp.status,
@@ -318,7 +363,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     }));
 
     return [...fixed, ...dynamic];
-  }, [schema, stages, updateOpportunity]);
+  }, [schema, stages, touchpointCounts, updateOpportunity]);
 
   const table = useReactTable({
     data: rows,
