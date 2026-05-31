@@ -384,6 +384,14 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     [rowSelection],
   );
 
+  // Sprint 5.1 §5.2 — paddle-shifter siblings: the table rows in the exact
+  // filtered + sorted order the user currently sees.
+  const siblingsForSelected = useMemo(
+    () => table.getSortedRowModel().rows.map((r) => r.original.opp),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [table, rows, sorting, globalFilter, stageFilter, statusFilter],
+  );
+
   const handleBulkDelete = async () => {
     try {
       await bulkDeleteOpportunities.mutateAsync(selectedOppIds);
@@ -543,6 +551,11 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         onOpenContact={(contactId) => {
           const target = leadsById[contactId];
           if (target) setContactDrawerLead(target);
+        }}
+        siblings={siblingsForSelected}
+        onNavigate={(id) => {
+          const next = opportunities.find((o) => o.id === id);
+          if (next) setSelectedOpp(next);
         }}
       />
 

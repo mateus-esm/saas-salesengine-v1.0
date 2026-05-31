@@ -32,6 +32,8 @@ import { EntityChips } from "./EntityChips";
 import { CompanySection } from "./companies/CompanySection";
 import { PropertySection } from "./properties/PropertySection";
 import { TouchpointsList } from "./TouchpointsList";
+import { PaddleShifterNav } from "./PaddleShifterNav";
+import { useSiblingNavigation } from "@/hooks/useSiblingNavigation";
 import { formatDisplayName, formatBrPhone } from "@/lib/displayName";
 import type { Lead } from "@/types/crm";
 import type {
@@ -55,6 +57,13 @@ interface OpportunityDetailModalProps {
    * drawer. The parent owns both drawers so neither leaks state across pipelines.
    */
   onOpenContact?: (contactId: string) => void;
+  /**
+   * Sprint 5.1 §5.2 — Paddle shifters. The parent passes the ordered list of
+   * opportunities in the same column/view the user sees, plus a navigate
+   * callback that swaps `opportunity` in place without closing the drawer.
+   */
+  siblings?: Opportunity[];
+  onNavigate?: (opportunityId: string) => void;
 }
 
 /**
@@ -77,6 +86,8 @@ export const OpportunityDetailModal = ({
   lead,
   onClose,
   onOpenContact,
+  siblings,
+  onNavigate,
 }: OpportunityDetailModalProps) => {
   const { updateOpportunity, deleteOpportunity } = useOpportunities({
     pipelineId: opportunity?.pipeline_id,
@@ -98,6 +109,12 @@ export const OpportunityDetailModal = ({
   const schema = useMemo(
     () => (pipeline?.custom_fields_schema ?? []).filter((f) => !f.is_deleted),
     [pipeline],
+  );
+
+  // Sprint 5.1 §5.2 — paddle-shifter navigation across the parent's ordered list.
+  const { prevId, nextId, canPrev, canNext, indexLabel } = useSiblingNavigation(
+    siblings ?? [],
+    opportunity?.id ?? null,
   );
 
   if (!opportunity) return null;
@@ -138,13 +155,26 @@ export const OpportunityDetailModal = ({
           scroll surfaces. Left = live timeline, right = identity + engineering. */}
       <DialogContent className="max-w-5xl w-[min(96vw,1100px)] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3 border-b border-border/60 shrink-0">
-          <div className="space-y-1">
-            <DialogTitle className="text-base font-semibold leading-tight">
-              {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
-            </DialogTitle>
-            <p className="text-xs text-muted-foreground">
-              em <span className="font-medium text-foreground/70">{pipeline?.name ?? "Pipeline"}</span>
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <DialogTitle className="text-base font-semibold leading-tight">
+                {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                em <span className="font-medium text-foreground/70">{pipeline?.name ?? "Pipeline"}</span>
+              </p>
+            </div>
+            {siblings && siblings.length > 1 && (
+              <div className="shrink-0 mr-7">
+                <PaddleShifterNav
+                  canPrev={canPrev}
+                  canNext={canNext}
+                  onPrev={() => prevId && onNavigate?.(prevId)}
+                  onNext={() => nextId && onNavigate?.(nextId)}
+                  label={indexLabel}
+                />
+              </div>
+            )}
           </div>
           <EntityChips
             opportunityId={opportunity.id}

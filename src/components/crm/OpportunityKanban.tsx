@@ -151,6 +151,12 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     return map;
   }, [localOpps, orderedStages]);
 
+  // Sprint 5.1 §5.2 — paddle-shifter siblings: the open card's own column, in view order.
+  const siblingsForSelected = useMemo(
+    () => (selectedOpp ? oppsByStage[selectedOpp.stage_id] ?? [] : []),
+    [selectedOpp, oppsByStage],
+  );
+
   const activeOpp = activeId ? localOpps.find((o) => o.id === activeId) ?? null : null;
 
   const handleDragStart = (e: DragStartEvent) => {
@@ -302,6 +308,11 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         onOpenContact={(contactId) => {
           const target = leadsById[contactId];
           if (target) setContactDrawerLead(target);
+        }}
+        siblings={siblingsForSelected}
+        onNavigate={(id) => {
+          const next = localOpps.find((o) => o.id === id);
+          if (next) setSelectedOpp(next);
         }}
       />
 
