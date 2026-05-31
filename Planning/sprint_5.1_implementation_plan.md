@@ -1374,7 +1374,7 @@ git commit -m "feat(crm): unified identity router in AddContactModal (Sprint 5.1
 **Files:**
 - Modify: `src/components/crm/OpportunityTable.tsx`
 
-- [ ] **Step 1: Add telemetry columns**
+- [x] **Step 1: Add telemetry columns**
 
 In `OpportunityTable.tsx`, import:
 ```tsx
@@ -1424,15 +1424,15 @@ In the `fixed` columns array, insert (between `stage` and `status`):
 ```
 Don't forget `touchpointCounts` in the `columns` deps array.
 
-- [ ] **Step 2: Audit custom fields column generation**
+- [x] **Step 2: Audit custom fields column generation**
 
 Re-read the existing `dynamic` columns map (≈ lines 310-315). It already covers all non-deleted schema fields — confirm by toggling a custom field's `is_deleted` flag in the DB and checking the column disappears.
 
-- [ ] **Step 3: Verify build + dev test**
+- [x] **Step 3: Verify build + dev test**
 
 Run: `npm run build` then `npm run dev`. Open the pipeline list view (the one with the table). Confirm Tempo na Fase + Interações columns render with sensible numbers.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/crm/OpportunityTable.tsx
