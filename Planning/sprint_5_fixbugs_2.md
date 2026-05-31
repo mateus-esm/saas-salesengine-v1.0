@@ -244,11 +244,11 @@ Decomposed into 4 branches per `Planning/agent_workflow.md` convention. Merge in
 - [x] **1.4** Chat Context HUD sidebar refinement — legacy quick-edit block removed; Identity/Properties/Copiloto scroll independently from Tabs (branch 2)
 - [x] **2.1** Infinite scroll Contacts table — pagination model + footer dropped (branch 3)
 - [x] **2.3** Column customization for Canal/Origem/Enriquecimento — Canal + Enriquecimento are now first-class columns; Origem already existed (branch 3)
-- [x] **2.4** Quick Add drawer wired into Base de Contatos header; batch upload already in `ImportModal`. Multi-entity link chips column **deferred** — needs new per-lead link queries (`useOpportunityLinks` is keyed by opportunity_id) (branch 3)
+- [x] **2.4** Quick Add drawer wired into Base de Contatos header; batch upload already in `ImportModal`. Multi-entity ledger chips completed with a batched per-lead entity summary (`useLeadEntitySummary`) for Associated Company + Properties count.
 - [x] **3.1** Mass purge deals — `bulkDeleteOpportunities` + select column + bulk action bar + confirm dialog (branch 4)
 - [x] **3.2** Lead Matrix — already implemented in `OpportunityTable.tsx:268-273` (dynamic column per custom field); no code change needed (branch 4)
 - [x] **3.3** Kanban card cover customization — wired existing `CardFieldsPicker` as dedicated "Card do Kanban" section in `PipelineSettings` (branch 4)
 
 ### Deferred for Sprint 6+
 
-- **2.4 multi-entity chips column** — show Associated Company chip + Properties count directly in the Contacts table row. Requires a per-lead links hook (analog of `useOpportunityLinks` but keyed by `lead_id`) plus a dedicated table column. Captured here so the sprint vision isn't lost.
+- No remaining Sprint 5.5 scope deferred after the multi-entity chips completion.
