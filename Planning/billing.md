@@ -24,12 +24,15 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | _add rows below as tasks complete_ | | | | | |
 | 2026-05-31 | Sprint 5.1 | T6 useStageTelemetry hook | Codex / GPT-5 | M | R$ 12 |
 | 2026-05-30 | Sprint 5.1 | T7 useCreateContactAtomic (Identity Router) | Claude / Opus | L | R$ 20 |
+| 2026-05-30 | Sprint 5.1 | T8 OpportunityCard telemetry pillars | Gemini | L | R$ 20 |
+| 2026-05-30 | Sprint 5.1 | T9 Kanban column SLA visual | Gemini | M | R$ 12 |
 
 ## 📊 Summary Totals
 
 | Sprint | Tasks | Total R$ |
 | :----- | :---- | :------- |
 | Sprint 5.1 — Wave 2 | T6, T7 | R$ 32 |
+| Sprint 5.1 — Wave 3 | T8, T9 | R$ 32 |
 
 ---
 

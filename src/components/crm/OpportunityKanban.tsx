@@ -26,12 +26,17 @@ import { useLeads } from "@/hooks/useLeads";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
+import { useTouchpointCounts } from "@/hooks/useStageTelemetry";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
-import { OpportunityCard } from "./OpportunityCard";
+import {
+  DEFAULT_NATIVE_CARD_FLAGS,
+  OpportunityCard,
+  type NativeCardFlags,
+} from "./OpportunityCard";
 import { OpportunityKanbanColumn } from "./OpportunityKanbanColumn";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
-import { CardFieldsPicker } from "./pipeline-settings/CardFieldsPicker";
+import { CardFieldsPicker, NATIVE_CARD_FIELDS } from "./pipeline-settings/CardFieldsPicker";
 
 import type { Lead } from "@/types/crm";
 import type { Opportunity } from "@/types/pipelines";
@@ -92,6 +97,9 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     return map;
   }, [leads]);
 
+  const leadIdsForCounts = useMemo(() => Array.from(new Set(localOpps.map((o) => o.lead_id))), [localOpps]);
+  const touchpointCounts = useTouchpointCounts(leadIdsForCounts);
+
   const cardFields = useMemo(() => {
     const cardFieldIds = pipeline?.card_field_ids ?? [];
     const schema = pipeline?.custom_fields_schema ?? [];
@@ -99,6 +107,31 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
       .filter((f) => !f.is_deleted && cardFieldIds.includes(f.field_id))
       .sort((a, b) => a.position - b.position);
   }, [pipeline]);
+
+  const nativeCardFieldIds = useMemo(
+    () => NATIVE_CARD_FIELDS.map((field) => field.field_id),
+    [],
+  );
+
+  const effectiveCardFieldIds = useMemo(() => {
+    const ids = pipeline?.card_field_ids ?? [];
+    const hasNativeConfig = ids.some((id) => id.startsWith("native:"));
+    return hasNativeConfig ? ids : [...nativeCardFieldIds, ...ids];
+  }, [nativeCardFieldIds, pipeline?.card_field_ids]);
+
+  const nativeFlags = useMemo<NativeCardFlags>(() => {
+    const ids = pipeline?.card_field_ids ?? [];
+    const hasNativeConfig = ids.some((id) => id.startsWith("native:"));
+    if (!hasNativeConfig) return DEFAULT_NATIVE_CARD_FLAGS;
+
+    return {
+      value: ids.includes("native:value"),
+      timeInPhase: ids.includes("native:time_in_phase"),
+      touchpoints: ids.includes("native:touchpoints"),
+      nextContact: ids.includes("native:next_contact"),
+      whatsapp: ids.includes("native:whatsapp"),
+    };
+  }, [pipeline?.card_field_ids]);
 
   const orderedStages = useMemo(
     () => [...stages].sort((a, b) => a.position - b.position),
@@ -163,7 +196,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   };
 
   const openCardConfig = () => {
-    setCardFieldDraft(pipeline?.card_field_ids ?? []);
+    setCardFieldDraft(effectiveCardFieldIds);
     setShowCardConfig(true);
   };
 
@@ -235,6 +268,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 opportunities={oppsByStage[stage.id] ?? []}
                 leadsById={leadsById}
                 cardFields={cardFields}
+                touchpointCounts={touchpointCounts}
+                nativeFlags={nativeFlags}
                 onCardClick={setSelectedOpp}
               />
             ))}
@@ -245,7 +280,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
               <OpportunityCard
                 opportunity={activeOpp}
                 lead={leadsById[activeOpp.lead_id]}
+                stage={orderedStages.find((s) => s.id === activeOpp.stage_id)}
                 cardFields={cardFields}
+                touchpointCount={touchpointCounts[activeOpp.lead_id] ?? 0}
+                nativeFlags={nativeFlags}
                 onClick={() => {}}
                 isDragOverlay
               />

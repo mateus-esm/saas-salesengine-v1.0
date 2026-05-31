@@ -1,16 +1,36 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { User, DollarSign } from "lucide-react";
+import { User } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
 import type { Lead } from "@/types/crm";
-import type { CustomFieldSchema, Opportunity } from "@/types/pipelines";
+import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
+import { CardTelemetryPillars } from "./CardTelemetryPillars";
+
+export interface NativeCardFlags {
+  value: boolean;
+  timeInPhase: boolean;
+  touchpoints: boolean;
+  nextContact: boolean;
+  whatsapp: boolean;
+}
+
+export const DEFAULT_NATIVE_CARD_FLAGS: NativeCardFlags = {
+  value: true,
+  timeInPhase: true,
+  touchpoints: true,
+  nextContact: true,
+  whatsapp: true,
+};
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
   lead: Lead | undefined;
+  stage: PipelineStageV2 | undefined;            // NEW
   cardFields: CustomFieldSchema[];   // schema entries whose field_id ∈ pipeline.card_field_ids (already filtered)
+  touchpointCount: number;                       // NEW — supplied by parent (batched)
+  nativeFlags?: NativeCardFlags;
   onClick: () => void;
   isDragOverlay?: boolean;
 }
@@ -50,7 +70,10 @@ const renderCustomValue = (field: CustomFieldSchema, raw: unknown): string | nul
 export const OpportunityCard = ({
   opportunity,
   lead,
+  stage,
   cardFields,
+  touchpointCount,
+  nativeFlags = DEFAULT_NATIVE_CARD_FLAGS,
   onClick,
   isDragOverlay,
 }: OpportunityCardProps) => {
@@ -84,17 +107,28 @@ export const OpportunityCard = ({
         isDragOverlay && "shadow-lg rotate-1 scale-[1.02]",
       )}
     >
-      <div className="flex items-center gap-1.5 text-sm font-medium truncate">
-        <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="truncate">{formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}</span>
+      <div className="flex items-center justify-between gap-1.5 text-sm font-medium">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="truncate">{formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}</span>
+        </div>
+        {nativeFlags.value && valueText && (
+          <span className="text-xs text-green-600 dark:text-green-400 font-semibold shrink-0">
+            {valueText}
+          </span>
+        )}
       </div>
 
-      {valueText && (
-        <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 font-medium">
-          <DollarSign className="h-3 w-3" />
-          {valueText}
-        </div>
-      )}
+      <CardTelemetryPillars
+        opportunity={opportunity}
+        stage={stage}
+        lead={lead}
+        touchpointCount={touchpointCount}
+        timeInPhase={nativeFlags.timeInPhase}
+        touchpoints={nativeFlags.touchpoints}
+        nextContact={nativeFlags.nextContact}
+        whatsapp={nativeFlags.whatsapp}
+      />
 
       {cardFields.length > 0 && (
         <div className="space-y-0.5 pt-1 border-t border-border/60">
