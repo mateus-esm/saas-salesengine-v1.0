@@ -1220,6 +1220,44 @@ export type Database = {
           },
         ]
       }
+      origin_taxonomy: {
+        Row: {
+          color: string
+          created_at: string
+          deleted_at: string | null
+          equipe_id: string
+          id: string
+          kind: string
+          label: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          deleted_at?: string | null
+          equipe_id: string
+          id?: string
+          kind: string
+          label: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          deleted_at?: string | null
+          equipe_id?: string
+          id?: string
+          kind?: string
+          label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "origin_taxonomy_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_agent_rules: {
         Row: {
           auto_advance_stages: boolean
@@ -1326,6 +1364,7 @@ export type Database = {
           equipe_id: string
           id: string
           max_idle_hours: number | null
+          max_interactions: number | null
           name: string
           pipeline_id: string
           position: number
@@ -1338,6 +1377,7 @@ export type Database = {
           equipe_id: string
           id?: string
           max_idle_hours?: number | null
+          max_interactions?: number | null
           name: string
           pipeline_id: string
           position: number
@@ -1350,6 +1390,7 @@ export type Database = {
           equipe_id?: string
           id?: string
           max_idle_hours?: number | null
+          max_interactions?: number | null
           name?: string
           pipeline_id?: string
           position?: number
@@ -1375,6 +1416,7 @@ export type Database = {
       pipelines: {
         Row: {
           card_field_ids: Json
+          cadence_days: number | null
           created_at: string
           custom_fields_schema: Json
           deleted_at: string | null
@@ -1387,6 +1429,7 @@ export type Database = {
         }
         Insert: {
           card_field_ids?: Json
+          cadence_days?: number | null
           created_at?: string
           custom_fields_schema?: Json
           deleted_at?: string | null
@@ -1399,6 +1442,7 @@ export type Database = {
         }
         Update: {
           card_field_ids?: Json
+          cadence_days?: number | null
           created_at?: string
           custom_fields_schema?: Json
           deleted_at?: string | null

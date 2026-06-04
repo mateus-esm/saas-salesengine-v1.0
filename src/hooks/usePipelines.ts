@@ -22,6 +22,7 @@ interface PipelineRow {
   equipe_id: string;
   name: string;
   description: string | null;
+  cadence_days: number | null;
   custom_fields_schema: CustomFieldSchema[] | null;
   card_field_ids: string[] | null;
   is_archived: boolean;
@@ -35,6 +36,7 @@ const normalizePipeline = (row: PipelineRow): Pipeline => ({
   equipe_id: row.equipe_id,
   name: row.name,
   description: row.description ?? null,
+  cadence_days: row.cadence_days ?? null,
   custom_fields_schema: Array.isArray(row.custom_fields_schema)
     ? row.custom_fields_schema
     : [],
@@ -91,6 +93,7 @@ export const usePipelines = () => {
           equipe_id: equipeId,
           name: input.name,
           description: input.description ?? null,
+          cadence_days: input.cadence_days ?? null,
           custom_fields_schema: input.custom_fields_schema ?? [],
           card_field_ids: input.card_field_ids ?? [],
         })

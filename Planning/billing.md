@@ -22,6 +22,8 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-04 | Sprint 5.2 | T1 schema cadence/KPI | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-04 | Sprint 5.2 | T2 schema taxonomy + hook | Codex / GPT-5 | M | R$ 12 |
 | 2026-05-31 | Sprint 5.1 | T6 useStageTelemetry hook | Codex / GPT-5 | M | R$ 12 |
 | 2026-05-30 | Sprint 5.1 | T7 useCreateContactAtomic (Identity Router) | Claude / Opus | L | R$ 20 |
 | 2026-05-30 | Sprint 5.1 | T8 OpportunityCard telemetry pillars | Gemini | L | R$ 20 |
@@ -42,7 +44,9 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Sprint 5.1 — Wave 4 | T12, T13 | R$ 32 |
 | Sprint 5.1 — Wave 5 | T14 | R$ 20 |
 | Sprint 5.1 — Wave 6 | T15 | R$ 5 |
+| Sprint 5.2 — Wave 1 | T1, T2 | R$ 24 |
 | **Sprint 5.1 — TOTAL** | **T6–T15** | **R$ 145** |
+| **Sprint 5.2 — TOTAL so far** | **T1, T2** | **R$ 24** |
 
 ---
 

@@ -53,6 +53,8 @@ export interface Pipeline {
   equipe_id: string;
   name: string;
   description: string | null;
+  /** Sprint 5.2 - null = cadence automation disabled; positive integer = follow-up days. */
+  cadence_days: number | null;
   custom_fields_schema: CustomFieldSchema[];
   card_field_ids: string[];        // which custom fields show on Kanban cards
   is_archived: boolean;
@@ -71,6 +73,8 @@ export interface PipelineStageV2 {
   stage_type: StageType;
   /** Sprint 5.1 section 3.1 - null = no SLA; positive integer = hours before red-pulse. */
   max_idle_hours: number | null;
+  /** Sprint 5.2 - null = no limit; positive integer = touchpoints before breach telemetry. */
+  max_interactions: number | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -110,6 +114,7 @@ export interface OpportunityStageHistory {
 export interface CreatePipelineData {
   name: string;
   description?: string;
+  cadence_days?: number | null;
   custom_fields_schema?: CustomFieldSchema[];
   card_field_ids?: string[];
 }
@@ -118,6 +123,7 @@ export interface UpdatePipelineData {
   id: string;
   name?: string;
   description?: string | null;
+  cadence_days?: number | null;
   custom_fields_schema?: CustomFieldSchema[];
   card_field_ids?: string[];
   is_archived?: boolean;
@@ -130,6 +136,7 @@ export interface CreateStageV2Data {
   position?: number;
   stage_type?: StageType;
   max_idle_hours?: number | null;
+  max_interactions?: number | null;
 }
 
 export interface UpdateStageV2Data {
@@ -139,6 +146,7 @@ export interface UpdateStageV2Data {
   position?: number;
   stage_type?: StageType;
   max_idle_hours?: number | null;
+  max_interactions?: number | null;
 }
 
 export interface CreateOpportunityData {
