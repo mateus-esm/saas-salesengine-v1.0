@@ -302,12 +302,29 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         id: "touchpoints",
         header: "Interações",
         accessorFn: (r) => touchpointCounts[r.opp.lead_id] ?? 0,
-        cell: ({ row }) => (
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <MessageSquare className="h-3 w-3" />
-            {touchpointCounts[row.original.opp.lead_id] ?? 0}
-          </span>
-        ),
+        cell: ({ row }) => {
+          // T11 — breach alert when the manager's interaction cap is exceeded.
+          const count = touchpointCounts[row.original.opp.lead_id] ?? 0;
+          const maxInteractions = row.original.stage?.max_interactions ?? null;
+          const breached =
+            typeof maxInteractions === "number" && maxInteractions > 0 && count >= maxInteractions;
+          return (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-xs",
+                breached ? "text-destructive font-medium animate-pulse" : "text-muted-foreground",
+              )}
+              title={
+                breached
+                  ? `Limite de ${maxInteractions} interações excedido`
+                  : `${count} interações`
+              }
+            >
+              <MessageSquare className="h-3 w-3" />
+              {count}
+            </span>
+          );
+        },
       },
       {
         id: "status",
