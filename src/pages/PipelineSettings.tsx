@@ -29,6 +29,7 @@ import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
 import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
 import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
+import { OriginTaxonomyEditor } from "@/components/crm/pipeline-settings/OriginTaxonomyEditor";
 import type { CustomFieldSchema, Pipeline } from "@/types/pipelines";
 
 const PipelineSettings = () => {
@@ -150,7 +151,7 @@ const PipelineSettings = () => {
         </aside>
 
         {/* Right pane: editor */}
-        <main className="overflow-auto p-6">
+        <main className="overflow-auto p-6 space-y-6">
           {selected ? (
             <PipelineEditor
               key={selected.id}
@@ -160,6 +161,9 @@ const PipelineSettings = () => {
           ) : (
             <EmptyEditorState onCreate={() => setCreatingOpen(true)} />
           )}
+
+          {/* T8 — workspace Origem/Canal taxonomy editor */}
+          <OriginTaxonomyEditor />
         </main>
       </div>
 
