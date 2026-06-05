@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ import {
   User,
   Clock,
   MessageSquare,
+  MessagesSquare,
   Send,
   Loader2,
   CheckCircle2,
@@ -97,6 +99,7 @@ export const ContactDetailsModal = ({
   onSave,
   onDelete,
 }: ContactDetailsModalProps) => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState<Partial<Lead>>({});
   const [newTag, setNewTag] = useState("");
   const [noteText, setNoteText] = useState("");
@@ -233,6 +236,22 @@ export const ContactDetailsModal = ({
         <DialogHeader className="p-6 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             Detalhes do Contato
+            {/* T15 — Sales Engine Chat Route: jump to this contact's native thread */}
+            {lead?.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto mr-8 h-8 gap-1.5 text-primary"
+                onClick={() => {
+                  const id = lead.id;
+                  onClose();
+                  navigate(`/chat?contact=${id}`);
+                }}
+              >
+                <MessagesSquare className="h-4 w-4" />
+                Abrir no Chat
+              </Button>
+            )}
           </DialogTitle>
         </DialogHeader>
 

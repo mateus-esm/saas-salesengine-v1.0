@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLeads } from "@/hooks/useLeads";
 import { useConversations } from "@/hooks/useConversations";
 import { useMessages } from "@/hooks/useMessages";
@@ -48,8 +50,48 @@ const Chat = () => {
   const [showInbox, setShowInbox] = useState(true);
   const [showCRM, setShowCRM] = useState(true);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);
+
+  // T15 — Zero-Friction Chat Link: when navigated to /chat?contact=<leadId>,
+  // focus that contact's thread (creating an internal thread if none exists).
+  useEffect(() => {
+    const contactId = searchParams.get("contact");
+    if (!contactId || loadingConversations) return;
+
+    const existing = conversations.find((c) => c.lead_id === contactId);
+    if (existing) {
+      setSelectedConversationId(existing.id);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    const equipeId = leads?.find((l) => l.id === contactId)?.equipe_id;
+    if (!equipeId) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await sb
+        .from("conversations")
+        .insert({ equipe_id: equipeId, lead_id: contactId })
+        .select("id")
+        .single();
+      if (!cancelled && !error && data?.id) {
+        await queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
+        setSelectedConversationId(data.id as string);
+      }
+      if (!cancelled) setSearchParams({}, { replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, conversations, loadingConversations, leads, queryClient, setSearchParams]);
 
   const { messages, loading: loadingMessages, addOptimisticMessage } = useMessages(
     selectedConversationId || undefined,

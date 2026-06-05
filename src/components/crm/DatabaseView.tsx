@@ -41,6 +41,7 @@ import {
 import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
+import { useNavigate } from "react-router-dom";
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
 import { AddContactModal } from "./AddContactModal";
@@ -54,6 +55,7 @@ import {
   UserPlus,
   Loader2,
   MessageCircle,
+  MessagesSquare,
   Building2,
   Briefcase,
   Home,
@@ -188,6 +190,7 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
 type LeadUpdateValue = string | number | boolean | null | string[] | undefined;
 
 export const DatabaseView = () => {
+  const navigate = useNavigate();
   const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
 
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -424,6 +427,19 @@ export const DatabaseView = () => {
                 <MessageCircle className="h-4 w-4" />
               </Button>
             )}
+            {/* T15 — Sales Engine Chat Route: open this contact's native thread */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-primary hover:text-primary/80 shrink-0"
+              title="Abrir no chat do Sales Engine"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/chat?contact=${row.original.id}`);
+              }}
+            >
+              <MessagesSquare className="h-4 w-4" />
+            </Button>
           </div>
         );
       },
