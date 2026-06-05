@@ -155,17 +155,17 @@ into clean code execution.
 
 ### âœ… SPRINT 5.2 DEFINITION OF DONE
 
-- [ ] Direct quick-touchpoint action buttons log item types in a single click,
+- [x] Direct quick-touchpoint action buttons log item types in a single click,
       instantly triggering the local cadence calculator.
-- [ ] Next-contact indicator badges adapt color states immediately based on
+- [x] Next-contact indicator badges adapt color states immediately based on
       calendar date conditions.
-- [ ] Association data linked inside pipelines instantly reflects across the
+- [x] Association data linked inside pipelines instantly reflects across the
       main Contacts grid views.
-- [ ] A dedicated workspace page lists all operational tasks, deadlines, and
+- [x] A dedicated workspace page lists all operational tasks, deadlines, and
       ownership keys.
-- [ ] The chat viewport automatically shifts states when a human representative
+- [x] The chat viewport automatically shifts states when a human representative
       joins the thread, providing a dynamic `Devolver` option.
-- [ ] Screen switching features absolute rendering persistence with zero visual
+- [x] Screen switching features absolute rendering persistence with zero visual
       reloads or chat component resets.
 
 ---
@@ -232,8 +232,8 @@ is bulletproof and ready for the **Agno Python Agent Core** setup!
 | T12 | 3.4             | Roteamento zero-reload (rota de layout + Outlet + cache tuning)  | XL   | Claude / Opus        | `src/App.tsx`, `src/components/AuthenticatedLayout.tsx` _(novo)_                                              | `claude/sprint5.2/epic3/zero-reload-routing`      | [x]    |
 | T13 | 2.2(page)       | PÃ¡gina mestre de Tarefas no sidebar + rota + nav                | L    | Claude / Opus        | `src/pages/Tasks.tsx` _(novo)_, `src/hooks/useAllTasks.ts` _(novo)_, `src/App.tsx`, `src/components/TopNavbar.tsx` | `claude/sprint5.2/epic2/master-task-page`         | [x]    |
 | T14 | 3.3             | Limpeza do chat + switch de handover hÃ­brido (`Vendedor no Loop`)| L    | Claude / Opus        | `src/components/inbox/ConversationHeader.tsx`, `src/components/inbox/CRMContextPanel.tsx`, `src/pages/Chat.tsx` | `claude/sprint5.2/epic3/chat-declutter-handover`  | [x]    |
-| T15 | 3.2             | BotÃ£o "Sales Engine Chat Route" (foco no chat / cria thread)    | L    | Claude / Opus        | `src/pages/Chat.tsx`, `src/components/crm/ContactDetailsModal.tsx`, `src/components/crm/DatabaseView.tsx`, `src/components/inbox/CRMContextPanel.tsx` | `claude/sprint5.2/epic3/zero-friction-chat-link`  | [ ]    |
-| T16 | DoD             | Auditoria de aceite (evidÃªncia de cÃ³digo) + fechamento da sprint | S    | Claude / Opus (PM)   | _read-only_ + `Planning/sprint_5.2_crm_v1_fixes_4.md`, `Planning/billing.md`                                | `claude/sprint5.2/dod/acceptance-audit`           | [ ]    |
+| T15 | 3.2             | BotÃ£o "Sales Engine Chat Route" (foco no chat / cria thread)    | L    | Claude / Opus        | `src/pages/Chat.tsx`, `src/components/crm/ContactDetailsModal.tsx`, `src/components/crm/DatabaseView.tsx`, `src/components/inbox/CRMContextPanel.tsx` | `claude/sprint5.2/epic3/zero-friction-chat-link`  | [x]    |
+| T16 | DoD             | Auditoria de aceite (evidÃªncia de cÃ³digo) + fechamento da sprint | S    | Claude / Opus (PM)   | _read-only_ + `Planning/sprint_5.2_crm_v1_fixes_4.md`, `Planning/billing.md`                                | `claude/sprint5.2/dod/acceptance-audit`           | [x]    |
 
 *Tiers: **S** mecÃ¢nico Â· **M** um hook/componente Â· **L** hook + integraÃ§Ã£o multi-arquivo Â· **XL** cross-cutting/arquitetura. Nunca rode S/M em modelo premium.*
 
@@ -450,8 +450,8 @@ Wave 2 ele roda T6 e T9 em sequÃªncia (sem pressa â€” token custo zero).*
 | 2026-06-04 | T12 zero-reload routing        | Claude / Opus  | XL | R$ 28 |
 | 2026-06-04 | T13 master task page           | Claude / Opus  | L  | R$ 20 |
 | 2026-06-04 | T14 chat declutter/handover    | Claude / Opus  | L  | R$ 20 |
-|      | T15 zero-friction chat link    | Claude / Opus  | L  | R$ 20 |
-|      | T16 DoD audit                  | Claude / Opus  | S  | R$ 5  |
+| 2026-06-04 | T15 zero-friction chat link    | Claude / Opus  | L  | R$ 20 |
+| 2026-06-04 | T16 DoD audit                  | Claude / Opus  | S  | R$ 5  |
 | **Total estimado** |                  |                |    | **R$ 281** |
 
 *Cada engenheiro adiciona a linha (com data) ao concluir; PM confere no merge. Tiers: S=R$5 Â· M=R$12 Â· L=R$20 Â· XL=R$28.*
