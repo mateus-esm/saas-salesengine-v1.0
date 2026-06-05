@@ -187,24 +187,8 @@ export function CRMContextPanel({
       {/* SECTIONS 2 + 3 + 4 · Active Opportunities / Opportunity Detail */}
       {session.leadId && <LeadOpportunitiesSection leadId={session.leadId} />}
 
-      {/* SECTION 5 · AI Commercial Copilot (skeleton) */}
-      <Card className="bg-muted/30 border-dashed">
-        <CardHeader className="p-3 pb-2">
-          <CardTitle className="text-xs font-medium flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-            Copiloto Comercial
-            <Badge variant="outline" className="text-[10px] ml-auto flex items-center gap-1 px-1.5 py-0 h-4">
-              <Lock className="h-2.5 w-2.5" /> Em breve
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Sugestões de próximas ações, resumo da conversa e coaching em tempo
-            real vão aparecer aqui.
-          </p>
-        </CardContent>
-      </Card>
+      {/* T14 — legacy "Copiloto Comercial" skeleton removed to free reading
+          real estate for customer records. */}
       </div>
 
       {/* Notes / Tasks / History tabs — independent scroll region. */}

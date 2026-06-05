@@ -213,6 +213,16 @@ const Chat = () => {
         media_type: media?.type || null,
       } as any);
 
+      // T14 — a human typing takes the loop: flip to human handling instantly
+      // so the header morphs to "Vendedor no Loop" + "Devolver" without a manual
+      // toggle.
+      if (!selectedConversation.atendido_por_agente) {
+        void sb
+          .from('conversations')
+          .update({ atendido_por_agente: true })
+          .eq('id', selectedConversationId);
+      }
+
       const { error } = await supabase.functions.invoke('send-chat-message', {
         body: {
           conversation_id: selectedConversationId,

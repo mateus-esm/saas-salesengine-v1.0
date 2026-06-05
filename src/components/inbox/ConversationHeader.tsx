@@ -222,47 +222,29 @@ export function ConversationHeader({ session, teamMembers = [], onToggleHandoff,
               and made it easy to write to the legacy lead.stage_id while
               the opportunity stage stayed unchanged. */}
 
-          {/* Value Editor (Popover) */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 text-xs font-mono text-muted-foreground hover:text-foreground"
-              >
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(session.crmData.value || 0)}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-2">
-              <div className="space-y-2">
-                <span className="text-xs font-medium text-muted-foreground">Valor da Oportunidade</span>
-                <Input
-                  type="number" 
-                  placeholder="0.00"
-                  defaultValue={session.crmData.value}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      onUpdateCRM({ value: parseFloat(e.currentTarget.value) });
-                      // Close popover logic would be nice here but keeping it simple for now
-                    }
-                  }}
-                  onBlur={(e) => {
-                      onUpdateCRM({ value: parseFloat(e.target.value) });
-                  }}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
+          {/* T14 — R$ value tracker removed from the chat bar. Deal financials
+              now live exclusively in the right CRM context panel. */}
         </div>
 
-        {/* Handoff Button */}
+        {/* T14 — Hybrid handover control. When a human is in the loop, surface
+            a warning badge and make "Devolver Controle ao Agente" prominent. */}
+        {!isBotHandling && (
+          <Badge
+            variant="outline"
+            className="hidden sm:flex items-center gap-1 h-7 px-2 text-[11px] bg-amber-50 text-amber-700 ring-1 ring-amber-300/50 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20"
+          >
+            <User className="h-3 w-3" />
+            Vendedor no Loop
+          </Badge>
+        )}
         <Button
           onClick={onToggleHandoff}
-          variant={isBotHandling ? "default" : "outline"}
+          variant={isBotHandling ? "outline" : "default"}
           size="sm"
           className={cn(
             "gap-2 h-8",
-            isBotHandling && "bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-md"
+            !isBotHandling &&
+              "bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-md"
           )}
         >
           {isBotHandling ? (
@@ -273,7 +255,7 @@ export function ConversationHeader({ session, teamMembers = [], onToggleHandoff,
           ) : (
             <>
               <Bot className="h-4 w-4" />
-              <span className="hidden sm:inline">Devolver</span>
+              <span className="hidden sm:inline">Devolver Controle ao Agente</span>
             </>
           )}
         </Button>
