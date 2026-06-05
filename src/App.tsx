@@ -5,10 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { TenantProvider, useTenant } from "@/contexts/TenantContext";
-import { useTenantTheme } from "@/hooks/useTenantTheme";
+import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { TopNavbar } from "@/components/TopNavbar";
+import { AuthenticatedLayout } from "@/components/AuthenticatedLayout";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
@@ -21,7 +20,6 @@ import Billing from "./pages/Billing";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
-import AIStudio from "./pages/AIStudio";
 import AIStudioLayout from "./pages/ai-studio/AIStudioLayout";
 import UsagePage from "./pages/ai-studio/UsagePage";
 import KnowledgePage from "./pages/ai-studio/KnowledgePage";
@@ -29,29 +27,18 @@ import SkillsPage from "./pages/ai-studio/SkillsPage";
 import ChannelsPage from "./pages/ai-studio/ChannelsPage";
 import SettingsPage from "./pages/ai-studio/SettingsPage";
 import { ToolkitPage, ClubePage } from "./pages/ComingSoon";
-import { WhatsAppButton } from "./components/WhatsAppButton";
 
-const queryClient = new QueryClient();
-
-const AuthenticatedLayout = ({ children }: { children: React.ReactNode }) => {
-  const { tenant } = useTenant();
-  useTenantTheme();
-
-  return (
-    <div className="min-h-screen flex flex-col w-full bg-background">
-      <TopNavbar />
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {children}
-      </main>
-      <footer className="border-t border-border bg-card shrink-0">
-        <div className="container mx-auto px-4 py-3 text-center text-sm text-muted-foreground font-medium">
-          © 2025 Solo Ventures. Todos os direitos reservados. | {tenant.name} é uma plataforma proprietária.
-        </div>
-      </footer>
-      <WhatsAppButton />
-    </div>
-  );
-};
+// Sprint 5.2 T12 — keep query data hot between screen switches so navigating
+// (e.g. CRM -> Chat) is a layout swap, not a refetch-and-flash.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000, // 1 min: data stays fresh across navigations
+      gcTime: 5 * 60_000, // keep unmounted query cache warm for 5 min
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -63,145 +50,40 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
+                {/* Public */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/login" element={<Login />} />
+
+                {/* Authenticated shell — mounted once; children swap via <Outlet/> */}
                 <Route
-                  path="/home"
                   element={
                     <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Home />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Dashboard />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/chat"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Chat />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/crm"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <CRM />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/pipeline"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <PipelineSettings />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/webhooks"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Webhooks />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/ai-studio"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <AIStudioLayout />
-                      </AuthenticatedLayout>
+                      <AuthenticatedLayout />
                     </ProtectedRoute>
                   }
                 >
-                  <Route path="usage" element={<UsagePage />} />
-                  <Route path="knowledge" element={<KnowledgePage />} />
-                  <Route path="skills" element={<SkillsPage />} />
-                  <Route path="channels" element={<ChannelsPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="/home" element={<Home />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/chat" element={<Chat />} />
+                  <Route path="/crm" element={<CRM />} />
+                  <Route path="/pipeline" element={<PipelineSettings />} />
+                  <Route path="/webhooks" element={<Webhooks />} />
+                  <Route path="/ai-studio" element={<AIStudioLayout />}>
+                    <Route path="usage" element={<UsagePage />} />
+                    <Route path="knowledge" element={<KnowledgePage />} />
+                    <Route path="skills" element={<SkillsPage />} />
+                    <Route path="channels" element={<ChannelsPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </Route>
+                  <Route path="/billing" element={<Billing />} />
+                  <Route path="/suporte" element={<Suporte />} />
+                  <Route path="/tutorial" element={<Tutorial />} />
+                  {/* ADD ALL CUSTOM AUTHENTICATED ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/toolkit" element={<ToolkitPage />} />
+                  <Route path="/clube" element={<ClubePage />} />
                 </Route>
-                <Route
-                  path="/billing"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Billing />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/suporte"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Suporte />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/tutorial"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Tutorial />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route
-                  path="/admin"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <Admin />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/toolkit"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <ToolkitPage />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/clube"
-                  element={
-                    <ProtectedRoute>
-                      <AuthenticatedLayout>
-                        <ClubePage />
-                      </AuthenticatedLayout>
-                    </ProtectedRoute>
-                  }
-                />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
