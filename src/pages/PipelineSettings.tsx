@@ -212,6 +212,7 @@ interface PipelineEditorProps {
   onSave: (patch: {
     name?: string;
     description?: string | null;
+    cadence_days?: number | null;
     custom_fields_schema?: CustomFieldSchema[];
     card_field_ids?: string[];
   }) => void;
@@ -220,6 +221,9 @@ interface PipelineEditorProps {
 const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const [name, setName] = useState(pipeline.name);
   const [description, setDescription] = useState(pipeline.description || "");
+  const [cadenceDays, setCadenceDays] = useState(
+    pipeline.cadence_days ? String(pipeline.cadence_days) : "",
+  );
   const [schema, setSchema] = useState<CustomFieldSchema[]>(pipeline.custom_fields_schema);
   const [cardFieldIds, setCardFieldIds] = useState<string[]>(pipeline.card_field_ids);
 
@@ -229,6 +233,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const dirty =
     name !== pipeline.name ||
     (description || "") !== (pipeline.description || "") ||
+    cadenceDays !== (pipeline.cadence_days ? String(pipeline.cadence_days) : "") ||
     JSON.stringify(schema) !== JSON.stringify(pipeline.custom_fields_schema) ||
     JSON.stringify(cardFieldIds) !== JSON.stringify(pipeline.card_field_ids);
 
@@ -237,9 +242,15 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
       toast.error("Nome é obrigatório");
       return;
     }
+    const parsedCadence = cadenceDays.trim() ? Number(cadenceDays) : null;
+    if (parsedCadence !== null && (!Number.isInteger(parsedCadence) || parsedCadence <= 0)) {
+      toast.error("Cadência deve ser um número inteiro maior que zero");
+      return;
+    }
     onSave({
       name: name.trim(),
       description: description.trim() || null,
+      cadence_days: parsedCadence,
       custom_fields_schema: schema,
       card_field_ids: cardFieldIds,
     });
@@ -303,6 +314,21 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
             />
+          </div>
+          <div>
+            <Label>Cadência (dias)</Label>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              value={cadenceDays}
+              onChange={(e) => setCadenceDays(e.target.value)}
+              placeholder="Ex.: 2"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Vazio desativa o cálculo automático de próximo contato.
+            </p>
           </div>
         </CardContent>
       </Card>

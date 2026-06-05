@@ -250,16 +250,67 @@ export const DatabaseView = () => {
   );
   const { data: entitySummary = {} } = useLeadEntitySummary(filteredLeadIds);
 
-  const summarizeEnrichment = (data: Record<string, unknown> | null | undefined): string | null => {
-    if (!data) return null;
-    const fragments: string[] = [];
-    if (typeof data["job_title"] === "string" && data["job_title"]) fragments.push(String(data["job_title"]));
-    if (typeof data["linkedin_url"] === "string" && data["linkedin_url"]) fragments.push("LinkedIn");
-    if (typeof data["instagram_url"] === "string" && data["instagram_url"]) fragments.push("Instagram");
-    if (typeof data["birthday"] === "string" && data["birthday"]) fragments.push("Aniv.");
-    if (fragments.length === 0) return null;
-    return fragments.slice(0, 3).join(" · ");
-  };
+  // T6 — Raio-X de Enriquecimento: desempacotar chaves do JSONB em colunas ordenáveis
+  const enrichmentColumns = useMemo((): ColumnDef<Lead>[] => {
+    const keySet = new Set<string>();
+    filteredLeads.forEach((lead) => {
+      if (lead.personal_custom_data && typeof lead.personal_custom_data === "object") {
+        Object.keys(lead.personal_custom_data).forEach((k) => keySet.add(k));
+      }
+    });
+
+    const knownLabels: Record<string, string> = {
+      job_title: "Cargo",
+      linkedin_url: "LinkedIn",
+      instagram_url: "Instagram",
+      birthday: "Aniversário",
+      company: "Empresa",
+      website: "Site",
+      industry: "Setor",
+      location: "Localização",
+      facebook_url: "Facebook",
+      twitter_url: "Twitter",
+    };
+
+    const fmtLabel = (k: string) =>
+      knownLabels[k] ||
+      k
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
+    return Array.from(keySet).map((key) => ({
+      id: `enrichment_${key}`,
+      header: fmtLabel(key),
+      accessorFn: (row: Lead) => {
+        const data = row.personal_custom_data as Record<string, unknown> | null | undefined;
+        if (!data || data[key] === undefined || data[key] === null) return "";
+        return String(data[key]);
+      },
+      cell: ({ getValue }) => {
+        const value = getValue<string>();
+        if (!value) return <span className="text-muted-foreground">-</span>;
+        if (value.startsWith("http://") || value.startsWith("https://")) {
+          return (
+            <a
+              href={value}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline truncate block max-w-[200px]"
+              title={value}
+            >
+              {value.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+            </a>
+          );
+        }
+        return (
+          <span className="truncate block max-w-[200px]" title={value}>
+            {value}
+          </span>
+        );
+      },
+      enableSorting: true,
+    }));
+  }, [filteredLeads]);
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
     {
@@ -461,21 +512,7 @@ export const DatabaseView = () => {
         />
       ),
     },
-    {
-      id: "enrichment_summary",
-      header: "Enriquecimento IA",
-      cell: ({ row }) => {
-        const summary = summarizeEnrichment(row.original.personal_custom_data as Record<string, unknown> | null | undefined);
-        if (!summary) return <span className="text-muted-foreground">-</span>;
-        return (
-          <Badge variant="outline" className="text-[11px] gap-1 max-w-[200px] truncate" title={summary}>
-            <Sparkles className="h-3 w-3 shrink-0" />
-            <span className="truncate">{summary}</span>
-          </Badge>
-        );
-      },
-      enableSorting: false,
-    },
+    ...enrichmentColumns,
     {
       accessorKey: "observations",
       header: "Observações",
@@ -526,7 +563,7 @@ export const DatabaseView = () => {
         return <span className="text-sm">{format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>;
       },
     },
-  ], [channelOptions, entitySummary, handleUpdateField, originCategoryOptions]);
+  ], [channelOptions, entitySummary, handleUpdateField, originCategoryOptions, enrichmentColumns]);
 
   const table = useReactTable({
     data: filteredLeads,

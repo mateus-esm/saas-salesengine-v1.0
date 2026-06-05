@@ -1,8 +1,12 @@
 import { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChatSession, ConversationStatus } from "@/types/chat";
 import { ChatListItem } from "./ChatListItem";
 import { InboxBulkActions } from "./InboxBulkActions";
 import { prefetchConversationMessages } from "@/hooks/useMessages";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePipelines } from "@/hooks/usePipelines";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -52,6 +56,8 @@ const RESP_AI = "__ai__";
 const RESP_UNASSIGNED = "__unassigned__";
 
 const CHANNEL_ALL = "__all__";
+// T9 — funnel (pipeline) filter sentinel
+const FUNNEL_ALL = "__all__";
 const CHANNEL_OPTIONS = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "instagram", label: "Instagram" },
@@ -73,8 +79,31 @@ export function InboxSidebar({
   const [statusTab, setStatusTab] = useState<StatusTab>("active");
   const [channelFilter, setChannelFilter] = useState<string>(CHANNEL_ALL);
   const [responsibleFilter, setResponsibleFilter] = useState<string>(RESP_ALL);
+  const [funnelFilter, setFunnelFilter] = useState<string>(FUNNEL_ALL);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // T9 — Funnel filter. Each session carries the lead's stage_id (crmData.stage);
+  // map stage_id -> pipeline_id once so we can segment the inbox by funnel.
+  const { profile } = useAuth();
+  const { pipelines } = usePipelines();
+  const { data: stagePipelineMap } = useQuery({
+    queryKey: ["inbox_stage_pipeline_map", profile?.equipe_id],
+    enabled: !!profile?.equipe_id,
+    queryFn: async (): Promise<Record<string, string>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from("pipeline_stages_v2")
+        .select("id, pipeline_id")
+        .eq("equipe_id", profile!.equipe_id)
+        .is("deleted_at", null);
+      const map: Record<string, string> = {};
+      ((data ?? []) as { id: string; pipeline_id: string }[]).forEach((r) => {
+        map[r.id] = r.pipeline_id;
+      });
+      return map;
+    },
+  });
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -119,6 +148,13 @@ export function InboxSidebar({
     // Channel
     if (channelFilter !== CHANNEL_ALL && session.channel !== channelFilter) {
       return false;
+    }
+
+    // Funnel (T9) — derive the session's pipeline from its stage_id
+    if (funnelFilter !== FUNNEL_ALL) {
+      const stageId = session.crmData?.stage;
+      const sessionPipeline = stageId ? stagePipelineMap?.[stageId] : undefined;
+      if (sessionPipeline !== funnelFilter) return false;
     }
 
     // Responsible
@@ -260,6 +296,24 @@ export function InboxSidebar({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Funnel filter (T9) — segment the inbox by pipeline */}
+        {pipelines.length > 0 && (
+          <Select value={funnelFilter} onValueChange={setFunnelFilter}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Funil" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FUNNEL_ALL}>Todos os funis</SelectItem>
+              <SelectSeparator />
+              {pipelines.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Bulk actions bar — visible when at least one conversation is selected.

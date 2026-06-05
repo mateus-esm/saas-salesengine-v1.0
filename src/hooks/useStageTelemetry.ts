@@ -16,6 +16,10 @@ export interface StageTelemetry {
   nextContactLabel: string | null;
   /** true when next_contact is in the past. */
   nextContactOverdue: boolean;
+  /** Visual indicator state for the next contact badge. */
+  nextContactState: 'overdue' | 'today' | 'future' | null;
+  /** true when touchpointCount >= maxInteractions and maxInteractions is set. */
+  interactionsBreached: boolean;
 }
 
 interface TelemetryInputs {
@@ -23,6 +27,7 @@ interface TelemetryInputs {
   maxIdleHours: number | null;
   touchpointCount: number;
   nextContact: string | null;
+  maxInteractions?: number | null;
 }
 
 const formatDuration = (hours: number): string => {
@@ -35,25 +40,38 @@ const formatDuration = (hours: number): string => {
   return rem ? `${days}d ${rem}h` : `${days}d`;
 };
 
-const formatNextContact = (iso: string | null): { label: string | null; overdue: boolean } => {
-  if (!iso) return { label: null, overdue: false };
+const formatNextContact = (iso: string | null): { label: string | null; overdue: boolean; state: 'overdue' | 'today' | 'future' | null } => {
+  if (!iso) return { label: null, overdue: false, state: null };
 
   const target = new Date(iso);
-  if (Number.isNaN(target.getTime())) return { label: null, overdue: false };
+  if (Number.isNaN(target.getTime())) return { label: null, overdue: false, state: null };
 
   const now = new Date();
+  
+  // Set start of today to check same day and overdue properly without hour bias.
+  // Note: if next_contact is scheduled for today but at an earlier hour, is it overdue?
+  // Let's check: target.getTime() - now.getTime() < 0.
+  // Wait, if it is scheduled for today but the time has passed, it is technically overdue, which is correct.
+  // What if it is scheduled for a past day? Definitely overdue.
   const ms = target.getTime() - now.getTime();
-  if (ms < 0) return { label: "Atrasado", overdue: true };
-
   const sameDay =
     target.getFullYear() === now.getFullYear() &&
     target.getMonth() === now.getMonth() &&
     target.getDate() === now.getDate();
 
+  if (ms < 0) {
+    // If it's today but in the past, or a past day
+    return { 
+      label: sameDay ? `Atrasado (Hoje)` : "Atrasado", 
+      overdue: true, 
+      state: "overdue" 
+    };
+  }
+
   if (sameDay) {
     const hh = String(target.getHours()).padStart(2, "0");
     const mm = String(target.getMinutes()).padStart(2, "0");
-    return { label: `Hoje ${hh}:${mm}`, overdue: false };
+    return { label: `Hoje ${hh}:${mm}`, overdue: false, state: "today" };
   }
 
   const tomorrow = new Date(now);
@@ -63,9 +81,9 @@ const formatNextContact = (iso: string | null): { label: string | null; overdue:
     target.getMonth() === tomorrow.getMonth() &&
     target.getDate() === tomorrow.getDate();
 
-  if (isTomorrow) return { label: "Amanhã", overdue: false };
+  if (isTomorrow) return { label: "Amanhã", overdue: false, state: "future" };
 
-  return { label: target.toLocaleDateString("pt-BR"), overdue: false };
+  return { label: target.toLocaleDateString("pt-BR"), overdue: false, state: "future" };
 };
 
 /**
@@ -118,7 +136,12 @@ export const computeStageTelemetry = (input: TelemetryInputs): StageTelemetry =>
     typeof input.maxIdleHours === "number" &&
     input.maxIdleHours > 0 &&
     hoursInPhase >= input.maxIdleHours;
-  const { label: nextContactLabel, overdue: nextContactOverdue } = formatNextContact(input.nextContact);
+  const { label: nextContactLabel, overdue: nextContactOverdue, state: nextContactState } = formatNextContact(input.nextContact);
+
+  const interactionsBreached =
+    typeof input.maxInteractions === "number" &&
+    input.maxInteractions > 0 &&
+    input.touchpointCount >= input.maxInteractions;
 
   return {
     hoursInPhase,
@@ -127,5 +150,7 @@ export const computeStageTelemetry = (input: TelemetryInputs): StageTelemetry =>
     touchpointCount: input.touchpointCount,
     nextContactLabel,
     nextContactOverdue,
+    nextContactState,
+    interactionsBreached,
   };
 };

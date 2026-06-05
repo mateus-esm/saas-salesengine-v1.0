@@ -40,6 +40,12 @@ const STAGE_TYPES: Array<{ value: StageType; label: string }> = [
   { value: "lost", label: "Perdido" },
 ];
 
+const parsePositiveIntOrNull = (value: string) => {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
   const { stages, isLoading, createStage, updateStage, deleteStage, reorderStages } =
     usePipelineStagesV2(pipelineId);
@@ -118,7 +124,14 @@ export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
 
 interface SortableStageRowProps {
   stage: PipelineStageV2;
-  onChange: (patch: Partial<Pick<PipelineStageV2, "name" | "color" | "stage_type">>) => void;
+  onChange: (
+    patch: Partial<
+      Pick<
+        PipelineStageV2,
+        "name" | "color" | "stage_type" | "max_idle_hours" | "max_interactions"
+      >
+    >,
+  ) => void;
   onDelete: () => void;
 }
 
@@ -176,6 +189,38 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
           ))}
         </SelectContent>
       </Select>
+
+      <div className="grid w-[94px] gap-1">
+        <span className="text-[10px] leading-none text-muted-foreground">SLA (h)</span>
+        <Input
+          type="number"
+          min={1}
+          step={1}
+          inputMode="numeric"
+          value={stage.max_idle_hours ?? ""}
+          onChange={(e) =>
+            onChange({ max_idle_hours: parsePositiveIntOrNull(e.target.value) })
+          }
+          className="h-8"
+          aria-label="SLA em horas da etapa"
+        />
+      </div>
+
+      <div className="grid w-[118px] gap-1">
+        <span className="text-[10px] leading-none text-muted-foreground">Máx. interações</span>
+        <Input
+          type="number"
+          min={1}
+          step={1}
+          inputMode="numeric"
+          value={stage.max_interactions ?? ""}
+          onChange={(e) =>
+            onChange({ max_interactions: parsePositiveIntOrNull(e.target.value) })
+          }
+          className="h-8"
+          aria-label="Máximo de interações da etapa"
+        />
+      </div>
 
       <Button
         variant="ghost"

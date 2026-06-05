@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, MessageCircle, Mail, Sparkles, ChevronDown, Link2 } from "lucide-react";
+import { Trash2, MessageCircle, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useTasks } from "@/hooks/useTasks";
+import { cn } from "@/lib/utils";
 
 import {
   Dialog,
@@ -289,6 +297,36 @@ export const OpportunityDetailModal = ({
                     <PropertySection mode={{ kind: "opportunity", opportunityId: opportunity.id }} />
                   </CollapsibleContent>
                 </Collapsible>
+
+                {/* Abas Notas e Tarefas (T10) */}
+                <section className="border-t border-border/60 pt-4 space-y-3">
+                  <Tabs defaultValue="notes" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="notes">Notas</TabsTrigger>
+                      <TabsTrigger value="tasks">Tarefas</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="notes" className="pt-3">
+                      {lead?.id ? (
+                        <TouchpointsList leadId={lead.id} />
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic text-center py-4">
+                          Sem contato vinculado para ver notas.
+                        </p>
+                      )}
+                    </TabsContent>
+                    
+                    <TabsContent value="tasks" className="pt-3">
+                      {lead?.id ? (
+                        <TasksTabPane leadId={lead.id} />
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic text-center py-4">
+                          Sem contato vinculado para ver tarefas.
+                        </p>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </section>
               </div>
             </ScrollArea>
           </div>
@@ -397,3 +435,134 @@ function IdentityBlock({ lead }: { lead: Lead | undefined }) {
     </section>
   );
 }
+
+function TasksTabPane({ leadId }: { leadId: string }) {
+  const { tasks, isLoading, createTask, toggleTask, deleteTask } = useTasks(leadId);
+  const [newTitle, setNewTitle] = useState("");
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleAddTask = async () => {
+    if (!newTitle.trim()) return;
+    setIsCreating(true);
+    try {
+      let dueDateStr: string | undefined = undefined;
+      if (selectedDate) {
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        dueDateStr = `${year}-${month}-${day}`;
+      }
+      await createTask(newTitle.trim(), undefined, dueDateStr);
+      setNewTitle("");
+      setSelectedDate(undefined);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Form to create task */}
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Nova tarefa..."
+            className="h-9 flex-1 text-xs"
+            onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
+            disabled={isCreating}
+          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-24 justify-start text-left font-normal text-xs shrink-0"
+                disabled={isCreating}
+              >
+                <CalendarIcon className="mr-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-muted-foreground">
+                  {selectedDate ? format(selectedDate, "dd/MM", { locale: ptBR }) : "Prazo"}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                locale={ptBR}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          <Button
+            size="sm"
+            onClick={handleAddTask}
+            disabled={!newTitle.trim() || isCreating}
+            className="h-9 w-9 p-0 shrink-0 bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
+          >
+            {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Task List */}
+      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : tasks.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4 italic">
+            Nenhuma tarefa cadastrada.
+          </p>
+        ) : (
+          tasks.map((task) => (
+            <div
+              key={task.id}
+              className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/20 border border-border/50 group hover:bg-muted/40 hover:border-border transition-all"
+            >
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <Checkbox
+                  checked={task.status === "done"}
+                  onCheckedChange={() => toggleTask(task.id)}
+                  id={`task-check-${task.id}`}
+                  className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                />
+                <div className="min-w-0 flex-1">
+                  <label
+                    htmlFor={`task-check-${task.id}`}
+                    className={cn(
+                      "text-xs font-medium cursor-pointer block truncate text-foreground/90",
+                      task.status === "done" && "line-through text-muted-foreground"
+                    )}
+                  >
+                    {task.title}
+                  </label>
+                  {task.due_date && (
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 font-mono">
+                      <CalendarIcon className="h-2.5 w-2.5 shrink-0" />
+                      Prazo: {task.due_date.split('T')[0].split('-').reverse().join('/')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => deleteTask(task.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+

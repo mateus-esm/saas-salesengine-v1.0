@@ -132,6 +132,7 @@ export interface UpdateLeadData {
   origin_category?: OriginCategory | null;
   origin_detail?: string | null;
   personal_custom_data?: Record<string, unknown>;
+  next_contact?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────
