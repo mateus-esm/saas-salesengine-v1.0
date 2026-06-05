@@ -34,25 +34,43 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
   const [newType, setNewType] = useState<CreateTouchpointData['touchpoint_type']>('note');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
+  const toLocalDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const handleAdd = () => {
     if (!newContent.trim()) return;
-
-    // Use local date to avoid timezone issues
-    const year = selectedDate.getFullYear();
-    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(selectedDate.getDate()).padStart(2, '0');
-    const localDateString = `${year}-${month}-${day}`;
 
     createTouchpoint.mutate({
       lead_id: leadId,
       touchpoint_type: newType,
       content: newContent.trim(),
-      contact_date: localDateString,
+      contact_date: toLocalDateString(selectedDate),
     });
 
     setNewContent("");
     setSelectedDate(new Date());
   };
+
+  // Sprint 5.2 T3 — Lightning Touchpoint Switch: one click records the
+  // touchpoint with today's date and fires the cadence calculator (in the hook).
+  const handleQuickTouch = (type: CreateTouchpointData['touchpoint_type']) => {
+    createTouchpoint.mutate({
+      lead_id: leadId,
+      touchpoint_type: type,
+      content: "",
+      contact_date: toLocalDateString(new Date()),
+    });
+  };
+
+  const QUICK_TOUCH = [
+    { type: 'call' as const, label: 'Chamada', icon: Phone },
+    { type: 'whatsapp' as const, label: 'WhatsApp', icon: MessageCircle },
+    { type: 'email' as const, label: 'E-mail', icon: Mail },
+  ];
 
   const getTypeConfig = (type: string) => {
     return TOUCHPOINT_TYPES.find(t => t.value === type) || TOUCHPOINT_TYPES[4];
@@ -68,6 +86,23 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
 
   return (
     <div className="space-y-3">
+      {/* QuickTouch toolbar (T3) — one-click modality logging */}
+      <div className="flex gap-1.5">
+        {QUICK_TOUCH.map(({ type, label, icon: Icon }) => (
+          <Button
+            key={type}
+            variant="outline"
+            size="sm"
+            className="h-9 flex-1 gap-1.5"
+            onClick={() => handleQuickTouch(type)}
+            disabled={createTouchpoint.isPending}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            <span className="text-xs">{label}</span>
+          </Button>
+        ))}
+      </div>
+
       {/* Quick Add Form */}
       <div className="space-y-2">
         <div className="flex gap-2">

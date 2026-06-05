@@ -5,6 +5,56 @@ import { toast } from "sonner";
 import { useEffect } from "react";
 import { Touchpoint } from "@/types/crm";
 
+// Sprint 5.2 T3: cadence lookups traverse opportunities -> pipelines.cadence_days.
+// Same escape hatch used across the CRM hooks while generated nested types lag.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
+
+/**
+ * Sprint 5.2 T3 — Cadence Shift Linkage.
+ *
+ * Resolves the lead's active pipeline cadence and, when set, atomically pushes
+ * `leads.next_contact` to `today + cadence_days`. Done here (not via a prop on
+ * TouchpointsList) so the touchpoint callers — including T10's
+ * OpportunityDetailModal in the same wave — stay untouched.
+ */
+async function applyCadenceShift(leadId: string): Promise<boolean> {
+  const { data: opp } = await sb
+    .from("opportunities")
+    .select("pipeline_id")
+    .eq("lead_id", leadId)
+    .is("deleted_at", null)
+    .neq("status", "lost")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!opp?.pipeline_id) return false;
+
+  const { data: pipeline } = await sb
+    .from("pipelines")
+    .select("cadence_days")
+    .eq("id", opp.pipeline_id)
+    .maybeSingle();
+
+  const cadenceDays = pipeline?.cadence_days ?? null;
+  if (!cadenceDays || cadenceDays <= 0) return false;
+
+  // Local-date formatting to match the rest of the CRM (avoids TZ drift).
+  const next = new Date();
+  next.setDate(next.getDate() + cadenceDays);
+  const year = next.getFullYear();
+  const month = String(next.getMonth() + 1).padStart(2, "0");
+  const day = String(next.getDate()).padStart(2, "0");
+
+  const { error } = await sb
+    .from("leads")
+    .update({ next_contact: `${year}-${month}-${day}` })
+    .eq("id", leadId);
+
+  return !error;
+}
+
 export interface CreateTouchpointData {
   lead_id: string;
   touchpoint_type: 'call' | 'email' | 'whatsapp' | 'meeting' | 'note';
@@ -79,11 +129,18 @@ export const useTouchpoints = (leadId?: string) => {
         .single();
 
       if (error) throw error;
-      return result;
+
+      // T3: fire the cadence calculator immediately after the touchpoint lands.
+      const cadenceShifted = await applyCadenceShift(data.lead_id);
+
+      return { result, cadenceShifted };
     },
-    onSuccess: () => {
+    onSuccess: ({ cadenceShifted }) => {
       queryClient.invalidateQueries({ queryKey: ["touchpoints", leadId] });
-      toast.success("Touchpoint registrado!");
+      // Refresh card/grid surfaces so the new next_contact paints right away.
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      toast.success(cadenceShifted ? "Touchpoint registrado — próximo contato atualizado!" : "Touchpoint registrado!");
     },
     onError: (error) => {
       toast.error("Erro ao registrar: " + error.message);

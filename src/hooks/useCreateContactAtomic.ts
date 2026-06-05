@@ -8,6 +8,75 @@ import type { OriginCategory } from "@/types/crm";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
+export type RelationalLinkKind = "company" | "property";
+
+/**
+ * Sprint 5.2 T7 — canonical contact-ledger persistence path.
+ *
+ * Upserts a company/property relationship onto the ledger tables that
+ * Base de Contatos reads (`contact_company_links` / `property_owner_links` via
+ * useLeadEntitySummary). Linking inside a pipeline used to write only
+ * `opportunity_links`, so the relationship never surfaced in the contacts grid.
+ *
+ * Idempotent: reactivates a soft-deleted row instead of inserting a duplicate.
+ */
+export async function linkEntityToContact(params: {
+  equipeId: string;
+  contactId: string;
+  kind: RelationalLinkKind;
+  entityId: string;
+}): Promise<void> {
+  const { equipeId, contactId, kind, entityId } = params;
+  const table = kind === "company" ? "contact_company_links" : "property_owner_links";
+  const match =
+    kind === "company"
+      ? { contact_id: contactId, company_id: entityId }
+      : { owner_id: contactId, owner_type: "contact", property_id: entityId };
+
+  let existingQuery = sb.from(table).select("id, deleted_at").eq("equipe_id", equipeId);
+  for (const [col, val] of Object.entries(match)) {
+    existingQuery = existingQuery.eq(col, val);
+  }
+  const { data: existing } = await existingQuery.limit(1).maybeSingle();
+
+  if (existing?.id) {
+    if (existing.deleted_at) {
+      const { error } = await sb.from(table).update({ deleted_at: null }).eq("id", existing.id);
+      if (error) throw error;
+    }
+    return;
+  }
+
+  const { error } = await sb.from(table).insert({ equipe_id: equipeId, ...match });
+  if (error) throw error;
+}
+
+/**
+ * Sprint 5.2 T7 — inverse of linkEntityToContact (soft delete).
+ * Callers must first confirm no other active link still justifies the
+ * relationship before removing it from the contact ledger.
+ */
+export async function unlinkEntityFromContact(params: {
+  equipeId: string;
+  contactId: string;
+  kind: RelationalLinkKind;
+  entityId: string;
+}): Promise<void> {
+  const { equipeId, contactId, kind, entityId } = params;
+  const table = kind === "company" ? "contact_company_links" : "property_owner_links";
+  const match =
+    kind === "company"
+      ? { contact_id: contactId, company_id: entityId }
+      : { owner_id: contactId, owner_type: "contact", property_id: entityId };
+
+  let query = sb.from(table).update({ deleted_at: new Date().toISOString() }).eq("equipe_id", equipeId);
+  for (const [col, val] of Object.entries(match)) {
+    query = query.eq(col, val);
+  }
+  const { error } = await query.is("deleted_at", null);
+  if (error) throw error;
+}
+
 interface ContactPayload {
   name: string;
   email?: string;

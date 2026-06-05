@@ -3,6 +3,11 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  linkEntityToContact,
+  unlinkEntityFromContact,
+  type RelationalLinkKind,
+} from "@/hooks/useCreateContactAtomic";
 
 // Sprint 4 EPIC 1 introduced opportunity_links; generated DB types lag the
 // migration. Same escape hatch as useOpportunities.
@@ -51,6 +56,57 @@ export const useOpportunityLinks = (opportunityId: string | null | undefined) =>
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["opportunity_links"] });
+    // T7: keep Base de Contatos relationship badges in sync after a cascade.
+    queryClient.invalidateQueries({ queryKey: ["lead_entity_summary"] });
+  };
+
+  // T7 — resolve the opportunity's underlying contact (lead) for ledger cascade.
+  const resolveContactId = async (oppId: string): Promise<string | null> => {
+    const { data } = await sb.from("opportunities").select("lead_id").eq("id", oppId).maybeSingle();
+    return data?.lead_id ?? null;
+  };
+
+  // T7 — mirror a company/property link onto the contact ledger so it shows up
+  // in the Base de Contatos grid. Contact-type links don't belong in the ledger.
+  const cascadeLink = async (oppId: string, type: OpportunityLinkType, linkedId: string) => {
+    if ((type !== "company" && type !== "property") || !equipeId) return;
+    const contactId = await resolveContactId(oppId);
+    if (!contactId) return;
+    await linkEntityToContact({ equipeId, contactId, kind: type as RelationalLinkKind, entityId: linkedId });
+  };
+
+  // T7 — only retract the ledger link when NO other active opportunity of the
+  // same contact still references that entity (avoids clobbering a relationship
+  // the contact legitimately holds via another deal).
+  const cascadeUnlink = async (oppId: string, type: OpportunityLinkType, linkedId: string) => {
+    if ((type !== "company" && type !== "property") || !equipeId) return;
+    const contactId = await resolveContactId(oppId);
+    if (!contactId) return;
+
+    const { data: opps } = await sb
+      .from("opportunities")
+      .select("id")
+      .eq("equipe_id", equipeId)
+      .eq("lead_id", contactId)
+      .is("deleted_at", null);
+    const oppIds = ((opps ?? []) as { id: string }[]).map((o) => o.id);
+
+    let stillLinked = false;
+    if (oppIds.length > 0) {
+      const { data: others } = await sb
+        .from(TABLE)
+        .select("id")
+        .eq("equipe_id", equipeId)
+        .eq("linked_type", type)
+        .eq("linked_id", linkedId)
+        .in("opportunity_id", oppIds)
+        .is("deleted_at", null);
+      stillLinked = ((others ?? []) as unknown[]).length > 0;
+    }
+
+    if (!stillLinked) {
+      await unlinkEntityFromContact({ equipeId, contactId, kind: type as RelationalLinkKind, entityId: linkedId });
+    }
   };
 
   const linkEntity = useMutation({
@@ -73,6 +129,10 @@ export const useOpportunityLinks = (opportunityId: string | null | undefined) =>
         .select()
         .single();
       if (error) throw error;
+
+      // T7: cascade the new link down to the contact ledger.
+      await cascadeLink(input.opportunity_id, input.linked_type, input.linked_id);
+
       return data as OpportunityLink;
     },
     onSuccess: () => {
@@ -84,11 +144,23 @@ export const useOpportunityLinks = (opportunityId: string | null | undefined) =>
 
   const unlinkEntity = useMutation({
     mutationFn: async (id: string) => {
+      // Capture the link shape before soft-deleting so we can cascade.
+      const { data: link } = await sb
+        .from(TABLE)
+        .select("opportunity_id, linked_type, linked_id")
+        .eq("id", id)
+        .maybeSingle();
+
       const { error } = await sb
         .from(TABLE)
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
       if (error) throw error;
+
+      // T7: retract the ledger link if no other active deal still needs it.
+      if (link) {
+        await cascadeUnlink(link.opportunity_id, link.linked_type, link.linked_id);
+      }
     },
     onSuccess: () => {
       invalidate();
