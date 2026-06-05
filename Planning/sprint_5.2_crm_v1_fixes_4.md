@@ -230,8 +230,8 @@ is bulletproof and ready for the **Agno Python Agent Core** setup!
 | T8  | 2.3(UI)         | Editor de taxonomia Origem/Canal (add/edit/color)               | L    | **Verboo / MiniMax** | `src/components/crm/pipeline-settings/OriginTaxonomyEditor.tsx` _(novo)_, `src/pages/PipelineSettings.tsx`     | `verboo/sprint5.2/epic2/taxonomy-editor`          | [x]    |
 | T11 | 1.2/2.1(surface)| Consumir telemetria no card e na tabela (badge + alerta de breach) | L | Gemini             | `src/components/crm/OpportunityCard.tsx`, `src/components/crm/CardTelemetryPillars.tsx`, `src/components/crm/OpportunityTable.tsx` | `gemini/sprint5.2/epic2/telemetry-surface`        | [x]    |
 | T12 | 3.4             | Roteamento zero-reload (rota de layout + Outlet + cache tuning)  | XL   | Claude / Opus        | `src/App.tsx`, `src/components/AuthenticatedLayout.tsx` _(novo)_                                              | `claude/sprint5.2/epic3/zero-reload-routing`      | [x]    |
-| T13 | 2.2(page)       | PÃ¡gina mestre de Tarefas no sidebar + rota + nav                | L    | Claude / Opus        | `src/pages/Tasks.tsx` _(novo)_, `src/hooks/useAllTasks.ts` _(novo)_, `src/App.tsx`, `src/components/TopNavbar.tsx` | `claude/sprint5.2/epic2/master-task-page`         | [ ]    |
-| T14 | 3.3             | Limpeza do chat + switch de handover hÃ­brido (`Vendedor no Loop`)| L    | Claude / Opus        | `src/components/inbox/ConversationHeader.tsx`, `src/components/inbox/CRMContextPanel.tsx`, `src/pages/Chat.tsx` | `claude/sprint5.2/epic3/chat-declutter-handover`  | [ ]    |
+| T13 | 2.2(page)       | PÃ¡gina mestre de Tarefas no sidebar + rota + nav                | L    | Claude / Opus        | `src/pages/Tasks.tsx` _(novo)_, `src/hooks/useAllTasks.ts` _(novo)_, `src/App.tsx`, `src/components/TopNavbar.tsx` | `claude/sprint5.2/epic2/master-task-page`         | [x]    |
+| T14 | 3.3             | Limpeza do chat + switch de handover hÃ­brido (`Vendedor no Loop`)| L    | Claude / Opus        | `src/components/inbox/ConversationHeader.tsx`, `src/components/inbox/CRMContextPanel.tsx`, `src/pages/Chat.tsx` | `claude/sprint5.2/epic3/chat-declutter-handover`  | [x]    |
 | T15 | 3.2             | BotÃ£o "Sales Engine Chat Route" (foco no chat / cria thread)    | L    | Claude / Opus        | `src/pages/Chat.tsx`, `src/components/crm/ContactDetailsModal.tsx`, `src/components/crm/DatabaseView.tsx`, `src/components/inbox/CRMContextPanel.tsx` | `claude/sprint5.2/epic3/zero-friction-chat-link`  | [ ]    |
 | T16 | DoD             | Auditoria de aceite (evidÃªncia de cÃ³digo) + fechamento da sprint | S    | Claude / Opus (PM)   | _read-only_ + `Planning/sprint_5.2_crm_v1_fixes_4.md`, `Planning/billing.md`                                | `claude/sprint5.2/dod/acceptance-audit`           | [ ]    |
 
@@ -448,8 +448,8 @@ Wave 2 ele roda T6 e T9 em sequÃªncia (sem pressa â€” token custo zero).*
 | 2026-06-04 | T8 taxonomy editor UI          | Verboo/MiniMax | L  | R$ 20 |
 | 2026-06-04 | T11 telemetry surface          | Gemini         | L  | R$ 20 |
 | 2026-06-04 | T12 zero-reload routing        | Claude / Opus  | XL | R$ 28 |
-|      | T13 master task page           | Claude / Opus  | L  | R$ 20 |
-|      | T14 chat declutter/handover    | Claude / Opus  | L  | R$ 20 |
+| 2026-06-04 | T13 master task page           | Claude / Opus  | L  | R$ 20 |
+| 2026-06-04 | T14 chat declutter/handover    | Claude / Opus  | L  | R$ 20 |
 |      | T15 zero-friction chat link    | Claude / Opus  | L  | R$ 20 |
 |      | T16 DoD audit                  | Claude / Opus  | S  | R$ 5  |
 | **Total estimado** |                  |                |    | **R$ 281** |
