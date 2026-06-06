@@ -6,6 +6,14 @@ verify_jwt = false
 [functions.crm-webhook]
 verify_jwt = false
 
+# Sprint 5.3 T6 — external task creation, authed via x-webhook-secret.
+[functions.tasks-api]
+verify_jwt = false
+
+# Sprint 5.3 T8 — scheduled cadence/SLA breach checker.
+[functions.cadence-check]
+verify_jwt = false
+
 [functions.process-automations]
 verify_jwt = false
 
