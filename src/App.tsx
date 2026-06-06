@@ -12,7 +12,6 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import CRM from "./pages/CRM";
-import Tasks from "./pages/Tasks";
 import PipelineSettings from "./pages/PipelineSettings";
 import Webhooks from "./pages/Webhooks";
 import Suporte from "./pages/Suporte";
@@ -67,6 +66,7 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/crm" element={<CRM />} />
+                  {/* Tasks live inside CRM now; keep this redirect for old links/bookmarks. */}
                   <Route path="/tasks" element={<Navigate to="/crm?tab=tasks" replace />} />
                   <Route path="/pipeline" element={<PipelineSettings />} />
                   <Route path="/webhooks" element={<Webhooks />} />
