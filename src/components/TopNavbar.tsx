@@ -4,7 +4,6 @@ import {
   Home,
   MessageCircle,
   LayoutDashboard,
-  ListChecks,
   HelpCircle,
   ExternalLink,
   CreditCard,
@@ -56,7 +55,6 @@ export function TopNavbar() {
       external: isExternalChatLink,
     },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
-    { title: "Tarefas", url: "/tasks", icon: ListChecks, external: false },
     {
       title: "AI Studio",
       url: "/ai-studio",
