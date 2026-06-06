@@ -1,12 +1,39 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { User } from "lucide-react";
+import { MessageSquarePlus, MessageSquareText, User } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useLogTouchpoint, type CreateTouchpointData } from "@/hooks/useTouchpoints";
 import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { CardTelemetryPillars } from "./CardTelemetryPillars";
+
+type TouchpointType = CreateTouchpointData["touchpoint_type"];
+
+const TOUCHPOINT_TYPES: { value: TouchpointType; label: string }[] = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "call", label: "Ligação" },
+  { value: "email", label: "Email" },
+  { value: "meeting", label: "Reunião" },
+  { value: "note", label: "Nota" },
+];
 
 export interface NativeCardFlags {
   value: boolean;
@@ -144,6 +171,105 @@ export const OpportunityCard = ({
           })}
         </div>
       )}
+
+      {/* Sprint 5.3 — card footer actions: open chat + quick-log a touchpoint */}
+      {!isDragOverlay && lead?.id && (
+        <CardQuickActions leadId={lead.id} />
+      )}
     </div>
   );
 };
+
+/** Stop drag/open propagation so footer controls don't move or open the card. */
+const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
+function CardQuickActions({ leadId }: { leadId: string }) {
+  const navigate = useNavigate();
+  const logTouchpoint = useLogTouchpoint();
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<TouchpointType>("whatsapp");
+  const [content, setContent] = useState("");
+
+  const register = () => {
+    logTouchpoint.mutate(
+      { lead_id: leadId, touchpoint_type: type, content: content.trim() || TOUCHPOINT_TYPES.find((t) => t.value === type)!.label },
+      {
+        onSuccess: () => {
+          setContent("");
+          setOpen(false);
+        },
+      },
+    );
+  };
+
+  return (
+    <div
+      className="flex items-center gap-1 pt-1.5 border-t border-border/60"
+      onClick={stop}
+      onPointerDown={stop}
+    >
+      <button
+        type="button"
+        onClick={() => navigate(`/chat?contact=${leadId}`)}
+        className="flex-1 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+        title="Abrir conversa no Sales Engine"
+      >
+        <MessageSquareText className="h-3 w-3 shrink-0" />
+        Chat
+      </button>
+
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex-1 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-muted-foreground bg-muted/60 hover:bg-muted transition-colors"
+            title="Registrar touchpoint"
+          >
+            <MessageSquarePlus className="h-3 w-3 shrink-0" />
+            Touchpoint
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="w-60 space-y-2"
+          onClick={stop}
+          onPointerDown={stop}
+        >
+          <p className="text-xs font-medium">Registrar touchpoint</p>
+          <Select value={type} onValueChange={(v) => setType(v as TouchpointType)}>
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TOUCHPOINT_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Nota (opcional)…"
+            className="h-8"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                register();
+              }
+            }}
+          />
+          <Button
+            size="sm"
+            className="w-full h-8"
+            onClick={register}
+            disabled={logTouchpoint.isPending}
+          >
+            Registrar
+          </Button>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}

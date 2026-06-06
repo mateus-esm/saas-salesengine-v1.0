@@ -13,6 +13,7 @@ import {
 import { useLeads, Lead } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
+import { CONTACT_ENRICHMENT_SCHEMA } from "@/config/contactEnrichmentSchema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -264,15 +265,26 @@ export const DatabaseView = () => {
   const { data: entitySummary = {} } = useLeadEntitySummary(filteredLeadIds);
 
   // T6 — Raio-X de Enriquecimento: desempacotar chaves do JSONB em colunas ordenáveis
+  // Sprint 5.3 T11 — seed with the canonical enrichment schema so the columns
+  // ALWAYS appear (populated when data exists, "-" otherwise), then union any
+  // extra keys discovered in the data for forward-compatibility.
   const enrichmentColumns = useMemo((): ColumnDef<Lead>[] => {
     const keySet = new Set<string>();
+    CONTACT_ENRICHMENT_SCHEMA.forEach((f) => {
+      if (!f.is_deleted) keySet.add(f.key);
+    });
     filteredLeads.forEach((lead) => {
       if (lead.personal_custom_data && typeof lead.personal_custom_data === "object") {
         Object.keys(lead.personal_custom_data).forEach((k) => keySet.add(k));
       }
     });
 
+    const schemaLabels: Record<string, string> = Object.fromEntries(
+      CONTACT_ENRICHMENT_SCHEMA.map((f) => [f.key, f.label]),
+    );
+
     const knownLabels: Record<string, string> = {
+      ...schemaLabels,
       job_title: "Cargo",
       linkedin_url: "LinkedIn",
       instagram_url: "Instagram",
@@ -691,7 +703,11 @@ export const DatabaseView = () => {
               .filter((col) => col.getCanHide())
               .map((col) => ({
                 id: col.id,
-                label: COLUMN_LABELS[col.id] || col.id,
+                label:
+                  COLUMN_LABELS[col.id] ||
+                  (typeof col.columnDef.header === "string"
+                    ? col.columnDef.header
+                    : col.id),
                 visible: col.getIsVisible(),
               }))}
             onToggle={(id, visible) => table.getColumn(id)?.toggleVisibility(visible)}

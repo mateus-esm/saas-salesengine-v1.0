@@ -925,14 +925,14 @@ const Admin = () => {
                     <div className="space-y-2">
                       <Label>Nicho</Label>
                       <Select
-                        value={editingEquipe.niche || ""}
-                        onValueChange={(v) => setEditingEquipe({ ...editingEquipe, niche: v || null })}
+                        value={editingEquipe.niche || "__none__"}
+                        onValueChange={(v) => setEditingEquipe({ ...editingEquipe, niche: v === "__none__" ? null : v })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecionar nicho…" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">— Nenhum —</SelectItem>
+                          <SelectItem value="__none__">— Nenhum —</SelectItem>
                           {niches.map((n) => (
                             <SelectItem key={n.id} value={n.id}>{n.nome} ({n.id})</SelectItem>
                           ))}

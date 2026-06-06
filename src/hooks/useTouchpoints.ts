@@ -89,6 +89,44 @@ export interface CreateTouchpointData {
   contact_date?: string;
 }
 
+/**
+ * Sprint 5.3 — mutation-only touchpoint logger for high-density surfaces
+ * (Kanban cards). Unlike useTouchpoints it runs no per-lead list query or
+ * realtime channel, so dozens of cards can mount it cheaply. Still applies the
+ * cadence shift and refreshes card/grid caches.
+ */
+export const useLogTouchpoint = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateTouchpointData) => {
+      if (!profile?.id) throw new Error("Usuário não autenticado");
+      const { error } = await supabase.from("touchpoints").insert({
+        lead_id: data.lead_id,
+        user_id: profile.id,
+        touchpoint_type: data.touchpoint_type,
+        content: data.content,
+        contact_date: data.contact_date || new Date().toISOString().split("T")[0],
+      });
+      if (error) throw error;
+      const cadenceShifted = await applyCadenceShift(data.lead_id);
+      return { cadenceShifted };
+    },
+    onSuccess: ({ cadenceShifted }, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["touchpoints", vars.lead_id] });
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      toast.success(
+        cadenceShifted
+          ? "Touchpoint registrado — próximo contato atualizado!"
+          : "Touchpoint registrado!",
+      );
+    },
+    onError: (error: Error) => toast.error("Erro ao registrar: " + error.message),
+  });
+};
+
 export const useTouchpoints = (leadId?: string) => {
   const { profile } = useAuth();
   const queryClient = useQueryClient();

@@ -11,7 +11,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Clock, Loader2, MessageSquare, Trash2, X } from "lucide-react";
+import { ArrowUpDown, Building2, Clock, Home, Loader2, MessageSquare, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/table";
 
 import { useLeads } from "@/hooks/useLeads";
+import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -123,6 +124,9 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   // stage_type (open/won/lost) already conveys the same information.
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     status: false,
+    // Sprint 5.3 — relation-table columns start hidden; users opt in via "Colunas".
+    company_link: false,
+    property_count: false,
   });
 
   /** Sprint 5.3 T9 — human-readable labels for the column visibility toggle.
@@ -136,6 +140,9 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     touchpoints: "Interações",
     status: "Status",
     updated: "Atualizada",
+    // Sprint 5.3 — columns sourced from related tables (companies / properties).
+    company_link: "Empresa",
+    property_count: "Imóveis",
   };
 
   // Sprint 4 EPIC 2 §2.3 — same `?opp=<id>` deep-link contract as the Kanban.
@@ -203,6 +210,14 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
       }));
   }, [opportunities, leadsById, stagesById, stageFilter, statusFilter, globalFilter]);
 
+  // Sprint 5.3 — relation-table data (linked company + property counts) for the
+  // optional Empresa/Imóveis columns. Batched once for the visible leads.
+  const rowLeadIds = useMemo(
+    () => rows.map((r) => r.lead?.id).filter((id): id is string => !!id),
+    [rows],
+  );
+  const { data: entitySummary = {} } = useLeadEntitySummary(rowLeadIds);
+
   const columns = useMemo<ColumnDef<Row>[]>(() => {
     const fixed: ColumnDef<Row>[] = [
       {
@@ -247,6 +262,43 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             {formatDisplayName(row.original.lead?.name, row.original.lead?.phone, "[Novo Contato - WhatsApp]")}
           </span>
         ),
+      },
+      {
+        // Sprint 5.3 — relation column: primary linked company
+        id: "company_link",
+        header: "Empresa",
+        accessorFn: (r) => (r.lead?.id ? entitySummary[r.lead.id]?.companyName ?? "" : ""),
+        cell: ({ row }) => {
+          const s = row.original.lead?.id ? entitySummary[row.original.lead.id] : undefined;
+          if (!s?.companyName) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span className="inline-flex items-center gap-1.5 text-sm">
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="truncate max-w-[160px]">{s.companyName}</span>
+              {s.companyCount > 1 && (
+                <span className="text-xs text-muted-foreground">+{s.companyCount - 1}</span>
+              )}
+            </span>
+          );
+        },
+      },
+      {
+        // Sprint 5.3 — relation column: linked property count
+        id: "property_count",
+        header: "Imóveis",
+        accessorFn: (r) => (r.lead?.id ? entitySummary[r.lead.id]?.propertyCount ?? 0 : 0),
+        cell: ({ row }) => {
+          const count = row.original.lead?.id
+            ? entitySummary[row.original.lead.id]?.propertyCount ?? 0
+            : 0;
+          if (!count) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span className="inline-flex items-center gap-1.5 text-sm">
+              <Home className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              {count}
+            </span>
+          );
+        },
       },
       {
         id: "value",
@@ -400,7 +452,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     }));
 
     return [...fixed, ...dynamic];
-  }, [schema, stages, touchpointCounts, updateOpportunity]);
+  }, [schema, stages, touchpointCounts, updateOpportunity, entitySummary]);
 
   const table = useReactTable({
     data: rows,

@@ -44,6 +44,10 @@ const CRM_FIELDS = [
   { key: "tags", label: "Tags (separadas por vírgula)", required: false },
 ];
 
+// Radix Select forbids empty-string item values; use a sentinel for "unmapped"
+// and store "" downstream so the import logic keeps treating it as falsy.
+const NONE = "__none__";
+
 export const ImportModal = ({
   open,
   onClose,
@@ -224,16 +228,19 @@ export const ImportModal = ({
                       {field.required && <span className="text-destructive">*</span>}
                     </Label>
                     <Select
-                      value={columnMapping[field.key] || ""}
+                      value={columnMapping[field.key] || NONE}
                       onValueChange={(value) =>
-                        setColumnMapping({ ...columnMapping, [field.key]: value })
+                        setColumnMapping({
+                          ...columnMapping,
+                          [field.key]: value === NONE ? "" : value,
+                        })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecionar coluna..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Não mapear</SelectItem>
+                        <SelectItem value={NONE}>Não mapear</SelectItem>
                         {csvHeaders.map((header) => (
                           <SelectItem key={header} value={header}>
                             {header}

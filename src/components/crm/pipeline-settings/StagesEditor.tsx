@@ -267,16 +267,16 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
             placeholder="—"
           />
           <Select
-            value={stage.cadence_unit ?? ""}
+            value={stage.cadence_unit ?? NONE}
             onValueChange={(v) =>
-              onChange({ cadence_unit: v === "" ? null : v as 'hours' | 'days' })
+              onChange({ cadence_unit: v === NONE ? null : (v as 'hours' | 'days') })
             }
           >
             <SelectTrigger className="h-8 w-[44px] px-1">
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">—</SelectItem>
+              <SelectItem value={NONE}>—</SelectItem>
               <SelectItem value="hours">h</SelectItem>
               <SelectItem value="days">d</SelectItem>
             </SelectContent>

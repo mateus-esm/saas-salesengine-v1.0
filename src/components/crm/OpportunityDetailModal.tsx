@@ -399,9 +399,23 @@ function IdentityBlock({ lead }: { lead: Lead | undefined }) {
         Identidade Conectada
       </h4>
       <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-        <p className="text-sm font-semibold leading-tight">
-          {formatDisplayName(lead.name, lead.phone, "[Novo Contato - WhatsApp]")}
-        </p>
+        {/* Sprint 5.3 — name + primary Chat action aligned on the header row */}
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold leading-tight min-w-0">
+            {formatDisplayName(lead.name, lead.phone, "[Novo Contato - WhatsApp]")}
+          </p>
+          {lead.id && (
+            <Button
+              size="sm"
+              className="h-7 shrink-0 gap-1.5 px-2.5"
+              onClick={() => navigate(`/chat?contact=${lead.id}`)}
+              title="Abrir conversa no Sales Engine"
+            >
+              <MessageSquareText className="h-3.5 w-3.5 shrink-0" />
+              Chat
+            </Button>
+          )}
+        </div>
 
         {lead.phone && waDigits && (
           <a
@@ -421,18 +435,6 @@ function IdentityBlock({ lead }: { lead: Lead | undefined }) {
             <Mail className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{lead.email}</span>
           </div>
-        )}
-
-        {/* Sprint 5.3 T13 — Chat gate from opportunity detail */}
-        {lead.id && (
-          <button
-            onClick={() => navigate(`/chat?contact=${lead.id}`)}
-            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-            title="Abrir conversa no Sales Engine"
-          >
-            <MessageSquareText className="h-3.5 w-3.5 shrink-0" />
-            Ir para o Chat
-          </button>
         )}
 
         {enrichment.length > 0 && (
