@@ -46,6 +46,7 @@ export interface ChatSession {
     email?: string;
     company?: string;
     position?: string;
+    next_contact?: string | null;
   };
   messages: Message[];
 }
@@ -53,6 +54,8 @@ export interface ChatSession {
 export interface Task {
   id: string;
   title: string;
-  completed: boolean;
+  /** Sprint 5.3 T3 — full status model (a_fazer | fazendo | feito | parado). */
+  status: string;
+  due_date: string | null;
   createdAt: Date;
 }

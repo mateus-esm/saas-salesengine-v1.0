@@ -67,7 +67,7 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/crm" element={<CRM />} />
-                  <Route path="/tasks" element={<Tasks />} />
+                  <Route path="/tasks" element={<Navigate to="/crm?tab=tasks" replace />} />
                   <Route path="/pipeline" element={<PipelineSettings />} />
                   <Route path="/webhooks" element={<Webhooks />} />
                   <Route path="/ai-studio" element={<AIStudioLayout />}>

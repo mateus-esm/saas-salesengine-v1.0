@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Loader2, Star, StarOff, Trash2, Users } from "lucide-react";
+import { Building2, Loader2, MessageSquareText, Star, StarOff, Trash2, Users } from "lucide-react";
 
 import {
   Dialog,
@@ -237,6 +238,7 @@ export const CompanyDetailModal = ({
 // ─────────────────────────────────────────────────────────────────────
 
 const CompanyContactsSection = ({ companyId }: { companyId: string }) => {
+  const navigate = useNavigate();
   const { profile } = useAuth();
   const equipeId = profile?.equipe_id;
   const { links, isLoading, link, unlink, updateRole, setPrimary } =
@@ -330,6 +332,20 @@ const CompanyContactsSection = ({ companyId }: { companyId: string }) => {
                     </div>
                   )}
                 </button>
+
+                {/* Sprint 5.3 T13 — Chat gate from company contacts */}
+                {contact?.id && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    onClick={() => navigate(`/chat?contact=${contact.id}`)}
+                    title="Ir para o Chat"
+                  >
+                    <MessageSquareText className="h-3.5 w-3.5" />
+                  </Button>
+                )}
 
                 <Select
                   value={lnk.role}

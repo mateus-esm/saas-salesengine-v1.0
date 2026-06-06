@@ -29,10 +29,15 @@ const TOUCHPOINT_TYPES = [
 ] as const;
 
 export function TouchpointsList({ leadId }: TouchpointsListProps) {
-  const { touchpoints, isLoading, createTouchpoint, deleteTouchpoint } = useTouchpoints(leadId);
+  const { touchpoints, isLoading, createTouchpoint, updateTouchpoint, deleteTouchpoint } = useTouchpoints(leadId);
   const [newContent, setNewContent] = useState("");
   const [newType, setNewType] = useState<CreateTouchpointData['touchpoint_type']>('note');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Sprint 5.3 T12 — inline editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editDate, setEditDate] = useState<Date | null>(null);
 
   const toLocalDateString = (date: Date) => {
     const year = date.getFullYear();
@@ -64,6 +69,28 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
       content: "",
       contact_date: toLocalDateString(new Date()),
     });
+  };
+
+  // Sprint 5.3 T12 — inline editing handlers
+  const startEditing = (tp: typeof touchpoints[number]) => {
+    setEditingId(tp.id);
+    setEditContent(tp.content);
+    setEditDate(new Date(tp.contact_date.split('T')[0]));
+  };
+
+  const saveEdit = (id: string) => {
+    if (editContent !== undefined || editDate) {
+      updateTouchpoint.mutate({
+        id,
+        ...(editContent !== undefined ? { content: editContent } : {}),
+        ...(editDate ? { contact_date: toLocalDateString(editDate) } : {}),
+      } as const);
+    }
+    setEditingId(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
   };
 
   const QUICK_TOUCH = [
@@ -174,6 +201,7 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
           touchpoints.map((tp) => {
             const config = getTypeConfig(tp.touchpoint_type);
             const Icon = config.icon;
+            const isEditing = editingId === tp.id;
 
             return (
               <div
@@ -184,7 +212,27 @@ export function TouchpointsList({ leadId }: TouchpointsListProps) {
                   <Icon className="h-3 w-3" />
                 </Badge>
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-sm text-foreground break-words whitespace-pre-wrap">{tp.content}</p>
+                  {isEditing ? (
+                    <Input
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="h-7 text-sm mb-1"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit(tp.id);
+                        if (e.key === 'Escape') cancelEditing();
+                      }}
+                      onBlur={() => saveEdit(tp.id)}
+                      autoFocus
+                    />
+                  ) : (
+                    <p
+                      className="text-sm text-foreground break-words whitespace-pre-wrap cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => startEditing(tp)}
+                      title="Clique para editar"
+                    >
+                      {tp.content || <span className="italic text-muted-foreground text-xs">Sem conteúdo</span>}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {/* Parse date as local to avoid timezone shift */}
                     {tp.contact_date.split('T')[0].split('-').reverse().join('/')}

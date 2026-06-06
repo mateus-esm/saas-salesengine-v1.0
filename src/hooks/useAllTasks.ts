@@ -49,7 +49,7 @@ export const useAllTasks = () => {
         title: r.title as string,
         description: (r.description as string | null) ?? null,
         due_date: (r.due_date as string | null) ?? null,
-        status: (r.status as string | null) ?? "pending",
+        status: (r.status as string | null) ?? "a_fazer",
         assigned_to: (r.assigned_to as string | null) ?? null,
         lead_id: r.lead_id as string,
         leadName: ((r.lead as { name?: string } | null)?.name as string | undefined) ?? null,

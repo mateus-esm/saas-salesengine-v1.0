@@ -4,6 +4,7 @@ import {
   ColumnDef,
   RowSelectionState,
   SortingState,
+  VisibilityState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -14,6 +15,7 @@ import { ArrowUpDown, Clock, Loader2, MessageSquare, Trash2, X } from "lucide-re
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColumnVisibilityDropdown } from "@/components/crm/ColumnVisibilityDropdown";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
@@ -117,6 +119,24 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   // (not table row index) so it survives sorting + filtering.
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  // Sprint 5.3 T9 — column visibility. Status hidden by default since
+  // stage_type (open/won/lost) already conveys the same information.
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    status: false,
+  });
+
+  /** Sprint 5.3 T9 — human-readable labels for the column visibility toggle.
+   *  Custom fields are NOT included here; they're dynamic and managed by the
+   *  pipeline's custom_fields_schema configuration instead. */
+  const COLUMN_LABELS: Record<string, string> = {
+    lead: "Lead",
+    value: "Valor",
+    stage: "Etapa",
+    time_in_phase: "Tempo na Fase",
+    touchpoints: "Interações",
+    status: "Status",
+    updated: "Atualizada",
+  };
 
   // Sprint 4 EPIC 2 §2.3 — same `?opp=<id>` deep-link contract as the Kanban.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -385,10 +405,11 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const table = useReactTable({
     data: rows,
     columns,
-    state: { sorting, globalFilter, rowSelection },
+    state: { sorting, globalFilter, rowSelection, columnVisibility },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onRowSelectionChange: setRowSelection,
+    onColumnVisibilityChange: setColumnVisibility,
     getRowId: (r) => r.opp.id,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -468,6 +489,21 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
               <SelectItem value="lost">Perdida</SelectItem>
             </SelectContent>
           </Select>
+
+          {/* Sprint 5.3 T9/T10 — column visibility toggle (shared component) */}
+          <ColumnVisibilityDropdown
+            columns={table
+              .getAllColumns()
+              .filter((col) => col.id !== "select")
+              .map((col) => ({
+                id: col.id,
+                label: COLUMN_LABELS[col.id] ?? col.id.replace(/^cf_/, ""),
+                visible: col.getIsVisible(),
+              }))}
+            onToggle={(id, visible) =>
+              table.getColumn(id)?.toggleVisibility(visible)
+            }
+          />
         </div>
 
         {/* Sprint 5.5 3.1 — bulk action bar surfaces when ≥1 row is selected */}

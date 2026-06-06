@@ -539,7 +539,7 @@ export const ContactDetailsModal = ({
                       <div
                         className={cn(
                           "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center",
-                          item.type === "task" && item.status === "done"
+                          item.type === "task" && item.status === "feito"
                             ? "bg-green-500/10 text-green-600"
                             : "bg-primary/10 text-primary",
                         )}
@@ -563,7 +563,7 @@ export const ContactDetailsModal = ({
                                         : "Nota"
                                 : item.title}
                           </p>
-                          {item.type === "task" && item.status === "done" && (
+                          {item.type === "task" && item.status === "feito" && (
                             <Badge
                               variant="outline"
                               className="text-[10px] h-4 bg-green-500/10 text-green-600 border-green-500/30"

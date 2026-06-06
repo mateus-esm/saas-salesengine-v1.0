@@ -45,6 +45,17 @@ export interface CustomFieldSchema {
 }
 
 export type StageType = "open" | "won" | "lost";
+
+/** Sprint 5.3 T8 — cadence/lifecycle events a stage can fire webhooks on. */
+export type StageWebhookEvent =
+  | "on_stage_entered"
+  | "on_idle_breach"
+  | "on_cadence_deadline";
+
+export interface StageWebhookTrigger {
+  event: StageWebhookEvent;
+  webhook_id: string;
+}
 export type OpportunityStatus = "open" | "won" | "lost";
 export type LeadOrigin = "whatsapp" | "manual" | "web" | "import" | string;
 
@@ -75,6 +86,12 @@ export interface PipelineStageV2 {
   max_idle_hours: number | null;
   /** Sprint 5.2 - null = no limit; positive integer = touchpoints before breach telemetry. */
   max_interactions: number | null;
+  /** Sprint 5.3 T7 — per-stage cadence magnitude (e.g. 1, 2, 10). NULL = inherit pipeline-level cadence_days. */
+  cadence_value: number | null;
+  /** Sprint 5.3 T7 — per-stage cadence unit (hours|days). NULL = inherit pipeline-level cadence_days. */
+  cadence_unit: 'hours' | 'days' | null;
+  /** Sprint 5.3 T8 — webhooks to fire on stage cadence/lifecycle events. */
+  webhook_triggers: StageWebhookTrigger[];
   created_at: string;
   deleted_at: string | null;
 }
@@ -147,6 +164,12 @@ export interface UpdateStageV2Data {
   stage_type?: StageType;
   max_idle_hours?: number | null;
   max_interactions?: number | null;
+  /** Sprint 5.3 T7 — per-stage cadence magnitude. */
+  cadence_value?: number | null;
+  /** Sprint 5.3 T7 — per-stage cadence unit (hours|days). */
+  cadence_unit?: 'hours' | 'days' | null;
+  /** Sprint 5.3 T8 — webhooks to fire on stage cadence/lifecycle events. */
+  webhook_triggers?: StageWebhookTrigger[];
 }
 
 export interface CreateOpportunityData {

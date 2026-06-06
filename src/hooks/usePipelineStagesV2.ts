@@ -25,6 +25,9 @@ interface StageRow {
   stage_type: string | null;
   max_idle_hours: number | null;
   max_interactions: number | null;
+  cadence_value: number | null;
+  cadence_unit: string | null;
+  webhook_triggers: PipelineStageV2["webhook_triggers"] | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -39,6 +42,9 @@ const normalize = (row: StageRow): PipelineStageV2 => ({
   stage_type: (row.stage_type as PipelineStageV2["stage_type"]) || "open",
   max_idle_hours: row.max_idle_hours ?? null,
   max_interactions: row.max_interactions ?? null,
+  cadence_value: row.cadence_value ?? null,
+  cadence_unit: (row.cadence_unit as PipelineStageV2["cadence_unit"]) ?? null,
+  webhook_triggers: row.webhook_triggers ?? [],
   created_at: row.created_at,
   deleted_at: row.deleted_at ?? null,
 });

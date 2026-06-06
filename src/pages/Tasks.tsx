@@ -31,7 +31,7 @@ const Tasks = () => {
   }, [teamMembers]);
 
   const isOverdue = (due: string | null, status: string) =>
-    !!due && new Date(due) < new Date() && status !== "completed" && status !== "done";
+    !!due && new Date(due) < new Date() && status !== "feito";
 
   return (
     <div className="flex flex-col h-full bg-background">

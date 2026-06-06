@@ -5,20 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Copy,
-  Mail,
-  Phone,
-  Building,
-  Briefcase,
-  Plus,
-  X,
-  MessageCircle,
-  Sparkles,
-  Lock,
-} from "lucide-react";
+import { Calendar as CalendarIcon, Copy, Mail, Phone, Building, Briefcase, Plus, Trash2, X, MessageCircle, Sparkles, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { TouchpointsList } from "@/components/crm/TouchpointsList";
 import { LeadOpportunitiesSection } from "@/components/crm/LeadOpportunitiesSection";
@@ -29,9 +20,26 @@ interface CRMContextPanelProps {
   onUpdateCRM: (data: Partial<ChatSession["crmData"]>) => void;
   onAddTask: (title: string) => void;
   onToggleTask: (taskId: string) => void;
+  /** Sprint 5.3 T4 — set an explicit status (a_fazer|fazendo|feito|parado). */
+  onUpdateTaskStatus?: (taskId: string, status: string) => void;
+  onDeleteTask?: (taskId: string) => void;
   stageEnteredAt?: string | null;
   onOpenLeadDetails?: () => void;
 }
+
+// Sprint 5.3 T3 — status labels + colors mirrored from TasksView.
+const TASK_STATUS_LABEL: Record<string, string> = {
+  a_fazer: "A Fazer",
+  fazendo: "Fazendo",
+  feito: "Feito",
+  parado: "Parado",
+};
+const TASK_STATUS_COLOR: Record<string, string> = {
+  a_fazer: "bg-slate-100 text-slate-700 border-slate-200",
+  fazendo: "bg-amber-50 text-amber-700 border-amber-200",
+  feito: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  parado: "bg-rose-50 text-rose-700 border-rose-200",
+};
 
 export function CRMContextPanel({
   session,
@@ -39,6 +47,8 @@ export function CRMContextPanel({
   onUpdateCRM,
   onAddTask,
   onToggleTask,
+  onUpdateTaskStatus,
+  onDeleteTask,
   onOpenLeadDetails,
 }: CRMContextPanelProps) {
   const [activeTab, setActiveTab] = useState("notes");
@@ -181,6 +191,42 @@ export function CRMContextPanel({
               ))}
             </div>
           )}
+
+          {/* Sprint 5.3 T14 — Next contact badge in chat sidebar */}
+          {(() => {
+            const nc = session.crmData.next_contact;
+            if (!nc) return null;
+            const ncDate = new Date(nc);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffMs = ncDate.getTime() - today.getTime();
+            const diffDays = Math.round(diffMs / 86_400_000);
+            const stateClass =
+              diffDays < 0
+                ? "bg-destructive/15 text-destructive-foreground"
+                : diffDays === 0
+                  ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                  : "bg-muted/50 text-muted-foreground";
+            const label =
+              diffDays < 0
+                ? `Atrasado ${Math.abs(diffDays)}d`
+                : diffDays === 0
+                  ? "Hoje"
+                  : diffDays === 1
+                    ? "Amanhã"
+                    : ncDate.toLocaleDateString("pt-BR");
+            return (
+              <div className="pt-1">
+                <span
+                  className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] font-medium ${stateClass}`}
+                  title={`Próximo contato: ${ncDate.toLocaleDateString("pt-BR")}`}
+                >
+                  <CalendarIcon className="h-3 w-3 shrink-0" />
+                  <span>{label}</span>
+                </span>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
@@ -252,23 +298,63 @@ export function CRMContextPanel({
               </Button>
             </div>
 
+            {/* Sprint 5.3 T3/T4 — editable task rows: toggle done, change status,
+                delete. The checkbox is a quick feito/a_fazer toggle; the status
+                dropdown exposes the full four-state model. */}
             <div className="space-y-2 mt-3">
               {tasks.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center gap-2 p-2 rounded-md bg-muted/50"
+                  className="flex items-center gap-2 p-2 rounded-md bg-muted/50 group"
                 >
                   <Checkbox
-                    checked={task.completed}
+                    checked={task.status === "feito"}
                     onCheckedChange={() => onToggleTask(task.id)}
                   />
                   <span
                     className={`text-sm flex-1 ${
-                      task.completed ? "line-through text-muted-foreground" : ""
+                      task.status === "feito" ? "line-through text-muted-foreground" : ""
                     }`}
                   >
                     {task.title}
                   </span>
+                  {onUpdateTaskStatus ? (
+                    <Select
+                      value={task.status}
+                      onValueChange={(v) => onUpdateTaskStatus(task.id, v)}
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          "h-6 w-[88px] text-[11px] px-1.5 border-transparent",
+                          TASK_STATUS_COLOR[task.status] ?? "",
+                        )}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(TASK_STATUS_LABEL).map(([val, lbl]) => (
+                          <SelectItem key={val} value={val}>
+                            {lbl}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant="outline" className={cn("text-[10px]", TASK_STATUS_COLOR[task.status] ?? "")}>
+                      {TASK_STATUS_LABEL[task.status] ?? task.status}
+                    </Badge>
+                  )}
+                  {onDeleteTask && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Excluir"
+                      onClick={() => onDeleteTask(task.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               ))}
               {tasks.length === 0 && (

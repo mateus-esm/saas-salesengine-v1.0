@@ -12,16 +12,18 @@ const sb = supabase as any;
 
 /**
  * Sprint 5.2 T3 — Cadence Shift Linkage.
+ * Sprint 5.3 T7 — Prefers per-stage cadence (cadence_value + cadence_unit)
+ * over the pipeline-level cadence_days.
  *
- * Resolves the lead's active pipeline cadence and, when set, atomically pushes
- * `leads.next_contact` to `today + cadence_days`. Done here (not via a prop on
- * TouchpointsList) so the touchpoint callers — including T10's
- * OpportunityDetailModal in the same wave — stay untouched.
+ * Resolves the lead's active pipeline + stage cadence and, when set,
+ * atomically pushes `leads.next_contact` to `today + cadence`. Done here
+ * (not via a prop on TouchpointsList) so the touchpoint callers stay
+ * untouched.
  */
 async function applyCadenceShift(leadId: string): Promise<boolean> {
   const { data: opp } = await sb
     .from("opportunities")
-    .select("pipeline_id")
+    .select("pipeline_id, stage_id")
     .eq("lead_id", leadId)
     .is("deleted_at", null)
     .neq("status", "lost")
@@ -31,18 +33,43 @@ async function applyCadenceShift(leadId: string): Promise<boolean> {
 
   if (!opp?.pipeline_id) return false;
 
-  const { data: pipeline } = await sb
-    .from("pipelines")
-    .select("cadence_days")
-    .eq("id", opp.pipeline_id)
-    .maybeSingle();
+  let cadenceMs: number | null = null;
 
-  const cadenceDays = pipeline?.cadence_days ?? null;
-  if (!cadenceDays || cadenceDays <= 0) return false;
+  // 1. Try per-stage cadence first
+  if (opp.stage_id) {
+    const { data: stage } = await sb
+      .from("pipeline_stages_v2")
+      .select("cadence_value, cadence_unit")
+      .eq("id", opp.stage_id)
+      .maybeSingle();
+
+    if (stage?.cadence_value && stage.cadence_value > 0) {
+      if (stage.cadence_unit === "hours") {
+        cadenceMs = stage.cadence_value * 60 * 60 * 1000;
+      } else if (stage.cadence_unit === "days") {
+        cadenceMs = stage.cadence_value * 24 * 60 * 60 * 1000;
+      }
+    }
+  }
+
+  // 2. Fall back to pipeline-level cadence_days
+  if (cadenceMs === null) {
+    const { data: pipeline } = await sb
+      .from("pipelines")
+      .select("cadence_days")
+      .eq("id", opp.pipeline_id)
+      .maybeSingle();
+
+    const cadenceDays = pipeline?.cadence_days ?? null;
+    if (cadenceDays && cadenceDays > 0) {
+      cadenceMs = cadenceDays * 24 * 60 * 60 * 1000;
+    }
+  }
+
+  if (cadenceMs === null) return false;
 
   // Local-date formatting to match the rest of the CRM (avoids TZ drift).
-  const next = new Date();
-  next.setDate(next.getDate() + cadenceDays);
+  const next = new Date(Date.now() + cadenceMs);
   const year = next.getFullYear();
   const month = String(next.getMonth() + 1).padStart(2, "0");
   const day = String(next.getDate()).padStart(2, "0");
@@ -165,11 +192,30 @@ export const useTouchpoints = (leadId?: string) => {
     },
   });
 
+  const updateTouchpoint = useMutation({
+    mutationFn: async ({ id, ...patch }: { id: string } & Partial<Pick<Touchpoint, 'touchpoint_type' | 'content' | 'contact_date'>>) => {
+      const { error } = await supabase
+        .from("touchpoints")
+        .update(patch)
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["touchpoints", leadId] });
+      toast.success("Touchpoint atualizado!");
+    },
+    onError: (error) => {
+      toast.error("Erro ao atualizar: " + error.message);
+    },
+  });
+
   return {
     touchpoints: touchpointsQuery.data || [],
     isLoading: touchpointsQuery.isLoading,
     error: touchpointsQuery.error,
     createTouchpoint,
+    updateTouchpoint,
     deleteTouchpoint,
     refetch: touchpointsQuery.refetch,
   };

@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Webhook } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
-import type { PipelineStageV2, StageType } from "@/types/pipelines";
+import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
+import type {
+  PipelineStageV2,
+  StageType,
+  StageWebhookEvent,
+  StageWebhookTrigger,
+} from "@/types/pipelines";
 
 interface StagesEditorProps {
   pipelineId: string;
@@ -39,6 +50,15 @@ const STAGE_TYPES: Array<{ value: StageType; label: string }> = [
   { value: "won", label: "Ganho" },
   { value: "lost", label: "Perdido" },
 ];
+
+// Sprint 5.3 T8 — cadence/lifecycle events a stage can fire webhooks on.
+const STAGE_WEBHOOK_EVENTS: Array<{ value: StageWebhookEvent; label: string }> = [
+  { value: "on_stage_entered", label: "Ao entrar na etapa" },
+  { value: "on_idle_breach", label: "Ao estourar o SLA (ocioso)" },
+  { value: "on_cadence_deadline", label: "Ao vencer a cadência" },
+];
+
+const NONE = "__none__";
 
 const parsePositiveIntOrNull = (value: string) => {
   if (!value.trim()) return null;
@@ -128,7 +148,14 @@ interface SortableStageRowProps {
     patch: Partial<
       Pick<
         PipelineStageV2,
-        "name" | "color" | "stage_type" | "max_idle_hours" | "max_interactions"
+        | "name"
+        | "color"
+        | "stage_type"
+        | "max_idle_hours"
+        | "max_interactions"
+        | "cadence_value"
+        | "cadence_unit"
+        | "webhook_triggers"
       >
     >,
   ) => void;
@@ -222,6 +249,47 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
         />
       </div>
 
+      {/* Sprint 5.3 T7 — per-stage cadence */}
+      <div className="grid w-[90px] gap-1">
+        <span className="text-[10px] leading-none text-muted-foreground">Cadência</span>
+        <div className="flex gap-0.5">
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            value={stage.cadence_value ?? ""}
+            onChange={(e) =>
+              onChange({ cadence_value: parsePositiveIntOrNull(e.target.value) })
+            }
+            className="h-8 w-[44px]"
+            aria-label="Valor da cadência"
+            placeholder="—"
+          />
+          <Select
+            value={stage.cadence_unit ?? ""}
+            onValueChange={(v) =>
+              onChange({ cadence_unit: v === "" ? null : v as 'hours' | 'days' })
+            }
+          >
+            <SelectTrigger className="h-8 w-[44px] px-1">
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">—</SelectItem>
+              <SelectItem value="hours">h</SelectItem>
+              <SelectItem value="days">d</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Sprint 5.3 T8 — per-stage webhook triggers */}
+      <StageWebhookPopover
+        triggers={stage.webhook_triggers ?? []}
+        onChange={(webhook_triggers) => onChange({ webhook_triggers })}
+      />
+
       <Button
         variant="ghost"
         size="icon"
@@ -232,5 +300,80 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
         <Trash2 className="h-4 w-4" />
       </Button>
     </div>
+  );
+};
+
+interface StageWebhookPopoverProps {
+  triggers: StageWebhookTrigger[];
+  onChange: (triggers: StageWebhookTrigger[]) => void;
+}
+
+/**
+ * Sprint 5.3 T8 — maps each cadence/lifecycle event to an optional webhook.
+ * Stored as a compact { event, webhook_id }[] on the stage; an unset event is
+ * simply absent from the array.
+ */
+const StageWebhookPopover = ({ triggers, onChange }: StageWebhookPopoverProps) => {
+  const { configs } = useWebhookConfigs();
+  const activeCount = triggers.length;
+
+  const webhookForEvent = (event: StageWebhookEvent) =>
+    triggers.find((t) => t.event === event)?.webhook_id ?? NONE;
+
+  const setEvent = (event: StageWebhookEvent, webhookId: string) => {
+    const rest = triggers.filter((t) => t.event !== event);
+    onChange(
+      webhookId === NONE ? rest : [...rest, { event, webhook_id: webhookId }],
+    );
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-8 w-8"
+          aria-label="Configurar webhooks da etapa"
+        >
+          <Webhook className="h-4 w-4" />
+          {activeCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+              {activeCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-3">
+        <p className="text-xs font-medium">Webhooks da etapa</p>
+        {configs.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhum webhook cadastrado. Crie um em Webhooks para vinculá-lo aqui.
+          </p>
+        ) : (
+          STAGE_WEBHOOK_EVENTS.map((evt) => (
+            <div key={evt.value} className="grid gap-1">
+              <span className="text-[11px] text-muted-foreground">{evt.label}</span>
+              <Select
+                value={webhookForEvent(evt.value)}
+                onValueChange={(v) => setEvent(evt.value, v)}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Nenhum" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Nenhum</SelectItem>
+                  {configs.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))
+        )}
+      </PopoverContent>
+    </Popover>
   );
 };

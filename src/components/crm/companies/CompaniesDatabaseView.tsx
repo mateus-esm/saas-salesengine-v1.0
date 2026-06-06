@@ -25,8 +25,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { useCompanies } from "@/hooks/useCompanies";
+import { ColumnVisibilityDropdown } from "@/components/crm/ColumnVisibilityDropdown";
 import { AddCompanyModal } from "./AddCompanyModal";
 import { CompanyDetailModal } from "./CompanyDetailModal";
+
+// Sprint 5.3 T10 — toggleable columns (name + row actions always shown).
+const COMPANY_COLUMNS: { id: string; label: string }[] = [
+  { id: "industry", label: "Setor" },
+  { id: "cnpj", label: "CNPJ" },
+  { id: "size_bracket", label: "Tamanho" },
+  { id: "contacts", label: "Contatos" },
+  { id: "properties", label: "Propriedades" },
+  { id: "website", label: "Website" },
+];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -45,6 +56,8 @@ export const CompaniesDatabaseView = () => {
   const [search, setSearch] = useState("");
   const { companies, isLoading, refetch } = useCompanies(search);
   const [showCreate, setShowCreate] = useState(false);
+  const [hidden, setHidden] = useState<Record<string, boolean>>({});
+  const isVisible = (id: string) => !hidden[id];
 
   const openId = searchParams.get("company");
   const openDetail = (id: string | null) => {
@@ -120,6 +133,12 @@ export const CompaniesDatabaseView = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <ColumnVisibilityDropdown
+            columns={COMPANY_COLUMNS.map((c) => ({ ...c, visible: isVisible(c.id) }))}
+            onToggle={(id, visible) =>
+              setHidden((prev) => ({ ...prev, [id]: !visible }))
+            }
+          />
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
@@ -150,12 +169,12 @@ export const CompaniesDatabaseView = () => {
               <TableRow className="bg-muted/30">
                 <TableHead className="w-8"></TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead>Setor</TableHead>
-                <TableHead>CNPJ</TableHead>
-                <TableHead>Tamanho</TableHead>
-                <TableHead className="text-center">Contatos</TableHead>
-                <TableHead className="text-center">Propriedades</TableHead>
-                <TableHead>Website</TableHead>
+                {isVisible("industry") && <TableHead>Setor</TableHead>}
+                {isVisible("cnpj") && <TableHead>CNPJ</TableHead>}
+                {isVisible("size_bracket") && <TableHead>Tamanho</TableHead>}
+                {isVisible("contacts") && <TableHead className="text-center">Contatos</TableHead>}
+                {isVisible("properties") && <TableHead className="text-center">Propriedades</TableHead>}
+                {isVisible("website") && <TableHead>Website</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -186,28 +205,40 @@ export const CompaniesDatabaseView = () => {
                       </Button>
                     </TableCell>
                     <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {c.industry || "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {c.cnpj || "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {c.size_bracket || "—"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className="text-xs">
-                        {contactCounts[c.id] ?? 0}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className="text-xs">
-                        {propertyCounts[c.id] ?? 0}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
-                      {c.website || "—"}
-                    </TableCell>
+                    {isVisible("industry") && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {c.industry || "—"}
+                      </TableCell>
+                    )}
+                    {isVisible("cnpj") && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {c.cnpj || "—"}
+                      </TableCell>
+                    )}
+                    {isVisible("size_bracket") && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {c.size_bracket || "—"}
+                      </TableCell>
+                    )}
+                    {isVisible("contacts") && (
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="text-xs">
+                          {contactCounts[c.id] ?? 0}
+                        </Badge>
+                      </TableCell>
+                    )}
+                    {isVisible("properties") && (
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="text-xs">
+                          {propertyCounts[c.id] ?? 0}
+                        </Badge>
+                      </TableCell>
+                    )}
+                    {isVisible("website") && (
+                      <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
+                        {c.website || "—"}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}

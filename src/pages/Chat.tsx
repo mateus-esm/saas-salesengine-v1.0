@@ -99,7 +99,7 @@ const Chat = () => {
   );
 
   // Tasks still scoped to the underlying lead (CRM-level, not per-conversation)
-  const { tasks, createTask, toggleTask } = useTasks(selectedConversation?.lead_id ?? null);
+  const { tasks, createTask, toggleTask, updateTask, deleteTask } = useTasks(selectedConversation?.lead_id ?? null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -193,6 +193,7 @@ const Chat = () => {
         email: lead?.email || undefined,
         company: lead?.name,
         position: undefined,
+        next_contact: lead?.next_contact || undefined,
       },
       messages: [],
     };
@@ -231,6 +232,7 @@ const Chat = () => {
           stage: lead?.stage_id || 'Novo',
           company: lead?.name,
           notes: lead?.observations || '',
+          next_contact: lead?.next_contact || undefined,
         },
         tags: lead?.tags || leadSlice?.tags || [],
         messages: [],
@@ -370,10 +372,19 @@ const Chat = () => {
     await toggleTask(taskId);
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    await deleteTask(taskId);
+  };
+
+  const handleUpdateTaskStatus = async (taskId: string, status: string) => {
+    await updateTask(taskId, { status });
+  };
+
   const currentTasks = tasks.map(t => ({
     id: t.id,
     title: t.title,
-    completed: t.status === 'done',
+    status: t.status,
+    due_date: t.due_date,
     createdAt: new Date(t.created_at)
   }));
 
@@ -477,6 +488,8 @@ const Chat = () => {
                         onUpdateCRM={handleUpdateCRM}
                         onAddTask={handleAddTask}
                         onToggleTask={handleToggleTask}
+                        onUpdateTaskStatus={handleUpdateTaskStatus}
+                        onDeleteTask={handleDeleteTask}
                         onOpenLeadDetails={() => setShowLeadModal(true)}
                     />
                   </SheetContent>
@@ -592,6 +605,8 @@ const Chat = () => {
                 onUpdateCRM={handleUpdateCRM}
                 onAddTask={handleAddTask}
                 onToggleTask={handleToggleTask}
+                onUpdateTaskStatus={handleUpdateTaskStatus}
+                onDeleteTask={handleDeleteTask}
                 onOpenLeadDetails={() => setShowLeadModal(true)}
             />
           </>

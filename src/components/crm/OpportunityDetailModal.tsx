@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, MessageCircle, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
@@ -386,6 +387,7 @@ const summarizeEnrichment = (data: Record<string, unknown> | null | undefined): 
 };
 
 function IdentityBlock({ lead }: { lead: Lead | undefined }) {
+  const navigate = useNavigate();
   if (!lead) return null;
 
   const waDigits = lead.phone ? lead.phone.replace(/\D/g, "").replace(/^(?!55)/, "55$&") : null;
@@ -419,6 +421,18 @@ function IdentityBlock({ lead }: { lead: Lead | undefined }) {
             <Mail className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{lead.email}</span>
           </div>
+        )}
+
+        {/* Sprint 5.3 T13 — Chat gate from opportunity detail */}
+        {lead.id && (
+          <button
+            onClick={() => navigate(`/chat?contact=${lead.id}`)}
+            className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+            title="Abrir conversa no Sales Engine"
+          >
+            <MessageSquareText className="h-3.5 w-3.5 shrink-0" />
+            Ir para o Chat
+          </button>
         )}
 
         {enrichment.length > 0 && (
@@ -527,7 +541,7 @@ function TasksTabPane({ leadId }: { leadId: string }) {
             >
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <Checkbox
-                  checked={task.status === "done"}
+                  checked={task.status === "feito"}
                   onCheckedChange={() => toggleTask(task.id)}
                   id={`task-check-${task.id}`}
                   className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
@@ -537,7 +551,7 @@ function TasksTabPane({ leadId }: { leadId: string }) {
                     htmlFor={`task-check-${task.id}`}
                     className={cn(
                       "text-xs font-medium cursor-pointer block truncate text-foreground/90",
-                      task.status === "done" && "line-through text-muted-foreground"
+                      task.status === "feito" && "line-through text-muted-foreground"
                     )}
                   >
                     {task.title}

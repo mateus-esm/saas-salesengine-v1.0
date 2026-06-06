@@ -26,18 +26,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ColumnVisibilityDropdown } from "@/components/crm/ColumnVisibilityDropdown";
 import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
@@ -47,7 +42,6 @@ import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
 import { AddContactModal } from "./AddContactModal";
 import {
   ArrowUpDown,
-  Columns,
   Search,
   Download,
   Upload,
@@ -188,6 +182,22 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
 };
 
 type LeadUpdateValue = string | number | boolean | null | string[] | undefined;
+
+// Sprint 5.3 T10/T11 — labels for the shared column visibility dropdown.
+// Enrichment columns (cf_*) fall through to their raw JSONB key as the label.
+const COLUMN_LABELS: Record<string, string> = {
+  name: "Nome",
+  email: "Email",
+  phone: "Telefone",
+  company_link: "Empresa",
+  property_count: "Imóveis",
+  origin_category: "Origem",
+  channel: "Canal",
+  enrichment_summary: "Enriquecimento IA",
+  observations: "Observações",
+  tags: "Tags",
+  created_at: "Criado em",
+};
 
 export const DatabaseView = () => {
   const navigate = useNavigate();
@@ -673,44 +683,19 @@ export const DatabaseView = () => {
             />
           </div>
 
-          {/* Column Visibility */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Columns className="h-4 w-4 mr-2" />
-                Colunas
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-[400px] overflow-y-auto">
-              {table
-                .getAllColumns()
-                .filter((col) => col.getCanHide())
-                .map((col) => {
-                  const labelMap: Record<string, string> = {
-                    name: "Nome",
-                    email: "Email",
-                    phone: "Telefone",
-                    company_link: "Empresa",
-                    property_count: "Imóveis",
-                    origin_category: "Origem",
-                    channel: "Canal",
-                    enrichment_summary: "Enriquecimento IA",
-                    observations: "Observações",
-                    tags: "Tags",
-                    created_at: "Criado em",
-                  };
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={col.id}
-                      checked={col.getIsVisible()}
-                      onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                    >
-                      {labelMap[col.id] || col.id}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Column Visibility — Sprint 5.3 T10 shared component. Enrichment
+              columns (cf_*) carry their JSONB key as the label automatically. */}
+          <ColumnVisibilityDropdown
+            columns={table
+              .getAllColumns()
+              .filter((col) => col.getCanHide())
+              .map((col) => ({
+                id: col.id,
+                label: COLUMN_LABELS[col.id] || col.id,
+                visible: col.getIsVisible(),
+              }))}
+            onToggle={(id, visible) => table.getColumn(id)?.toggleVisibility(visible)}
+          />
         </div>
 
         {/* Bulk Actions */}

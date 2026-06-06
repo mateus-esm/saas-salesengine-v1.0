@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Building2, LayoutGrid, Plus, Users } from "lucide-react";
+import { Building2, Home, LayoutGrid, ListChecks, Plus, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,13 @@ import { AIAgentToggle } from "@/components/AIAgentToggle";
 import { DatabaseView } from "@/components/crm/DatabaseView";
 import { PipelineWorkspace } from "@/components/crm/PipelineWorkspace";
 import { CompaniesDatabaseView } from "@/components/crm/companies/CompaniesDatabaseView";
+import TasksView from "@/components/crm/TasksView";
+import { PropertiesDatabaseView } from "@/components/crm/properties/PropertiesDatabaseView";
 import { usePipelineSelection } from "@/hooks/usePipelineSelection";
 
-type TopTab = "pipeline" | "contacts" | "companies";
+type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
@@ -41,6 +43,9 @@ const CRM = () => {
       if (next !== "companies") {
         params.delete("company");
       }
+      if (next !== "properties") {
+        params.delete("property");
+      }
       setSearchParams(params, { replace: false });
     },
     [searchParams, setSearchParams],
@@ -63,6 +68,14 @@ const CRM = () => {
               <Building2 className="h-4 w-4" />
               Empresas
             </TabsTrigger>
+            <TabsTrigger value="properties" className="flex items-center gap-2">
+              <Home className="h-4 w-4" />
+              Imóveis
+            </TabsTrigger>
+            <TabsTrigger value="tasks" className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4" />
+              Tarefas
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         <AIAgentToggle />
@@ -73,6 +86,10 @@ const CRM = () => {
           <DatabaseView />
         ) : tab === "companies" ? (
           <CompaniesDatabaseView />
+        ) : tab === "properties" ? (
+          <PropertiesDatabaseView />
+        ) : tab === "tasks" ? (
+          <TasksView />
         ) : !isLoading && pipelines.length === 0 ? (
           <EmptyPipelinesState />
         ) : pipelineId ? (
