@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-06 | Sprint 6 | Pre-Sprint 6 R&D: Agent-First Sales OS Architecture Analysis & Dokploy Topology Validation | Gemini 3.5 Flash | XL | R$ 28 |
 | 2026-06-04 | Sprint 5.2 | T1 schema cadence/KPI | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-04 | Sprint 5.2 | T2 schema taxonomy + hook | Codex / GPT-5 | M | R$ 12 |
 | 2026-05-31 | Sprint 5.1 | T6 useStageTelemetry hook | Codex / GPT-5 | M | R$ 12 |
@@ -47,6 +48,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Sprint 5.2 — Wave 1 | T1, T2 | R$ 24 |
 | **Sprint 5.1 — TOTAL** | **T6–T15** | **R$ 145** |
 | **Sprint 5.2 — TOTAL so far** | **T1, T2** | **R$ 24** |
+| **Sprint 6 — TOTAL so far** | **R&D Blueprint** | **R$ 28** |
 
 ---
 
