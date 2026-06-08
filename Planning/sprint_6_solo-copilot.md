@@ -625,7 +625,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [x] A2 · config (real models + DB URL) · S · verboo
 - [ ] A3 · security.py (+del jwt.py) · M · codex
 - [ ] A4 · db.py (client + pg pool) · M · codex
-- [ ] A5 · guards.py · M · gemini
+- [x] A5 · guards.py · M · gemini
 - [x] B1 · pipeline_agent_rules migration · S · verboo
 - [x] B2 · ai_decisions queue migration · S · verboo
 - [x] B3 · stage_history actor migration · S · verboo
@@ -636,7 +636,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] C2 · cascade/track_shaper.py · L · claude (Sonnet)
 - [ ] C3 · routers/shape.py · L · codex
 - [ ] C4 · setup dashboard UI · L · claude (Sonnet)
-- [ ] D1 · audit.py · M · gemini
+- [x] D1 · audit.py · M · gemini
 - [x] D2 · skills/registry.py · S · verboo
 - [ ] D3 · skills/core_table.py · L · codex
 - [ ] E1 · cascade/tower_doorman.py · L · claude (Sonnet)
