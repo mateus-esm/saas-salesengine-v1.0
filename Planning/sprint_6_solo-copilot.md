@@ -621,7 +621,7 @@ Wave 8  Deploy (Human-led)                    ▶ W7 merged + built
 Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · task · engineer/model · tier).
 
 - [x] A1a · uv project + lockfile · S · verboo
-- [ ] A1b · Dockerfile · M · codex
+- [x] A1b · Dockerfile · M · codex
 - [ ] A2 · config (real models + DB URL) · S · verboo
 - [ ] A3 · security.py (+del jwt.py) · M · codex
 - [ ] A4 · db.py (client + pg pool) · M · codex
