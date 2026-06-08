@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-08 | Sprint 6 | B4 shape_pipeline RPC | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-08 | Sprint 6 | B2 ai_decisions queue migration | Codex / GPT-5 | S | R$ 5 |
 | 2026-06-08 | Sprint 6 | G1 deploy artifacts + .env.example | Codex / GPT-5 | S | R$ 5 |
 | 2026-06-08 | Sprint 6 | D2 skills registry | Codex / GPT-5 | S | R$ 5 |
