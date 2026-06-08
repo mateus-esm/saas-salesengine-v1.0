@@ -653,7 +653,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] F2 · useCopilotRealtime.ts · M · gemini
 - [ ] F3 · Sync button (OpportunityDetailModal) · M · verboo
 - [ ] F4 · approval cards · L · claude (Sonnet)
-- [ ] G1 · deploy artifacts + .env.example · S · verboo
+- [x] G1 · deploy artifacts + .env.example · S · verboo
 - [ ] G2 · [HUMAN] Dokploy app + auto-deploy · Mateus
 - [ ] G3 · [HUMAN] domain + Traefik SSL · Mateus
 - [ ] G4 · [HUMAN] secrets in Dokploy · Mateus
