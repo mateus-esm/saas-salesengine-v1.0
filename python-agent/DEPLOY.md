@@ -15,6 +15,14 @@ Deploy this service as a Dokploy application rooted at `python-agent`.
 Secrets must live only in Dokploy environment variables. Do not bake `.env`
 files or API keys into the image.
 
+Do not copy real secrets into `.env.example`. If a secret is pasted into the
+repository by accident, rotate it in the provider dashboard and replace the file
+with placeholders before committing.
+
+`DATABASE_URL` must be a valid URL. Supabase passwords that contain reserved URL
+characters such as `%` or `@` must be URL-encoded before being pasted into
+Dokploy.
+
 ## First Smoke Test
 
 After the first deploy, confirm the service boots and answers:
