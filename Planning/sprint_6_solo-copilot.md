@@ -627,7 +627,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] A4 · db.py (client + pg pool) · M · codex
 - [ ] A5 · guards.py · M · gemini
 - [x] B1 · pipeline_agent_rules migration · S · verboo
-- [ ] B2 · ai_decisions queue migration · S · verboo
+- [x] B2 · ai_decisions queue migration · S · verboo
 - [x] B3 · stage_history actor migration · S · verboo
 - [ ] B4 · shape_pipeline RPC · L · codex
 - [x] B5 · copilot_ingest_queue migration · S · verboo
