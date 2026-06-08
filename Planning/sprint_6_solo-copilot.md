@@ -643,7 +643,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] E2 · cascade/floor_doorman.py · L · claude (Sonnet)
 - [ ] E3 · cascade/worker.py · M · gemini
 - [ ] E4 · cascade/autonomous_team.py · XL · claude (Opus)
-- [ ] E5 · agno_store.py (session/memory) · M · codex
+- [x] E5 · agno_store.py (session/memory) · M · codex
 - [ ] E6 · cascade/workflow.py · XL · claude (Opus)
 - [ ] E7 · routers/ingest.py · M · codex
 - [ ] E8 · routers/sync.py · M · codex
