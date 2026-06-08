@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-08 | Sprint 6 | A2 config real models + DB URL | Codex / GPT-5 | S | R$ 5 |
 | 2026-06-08 | Sprint 6 | A1b Dockerfile | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-08 | Sprint 6 | A1a uv project + lockfile | Codex / GPT-5 | S | R$ 5 |
 | 2026-06-06 | Sprint 6 | Pre-Sprint 6 R&D: Agent-First Sales OS Architecture Analysis & Dokploy Topology Validation | Gemini 3.5 Flash | XL | R$ 28 |

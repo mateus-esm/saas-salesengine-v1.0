@@ -622,7 +622,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 
 - [x] A1a · uv project + lockfile · S · verboo
 - [x] A1b · Dockerfile · M · codex
-- [ ] A2 · config (real models + DB URL) · S · verboo
+- [x] A2 · config (real models + DB URL) · S · verboo
 - [ ] A3 · security.py (+del jwt.py) · M · codex
 - [ ] A4 · db.py (client + pg pool) · M · codex
 - [ ] A5 · guards.py · M · gemini
