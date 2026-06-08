@@ -59,22 +59,71 @@ The assigned engineer reads their task and the relevant vision.
 Do the work on your branch. Stay inside your file ownership. Keep commits scoped to your task.
 
 ### 6. ✅ Completion & Handoff
-Before telling the PM you're done:
-- [ ] Builds clean (`npm run build` / `tsc` passes — no new errors).
-- [ ] Only your assigned files changed.
-- [ ] Task ticked `[x]` in the sprint file's implementation plan.
-- [ ] **One billing row added** to `Planning/billing.md` (date · sprint · task · agent/model · tier). No token math — the tier sets the cost.
-- [ ] Changes committed to your branch.
 
-Then ping the PM: *"<task> done, branch `<agent>/sprint.../...`, tier <X>."*
+Before signalling the PM, verify **all five gates** locally on your branch:
+
+- [ ] Builds clean (`npm run build` / `tsc` / `uv run pytest` — no new errors).
+- [ ] Only your assigned files changed (`git diff main...HEAD --stat`).
+- [ ] Task ticked `[x]` in the sprint file's implementation plan (committed to your branch).
+- [ ] **One billing row added** to `Planning/billing.md` (date · sprint · task · agent/model · tier) — committed to your branch.
+- [ ] All changes committed; branch is ahead of `main` by at least 1 commit.
+
+Then post the following **structured handoff block** — nothing less will be accepted:
+
+```
+HANDOFF: <task-id> · <task-name>
+Branch:  <agent>/sprint<x>/<epic>/<desc>
+Commit:  <short-sha> <commit message>
+Files:   <list of created/modified files, one per line>
+Tests:   <test command> → <N passed, 0 failed>
+Ledger:  sprint checkbox [x] ticked · billing row added
+```
+
+**Example:**
+```
+HANDOFF: A3 · security.py + deps.py
+Branch:  engineer/sprint6/epicA/security
+Commit:  4e613be Add tenant JWT security context
+Files:   python-agent/app/security.py (created)
+         python-agent/app/deps.py (created)
+         python-agent/tests/test_security.py (created)
+         Planning/sprint_6_solo-copilot.md ([x] A3)
+         Planning/billing.md (A3 row added)
+Tests:   uv run pytest tests/test_security.py → 12 passed, 0 failed
+Ledger:  [x] A3 ticked · billing row 2026-06-08 Sprint 6 A3 M R$12
+```
+
+> ⚠️ **If you skip the handoff block the PM will not accept the task.** Saying "it's done" or "I finished" without the structured block is not a valid handoff — the PM checks branches, not memory.
 
 ### 7. 🔍 PM Double-Check & Merge
-For each finished task the PM verifies, then merges to `main`:
-- ✅ **Task** — builds clean, in-scope files only, matches the plan.
-- ✅ **Billing** — row present with the correct tier.
-- ✅ **Acceptance test** — the work satisfies the matching item(s) in the sprint's Definition of Done.
 
-If any check fails, the PM bounces it back with a one-line reason. Once a wave is merged, the PM tells all agents to `git pull`. When every Definition-of-Done item is ticked, the sprint closes.
+The PM **never checks `main` to verify engineer work** — all work lives on the engineer's feature branch until the PM merges it. The PM's protocol for each finished task:
+
+1. **Receive the handoff block** — reject immediately if the block is missing or incomplete.
+2. **Check out the branch** and diff against main:
+   ```bash
+   git diff main...<branch> --stat
+   git show <branch>:python-agent/app/<file>.py   # read the key files
+   ```
+3. **Run the tests on the branch:**
+   ```bash
+   git checkout <branch>
+   uv run pytest tests/  # or npm run build — whatever the task owns
+   ```
+4. **Verify the three acceptance gates:**
+   - ✅ **Files** — only the task's owned files changed; implementation matches the contract in the sprint doc.
+   - ✅ **Billing** — row present in `Planning/billing.md` with the correct tier and agent.
+   - ✅ **DoD** — the work satisfies the matching acceptance criteria in the sprint's Definition of Done.
+5. **Merge to `main`** — resolve any ledger/billing conflicts by keeping all rows (each branch adds its own row; the merge result must contain all of them).
+6. **Announce wave completion** to all agents using this format:
+
+```
+WAVE <N> MERGED · git pull origin main
+Ready: <list of tasks now on main>
+Next wave opens: <wave N+1 tasks and assignees>
+```
+
+If any gate fails, the PM bounces it back with a one-line reason and the task stays on its branch until fixed.
 
 ---
 
