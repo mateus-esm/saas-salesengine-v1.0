@@ -631,7 +631,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [x] B3 · stage_history actor migration · S · verboo
 - [ ] B4 · shape_pipeline RPC · L · codex
 - [x] B5 · copilot_ingest_queue migration · S · verboo
-- [ ] B6 · agno schema migration · M · gemini
+- [x] B6 · agno schema migration · M · gemini
 - [ ] C1 · schemas.py · M · verboo
 - [ ] C2 · cascade/track_shaper.py · L · claude (Sonnet)
 - [ ] C3 · routers/shape.py · L · codex
