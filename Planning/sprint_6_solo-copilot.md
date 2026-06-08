@@ -633,7 +633,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [x] B5 · copilot_ingest_queue migration · S · verboo
 - [x] B6 · agno schema migration · M · gemini
 - [x] C1 · schemas.py · M · verboo
-- [ ] C2 · cascade/track_shaper.py · L · claude (Sonnet)
+- [x] C2 · cascade/track_shaper.py · L · claude (Sonnet)
 - [ ] C3 · routers/shape.py · L · codex
 - [ ] C4 · setup dashboard UI · L · claude (Sonnet)
 - [x] D1 · audit.py · M · gemini
