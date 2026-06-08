@@ -220,8 +220,10 @@ Sprint 6.**
 
 ## §P3 — Reconciliation with existing scaffold
 
-- `python-agent/app/main.py` imports non-existent routers `chat/session/actions` → can't boot; **E10** rewrites it.
-- `python-agent/app/jwt.py` uses network `auth.get_user()`; Vision Pillar 2 mandates **local `SUPABASE_JWT_SECRET` decode** → **A3** adds `security.py`, **deletes `jwt.py`**, re-points `deps.py`.
+> **PM CORRECTION (2026-06-08):** the `python-agent/` scaffold **does not exist** on disk or in git — the Python service is **greenfield**. Bullets ①–② below were written against a presumed scaffold that was never committed. Net effect: every task that said *"Modify"* or *"Delete"* a `python-agent/app/*` file is a **Create** instead. There is no `main.py`/`jwt.py`/`deps.py`/`config.py` to reconcile or delete. No work added; this only removes a false premise. Affected: **A2** (create `config.py`), **A3** (create `security.py`+`deps.py`; no `jwt.py` to delete), **A4** (`get_supabase_admin` is authored fresh in `db.py`, not "moved"), **E10** (create `main.py`). All `Create` file sets and contracts otherwise stand.
+
+- ~~`python-agent/app/main.py` imports non-existent routers~~ → **E10 creates `main.py` fresh** wiring `shape, sync, ingest, approvals`.
+- ~~`python-agent/app/jwt.py` uses network `auth.get_user()`~~ → **A3 creates `security.py`** with local `SUPABASE_JWT_SECRET` HS256 decode (Vision Pillar 2). Nothing to delete.
 - Migrations follow `db/CONVENTIONS.md` (additive, `equipe_id`, RLS, `updated_at`).
 - Core-Table (**D3**) is a verb-for-verb port of `supabase/functions/_shared/rule-engine.ts::executeActions` — read it as the reference.
 
@@ -618,7 +620,7 @@ Wave 8  Deploy (Human-led)                    ▶ W7 merged + built
 
 Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · task · engineer/model · tier).
 
-- [ ] A1a · uv project + lockfile · S · verboo
+- [x] A1a · uv project + lockfile · S · verboo
 - [ ] A1b · Dockerfile · M · codex
 - [ ] A2 · config (real models + DB URL) · S · verboo
 - [ ] A3 · security.py (+del jwt.py) · M · codex

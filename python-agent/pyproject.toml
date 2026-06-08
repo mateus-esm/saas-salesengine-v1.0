@@ -1,0 +1,30 @@
+[project]
+name = "solo-copilot-agent"
+version = "0.1.0"
+description = "FastAPI service for the Sprint 6 Solo Copilot agent layer."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "agno",
+  "fastapi",
+  "openai",
+  "psycopg[binary]",
+  "pydantic>=2",
+  "pydantic-settings",
+  "pyjwt",
+  "python-dotenv",
+  "supabase",
+  "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+  "httpx",
+  "pytest",
+  "pytest-asyncio",
+  "respx",
+]
+
+[tool.uv]
+package = false
+
