@@ -106,8 +106,11 @@ export const OpportunityDetailModal = ({
   });
 
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const { profile, equipe } = useAuth();
   const equipeId = profile?.equipe_id;
+  // "Agente de CRM" toggle (equipes.is_crm_agent_enabled): the ⚡ Sync button
+  // only appears for niches/teams that have the CRM agent enabled.
+  const crmAgentEnabled = equipe?.is_crm_agent_enabled ?? false;
 
   const [stageId, setStageId] = useState<string>("");
   const [syncLoading, setSyncLoading] = useState(false);
@@ -373,20 +376,22 @@ export const OpportunityDetailModal = ({
             Excluir
           </Button>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSync}
-              disabled={syncLoading}
-              className="h-8"
-            >
-              {syncLoading ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              Sync com Copilot
-            </Button>
+            {crmAgentEnabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync}
+                disabled={syncLoading}
+                className="h-8"
+              >
+                {syncLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Sync com Copilot
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={onClose} className="h-8">
               Cancelar
             </Button>
