@@ -22,6 +22,8 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-09 | Sprint 6 | E8 routers/sync.py | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-09 | Sprint 6 | F2 useCopilotRealtime.ts | Gemini 3.5 Flash | M | R$ 12 |
 | 2026-06-08 | Sprint 6 | E9 routers/approvals.py | Gemini 3.5 Flash | M | R$ 12 |
 | 2026-06-08 | Sprint 6 | E6 workflow.py | Claude / Opus | XL | R$ 28 |
 | 2026-06-08 | Sprint 6 | E4 autonomous_team.py | Claude / Opus | XL | R$ 28 |

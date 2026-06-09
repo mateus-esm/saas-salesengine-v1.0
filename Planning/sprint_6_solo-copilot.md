@@ -646,11 +646,11 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [x] E5 · agno_store.py (session/memory) · M · codex
 - [x] E6 · cascade/workflow.py · XL · claude (Opus)
 - [x] E7 · routers/ingest.py · M · codex
-- [ ] E8 · routers/sync.py · M · codex
+- [x] E8 · routers/sync.py · M · codex
 - [x] E9 · routers/approvals.py · M · gemini
 - [x] E10 · main.py wiring · S · verboo
 - [x] F1 · services/copilot.ts · S · verboo
-- [ ] F2 · useCopilotRealtime.ts · M · gemini
+- [x] F2 · useCopilotRealtime.ts · M · gemini
 - [ ] F3 · Sync button (OpportunityDetailModal) · M · verboo
 - [ ] F4 · approval cards · L · claude (Sonnet)
 - [x] G1 · deploy artifacts + .env.example · S · verboo
