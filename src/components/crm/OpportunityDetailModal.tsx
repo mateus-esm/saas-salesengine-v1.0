@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import * as copilot from "@/services/copilot";
 import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -102,7 +105,12 @@ export const OpportunityDetailModal = ({
     pipelineId: opportunity?.pipeline_id,
   });
 
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const equipeId = profile?.equipe_id;
+
   const [stageId, setStageId] = useState<string>("");
+  const [syncLoading, setSyncLoading] = useState(false);
   const [status, setStatus] = useState<OpportunityStatus>("open");
   const [value, setValue] = useState<string>("");
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
@@ -154,6 +162,27 @@ export const OpportunityDetailModal = ({
     if (!confirm("Excluir este lead?")) return;
     deleteOpportunity.mutate(opportunity.id);
     onClose();
+  };
+
+  const handleSync = async () => {
+    if (!opportunity.lead_id) {
+      toast.error("Esta oportunidade não tem lead vinculado.");
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      await copilot.syncOpportunity({
+        lead_id: opportunity.lead_id,
+        opportunity_id: opportunity.id,
+        pipeline_id: opportunity.pipeline_id,
+      });
+      toast.success("Copilot sincronizou o card");
+      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao sincronizar com o Copilot");
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   const hasCustomFields = schema.length > 0;
@@ -344,6 +373,20 @@ export const OpportunityDetailModal = ({
             Excluir
           </Button>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={syncLoading}
+              className="h-8"
+            >
+              {syncLoading ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Sync com Copilot
+            </Button>
             <Button variant="outline" size="sm" onClick={onClose} className="h-8">
               Cancelar
             </Button>
