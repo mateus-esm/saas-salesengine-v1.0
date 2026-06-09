@@ -103,9 +103,10 @@ async def test_run_worker_agentic_fallback(dummy_context):
         lead=None,
         rules=None
     )
-    # Since autonomous_team is not implemented in Wave 3, it should return the fallback
+    # E4 landed: agentic now delegates to run_autonomous. With no rules (and thus
+    # no autonomy_cost_ceiling), autonomy is disabled and the model never runs.
     assert not res.success
-    assert res.error == "autonomous_team_not_implemented"
+    assert res.error == "autonomy_disabled"
 
 
 @pytest.mark.asyncio
