@@ -30,3 +30,12 @@ dist-ssr
 *.sw?
 
 nul
+
+# Python (python-agent service)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Supabase CLI local state (machine-specific; not source)
+supabase/.temp/
