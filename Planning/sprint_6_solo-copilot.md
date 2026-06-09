@@ -638,7 +638,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] C4 · setup dashboard UI · L · claude (Sonnet)
 - [x] D1 · audit.py · M · gemini
 - [x] D2 · skills/registry.py · S · verboo
-- [ ] D3 · skills/core_table.py · L · codex
+- [x] D3 · skills/core_table.py · L · codex
 - [ ] E1 · cascade/tower_doorman.py · L · claude (Sonnet)
 - [ ] E2 · cascade/floor_doorman.py · L · claude (Sonnet)
 - [ ] E3 · cascade/worker.py · M · gemini

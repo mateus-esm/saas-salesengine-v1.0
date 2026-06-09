@@ -11,6 +11,7 @@ ALLOWED_TABLES = {
     "tasks",
     "lead_activities",
     "touchpoints",
+    "opportunity_stage_history",
 }
 
 
