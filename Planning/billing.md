@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-09 | Sprint 6 | C4 setup dashboard UI | Claude / Sonnet 4.6 | L | R$ 20 |
 | 2026-06-09 | Sprint 6 | F4 approval cards | Claude / Sonnet 4.6 | L | R$ 20 |
 | 2026-06-09 | Sprint 6 | F3 Sync button (OpportunityDetailModal) | verboo / deepseek | M | R$ 12 |
 | 2026-06-09 | Sprint 6 | E8 routers/sync.py | Codex / GPT-5 | M | R$ 12 |
