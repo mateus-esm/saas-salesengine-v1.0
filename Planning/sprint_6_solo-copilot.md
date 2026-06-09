@@ -158,78 +158,114 @@ execution intelligence.
 Sprint 6.**
 
 ---
+
 ---
 
 # 🛠️ IMPLEMENTATION PLAN (PM-owned · v2 — full Agno layer + infra)
 
-> **Flow:** `Planning/agent_workflow.md`. **R&D:** `Planning/pré_sprint_6_copilot.md`.
-> Every task is tagged **S/M/L/XL**, owns an explicit file set, lives in a wave (disjoint file ownership inside a wave). **L/XL** need PM sign-off before code; **S/M** branch and go if the contract is clear. Tick your box + add a billing row when merged (§Ledger).
+> **Flow:** `Planning/agent_workflow.md`. **R&D:**
+> `Planning/pré_sprint_6_copilot.md`. Every task is tagged **S/M/L/XL**, owns an
+> explicit file set, lives in a wave (disjoint file ownership inside a wave).
+> **L/XL** need PM sign-off before code; **S/M** branch and go if the contract
+> is clear. Tick your box + add a billing row when merged (§Ledger).
 >
-> **v2 changes (this revision):** ① the **entire Agno/agent layer** is in scope — autonomous cost-capped **Team worker** + **Agno session/memory** (no more Sprint-7 deferral); ② new **EPIC G — Infrastructure & Deployment** (Dokploy on the VPS) with a human guide; ③ roles formalized and **verboo** loaded with the S/M volume; ④ PM blind spots resolved — **real model IDs** (no `gpt-5.2`) + **UI hydration** (React Query invalidation + Supabase Realtime).
+> **v2 changes (this revision):** ① the **entire Agno/agent layer** is in scope
+> — autonomous cost-capped **Team worker** + **Agno session/memory** (no more
+> Sprint-7 deferral); ② new **EPIC G — Infrastructure & Deployment** (Dokploy on
+> the VPS) with a human guide; ③ roles formalized and **verboo** loaded with the
+> S/M volume; ④ PM blind spots resolved — **real model IDs** (no `gpt-5.2`) +
+> **UI hydration** (React Query invalidation + Supabase Realtime).
 
 ## §R — Roles & Cost Model
 
-**Mateus — Human Orchestrator (Diretor de Prova).** Owns the Vision + final acceptance. Authorizes each wave. Performs the **human-only infra** (EPIC G): VPS shell, Dokploy dashboard, DNS, provider API keys, secrets, GitHub deploy webhook, enabling the `pg_cron` extension. Has final say on scope and merges-of-record sign-off.
+**Mateus — Human Orchestrator (Diretor de Prova).** Owns the Vision + final
+acceptance. Authorizes each wave. Performs the **human-only infra** (EPIC G):
+VPS shell, Dokploy dashboard, DNS, provider API keys, secrets, GitHub deploy
+webhook, enabling the `pg_cron` extension. Has final say on scope and
+merges-of-record sign-off.
 
-**Claude / Opus — PM.** Maintains this plan; reviews **L/XL** task-plans before any code; double-checks finished tasks against the DoD; merges to `main`; opens waves; keeps the wave map conflict-free. Personally implements only the **XL** architectural keystones (E4 autonomous Team, E6 workflow).
+**Claude / Opus — PM.** Maintains this plan; reviews **L/XL** task-plans before
+any code; double-checks finished tasks against the DoD; merges to `main`; opens
+waves; keeps the wave map conflict-free. Personally implements only the **XL**
+architectural keystones (E4 autonomous Team, E6 workflow).
 
 **Engineers (route cheap work to cheap models — the #1 cost lever):**
 
-| Engineer | Cost | Model(s) | Best at / gets |
-| :-- | :-- | :-- | :-- |
-| **codex** | high | strong coding model | **L** security-critical Python: `security.py`, `core_table.py`, RPC, routers, Agno store |
-| **claude (Sonnet)** | mid-high | Sonnet 4.6 | **L** tasks needing product taste: Agno agents (doormen, shaper), autonomous-Team prompts, frontend dashboard/cards |
-| **gemini** | mid | Gemini Pro/Flash | **M** tasks: `guards.py`, `audit.py`, realtime hooks, mid routers, Agno schema |
-| **verboo** | **low** | **deepseek / MiMo / GLM / MiniMax (swappable)** | **the volume:** all **S** + most straightforward **M** — migrations, config, schemas, registry, client, wiring, deploy artifacts |
+| Engineer            | Cost     | Model(s)                                        | Best at / gets                                                                                                                   |
+| :------------------ | :------- | :---------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------- |
+| **codex**           | high     | strong coding model                             | **L** security-critical Python: `security.py`, `core_table.py`, RPC, routers, Agno store                                         |
+| **claude (Sonnet)** | mid-high | Sonnet 4.6                                      | **L** tasks needing product taste: Agno agents (doormen, shaper), autonomous-Team prompts, frontend dashboard/cards              |
+| **gemini**          | mid      | Gemini Pro/Flash                                | **M** tasks: `guards.py`, `audit.py`, realtime hooks, mid routers, Agno schema                                                   |
+| **verboo**          | **low**  | **deepseek / MiMo / GLM / MiniMax (swappable)** | **the volume:** all **S** + most straightforward **M** — migrations, config, schemas, registry, client, wiring, deploy artifacts |
 
-> Branch naming: `<engineer>/sprint6/<epic>/<desc>` — e.g. `verboo/sprint6/epicB/ai-decisions-queue`, `codex/sprint6/epicD/core-table-skill`.
+> Branch naming: `<engineer>/sprint6/<epic>/<desc>` — e.g.
+> `verboo/sprint6/epicB/ai-decisions-queue`,
+> `codex/sprint6/epicD/core-table-skill`.
 
 ## §P0 — DoD ↔ JTBD ↔ Tasks
 
-| Cockpit Metric (Vision DoD) | JTBD | Delivered by |
-| :-- | :-- | :-- |
-| **Engine Ignition** (Dokploy boot, no leaks) | infra | A1, A2, **EPIC G** |
-| **Sovereign Gateway** (FastAPI secure, JWT→`equipe_id`) | infra | A3–A5, E10 |
-| **Deterministic Clean Outputs** (text→blueprint 100%) | **JTBD 1** | B4, C1–C4 |
-| **Guarded Execution** (tenant-checked tools + audit queue) | **JTBD 3** | B1–B3, D1–D3 |
-| *(Hero Story B — Autonomous Handover Loop + full Agno cognition)* | **JTBD 2** | E1–E10 (incl. **E4 autonomous Team**, **E5 memory**) + F1–F4 |
+| Cockpit Metric (Vision DoD)                                       | JTBD       | Delivered by                                                 |
+| :---------------------------------------------------------------- | :--------- | :----------------------------------------------------------- |
+| **Engine Ignition** (Dokploy boot, no leaks)                      | infra      | A1, A2, **EPIC G**                                           |
+| **Sovereign Gateway** (FastAPI secure, JWT→`equipe_id`)           | infra      | A3–A5, E10                                                   |
+| **Deterministic Clean Outputs** (text→blueprint 100%)             | **JTBD 1** | B4, C1–C4                                                    |
+| **Guarded Execution** (tenant-checked tools + audit queue)        | **JTBD 3** | B1–B3, D1–D3                                                 |
+| _(Hero Story B — Autonomous Handover Loop + full Agno cognition)_ | **JTBD 2** | E1–E10 (incl. **E4 autonomous Team**, **E5 memory**) + F1–F4 |
 
 ## §P1 — Scope (v2)
 
 **In scope — all 3 JTBDs + the complete Agno cognition layer:**
-1. **JTBD 1 Self-Shaping Track:** NL → validated `PipelineBlueprint` (Agno `output_schema`) → atomic `shape_pipeline` RPC → setup dashboard.
-2. **JTBD 3 Sniper Tools:** guarded **Core-Table Skill** (Python port of `_shared/rule-engine.ts::executeActions`) + audit.
-3. **JTBD 2 Cascade Doorman (full):** Tower→Floor→Worker Agno **Workflow**, with the **deterministic** dispatch *and* the **autonomous cost-capped Team** leaf, backed by **Agno session/memory persistence**. Driven by the **⚡ Sync button** and the **gated autonomous ingest loop**.
-4. **Infra:** containerized service **deployed on Dokploy/VPS**, reachable over HTTPS via Traefik, secrets in Dokploy, `pg_cron` debounce tick.
 
-**Still out of scope (Sprint 7):** a UI-managed `copilot_skills` table (v1 uses JSONB `enabled_skills`); horizontal scale-out + Redis cache fan-out (start at **1 replica**, in-process 60s TTL); multi-channel Realtime push beyond the in-app stream.
+1. **JTBD 1 Self-Shaping Track:** NL → validated `PipelineBlueprint` (Agno
+   `output_schema`) → atomic `shape_pipeline` RPC → setup dashboard.
+2. **JTBD 3 Sniper Tools:** guarded **Core-Table Skill** (Python port of
+   `_shared/rule-engine.ts::executeActions`) + audit.
+3. **JTBD 2 Cascade Doorman (full):** Tower→Floor→Worker Agno **Workflow**, with
+   the **deterministic** dispatch _and_ the **autonomous cost-capped Team**
+   leaf, backed by **Agno session/memory persistence**. Driven by the **⚡ Sync
+   button** and the **gated autonomous ingest loop**.
+4. **Infra:** containerized service **deployed on Dokploy/VPS**, reachable over
+   HTTPS via Traefik, secrets in Dokploy, `pg_cron` debounce tick.
 
-**PM note:** the autonomous loop ships **gated by `equipes.is_crm_agent_enabled` (off by default)**. The Sync button is the always-on, rep-supervised path and the primary demo for "Guarded Execution".
+**Still out of scope (Sprint 7):** a UI-managed `copilot_skills` table (v1 uses
+JSONB `enabled_skills`); horizontal scale-out + Redis cache fan-out (start at
+**1 replica**, in-process 60s TTL); multi-channel Realtime push beyond the
+in-app stream.
+
+**PM note:** the autonomous loop ships **gated by `equipes.is_crm_agent_enabled`
+(off by default)**. The Sync button is the always-on, rep-supervised path and
+the primary demo for "Guarded Execution".
 
 ## §P2 — Locked technical answers
 
-| Topic | Lock |
-| :-- | :-- |
-| Debounce | Stateless `due_at` marker on `copilot_ingest_queue` (B5) + `pg_cron` tick → `/ingest` (G5). No in-memory timers. |
-| Pre-filter | Heuristic `worker.is_pipeline_relevant` (no tiny-model call). |
-| Router↔identity | Tower Doorman routes by creating an `opportunity` (dedup on `(lead_id, pipeline_id)`). |
-| DB access | `service_role` supabase-py for verbs; **`psycopg` pool to `DATABASE_URL` (session mode `:5432`)** only for **Agno storage/memory** (A4, E5). `shape_pipeline` is an in-DB RPC (atomic). |
-| Agno session/memory | **Supabase Postgres, dedicated `agno` schema** (R&D Q5 Option A). Session keyed by `opportunity_id`. |
+| Topic                         | Lock                                                                                                                                                                                                                                                                                                                         |
+| :---------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Debounce                      | Stateless `due_at` marker on `copilot_ingest_queue` (B5) + `pg_cron` tick → `/ingest` (G5). No in-memory timers.                                                                                                                                                                                                             |
+| Pre-filter                    | Heuristic `worker.is_pipeline_relevant` (no tiny-model call).                                                                                                                                                                                                                                                                |
+| Router↔identity               | Tower Doorman routes by creating an `opportunity` (dedup on `(lead_id, pipeline_id)`).                                                                                                                                                                                                                                       |
+| DB access                     | `service_role` supabase-py for verbs; **`psycopg` pool to `DATABASE_URL` (session mode `:5432`)** only for **Agno storage/memory** (A4, E5). `shape_pipeline` is an in-DB RPC (atomic).                                                                                                                                      |
+| Agno session/memory           | **Supabase Postgres, dedicated `agno` schema** (R&D Q5 Option A). Session keyed by `opportunity_id`.                                                                                                                                                                                                                         |
 | Runtime models (blind spot B) | **No `gpt-5.2`.** Defaults: `doorman_model="gpt-4o-mini"`, `worker_model="gpt-4o"`, `shaper_model="gpt-4o"` — all overridable per-pipeline (`pipeline_agent_rules`) and via env. Documented cheap swaps: `deepseek-chat`, `glm-4-flash`, `claude-haiku` (doorman); `claude-sonnet-4-6`, `deepseek-reasoner` (worker/shaper). |
-| UI hydration (blind spot A) | Mutations from `/sync` & `/approvals` are reflected via **React Query `invalidateQueries`** *and* a **Supabase Realtime** subscription on `opportunities` + `ai_decisions` (F2). No full-page refreshes. |
+| UI hydration (blind spot A)   | Mutations from `/sync` & `/approvals` are reflected via **React Query `invalidateQueries`** _and_ a **Supabase Realtime** subscription on `opportunities` + `ai_decisions` (F2). No full-page refreshes.                                                                                                                     |
 
 ## §P3 — Reconciliation with existing scaffold
 
-> **PM CORRECTION (2026-06-08):** the `python-agent/` scaffold **does not exist** on disk or in git — the Python service is **greenfield**. Bullets ①–② below were written against a presumed scaffold that was never committed. Net effect: every task that said *"Modify"* or *"Delete"* a `python-agent/app/*` file is a **Create** instead. There is no `main.py`/`jwt.py`/`deps.py`/`config.py` to reconcile or delete. No work added; this only removes a false premise. Affected: **A2** (create `config.py`), **A3** (create `security.py`+`deps.py`; no `jwt.py` to delete), **A4** (`get_supabase_admin` is authored fresh in `db.py`, not "moved"), **E10** (create `main.py`). All `Create` file sets and contracts otherwise stand.
-
-- ~~`python-agent/app/main.py` imports non-existent routers~~ → **E10 creates `main.py` fresh** wiring `shape, sync, ingest, approvals`.
-- ~~`python-agent/app/jwt.py` uses network `auth.get_user()`~~ → **A3 creates `security.py`** with local `SUPABASE_JWT_SECRET` HS256 decode (Vision Pillar 2). Nothing to delete.
-- Migrations follow `db/CONVENTIONS.md` (additive, `equipe_id`, RLS, `updated_at`).
-- Core-Table (**D3**) is a verb-for-verb port of `supabase/functions/_shared/rule-engine.ts::executeActions` — read it as the reference.
+- `python-agent/app/main.py` imports non-existent routers `chat/session/actions`
+  → can't boot; **E10** rewrites it.
+- `python-agent/app/jwt.py` uses network `auth.get_user()`; Vision Pillar 2
+  mandates **local `SUPABASE_JWT_SECRET` decode** → **A3** adds `security.py`,
+  **deletes `jwt.py`**, re-points `deps.py`.
+- Migrations follow `db/CONVENTIONS.md` (additive, `equipe_id`, RLS,
+  `updated_at`).
+- Core-Table (**D3**) is a verb-for-verb port of
+  `supabase/functions/_shared/rule-engine.ts::executeActions` — read it as the
+  reference.
 
 ## §P4 — Canonical contracts (define once; all tasks reference these)
 
-**`app/schemas.py`** (C1) — JTBD 1 blueprint **must** mirror `src/types/pipelines.ts`:
+**`app/schemas.py`** (C1) — JTBD 1 blueprint **must** mirror
+`src/types/pipelines.ts`:
+
 ```python
 from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -307,7 +343,10 @@ class ActionResult(BaseModel):
     error: Optional[str] = None
 ```
 
-**Core-Table Skill** — `app/skills/core_table.py` (D3), bound to `(client, equipe_id, actor)`; every query carries `.eq("equipe_id", self.equipe_id)`:
+**Core-Table Skill** — `app/skills/core_table.py` (D3), bound to
+`(client, equipe_id, actor)`; every query carries
+`.eq("equipe_id", self.equipe_id)`:
+
 ```python
 class CoreTableSkill:
     name = "core_table"
@@ -324,15 +363,31 @@ class CoreTableSkill:
     async def create_opportunity(self, lead_id, pipeline_id, stage_id=None) -> ActionResult: ...   # routing, dedup
 ```
 
-**Guards** — `app/guards.py` (A5): `ALLOWED_TABLES = {opportunities, pipeline_stages_v2, custom_table_records, leads, tasks, lead_activities, touchpoints, opportunity_stage_history}`; `assert_table`, `assert_equipe(row, equipe_id)`, `GuardError`. **(PM correction 2026-06-08: `opportunity_stage_history` added to the whitelist during Wave 2 — D3's `move_stage` must follow-up-stamp `actor`/`changed_by_type` on the trigger-created history row, which the original §P4 set omitted. `tasks`/`lead_activities`/`touchpoints` have no `equipe_id` column; they are tenant-guarded via the `lead_id → leads` pre-fetch, not a row-level `equipe_id` filter.)**
+**Guards** — `app/guards.py` (A5):
+`ALLOWED_TABLES = {opportunities, pipeline_stages_v2, custom_table_records, leads, tasks, lead_activities, touchpoints}`;
+`assert_table`, `assert_equipe(row, equipe_id)`, `GuardError`.
 
-**Security** — `app/security.py` (A3): `TenantContext(equipe_id, actor_user_id, role)`; `tenant_from_jwt(authorization)` — HS256 decode with `SUPABASE_JWT_SECRET` (`audience="authenticated"`), `actor_user_id = sub`, resolve `equipe_id` from `profiles`.
+**Security** — `app/security.py` (A3):
+`TenantContext(equipe_id, actor_user_id, role)`;
+`tenant_from_jwt(authorization)` — HS256 decode with `SUPABASE_JWT_SECRET`
+(`audience="authenticated"`), `actor_user_id = sub`, resolve `equipe_id` from
+`profiles`.
 
-**Audit** — `app/audit.py` (D1): `record_decision(client, *, equipe_id, lead_id, opportunity_id, pipeline_id, agent_role, decision_type, output_action, confidence, status, actor) -> id`. `status ∈ {auto_applied, pending_approval, approved, rejected, executed, failed}`.
+**Audit** — `app/audit.py` (D1):
+`record_decision(client, *, equipe_id, lead_id, opportunity_id, pipeline_id, agent_role, decision_type, output_action, confidence, status, actor) -> id`.
+`status ∈ {auto_applied, pending_approval, approved, rejected, executed, failed}`.
 
-**Agno store** — `app/agno_store.py` (E5): `get_storage()` / `get_memory()` returning Agno Postgres backends pointed at `DATABASE_URL`, schema `agno`, sessions keyed by `opportunity_id`.
+**Agno store** — `app/agno_store.py` (E5): `get_storage()` / `get_memory()`
+returning Agno Postgres backends pointed at `DATABASE_URL`, schema `agno`,
+sessions keyed by `opportunity_id`.
 
-**Autonomous Team** — `app/cascade/autonomous_team.py` (E4): `async def run_autonomous(*, ctx, decision, opportunity, lead, rules) -> ActionResult` — an Agno `Team`/reasoning `Agent` whose **only tools are the pipeline's active skills** (Core-Table verbs), bounded by `rules["autonomy_cost_ceiling"]` (max tool-calls/iterations; `None` ⇒ skip, deterministic-only) and `worker_model`. Returns a single `ActionResult` summarizing applied mutations; **all** writes still go through the guarded Core-Table tools.
+**Autonomous Team** — `app/cascade/autonomous_team.py` (E4):
+`async def run_autonomous(*, ctx, decision, opportunity, lead, rules) -> ActionResult`
+— an Agno `Team`/reasoning `Agent` whose **only tools are the pipeline's active
+skills** (Core-Table verbs), bounded by `rules["autonomy_cost_ceiling"]` (max
+tool-calls/iterations; `None` ⇒ skip, deterministic-only) and `worker_model`.
+Returns a single `ActionResult` summarizing applied mutations; **all** writes
+still go through the guarded Core-Table tools.
 
 ---
 
@@ -341,225 +396,539 @@ class CoreTableSkill:
 ### EPIC A — Engine Ignition & Sovereign Gateway
 
 #### A1a — Python project + lockfile · **S** · verboo
-**Create:** `python-agent/pyproject.toml`, `python-agent/.dockerignore`, `python-agent/uv.lock`, `python-agent/README.md`
-**Contract:** deps `fastapi, uvicorn[standard], agno, openai, pyjwt, pydantic>=2, pydantic-settings, supabase, psycopg[binary], python-dotenv`; dev `pytest, pytest-asyncio, httpx, respx`; Python 3.12. `.dockerignore` excludes `.git .venv .env __pycache__/ *.pyc node_modules/ dist/`. Run `uv lock`.
-**Accept:** `uv sync --frozen` succeeds.
+
+**Create:** `python-agent/pyproject.toml`, `python-agent/.dockerignore`,
+`python-agent/uv.lock`, `python-agent/README.md` **Contract:** deps
+`fastapi, uvicorn[standard], agno, openai, pyjwt, pydantic>=2, pydantic-settings, supabase, psycopg[binary], python-dotenv`;
+dev `pytest, pytest-asyncio, httpx, respx`; Python 3.12. `.dockerignore`
+excludes `.git .venv .env __pycache__/ *.pyc node_modules/ dist/`. Run
+`uv lock`. **Accept:** `uv sync --frozen` succeeds.
 
 #### A1b — Production Dockerfile (uv multi-stage) · **M** · codex
-**Create:** `python-agent/Dockerfile`
-**Contract:** pinned `ghcr.io/astral-sh/uv:0.11.19-python3.12-trixie-slim` builder → `python:3.12-slim-trixie` runtime; non-root `appuser`; `CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8000","--workers","2","--proxy-headers","--no-access-log"]`. No secrets baked.
-**Accept:** `docker build python-agent` succeeds; image runs as non-root; no `.env` in image.
+
+**Create:** `python-agent/Dockerfile` **Contract:** pinned
+`ghcr.io/astral-sh/uv:0.11.19-python3.12-trixie-slim` builder →
+`python:3.12-slim-trixie` runtime; non-root `appuser`;
+`CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8000","--workers","2","--proxy-headers","--no-access-log"]`.
+No secrets baked. **Accept:** `docker build python-agent` succeeds; image runs
+as non-root; no `.env` in image.
 
 #### A2 — Config surface (real model IDs + DB URL) · **S** · verboo
-**Modify:** `python-agent/app/config.py`
-**Contract:** add `supabase_jwt_secret`, `agent_internal_token`, `database_url` (session-mode `:5432`), `agno_schema="agno"`, `doorman_model="gpt-4o-mini"`, `worker_model="gpt-4o"`, `shaper_model="gpt-4o"`, `ingest_enabled=False`. Keep existing keys. Comment the documented cheap swaps (§P2). **Resolves PM blind spot B — no `gpt-5.2`.**
-**Accept:** imports; all keys present; loads from `.env`.
+
+**Modify:** `python-agent/app/config.py` **Contract:** add
+`supabase_jwt_secret`, `agent_internal_token`, `database_url` (session-mode
+`:5432`), `agno_schema="agno"`, `doorman_model="gpt-4o-mini"`,
+`worker_model="gpt-4o"`, `shaper_model="gpt-4o"`, `ingest_enabled=False`. Keep
+existing keys. Comment the documented cheap swaps (§P2). **Resolves PM blind
+spot B — no `gpt-5.2`.** **Accept:** imports; all keys present; loads from
+`.env`.
 
 #### A3 — Security: local JWT decode → tenant context · **M** · codex
-**Create:** `python-agent/app/security.py` · **Modify:** `python-agent/app/deps.py` · **Delete:** `python-agent/app/jwt.py`
-**Contract:** `TenantContext` + `tenant_from_jwt` per §P4; `deps.get_tenant_context` returns `TenantContext`. (`get_supabase_admin` moves to `db.py`/A4 before deletion.)
-**Accept:** valid token → context; tampered/expired/bad-audience → 401; no tenant → 403; self-signed HS256 unit tests.
+
+**Create:** `python-agent/app/security.py` · **Modify:**
+`python-agent/app/deps.py` · **Delete:** `python-agent/app/jwt.py` **Contract:**
+`TenantContext` + `tenant_from_jwt` per §P4; `deps.get_tenant_context` returns
+`TenantContext`. (`get_supabase_admin` moves to `db.py`/A4 before deletion.)
+**Accept:** valid token → context; tampered/expired/bad-audience → 401; no
+tenant → 403; self-signed HS256 unit tests.
 
 #### A4 — DB access (service client + psycopg pool) · **M** · codex
-**Create:** `python-agent/app/db.py`
-**Contract:** memoised `get_service_client() -> Client` (supabase-py) + `get_db()` dependency; **plus** a lazily-initialised `psycopg` connection pool to `DATABASE_URL` (session mode) exposed as `get_pg_pool()` for Agno storage (E5). No `pg_cron` here.
-**Accept:** memoised client; pool created lazily; no network at import.
+
+**Create:** `python-agent/app/db.py` **Contract:** memoised
+`get_service_client() -> Client` (supabase-py) + `get_db()` dependency; **plus**
+a lazily-initialised `psycopg` connection pool to `DATABASE_URL` (session mode)
+exposed as `get_pg_pool()` for Agno storage (E5). No `pg_cron` here. **Accept:**
+memoised client; pool created lazily; no network at import.
 
 #### A5 — Guard layer · **M** · gemini
-**Create:** `python-agent/app/guards.py`
-**Contract:** `ALLOWED_TABLES`, `assert_table`, `assert_equipe`, `GuardError` per §P4.
-**Accept:** non-whitelisted table / cross-tenant / None row raise; matches pass; full unit coverage.
+
+**Create:** `python-agent/app/guards.py` **Contract:** `ALLOWED_TABLES`,
+`assert_table`, `assert_equipe`, `GuardError` per §P4. **Accept:**
+non-whitelisted table / cross-tenant / None row raise; matches pass; full unit
+coverage.
 
 ### EPIC B — Schema Deltas (per `db/CONVENTIONS.md`)
 
 #### B1 — Extend `pipeline_agent_rules` · **S** · verboo
+
 **Create:** `supabase/migrations/20260608000000_sprint6_copilot_config.sql`
-**Contract:** R&D §5.1 `ALTER TABLE` — `reasoning_enabled, tools_enabled, enabled_skills, confidence_threshold (CHECK 0..1), autonomy_cost_ceiling, doorman_model, worker_model`. Idempotent + comments.
-**Accept:** idempotent apply; defaults/checks correct.
+**Contract:** R&D §5.1 `ALTER TABLE` —
+`reasoning_enabled, tools_enabled, enabled_skills, confidence_threshold (CHECK 0..1), autonomy_cost_ceiling, doorman_model, worker_model`.
+Idempotent + comments. **Accept:** idempotent apply; defaults/checks correct.
 
 #### B2 — `ai_decisions` → audit + approval queue · **S** · verboo
+
 **Create:** `supabase/migrations/20260608000100_sprint6_ai_decisions_queue.sql`
-**Contract:** R&D §5.2 `ALTER TABLE` — `equipe_id, opportunity_id, pipeline_id, agent_role, status (CHECK), actor, resolved_by, resolved_at`; partial index `where status='pending_approval'`; backfill nulls → `auto_applied`.
-**Accept:** idempotent; CHECK rejects bad status; index present.
+**Contract:** R&D §5.2 `ALTER TABLE` —
+`equipe_id, opportunity_id, pipeline_id, agent_role, status (CHECK), actor, resolved_by, resolved_at`;
+partial index `where status='pending_approval'`; backfill nulls →
+`auto_applied`. **Accept:** idempotent; CHECK rejects bad status; index present.
 
 #### B3 — Audit-actor on stage history · **S** · verboo
+
 **Create:** `supabase/migrations/20260608000200_sprint6_stage_history_actor.sql`
-**Contract:** on `public.opportunity_stage_history` add `actor text` + `changed_by_type text default 'team' CHECK (in 'team','copilot','automation','import')` (R&D §5.3).
-**Accept:** idempotent; existing trigger unaffected.
+**Contract:** on `public.opportunity_stage_history` add `actor text` +
+`changed_by_type text default 'team' CHECK (in 'team','copilot','automation','import')`
+(R&D §5.3). **Accept:** idempotent; existing trigger unaffected.
 
 #### B4 — `shape_pipeline` atomic RPC · **L** · codex · **PM approval**
+
 **Create:** `supabase/migrations/20260608000300_sprint6_shape_pipeline_rpc.sql`
-**Contract:** `create or replace function public.shape_pipeline(p_equipe_id uuid, p_payload jsonb) returns uuid language plpgsql security definer set search_path=public` — adapt R&D Addendum §E to **live columns**: insert `pipelines (equipe_id, name, description, custom_fields_schema)` with **server-minted `field_id`** per field (`{field_id,key,label,type,required,options,position,is_deleted:false}`), then loop `stages` → `pipeline_stages_v2 (equipe_id, pipeline_id, name, color, position, stage_type, max_idle_hours, cadence_value, cadence_unit)`. One transaction. Return `pipeline_id`. `grant execute to service_role`.
-**Accept:** valid payload → 1 pipeline + N stages + minted field_ids, all-or-nothing; mid-payload error rolls back; positions preserved.
+**Contract:**
+`create or replace function public.shape_pipeline(p_equipe_id uuid, p_payload jsonb) returns uuid language plpgsql security definer set search_path=public`
+— adapt R&D Addendum §E to **live columns**: insert
+`pipelines (equipe_id, name, description, custom_fields_schema)` with
+**server-minted `field_id`** per field
+(`{field_id,key,label,type,required,options,position,is_deleted:false}`), then
+loop `stages` →
+`pipeline_stages_v2 (equipe_id, pipeline_id, name, color, position, stage_type, max_idle_hours, cadence_value, cadence_unit)`.
+One transaction. Return `pipeline_id`. `grant execute to service_role`.
+**Accept:** valid payload → 1 pipeline + N stages + minted field_ids,
+all-or-nothing; mid-payload error rolls back; positions preserved.
 
 #### B5 — `copilot_ingest_queue` (stateless debounce) · **S** · verboo
+
 **Create:** `supabase/migrations/20260608000400_sprint6_ingest_queue.sql`
-**Contract:** table `copilot_ingest_queue (id, equipe_id, lead_id, pipeline_id, conversation_ref text, due_at timestamptz, processed_at timestamptz, created_at)` + standard `equipe_id`/RLS + index on `(due_at) where processed_at is null`. (The `pg_cron` tick that consumes it is G5.)
-**Accept:** idempotent; index present; RLS enabled.
+**Contract:** table
+`copilot_ingest_queue (id, equipe_id, lead_id, pipeline_id, conversation_ref text, due_at timestamptz, processed_at timestamptz, created_at)` +
+standard `equipe_id`/RLS + index on `(due_at) where processed_at is null`. (The
+`pg_cron` tick that consumes it is G5.) **Accept:** idempotent; index present;
+RLS enabled.
 
 #### B6 — Agno session/memory schema · **M** · gemini
-**Create:** `supabase/migrations/20260608000500_sprint6_agno_schema.sql`
-**Contract:** `create schema if not exists agno;` + `grant usage on schema agno to service_role;` + `alter default privileges in schema agno grant all on tables to service_role;`. Agno auto-creates its own session/memory tables here at runtime (E5); this migration only provisions the schema + grants. Document that no public RLS applies (service_role only, never client-exposed).
-**Accept:** schema exists; service_role can create/select tables in it.
 
-### EPIC C — JTBD 1: Self-Shaping Track  *(DoD: Deterministic Clean Outputs)*
+**Create:** `supabase/migrations/20260608000500_sprint6_agno_schema.sql`
+**Contract:** `create schema if not exists agno;` +
+`grant usage on schema agno to service_role;` +
+`alter default privileges in schema agno grant all on tables to service_role;`.
+Agno auto-creates its own session/memory tables here at runtime (E5); this
+migration only provisions the schema + grants. Document that no public RLS
+applies (service_role only, never client-exposed). **Accept:** schema exists;
+service_role can create/select tables in it.
+
+### EPIC C — JTBD 1: Self-Shaping Track _(DoD: Deterministic Clean Outputs)_
 
 #### C1 — Schemas (blueprint + decisions) · **M** · verboo
-**Create:** `python-agent/app/schemas.py`
-**Contract:** the full §P4 schemas block. Union **must equal** `src/types/pipelines.ts::CustomFieldType`.
-**Accept:** non-contiguous positions raise; mismatched cadence pair raises; non-snake key raises; valid blueprint round-trips `.model_dump()`.
+
+**Create:** `python-agent/app/schemas.py` **Contract:** the full §P4 schemas
+block. Union **must equal** `src/types/pipelines.ts::CustomFieldType`.
+**Accept:** non-contiguous positions raise; mismatched cadence pair raises;
+non-snake key raises; valid blueprint round-trips `.model_dump()`.
 
 #### C2 — Track Shaper agent · **L** · claude (Sonnet) · **PM approval**
-**Create:** `python-agent/app/cascade/track_shaper.py`, `python-agent/app/cascade/__init__.py`
-**Contract:** `async def shape_track(*, prompt, locale="pt-BR", model_id) -> PipelineBlueprint`. Agno `Agent(model=OpenAIChat(id=model_id), output_schema=PipelineBlueprint, telemetry=False)`; PT-BR system prompt (snake_case keys, contiguous positions, infer SLA/cadence). Pure generation (no DB). Validation failure → typed error for 422.
-**Accept:** stubbed model → valid blueprint; Story-A prompt yields ≥3 stages + ≥2 fields; invalid output surfaces `ValidationError`.
+
+**Create:** `python-agent/app/cascade/track_shaper.py`,
+`python-agent/app/cascade/__init__.py` **Contract:**
+`async def shape_track(*, prompt, locale="pt-BR", model_id) -> PipelineBlueprint`.
+Agno
+`Agent(model=OpenAIChat(id=model_id), output_schema=PipelineBlueprint, telemetry=False)`;
+PT-BR system prompt (snake_case keys, contiguous positions, infer SLA/cadence).
+Pure generation (no DB). Validation failure → typed error for 422. **Accept:**
+stubbed model → valid blueprint; Story-A prompt yields ≥3 stages + ≥2 fields;
+invalid output surfaces `ValidationError`.
 
 #### C3 — Shape route (preview + apply) · **L** · codex · **PM approval**
-**Create:** `python-agent/app/routers/shape.py`
-**Contract:** `POST /api/v1/shape/preview {prompt}` → blueprint JSON (no write); `POST /api/v1/shape/apply {blueprint}` → re-validate → `shape_pipeline` RPC with `ctx.equipe_id` → `{pipeline_id}`. Validation failure → `422` (never partial). `ctx = Depends(get_tenant_context)`.
-**Accept:** preview returns valid blueprint; apply asserts `p_equipe_id = ctx.equipe_id` (mocked RPC); bad blueprint → 422.
+
+**Create:** `python-agent/app/routers/shape.py` **Contract:**
+`POST /api/v1/shape/preview {prompt}` → blueprint JSON (no write);
+`POST /api/v1/shape/apply {blueprint}` → re-validate → `shape_pipeline` RPC with
+`ctx.equipe_id` → `{pipeline_id}`. Validation failure → `422` (never partial).
+`ctx = Depends(get_tenant_context)`. **Accept:** preview returns valid
+blueprint; apply asserts `p_equipe_id = ctx.equipe_id` (mocked RPC); bad
+blueprint → 422.
 
 #### C4 — Setup dashboard UI · **L** · claude (Sonnet) · **PM approval**
-**Create:** `src/components/crm/copilot/TrackShaperDialog.tsx`, `src/hooks/useTrackShaper.ts` · **Modify:** `src/components/crm/pipeline-settings/PipelineList.tsx` (one insertion: "✨ Criar com Copilot")
-**Contract:** dark minimal dialog (Story A): `Textarea` → "Gerar" → `copilot.shapePreview` → render proposed columns + fields → "Criar pipeline" → `copilot.shapeApply` → invalidate pipelines query + toast.
-**Accept:** `npm run build` clean; paragraph → live preview; confirm → pipeline appears; only owned files changed.
 
-### EPIC D — JTBD 3: Sniper CRM Tools  *(DoD: Guarded Execution)*
+**Create:** `src/components/crm/copilot/TrackShaperDialog.tsx`,
+`src/hooks/useTrackShaper.ts` · **Modify:**
+`src/components/crm/pipeline-settings/PipelineList.tsx` (one insertion: "✨
+Criar com Copilot") **Contract:** dark minimal dialog (Story A): `Textarea` →
+"Gerar" → `copilot.shapePreview` → render proposed columns + fields → "Criar
+pipeline" → `copilot.shapeApply` → invalidate pipelines query + toast.
+**Accept:** `npm run build` clean; paragraph → live preview; confirm → pipeline
+appears; only owned files changed.
+
+### EPIC D — JTBD 3: Sniper CRM Tools _(DoD: Guarded Execution)_
 
 #### D1 — Audit writer · **M** · gemini
-**Create:** `python-agent/app/audit.py`
-**Contract:** `record_decision(...)` per §P4 (`confidence`→`confidence_score`, `output_action` jsonb, new cols). **Depends:** B2, A4.
-**Accept:** mocked-client test asserts key mapping + returned id.
+
+**Create:** `python-agent/app/audit.py` **Contract:** `record_decision(...)` per
+§P4 (`confidence`→`confidence_score`, `output_action` jsonb, new cols).
+**Depends:** B2, A4. **Accept:** mocked-client test asserts key mapping +
+returned id.
 
 #### D2 — Skill registry · **S** · verboo
-**Create:** `python-agent/app/skills/registry.py`, `python-agent/app/skills/__init__.py`
-**Contract:** `register(skill_cls)`, `get_skill(name)`, `active_skills(enabled_skills)` — in-process, driven by JSONB `pipeline_agent_rules.enabled_skills`.
-**Accept:** register→get round-trips; unknown raises; `active_skills([])` empty.
+
+**Create:** `python-agent/app/skills/registry.py`,
+`python-agent/app/skills/__init__.py` **Contract:** `register(skill_cls)`,
+`get_skill(name)`, `active_skills(enabled_skills)` — in-process, driven by JSONB
+`pipeline_agent_rules.enabled_skills`. **Accept:** register→get round-trips;
+unknown raises; `active_skills([])` empty.
 
 #### D3 — Core-Table Skill (Guarded CRUD) · **L** · codex · **PM approval**
-**Create:** `python-agent/app/skills/core_table.py`
-**Reference:** `_shared/rule-engine.ts::executeActions` (port verb-for-verb).
-**Contract:** `CoreTableSkill` per §P4. Every query `.eq("equipe_id", self.equipe_id)`; per-verb try/except → `ActionResult`. `set_field`/`set_contact_field` fetch-merge-write JSONB (preserve siblings; `custom_data` by `field_id`, `personal_custom_data` by `key`). `move_stage` resolves stage by `(equipe_id, pipeline_id, stage_type, name_hint)`, updates `stage_id`+`stage_entered_at`, then stamps `opportunity_stage_history.actor`/`changed_by_type` (B3). `create_opportunity` dedups `(lead_id, pipeline_id)`. `guards.assert_table` before any touch; `guards.assert_equipe` on every fetched row.
-**Accept:** per-verb tests: correct table, `equipe_id` filter everywhere, JSONB merge preserves siblings, cross-tenant → guard fail, `add_tag` dedups, `move_stage` stamps actor.
 
-### EPIC E — JTBD 2: Cascade Doorman + Full Agno Cognition  *(Hero Story B)*
+**Create:** `python-agent/app/skills/core_table.py` **Reference:**
+`_shared/rule-engine.ts::executeActions` (port verb-for-verb). **Contract:**
+`CoreTableSkill` per §P4. Every query `.eq("equipe_id", self.equipe_id)`;
+per-verb try/except → `ActionResult`. `set_field`/`set_contact_field`
+fetch-merge-write JSONB (preserve siblings; `custom_data` by `field_id`,
+`personal_custom_data` by `key`). `move_stage` resolves stage by
+`(equipe_id, pipeline_id, stage_type, name_hint)`, updates
+`stage_id`+`stage_entered_at`, then stamps
+`opportunity_stage_history.actor`/`changed_by_type` (B3). `create_opportunity`
+dedups `(lead_id, pipeline_id)`. `guards.assert_table` before any touch;
+`guards.assert_equipe` on every fetched row. **Accept:** per-verb tests: correct
+table, `equipe_id` filter everywhere, JSONB merge preserves siblings,
+cross-tenant → guard fail, `add_tag` dedups, `move_stage` stamps actor.
+
+### EPIC E — JTBD 2: Cascade Doorman + Full Agno Cognition _(Hero Story B)_
 
 #### E1 — Tower Doorman · **L** · claude (Sonnet) · **PM approval**
-**Create:** `python-agent/app/cascade/tower_doorman.py`
-**Contract:** `async def classify_and_route(*, ctx, conversation, lead, pipelines, model_id) -> RouteDecision`. Agno `Agent(output_schema=RouteDecision, telemetry=False)`. No DB writes.
-**Accept:** stubbed model → valid `RouteDecision`; `pipeline_id` ∈ supplied set or `None`; confidence ∈ [0,1].
+
+**Create:** `python-agent/app/cascade/tower_doorman.py` **Contract:**
+`async def classify_and_route(*, ctx, conversation, lead, pipelines, model_id) -> RouteDecision`.
+Agno `Agent(output_schema=RouteDecision, telemetry=False)`. No DB writes.
+**Accept:** stubbed model → valid `RouteDecision`; `pipeline_id` ∈ supplied set
+or `None`; confidence ∈ [0,1].
 
 #### E2 — Floor Doorman · **L** · claude (Sonnet) · **PM approval**
-**Create:** `python-agent/app/cascade/floor_doorman.py`
-**Contract:** `async def triage_intent(*, ctx, conversation, opportunity, pipeline_rules, model_id) -> IntentDecision`. Prompt carries `extraction_hints` + `enabled_skills`. Out-of-registry skill → downgrade to `relevant=False`. No DB writes.
-**Accept:** stubbed model → valid `IntentDecision`; out-of-registry skill downgraded with reason.
+
+**Create:** `python-agent/app/cascade/floor_doorman.py` **Contract:**
+`async def triage_intent(*, ctx, conversation, opportunity, pipeline_rules, model_id) -> IntentDecision`.
+Prompt carries `extraction_hints` + `enabled_skills`. Out-of-registry skill →
+downgrade to `relevant=False`. No DB writes. **Accept:** stubbed model → valid
+`IntentDecision`; out-of-registry skill downgraded with reason.
 
 #### E3 — Worker (deterministic dispatch + escalation router) · **M** · gemini
-**Create:** `python-agent/app/cascade/worker.py`
-**Contract:** `async def run_worker(*, ctx, decision, opportunity, lead, rules) -> ActionResult`. `deterministic` → `registry.get_skill(decision.skill)` bound to `(client, ctx.equipe_id, actor)`, dispatch the verb in `decision.args`. `agentic` → **delegate to `autonomous_team.run_autonomous(...)`** (E4). `none` → no-op success. Includes `is_pipeline_relevant(conversation) -> bool` heuristic.
-**Accept:** deterministic dispatches the right verb; agentic calls `run_autonomous` (mocked); none is no-op.
+
+**Create:** `python-agent/app/cascade/worker.py` **Contract:**
+`async def run_worker(*, ctx, decision, opportunity, lead, rules) -> ActionResult`.
+`deterministic` → `registry.get_skill(decision.skill)` bound to
+`(client, ctx.equipe_id, actor)`, dispatch the verb in `decision.args`.
+`agentic` → **delegate to `autonomous_team.run_autonomous(...)`** (E4). `none` →
+no-op success. Includes `is_pipeline_relevant(conversation) -> bool` heuristic.
+**Accept:** deterministic dispatches the right verb; agentic calls
+`run_autonomous` (mocked); none is no-op.
 
 #### E4 — Autonomous Team worker (cost-capped) · **XL** · claude (Opus) · **PM approval**
-**Create:** `python-agent/app/cascade/autonomous_team.py`
-**Contract:** `run_autonomous` per §P4. Agno `Team`/reasoning `Agent` whose tools are the pipeline's **active Core-Table skills only**, bounded by `rules["autonomy_cost_ceiling"]` (`None` ⇒ return `ActionResult(success=False, error="autonomy_disabled")`), capped iterations/tool-calls, `worker_model`. Persists session via Agno memory (E5) keyed by `opportunity_id`. **All** mutations route through guarded Core-Table tools (no raw DB). Returns one summarizing `ActionResult`.
-**Accept:** with `autonomy_cost_ceiling=None` → disabled result; with a ceiling + stubbed model that calls a tool → mutation runs via Core-Table and is audited; exceeding the cap halts gracefully.
+
+**Create:** `python-agent/app/cascade/autonomous_team.py` **Contract:**
+`run_autonomous` per §P4. Agno `Team`/reasoning `Agent` whose tools are the
+pipeline's **active Core-Table skills only**, bounded by
+`rules["autonomy_cost_ceiling"]` (`None` ⇒ return
+`ActionResult(success=False, error="autonomy_disabled")`), capped
+iterations/tool-calls, `worker_model`. Persists session via Agno memory (E5)
+keyed by `opportunity_id`. **All** mutations route through guarded Core-Table
+tools (no raw DB). Returns one summarizing `ActionResult`. **Accept:** with
+`autonomy_cost_ceiling=None` → disabled result; with a ceiling + stubbed model
+that calls a tool → mutation runs via Core-Table and is audited; exceeding the
+cap halts gracefully.
 
 #### E5 — Agno session/memory wiring · **M** · codex
-**Create:** `python-agent/app/agno_store.py`
-**Contract:** `get_storage()`/`get_memory()` per §P4 — Agno Postgres backends on `get_pg_pool()` (A4), schema `agno` (B6), session id = `opportunity_id`. Doormen/Team accept an optional storage so context persists across bursts.
-**Accept:** storage initialises against a test PG (or mocked); two calls with the same `opportunity_id` share session state.
+
+**Create:** `python-agent/app/agno_store.py` **Contract:**
+`get_storage()`/`get_memory()` per §P4 — Agno Postgres backends on
+`get_pg_pool()` (A4), schema `agno` (B6), session id = `opportunity_id`.
+Doormen/Team accept an optional storage so context persists across bursts.
+**Accept:** storage initialises against a test PG (or mocked); two calls with
+the same `opportunity_id` share session state.
 
 #### E6 — Agno Workflow orchestration · **XL** · claude (Opus) · **PM approval**
-**Create:** `python-agent/app/cascade/workflow.py`
-**Contract:** `async def run_cascade(*, ctx, lead_id, opportunity_id, pipeline_id, trigger) -> dict`. ①→②→③: load lead/conversation/rules → pre-filter (skip if irrelevant & `trigger!="sync"`) → Tower (route via `create_opportunity` if `conf≥threshold` or sync; else `record_decision(pending_approval, tower_doorman)`) → Floor → gate on per-pipeline `confidence_threshold` (sync forces auto-apply): ≥ run Worker (which may escalate to E4) + `record_decision(executed)`; < `record_decision(pending_approval, floor_doorman)` → notify (note via Core-Table; `urgent` flags the decision for Realtime). `actor = ctx.actor_user_id if trigger=="sync" else "copilot"`.
-**Accept:** integration test (stubbed doormen + mocked client): (a) sync → route+execute+audit `executed`; (b) low-conf background → `pending_approval`, no mutation; (c) irrelevant background → no agent calls; (d) agentic intent → Worker delegates to E4.
+
+**Create:** `python-agent/app/cascade/workflow.py` **Contract:**
+`async def run_cascade(*, ctx, lead_id, opportunity_id, pipeline_id, trigger) -> dict`.
+①→②→③: load lead/conversation/rules → pre-filter (skip if irrelevant &
+`trigger!="sync"`) → Tower (route via `create_opportunity` if `conf≥threshold`
+or sync; else `record_decision(pending_approval, tower_doorman)`) → Floor → gate
+on per-pipeline `confidence_threshold` (sync forces auto-apply): ≥ run Worker
+(which may escalate to E4) + `record_decision(executed)`; <
+`record_decision(pending_approval, floor_doorman)` → notify (note via
+Core-Table; `urgent` flags the decision for Realtime).
+`actor = ctx.actor_user_id if trigger=="sync" else "copilot"`. **Accept:**
+integration test (stubbed doormen + mocked client): (a) sync →
+route+execute+audit `executed`; (b) low-conf background → `pending_approval`, no
+mutation; (c) irrelevant background → no agent calls; (d) agentic intent →
+Worker delegates to E4.
 
 #### E7 — Ingest route (gated debounce consumer) · **M** · codex
-**Create:** `python-agent/app/routers/ingest.py`
-**Contract:** `POST /api/v1/ingest`: if `not settings.ingest_enabled` → `503`; auth via `agent_internal_token` header; act only when `equipes.is_crm_agent_enabled` → `run_cascade(trigger="ingest")`. Consumes settled `copilot_ingest_queue` rows (B5), marks `processed_at`.
-**Accept:** default → 503; flag on + valid token + agent-enabled team + mocked cascade → 202; bad token → 401; toggle-off team → no cascade.
+
+**Create:** `python-agent/app/routers/ingest.py` **Contract:**
+`POST /api/v1/ingest`: if `not settings.ingest_enabled` → `503`; auth via
+`agent_internal_token` header; act only when `equipes.is_crm_agent_enabled` →
+`run_cascade(trigger="ingest")`. Consumes settled `copilot_ingest_queue` rows
+(B5), marks `processed_at`. **Accept:** default → 503; flag on + valid token +
+agent-enabled team + mocked cascade → 202; bad token → 401; toggle-off team → no
+cascade.
 
 #### E8 — Sync route · **M** · codex
-**Create:** `python-agent/app/routers/sync.py`, `python-agent/app/routers/__init__.py`
-**Contract:** `POST /api/v1/sync {opportunity_id?, lead_id, pipeline_id?}`; `ctx = Depends(get_tenant_context)`; `run_cascade(trigger="sync")` (forces auto-apply, ignores team toggle). Returns `{decision_id, status, result}`.
-**Accept:** mocked cascade → 200 + body; no JWT → 401; cross-tenant lead blocked by guard.
+
+**Create:** `python-agent/app/routers/sync.py`,
+`python-agent/app/routers/__init__.py` **Contract:**
+`POST /api/v1/sync {opportunity_id?, lead_id, pipeline_id?}`;
+`ctx = Depends(get_tenant_context)`; `run_cascade(trigger="sync")` (forces
+auto-apply, ignores team toggle). Returns `{decision_id, status, result}`.
+**Accept:** mocked cascade → 200 + body; no JWT → 401; cross-tenant lead blocked
+by guard.
 
 #### E9 — Approvals route · **M** · gemini
-**Create:** `python-agent/app/routers/approvals.py`
-**Contract:** `POST /api/v1/approvals/{decision_id}/resolve {action}`; load row, `assert_equipe`. Approve → execute stored `output_action` via Worker/Core-Table → `status='executed'|'failed'`, set `resolved_by/resolved_at`. Reject → `status='rejected'` only.
-**Accept:** approve runs+flips; reject flips without mutation; cross-tenant → 403; unknown → 404.
 
-#### E10 — Wire `main.py` · **S** · verboo · *(after C3, E7, E8, E9)*
-**Modify:** `python-agent/app/main.py`
-**Contract:** replace dead imports with `shape, sync, ingest, approvals`; `include_router` each under `/api/v1`; keep `/health` + CORS.
-**Accept:** boots clean; OpenAPI lists `/shape/preview`, `/shape/apply`, `/sync`, `/ingest`, `/approvals/{id}/resolve`; `/health` ok.
+**Create:** `python-agent/app/routers/approvals.py` **Contract:**
+`POST /api/v1/approvals/{decision_id}/resolve {action}`; load row,
+`assert_equipe`. Approve → execute stored `output_action` via Worker/Core-Table
+→ `status='executed'|'failed'`, set `resolved_by/resolved_at`. Reject →
+`status='rejected'` only. **Accept:** approve runs+flips; reject flips without
+mutation; cross-tenant → 403; unknown → 404.
+
+#### E10 — Wire `main.py` · **S** · verboo · _(after C3, E7, E8, E9)_
+
+**Modify:** `python-agent/app/main.py` **Contract:** replace dead imports with
+`shape, sync, ingest, approvals`; `include_router` each under `/api/v1`; keep
+`/health` + CORS. **Accept:** boots clean; OpenAPI lists `/shape/preview`,
+`/shape/apply`, `/sync`, `/ingest`, `/approvals/{id}/resolve`; `/health` ok.
 
 ### EPIC F — Frontend operator surfaces
 
 #### F1 — Copilot API client · **S** · verboo
-**Create:** `src/services/copilot.ts`
-**Contract:** base URL `import.meta.env.VITE_COPILOT_URL`; bearer = `supabase.auth.getSession()` token. Export `shapePreview`, `shapeApply`, `syncOpportunity`, `resolveApproval`. Add `VITE_COPILOT_URL` to `.env.example`.
-**Accept:** `tsc` clean; attaches bearer; throws on non-2xx.
+
+**Create:** `src/services/copilot.ts` **Contract:** base URL
+`import.meta.env.VITE_COPILOT_URL`; bearer = `supabase.auth.getSession()` token.
+Export `shapePreview`, `shapeApply`, `syncOpportunity`, `resolveApproval`. Add
+`VITE_COPILOT_URL` to `.env.example`. **Accept:** `tsc` clean; attaches bearer;
+throws on non-2xx.
 
 #### F2 — Realtime hydration hooks (blind spot A) · **M** · gemini
-**Create:** `src/hooks/useCopilotRealtime.ts`
-**Contract:** subscribe to Supabase Realtime on `opportunities` and `ai_decisions` (filtered by `equipe_id`); on change → `queryClient.invalidateQueries` for the opportunities + approvals query keys. Export a hook the Kanban/workspace mounts once. **No full-page refresh.**
-**Accept:** `tsc` clean; a simulated row change invalidates the right query keys; subscription cleaned up on unmount.
+
+**Create:** `src/hooks/useCopilotRealtime.ts` **Contract:** subscribe to
+Supabase Realtime on `opportunities` and `ai_decisions` (filtered by
+`equipe_id`); on change → `queryClient.invalidateQueries` for the
+opportunities + approvals query keys. Export a hook the Kanban/workspace mounts
+once. **No full-page refresh.** **Accept:** `tsc` clean; a simulated row change
+invalidates the right query keys; subscription cleaned up on unmount.
 
 #### F3 — Sync button on the deal · **M** · verboo
-**Modify:** `src/components/crm/OpportunityDetailModal.tsx`
-**Contract:** "⚡ Sync com Copilot" button in `DialogFooter` (reuse imported `Sparkles`/`Button`/`toast`/`Loader2`) → `copilot.syncOpportunity(...)` → loading → success toast + invalidate opportunities query (works with F2). Only this file.
-**Accept:** `npm run build` clean; button works; card refreshes live.
+
+**Modify:** `src/components/crm/OpportunityDetailModal.tsx` **Contract:** "⚡
+Sync com Copilot" button in `DialogFooter` (reuse imported
+`Sparkles`/`Button`/`toast`/`Loader2`) → `copilot.syncOpportunity(...)` →
+loading → success toast + invalidate opportunities query (works with F2). Only
+this file. **Accept:** `npm run build` clean; button works; card refreshes live.
 
 #### F4 — Approval cards · **L** · claude (Sonnet) · **PM approval**
-**Create:** `src/components/crm/copilot/CopilotApprovalCard.tsx`, `src/components/crm/copilot/CopilotApprovalsPanel.tsx`, `src/hooks/useCopilotApprovals.ts` · **Modify:** `src/components/crm/PipelineWorkspace.tsx` (mount panel + the F2 realtime hook — one insertion)
-**Contract:** `useCopilotApprovals(pipelineId)` reads `ai_decisions` where `status='pending_approval'` (RLS scopes `equipe_id`) via React Query, kept live by F2. Card shows `output_action`/`reason`/`confidence` + Approve/Reject → `copilot.resolveApproval`. Panel lists cards; mount in `PipelineWorkspace`.
-**Accept:** `npm run build` clean; pending decisions render; resolve removes the card live; no console errors.
+
+**Create:** `src/components/crm/copilot/CopilotApprovalCard.tsx`,
+`src/components/crm/copilot/CopilotApprovalsPanel.tsx`,
+`src/hooks/useCopilotApprovals.ts` · **Modify:**
+`src/components/crm/PipelineWorkspace.tsx` (mount panel + the F2 realtime hook —
+one insertion) **Contract:** `useCopilotApprovals(pipelineId)` reads
+`ai_decisions` where `status='pending_approval'` (RLS scopes `equipe_id`) via
+React Query, kept live by F2. Card shows `output_action`/`reason`/`confidence` +
+Approve/Reject → `copilot.resolveApproval`. Panel lists cards; mount in
+`PipelineWorkspace`. **Accept:** `npm run build` clean; pending decisions
+render; resolve removes the card live; no console errors.
 
 ### EPIC G — Infrastructure & Deployment (Dokploy on the VPS)
 
-> Most of EPIC G is **Mateus's hands-on work** (VPS/dashboard access). Engineers prepare the artifacts and SQL; Mateus performs the dashboard/DNS/secret steps. The step-by-step is in **§INFRA GUIDE** below.
+> Most of EPIC G is **Mateus's hands-on work** (VPS/dashboard access). Engineers
+> prepare the artifacts and SQL; Mateus performs the dashboard/DNS/secret steps.
+> The step-by-step is in **§INFRA GUIDE** below.
 
 #### G1 — Deploy artifacts + env template · **S** · verboo
-**Create:** `python-agent/.env.example`, `python-agent/DEPLOY.md`
-**Contract:** `.env.example` lists every runtime var (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `DATABASE_URL`, `OPENAI_API_KEY`, `AGENT_INTERNAL_TOKEN`, `INGEST_ENABLED`, model overrides, `CORS_ORIGINS`). `DEPLOY.md` = condensed copy of §INFRA GUIDE.
-**Accept:** every var the code reads appears in `.env.example`.
+
+**Create:** `python-agent/.env.example`, `python-agent/DEPLOY.md` **Contract:**
+`.env.example` lists every runtime var (`SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `DATABASE_URL`,
+`OPENAI_API_KEY`, `AGENT_INTERNAL_TOKEN`, `INGEST_ENABLED`, model overrides,
+`CORS_ORIGINS`). `DEPLOY.md` = condensed copy of §INFRA GUIDE. **Accept:** every
+var the code reads appears in `.env.example`.
 
 #### G2 — [HUMAN] Dokploy application + Git auto-deploy · **Mateus**
-Create the Dokploy **Application** linked to the repo, root `/python-agent`, enable **Auto Deploy**, register the generated webhook in GitHub (`push` → `main`). *(Guide step 1–2.)*
+
+Create the Dokploy **Application** linked to the repo, root `/python-agent`,
+enable **Auto Deploy**, register the generated webhook in GitHub (`push` →
+`main`). _(Guide step 1–2.)_
 
 #### G3 — [HUMAN] Domain + Traefik SSL · **Mateus**
-Point a subdomain (e.g. `agent.solosales.io`) at the VPS; add it in the app's **Domains** tab → Traefik issues Let's Encrypt SSL → proxies `:443` to container `:8000`. *(Guide step 3.)*
+
+Point a subdomain (e.g. `agent.solosales.io`) at the VPS; add it in the app's
+**Domains** tab → Traefik issues Let's Encrypt SSL → proxies `:443` to container
+`:8000`. _(Guide step 3.)_
 
 #### G4 — [HUMAN] Secrets in Dokploy · **Mateus**
-Add all `.env.example` vars in the app **Environment** tab (never in the image). `INGEST_ENABLED=false` for first deploy. *(Guide step 4.)*
+
+Add all `.env.example` vars in the app **Environment** tab (never in the image).
+`INGEST_ENABLED=false` for first deploy. _(Guide step 4.)_
 
 #### G5 — pg_cron debounce tick · **S (SQL) · verboo** + **[HUMAN] enable extension · Mateus**
+
 **Create:** `supabase/migrations/20260608000600_sprint6_ingest_cron.sql`
-**Contract:** `create extension if not exists pg_cron;` then `cron.schedule` a 1-minute job that `select net.http_post(...)` to `<agent-domain>/api/v1/ingest` for settled `copilot_ingest_queue` rows (with the `agent_internal_token`). Ship **commented/disabled** until the domain + token exist; Mateus enables `pg_cron`/`pg_net` in the Supabase dashboard and uncomments. *(Guide step 6.)*
+**Contract:** `create extension if not exists pg_cron;` then `cron.schedule` a
+1-minute job that `select net.http_post(...)` to `<agent-domain>/api/v1/ingest`
+for settled `copilot_ingest_queue` rows (with the `agent_internal_token`). Ship
+**commented/disabled** until the domain + token exist; Mateus enables
+`pg_cron`/`pg_net` in the Supabase dashboard and uncomments. _(Guide step 6.)_
 **Accept:** migration applies; job is documented; stays inert until enabled.
 
 #### G6 — Frontend prod wiring · **S** · verboo
-**Modify:** `python-agent/app/config.py` CORS default note + frontend `.env.example` (root) adding `VITE_COPILOT_URL`
-**Contract:** set production `CORS_ORIGINS` to include the app domain; document `VITE_COPILOT_URL=https://agent.<domain>` for the Vite build.
-**Accept:** CORS allows the prod origin; `VITE_COPILOT_URL` documented.
+
+**Modify:** `python-agent/app/config.py` CORS default note + frontend
+`.env.example` (root) adding `VITE_COPILOT_URL` **Contract:** set production
+`CORS_ORIGINS` to include the app domain; document
+`VITE_COPILOT_URL=https://agent.<domain>` for the Vite build. **Accept:** CORS
+allows the prod origin; `VITE_COPILOT_URL` documented.
 
 #### G7 — [HUMAN] Deploy smoke test · **Mateus** (verboo provides the script)
-`curl https://agent.<domain>/api/v1/health` → `{"status":"ok"}`; then a real ⚡ Sync from the UI writes an `ai_decisions` row. *(Guide step 7.)*
+
+`curl https://agent.<domain>/api/v1/health` → `{"status":"ok"}`; then a real ⚡
+Sync from the UI writes an `ai_decisions` row. _(Guide step 7.)_
 
 ---
 
 ## §INFRA GUIDE — what **Mateus** does, click by click
 
-1. **VPS + Dokploy ready.** Confirm Dokploy is installed on the VPS and reachable. Have the repo connected to your Git provider.
-2. **Create the app + auto-deploy.** Dokploy → **Create Application** → link repo → set **Build Path / Root** to `python-agent` → **Deployments → enable Auto Deploy** → copy the webhook URL → GitHub repo **Settings → Webhooks** → add it (`application/json`, event: `push`) → branch `main`. Push to `main` now triggers a rebuild.
-3. **Domain + SSL.** In your DNS, add an `A` record `agent.<yourdomain>` → VPS IP. In Dokploy app → **Domains** → add `agent.<yourdomain>`, container port `8000`, enable HTTPS → Traefik auto-provisions Let's Encrypt.
-4. **Secrets.** Dokploy app → **Environment** → paste every var from `python-agent/.env.example` (real values). Keep `INGEST_ENABLED=false` for the first deploy. **Never** put secrets in the Dockerfile or repo.
-5. **First deploy.** Trigger a deploy (push or the dashboard button). Watch logs for a clean Uvicorn boot. Hit `https://agent.<yourdomain>/api/v1/health`.
-6. **Turn on the autonomous loop (only when ready).** In Supabase dashboard → **Database → Extensions** enable `pg_cron` + `pg_net`. Uncomment the G5 cron migration (set the domain + `agent_internal_token`), apply it. Flip `INGEST_ENABLED=true` and turn on `equipes.is_crm_agent_enabled` for a pilot team.
-7. **Smoke test.** `curl …/health`; open a deal → **⚡ Sync com Copilot** → confirm the card updates live and a row lands in `ai_decisions`.
+1. **VPS + Dokploy ready.** Confirm Dokploy is installed on the VPS and
+   reachable. Have the repo connected to your Git provider.
+2. **Create the app + auto-deploy.** Dokploy → **Create Application** → link
+   repo → set **Build Path / Root** to `python-agent` → **Deployments → enable
+   Auto Deploy** → copy the webhook URL → GitHub repo **Settings → Webhooks** →
+   add it (`application/json`, event: `push`) → branch `main`. Push to `main`
+   now triggers a rebuild.
+3. **Domain + SSL.** In your DNS, add an `A` record `agent.<yourdomain>` → VPS
+   IP. In Dokploy app → **Domains** → add `agent.<yourdomain>`, container port
+   `8000`, enable HTTPS → Traefik auto-provisions Let's Encrypt.
+4. **Secrets.** Dokploy app → **Environment** → paste every var from
+   `python-agent/.env.example` (real values). Keep `INGEST_ENABLED=false` for
+   the first deploy. **Never** put secrets in the Dockerfile or repo.
+5. **First deploy.** Trigger a deploy (push or the dashboard button). Watch logs
+   for a clean Uvicorn boot. Hit `https://agent.<yourdomain>/api/v1/health`.
+6. **Turn on the autonomous loop (only when ready).** In Supabase dashboard →
+   **Database → Extensions** enable `pg_cron` + `pg_net`. Uncomment the G5 cron
+   migration (set the domain + `agent_internal_token`), apply it. Flip
+   `INGEST_ENABLED=true` and turn on `equipes.is_crm_agent_enabled` for a pilot
+   team.
+7. **Smoke test.** `curl …/health`; open a deal → **⚡ Sync com Copilot** →
+   confirm the card updates live and a row lands in `ai_decisions`.
 
-> Tell the PM when steps 2–5 are done so the team can run G7 + the live acceptance pass.
+> Tell the PM when steps 2–5 are done so the team can run G7 + the live
+> acceptance pass.
+
+Report: Mateus - Work Done (08/06/2026)
+
+Context: Infrastructure Setup Complete & Verified
+
+To: Engineering Team / Development Agent
+
+From: Project Lead
+
+I have fully prepared and certified the production hosting infrastructure and
+database extensions for the Solo Ventures Sales Engine Multi-Agent system. The
+system is ready for your deployment.
+
+Here is the exact status of the environment:
+
+🛠️ What Has Been Done
+
+Dokploy & Git Bridge (G2): The Dokploy application is created and successfully
+authenticated via SSH. The repository clone test passes perfectly. The
+Auto-Deploy webhook is registered in GitHub (push $\rightarrow$ main).
+
+Network & SSL (G3): The subdomain agent.soloventures.com.br is pointed via DNS A
+Record to the VPS. Dokploy's Traefik reverse proxy is configured to intercept
+traffic on port 443 with automatic Let's Encrypt SSL and proxy it to internal
+container port 8000.
+
+Database Extensions (G5): The pg_cron and pg_net extensions have been manually
+activated in the Supabase project dashboard.
+
+Environment Variables: All production credentials, LLM API tokens, whitelisted
+CORS origins for our niches, and the database session pooler string (:5432) have
+been securely saved inside the Dokploy Environment tab.
+
+For your architectural alignment, this is the exact .env layout locked into the
+container server:
+
+Plaintext
+
+# ==============================================================================
+
+# 🌌 CORE INFRASTRUCTURE & SOVEREIGN GATEWAY PARAMETERS
+
+# ==============================================================================
+
+INGEST_ENABLED=false
+
+CORS_ORIGINS=https://saas.soloventures.com.br,https://casaflow.soloventures.com.br,https://solon.soloventures.com.br,https://nutria.soloventures.com.br,https://advai.soloventures.com.br,https://jornadar1.soloventures.com.br,https://rema.soloventures.com.br,https://cb.soloventures.com.br,http://localhost:5173
+
+AGENT_INTERNAL_TOKEN=<redacted — live value lives only in Dokploy env, never in git>
+
+# ==============================================================================
+
+# ⚡ SUPABASE METRICS & RELATIONAL CONNECTION POOL
+
+# ==============================================================================
+
+VITE_SUPABASE_PROJECT_ID=egxzsivzqlqadoqpgfby
+
+SUPABASE_URL=https://egxzsivzqlqadoqpgfby.supabase.co
+
+VITE_SUPABASE_URL=https://egxzsivzqlqadoqpgfby.supabase.co
+
+VITE_SUPABASE_ANON_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+VITE_SUPABASE_PUBLISHABLE_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+SUPABASE_SERVICE_ROLE_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+SUPABASE_JWT_SECRET=<redacted — live value lives only in Dokploy env, never in git>
+
+SUPABASE_ACCESS_TOKEN=<redacted — live value lives only in Dokploy env, never in git>
+
+DATABASE_URL=<redacted — live value lives only in Dokploy env, never in git>
+
+# ==============================================================================
+
+# 🤖 COGNITIVE LAYER & INTELLIGENCE AGENT TOKENS
+
+# ==============================================================================
+
+OPENAI_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+ANTHROPIC_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+GEMINI_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+GROQ_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+VERBOO_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+
+VERBOO_BASE_URL=https://code.verboo.ai/router/v1
+
+⚠️ Current Blocker & Your Next Steps (Wave 0 & Wave 1 Execution)
+
+Dokploy is currently throwing a deployment error (cannot create
+/python-agent/.env: Directory nonexistent). This is completely expected because
+the python-agent/ directory does not exist on the main branch yet.
+
+Please initialize the codebase layout immediately by executing the following
+steps:
+
+Create the python-agent/ directory at the root of the repository.
+
+Commit and push the foundational file schema:
+
+The multi-stage optimized Dockerfile targeted to run the FastAPI app.
+
+The Python dependency files (pyproject.toml or requirements.txt).
+
+The initial boilerplate (app/main.py) exposing the FastAPI endpoints on
+port 8000.
+
+Ship the database migrations (supabase/migrations/) including the schema layers
+for Agno session management and the pg_cron / pg_net background debounce ticker
+jobs (/api/v1/ingest).
+
+As soon as you push the python-agent folder structure to the main branch, the
+Git webhook will automatically trigger the build pipeline, map your code
+boundaries, and light up the live engine. Proceed with the code delivery!
 
 ---
 
@@ -596,71 +965,135 @@ Wave 8  Deploy (Human-led)                    ▶ W7 merged + built
   G2,G3,G4·Mateus  G5 cron(SQL verboo + enable Mateus)  G6 fe-env·verboo  G7 smoke·Mateus
 ```
 
-**Critical paths:** JTBD 1 → `A2→A4→B4→C2→C3→F1→C4`; JTBD 3 → `A2→A4/A5→D3→E6→E8→F1→F3`; Agno cognition → `D3→E5→E4→E6`.
+**Critical paths:** JTBD 1 → `A2→A4→B4→C2→C3→F1→C4`; JTBD 3 →
+`A2→A4/A5→D3→E6→E8→F1→F3`; Agno cognition → `D3→E5→E4→E6`.
 
-**verboo load (the volume):** A1a, A2, B1, B2, B3, B5, C1, D2, G1, E10, F1, F3, G5(SQL), G6 — 14 tasks. **codex:** A1b, A3, A4, B4, D3, C3, E5, E7, E8 — 9. **gemini:** A5, D1, B6, E3, E9, F2 — 6. **claude (Sonnet):** C2, C4, E1, E2, F4 — 5. **claude (Opus / PM):** E4, E6 — 2 + all reviews/merges.
+**verboo load (the volume):** A1a, A2, B1, B2, B3, B5, C1, D2, G1, E10, F1, F3,
+G5(SQL), G6 — 14 tasks. **codex:** A1b, A3, A4, B4, D3, C3, E5, E7, E8 — 9.
+**gemini:** A5, D1, B6, E3, E9, F2 — 6. **claude (Sonnet):** C2, C4, E1, E2, F4
+— 5. **claude (Opus / PM):** E4, E6 — 2 + all reviews/merges.
 
 ---
 
 ## §P7 — Definition of Done (maps to the Vision's 4 Cockpit Metrics)
 
-- [ ] **Engine Ignition** — `docker build` ok; service **deployed on Dokploy/VPS**, reachable at `https://agent.<domain>/api/v1/health`; non-root; secrets only in Dokploy env (A1, A2, EPIC G).
-- [x] **Sovereign Gateway** — JWT verified locally via `SUPABASE_JWT_SECRET`; `equipe_id` injected from token, never the client; `jwt.py` deleted; every Core-Table query carries `equipe_id`; non-whitelisted/cross-tenant rejected by tests (A3–A5, D3).
-- [x] **Deterministic Clean Outputs (JTBD 1)** — `/shape/preview` turns a PT-BR paragraph into a valid `PipelineBlueprint`; `/shape/apply` mints pipeline + stages + `field_id`s atomically; invalid → 422 (never partial); setup dashboard demos Story A (B4, C1–C4, F1).
-- [x] **Guarded Execution (JTBD 3)** — all `executeActions` verbs ported with tenant guards + sibling-safe JSONB merges; ⚡ Sync runs Tower→Floor→Worker on one deal and writes an `ai_decisions` row with `actor = rep uuid`; low-confidence background → `pending_approval` → approval card resolves it (B1–B3, D1–D3, E1–E9, F2–F4).
-- [x] **Full Agno cognition** — Worker escalates `agentic` intents to the **cost-capped autonomous Team** (E4), bounded by `autonomy_cost_ceiling`, with all writes through guarded tools; **Agno session/memory** persists per `opportunity_id` in the `agno` schema (E5, B6).
-- [x] **UI hydration (blind spot A)** — Sync/approval mutations reflect live via React Query invalidation + Supabase Realtime on `opportunities`/`ai_decisions`; no full-page refresh (F2–F4).
-- [x] **Coexistence** — `analyze-message` + all edge functions untouched and passing; `/ingest` + autonomous loop gated by `is_crm_agent_enabled` (off by default).
-- [x] **Frontend builds** — `npm run build` / `tsc` clean; only assigned files changed.
-- [x] **Ledger** — one billing row per merged task in `Planning/billing.md` with the correct tier.
+- [ ] **Engine Ignition** — `docker build` ok; service **deployed on
+      Dokploy/VPS**, reachable at `https://agent.<domain>/api/v1/health`;
+      non-root; secrets only in Dokploy env (A1, A2, EPIC G).
+- [ ] **Sovereign Gateway** — JWT verified locally via `SUPABASE_JWT_SECRET`;
+      `equipe_id` injected from token, never the client; `jwt.py` deleted; every
+      Core-Table query carries `equipe_id`; non-whitelisted/cross-tenant
+      rejected by tests (A3–A5, D3).
+- [ ] **Deterministic Clean Outputs (JTBD 1)** — `/shape/preview` turns a PT-BR
+      paragraph into a valid `PipelineBlueprint`; `/shape/apply` mints
+      pipeline + stages + `field_id`s atomically; invalid → 422 (never partial);
+      setup dashboard demos Story A (B4, C1–C4, F1).
+- [ ] **Guarded Execution (JTBD 3)** — all `executeActions` verbs ported with
+      tenant guards + sibling-safe JSONB merges; ⚡ Sync runs Tower→Floor→Worker
+      on one deal and writes an `ai_decisions` row with `actor = rep uuid`;
+      low-confidence background → `pending_approval` → approval card resolves it
+      (B1–B3, D1–D3, E1–E9, F2–F4).
+- [ ] **Full Agno cognition** — Worker escalates `agentic` intents to the
+      **cost-capped autonomous Team** (E4), bounded by `autonomy_cost_ceiling`,
+      with all writes through guarded tools; **Agno session/memory** persists
+      per `opportunity_id` in the `agno` schema (E5, B6).
+- [ ] **UI hydration (blind spot A)** — Sync/approval mutations reflect live via
+      React Query invalidation + Supabase Realtime on
+      `opportunities`/`ai_decisions`; no full-page refresh (F2–F4).
+- [ ] **Coexistence** — `analyze-message` + all edge functions untouched and
+      passing; `/ingest` + autonomous loop gated by `is_crm_agent_enabled` (off
+      by default).
+- [ ] **Frontend builds** — `npm run build` / `tsc` clean; only assigned files
+      changed.
+- [ ] **Ledger** — one billing row per merged task in `Planning/billing.md` with
+      the correct tier.
 
 ---
 
 ## 📊 LEDGER HOOKS
 
-Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · task · engineer/model · tier).
+Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint ·
+task · engineer/model · tier).
 
-- [x] A1a · uv project + lockfile · S · verboo
-- [x] A1b · Dockerfile · M · codex
-- [x] A2 · config (real models + DB URL) · S · verboo
-- [x] A3 · security.py (+del jwt.py) · M · codex
-- [x] A4 · db.py (client + pg pool) · M · codex
-- [x] A5 · guards.py · M · gemini
-- [x] B1 · pipeline_agent_rules migration · S · verboo
-- [x] B2 · ai_decisions queue migration · S · verboo
-- [x] B3 · stage_history actor migration · S · verboo
-- [x] B4 · shape_pipeline RPC · L · codex
-- [x] B5 · copilot_ingest_queue migration · S · verboo
-- [x] B6 · agno schema migration · M · gemini
-- [x] C1 · schemas.py · M · verboo
-- [x] C2 · cascade/track_shaper.py · L · claude (Sonnet)
-- [x] C3 · routers/shape.py · L · codex
-- [x] C4 · setup dashboard UI · L · claude (Sonnet)
-- [x] D1 · audit.py · M · gemini
-- [x] D2 · skills/registry.py · S · verboo
-- [x] D3 · skills/core_table.py · L · codex
-- [x] E1 · cascade/tower_doorman.py · L · claude (Sonnet)
-- [x] E2 · cascade/floor_doorman.py · L · claude (Sonnet)
-- [x] E3 · cascade/worker.py · M · gemini
-- [x] E4 · cascade/autonomous_team.py · XL · claude (Opus)
-- [x] E5 · agno_store.py (session/memory) · M · codex
-- [x] E6 · cascade/workflow.py · XL · claude (Opus)
-- [x] E7 · routers/ingest.py · M · codex
-- [x] E8 · routers/sync.py · M · codex
-- [x] E9 · routers/approvals.py · M · gemini
-- [x] E10 · main.py wiring · S · verboo
-- [x] F1 · services/copilot.ts · S · verboo
-- [x] F2 · useCopilotRealtime.ts · M · gemini
-- [x] F3 · Sync button (OpportunityDetailModal) · M · verboo
-- [x] F4 · approval cards · L · claude (Sonnet)
-- [x] G1 · deploy artifacts + .env.example · S · verboo
+- [ ] A1a · uv project + lockfile · S · verboo
+- [ ] A1b · Dockerfile · M · codex
+- [ ] A2 · config (real models + DB URL) · S · verboo
+- [ ] A3 · security.py (+del jwt.py) · M · codex
+- [ ] A4 · db.py (client + pg pool) · M · codex
+- [ ] A5 · guards.py · M · gemini
+- [ ] B1 · pipeline_agent_rules migration · S · verboo
+- [ ] B2 · ai_decisions queue migration · S · verboo
+- [ ] B3 · stage_history actor migration · S · verboo
+- [ ] B4 · shape_pipeline RPC · L · codex
+- [ ] B5 · copilot_ingest_queue migration · S · verboo
+- [ ] B6 · agno schema migration · M · gemini
+- [ ] C1 · schemas.py · M · verboo
+- [ ] C2 · cascade/track_shaper.py · L · claude (Sonnet)
+- [ ] C3 · routers/shape.py · L · codex
+- [ ] C4 · setup dashboard UI · L · claude (Sonnet)
+- [ ] D1 · audit.py · M · gemini
+- [ ] D2 · skills/registry.py · S · verboo
+- [ ] D3 · skills/core_table.py · L · codex
+- [ ] E1 · cascade/tower_doorman.py · L · claude (Sonnet)
+- [ ] E2 · cascade/floor_doorman.py · L · claude (Sonnet)
+- [ ] E3 · cascade/worker.py · M · gemini
+- [ ] E4 · cascade/autonomous_team.py · XL · claude (Opus)
+- [ ] E5 · agno_store.py (session/memory) · M · codex
+- [ ] E6 · cascade/workflow.py · XL · claude (Opus)
+- [ ] E7 · routers/ingest.py · M · codex
+- [ ] E8 · routers/sync.py · M · codex
+- [ ] E9 · routers/approvals.py · M · gemini
+- [ ] E10 · main.py wiring · S · verboo
+- [ ] F1 · services/copilot.ts · S · verboo
+- [ ] F2 · useCopilotRealtime.ts · M · gemini
+- [ ] F3 · Sync button (OpportunityDetailModal) · M · verboo
+- [ ] F4 · approval cards · L · claude (Sonnet)
+- [ ] G1 · deploy artifacts + .env.example · S · verboo
 - [ ] G2 · [HUMAN] Dokploy app + auto-deploy · Mateus
 - [ ] G3 · [HUMAN] domain + Traefik SSL · Mateus
 - [ ] G4 · [HUMAN] secrets in Dokploy · Mateus
-- [x] G5 · pg_cron debounce tick (SQL verboo + enable Mateus) · S
-- [x] G6 · frontend prod wiring · S · verboo
+- [ ] G5 · pg_cron debounce tick (SQL verboo + enable Mateus) · S
+- [ ] G6 · frontend prod wiring · S · verboo
 - [ ] G7 · [HUMAN] deploy smoke test · Mateus
 
 ---
 
-*Plan v2 by PM (Claude / Opus) · 2026-06-07 · full Agno cognition layer + Dokploy infra; verboo loaded with the S/M volume; PM blind spots A (UI hydration) & B (real model IDs) resolved. Grounded against live v2 schema, `src/types/pipelines.ts`, the `python-agent/` scaffold, and `_shared/rule-engine.ts`. Engineers: read your task + the Vision, raise plan corrections before code (L/XL need PM sign-off), then wait for the PM to open your wave.*
+_Plan v2 by PM (Claude / Opus) · 2026-06-07 · full Agno cognition layer +
+Dokploy infra; verboo loaded with the S/M volume; PM blind spots A (UI
+hydration) & B (real model IDs) resolved. Grounded against live v2 schema,
+`src/types/pipelines.ts`, the `python-agent/` scaffold, and
+`_shared/rule-engine.ts`. Engineers: read your task + the Vision, raise plan
+corrections before code (L/XL need PM sign-off), then wait for the PM to open
+your wave._
+
+DEBUGS: Space to treat the bugs afther the deploy:
+
+### DBG-1 · Deployment boot crash (Bad Gateway) on `agent.soloventures.com.br` · PM (Opus) · 2026-06-09
+
+**Symptom:** Traefik returns 502 Bad Gateway for the agent subdomain → the upstream container is not serving on `:8000`.
+
+**What I verified locally (code is NOT the cause):**
+- `import app.main` succeeds; all 10 routes mount, incl. `/health` + the 5 `/api/v1/*`.
+- Reproduced the **exact container Python env**: `uv lock --check` passes (frozen lock is consistent); `uv sync --frozen --no-dev` then import → **boots clean** (so no dev-dep leaked into a runtime import).
+- All runtime deps locked, incl. `psycopg[binary,pool]` (`psycopg`, `psycopg-binary`, `psycopg-pool` all in `uv.lock`).
+- `config.Settings` builds with the 6 required vars (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `DATABASE_URL`, `OPENAI_API_KEY`, `AGENT_INTERNAL_TOKEN`), all present in the locked env. `extra="ignore"` → the extra `VITE_*`/`GROQ`/`ANTHROPIC`/`GEMINI`/`VERBOO` vars are harmless.
+- Nothing connects to Postgres/Supabase at import (db pool + agno store are lazy) → a malformed `DATABASE_URL` would fail at first **runtime** use, not at boot.
+
+**Conclusion:** the crash is at the **Dokploy/Traefik/container layer**, not the Python code. Ranked suspects + exact checks:
+1. **Container port in the Dokploy Domain ≠ 8000** (the #1 Dokploy 502). Domains tab → port must be `8000`.
+2. **Build type not using the Dockerfile** (Dokploy fell back to Nixpacks). Force Build Type = Dockerfile, path `python-agent/Dockerfile`, context `python-agent`.
+3. The earlier `cannot create /python-agent/.env: Directory nonexistent` — confirm it's gone now that `python-agent/` is on `main`; if Dokploy writes the Env-tab vars to a `.env`, point it inside the build context.
+4. **Healthcheck path** — set to `/health` (app returns 404 on `/`, which a `/`-probe would read as unhealthy → 502).
+5. Confirm the container is actually **running, not crash-looping** (Dokploy container logs / `docker ps` on the VPS).
+
+**Decisive next step (need ground truth):** paste the **Dokploy Deployment logs** — the build stage AND the container runtime stdout (where uvicorn either prints `Uvicorn running on http://0.0.0.0:8000` or a traceback). That distinguishes build-fail vs boot-crash vs port/healthcheck. I'll ship the precise fix once I see them.
+
+**Latent runtime bug noted (not the boot cause):** the `DATABASE_URL` password was only partially percent-encoded (raw special chars mixed with one `%`-escape), so the pooler rejects it on first DB use (sync/ingest/approvals/agentic). Fully URL-encode every special char in the password (`!`→`%21`, `(`→`%28`, `)`→`%29`, `@`→`%40`, `%`→`%25`). (Actual value redacted — lives only in Dokploy env.)
+
+**✅ ROOT CAUSE (from the Dokploy runtime logs) + FIX — 2026-06-09.** Docker build succeeded; the container **crash-looped on uvicorn boot**:
+```
+SettingsError: error parsing value for field "cors_origins" from source "EnvSettingsSource"
+  json.loads(value) -> JSONDecodeError: Expecting value: line 1 column 1 (char 0)   (main.py:41 get_settings())
+```
+`config.cors_origins` was typed `list[str]` — pydantic-settings treats list/dict fields as **complex** and runs `json.loads()` on the env string **before** field_validators, so the comma-separated `CORS_ORIGINS` (valid, documented format) failed JSON parsing and `get_settings()` threw → dead container → Traefik 502. (My first local boot test missed it because I hadn't set `CORS_ORIGINS`; it fell back to the default and skipped the JSON path.)
+**Fix:** annotate the field `Annotated[list[str], NoDecode]` (pydantic-settings ≥2.2) so the JSON pre-decode is skipped and `parse_cors_origins` splits the comma string. Added `tests/test_config.py` (5 regression tests: comma / single / whitespace / empty / default). Suite 149→**154 passed**. Reproduced the crash locally with the exact `CORS_ORIGINS`, confirmed the fix boots. Pushed to `main` → auto-deploy. **Also still required:** correct the `DATABASE_URL` encoding (above) for runtime DB access. **DBG-1 boot crash: RESOLVED in code.**

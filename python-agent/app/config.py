@@ -1,8 +1,8 @@
 from functools import lru_cache
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import AnyHttpUrl, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -28,7 +28,13 @@ class Settings(BaseSettings):
     # The Vite frontend reads VITE_COPILOT_URL=https://agent.<yourdomain> at
     # build time (see root .env.example) — that is the public URL of this service.
     # ─────────────────────────────────────────────────────────────────────────
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # NoDecode: pydantic-settings JSON-decodes complex (list/dict) fields from env
+    # BEFORE field validators run. A comma-separated CORS_ORIGINS is not JSON, which
+    # raised SettingsError on boot. NoDecode skips that decode so parse_cors_origins
+    # (mode="before") receives the raw string and splits it.
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
