@@ -95,6 +95,9 @@ async def classify_and_route(
         output_schema=RouteDecision,
         system_message=_SYSTEM_PT,
         telemetry=False,
+        # JSON mode (parse-based) instead of OpenAI strict structured outputs,
+        # which rejects free-form dict fields (extracted) and optional fields.
+        use_json_mode=True,
     )
     message = _build_user_message(conversation, lead, pipelines)
     response = await agent.arun(message)

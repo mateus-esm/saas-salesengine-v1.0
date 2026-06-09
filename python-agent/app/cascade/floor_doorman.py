@@ -124,6 +124,9 @@ async def triage_intent(
         output_schema=IntentDecision,
         system_message=_SYSTEM_PT,
         telemetry=False,
+        # JSON mode (parse-based) instead of OpenAI strict structured outputs,
+        # which rejects free-form dict fields (args) and optional fields.
+        use_json_mode=True,
     )
     message = _build_user_message(conversation, opportunity, pipeline_rules)
     response = await agent.arun(message)

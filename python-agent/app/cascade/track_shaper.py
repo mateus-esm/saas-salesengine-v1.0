@@ -79,6 +79,9 @@ async def shape_track(
         output_schema=PipelineBlueprint,
         system_message=_SYSTEM_PT,
         telemetry=False,
+        # JSON mode (parse-based) instead of OpenAI strict structured outputs,
+        # which rejects optional fields / open dicts in our blueprint schema.
+        use_json_mode=True,
     )
     response = await agent.arun(prompt)
     # Agno with output_schema already validates; if the model returns garbage

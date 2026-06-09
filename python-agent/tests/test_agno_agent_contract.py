@@ -34,6 +34,7 @@ def test_doorman_shaper_agent_kwargs_are_valid():
         output_schema=RouteDecision,
         system_message="system message",
         telemetry=False,
+        use_json_mode=True,
     )
     assert agent is not None
 
