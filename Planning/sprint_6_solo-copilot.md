@@ -649,7 +649,7 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] E8 · routers/sync.py · M · codex
 - [x] E9 · routers/approvals.py · M · gemini
 - [x] E10 · main.py wiring · S · verboo
-- [ ] F1 · services/copilot.ts · S · verboo
+- [x] F1 · services/copilot.ts · S · verboo
 - [ ] F2 · useCopilotRealtime.ts · M · gemini
 - [ ] F3 · Sync button (OpportunityDetailModal) · M · verboo
 - [ ] F4 · approval cards · L · claude (Sonnet)

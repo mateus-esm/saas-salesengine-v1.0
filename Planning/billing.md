@@ -47,6 +47,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | 2026-06-08 | Sprint 6 | A1b Dockerfile | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-08 | Sprint 6 | C3 routers/shape.py | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-08 | Sprint 6 | C2 cascade/track_shaper.py | Claude / Sonnet 4.6 | L | R$ 20 |
+| 2026-06-08 | Sprint 6 | F1 services/copilot.ts | verboo / deepseek | S | R$ 5 |
 | 2026-06-08 | Sprint 6 | E10 main.py wiring | verboo / deepseek | S | R$ 5 |
 | 2026-06-08 | Sprint 6 | E7 routers/ingest.py | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-08 | Sprint 6 | A1a uv project + lockfile | Codex / GPT-5 | S | R$ 5 |
