@@ -122,7 +122,7 @@ async def triage_intent(
     agent = Agent(
         model=OpenAIChat(id=model_id),
         output_schema=IntentDecision,
-        system_prompt=_SYSTEM_PT,
+        system_message=_SYSTEM_PT,
         telemetry=False,
     )
     message = _build_user_message(conversation, opportunity, pipeline_rules)

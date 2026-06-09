@@ -93,7 +93,7 @@ async def classify_and_route(
     agent = Agent(
         model=OpenAIChat(id=model_id),
         output_schema=RouteDecision,
-        system_prompt=_SYSTEM_PT,
+        system_message=_SYSTEM_PT,
         telemetry=False,
     )
     message = _build_user_message(conversation, lead, pipelines)

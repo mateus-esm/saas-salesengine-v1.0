@@ -77,7 +77,7 @@ async def shape_track(
     agent = Agent(
         model=OpenAIChat(id=model_id),
         output_schema=PipelineBlueprint,
-        system_prompt=_SYSTEM_PT,
+        system_message=_SYSTEM_PT,
         telemetry=False,
     )
     response = await agent.arun(prompt)

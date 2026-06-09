@@ -162,7 +162,7 @@ async def run_autonomous(
         "model": OpenAIChat(id=model_id),
         "tools": tools,
         "tool_call_limit": int(ceiling),
-        "system_prompt": _SYSTEM_PT,
+        "system_message": _SYSTEM_PT,
         "telemetry": False,
     }
 
