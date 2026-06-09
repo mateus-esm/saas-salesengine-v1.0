@@ -22,6 +22,8 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-08 | Sprint 6 | E1 cascade/tower_doorman.py | Claude / Sonnet 4.6 | L | R$ 20 |
+| 2026-06-08 | Sprint 6 | E2 cascade/floor_doorman.py | Claude / Sonnet 4.6 | L | R$ 20 |
 | 2026-06-08 | Sprint 6 | E3 cascade/worker.py | Gemini 3.5 Flash | M | R$ 12 |
 | 2026-06-08 | Sprint 6 | D3 skills/core_table.py guarded CRUD | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-08 | Sprint 6 | E5 agno_store.py session memory | Codex / GPT-5 | M | R$ 12 |
