@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     worker_model: str = "gpt-4o"
     shaper_model: str = "gpt-4o"
     ingest_enabled: bool = False
+
+    # G6 — Production CORS wiring
+    # ─────────────────────────────────────────────────────────────────────────
+    # Dev default: ["http://localhost:5173"]
+    # Production:  set CORS_ORIGINS=https://app.<yourdomain> in Dokploy env vars
+    #              (comma-separated list if multiple origins are needed, e.g.
+    #               "https://app.<yourdomain>,https://www.<yourdomain>").
+    # The Vite frontend reads VITE_COPILOT_URL=https://agent.<yourdomain> at
+    # build time (see root .env.example) — that is the public URL of this service.
+    # ─────────────────────────────────────────────────────────────────────────
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
     model_config = SettingsConfigDict(
