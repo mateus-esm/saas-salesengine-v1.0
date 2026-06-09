@@ -605,14 +605,14 @@ Wave 8  Deploy (Human-led)                    ▶ W7 merged + built
 ## §P7 — Definition of Done (maps to the Vision's 4 Cockpit Metrics)
 
 - [ ] **Engine Ignition** — `docker build` ok; service **deployed on Dokploy/VPS**, reachable at `https://agent.<domain>/api/v1/health`; non-root; secrets only in Dokploy env (A1, A2, EPIC G).
-- [ ] **Sovereign Gateway** — JWT verified locally via `SUPABASE_JWT_SECRET`; `equipe_id` injected from token, never the client; `jwt.py` deleted; every Core-Table query carries `equipe_id`; non-whitelisted/cross-tenant rejected by tests (A3–A5, D3).
-- [ ] **Deterministic Clean Outputs (JTBD 1)** — `/shape/preview` turns a PT-BR paragraph into a valid `PipelineBlueprint`; `/shape/apply` mints pipeline + stages + `field_id`s atomically; invalid → 422 (never partial); setup dashboard demos Story A (B4, C1–C4, F1).
-- [ ] **Guarded Execution (JTBD 3)** — all `executeActions` verbs ported with tenant guards + sibling-safe JSONB merges; ⚡ Sync runs Tower→Floor→Worker on one deal and writes an `ai_decisions` row with `actor = rep uuid`; low-confidence background → `pending_approval` → approval card resolves it (B1–B3, D1–D3, E1–E9, F2–F4).
-- [ ] **Full Agno cognition** — Worker escalates `agentic` intents to the **cost-capped autonomous Team** (E4), bounded by `autonomy_cost_ceiling`, with all writes through guarded tools; **Agno session/memory** persists per `opportunity_id` in the `agno` schema (E5, B6).
-- [ ] **UI hydration (blind spot A)** — Sync/approval mutations reflect live via React Query invalidation + Supabase Realtime on `opportunities`/`ai_decisions`; no full-page refresh (F2–F4).
-- [ ] **Coexistence** — `analyze-message` + all edge functions untouched and passing; `/ingest` + autonomous loop gated by `is_crm_agent_enabled` (off by default).
-- [ ] **Frontend builds** — `npm run build` / `tsc` clean; only assigned files changed.
-- [ ] **Ledger** — one billing row per merged task in `Planning/billing.md` with the correct tier.
+- [x] **Sovereign Gateway** — JWT verified locally via `SUPABASE_JWT_SECRET`; `equipe_id` injected from token, never the client; `jwt.py` deleted; every Core-Table query carries `equipe_id`; non-whitelisted/cross-tenant rejected by tests (A3–A5, D3).
+- [x] **Deterministic Clean Outputs (JTBD 1)** — `/shape/preview` turns a PT-BR paragraph into a valid `PipelineBlueprint`; `/shape/apply` mints pipeline + stages + `field_id`s atomically; invalid → 422 (never partial); setup dashboard demos Story A (B4, C1–C4, F1).
+- [x] **Guarded Execution (JTBD 3)** — all `executeActions` verbs ported with tenant guards + sibling-safe JSONB merges; ⚡ Sync runs Tower→Floor→Worker on one deal and writes an `ai_decisions` row with `actor = rep uuid`; low-confidence background → `pending_approval` → approval card resolves it (B1–B3, D1–D3, E1–E9, F2–F4).
+- [x] **Full Agno cognition** — Worker escalates `agentic` intents to the **cost-capped autonomous Team** (E4), bounded by `autonomy_cost_ceiling`, with all writes through guarded tools; **Agno session/memory** persists per `opportunity_id` in the `agno` schema (E5, B6).
+- [x] **UI hydration (blind spot A)** — Sync/approval mutations reflect live via React Query invalidation + Supabase Realtime on `opportunities`/`ai_decisions`; no full-page refresh (F2–F4).
+- [x] **Coexistence** — `analyze-message` + all edge functions untouched and passing; `/ingest` + autonomous loop gated by `is_crm_agent_enabled` (off by default).
+- [x] **Frontend builds** — `npm run build` / `tsc` clean; only assigned files changed.
+- [x] **Ledger** — one billing row per merged task in `Planning/billing.md` with the correct tier.
 
 ---
 
