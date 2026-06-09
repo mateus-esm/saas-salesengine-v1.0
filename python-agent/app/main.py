@@ -69,6 +69,16 @@ app.include_router(approvals.router, prefix=_API_PREFIX)
 
 
 @app.get("/health", tags=["health"])
+@app.get("/api/v1/health", tags=["health"])
 async def health() -> dict:
-    """Liveness probe — returns {"status": "ok"}."""
+    """Liveness probe — returns {"status": "ok"}. Exposed at both /health and
+    /api/v1/health (the latter is the path documented in the deploy guide)."""
     return {"status": "ok"}
+
+
+@app.get("/", tags=["health"])
+async def root() -> dict:
+    """Friendly root banner so the bare domain doesn't look broken (404).
+
+    Real functionality lives under /api/v1/* (see /docs)."""
+    return {"status": "ok", "service": "solo-copilot", "docs": "/docs"}

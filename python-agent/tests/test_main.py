@@ -97,6 +97,37 @@ def test_health_endpoint_returns_200_ok() -> None:
     assert resp.json() == {"status": "ok"}
 
 
+def test_api_v1_health_alias_returns_200_ok() -> None:
+    """GET /api/v1/health (deploy-guide path) is an alias of /health."""
+    with patch("app.config.get_settings", return_value=FAKE_SETTINGS):
+        import importlib
+
+        import app.main as main_module
+
+        importlib.reload(main_module)
+        client = TestClient(main_module.app)
+
+    resp = client.get("/api/v1/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
+def test_root_returns_friendly_banner() -> None:
+    """GET / returns a friendly banner instead of a bare 404."""
+    with patch("app.config.get_settings", return_value=FAKE_SETTINGS):
+        import importlib
+
+        import app.main as main_module
+
+        importlib.reload(main_module)
+        client = TestClient(main_module.app)
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+    assert resp.json()["service"] == "solo-copilot"
+
+
 # ---------------------------------------------------------------------------
 # 3. OpenAPI route coverage
 # ---------------------------------------------------------------------------
