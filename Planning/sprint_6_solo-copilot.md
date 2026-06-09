@@ -324,7 +324,7 @@ class CoreTableSkill:
     async def create_opportunity(self, lead_id, pipeline_id, stage_id=None) -> ActionResult: ...   # routing, dedup
 ```
 
-**Guards** — `app/guards.py` (A5): `ALLOWED_TABLES = {opportunities, pipeline_stages_v2, custom_table_records, leads, tasks, lead_activities, touchpoints}`; `assert_table`, `assert_equipe(row, equipe_id)`, `GuardError`.
+**Guards** — `app/guards.py` (A5): `ALLOWED_TABLES = {opportunities, pipeline_stages_v2, custom_table_records, leads, tasks, lead_activities, touchpoints, opportunity_stage_history}`; `assert_table`, `assert_equipe(row, equipe_id)`, `GuardError`. **(PM correction 2026-06-08: `opportunity_stage_history` added to the whitelist during Wave 2 — D3's `move_stage` must follow-up-stamp `actor`/`changed_by_type` on the trigger-created history row, which the original §P4 set omitted. `tasks`/`lead_activities`/`touchpoints` have no `equipe_id` column; they are tenant-guarded via the `lead_id → leads` pre-fetch, not a row-level `equipe_id` filter.)**
 
 **Security** — `app/security.py` (A3): `TenantContext(equipe_id, actor_user_id, role)`; `tenant_from_jwt(authorization)` — HS256 decode with `SUPABASE_JWT_SECRET` (`audience="authenticated"`), `actor_user_id = sub`, resolve `equipe_id` from `profiles`.
 
