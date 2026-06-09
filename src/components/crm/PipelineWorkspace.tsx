@@ -5,8 +5,10 @@ import { Bot, LayoutGrid, Table2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { usePipelines } from "@/hooks/usePipelines";
+import { useCopilotRealtime } from "@/hooks/useCopilotRealtime";
 
 import { AgentRulesPanel } from "./AgentRulesPanel";
+import { CopilotApprovalsPanel } from "./copilot/CopilotApprovalsPanel";
 import { OpportunityKanban } from "./OpportunityKanban";
 import { OpportunityTable } from "./OpportunityTable";
 import { PipelineSelector } from "./PipelineSelector";
@@ -33,6 +35,10 @@ interface PipelineWorkspaceProps {
 export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { pipelines } = usePipelines();
+
+  // F2 + F4: subscribe to Realtime on opportunities + ai_decisions for this
+  // pipeline so React Query caches stay live without a full-page refresh.
+  useCopilotRealtime(pipelineId);
 
   const view: PipelineView = useMemo(() => {
     const raw = searchParams.get("view");
@@ -77,6 +83,9 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
           </Tabs>
         </div>
       </div>
+
+      {/* F4: Approval cards — renders only when there are pending decisions */}
+      <CopilotApprovalsPanel pipelineId={pipelineId} />
 
       <div className="flex-1 overflow-hidden">
         {view === "kanban" && <OpportunityKanban pipelineId={pipelineId} />}
