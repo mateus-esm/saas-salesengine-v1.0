@@ -90,6 +90,39 @@ def test_valid_token_returns_tenant_context():
     )
 
 
+def test_es256_token_verified_via_jwks(monkeypatch):
+    """Modern Supabase asymmetric (ES256) access tokens verify via the JWKS path,
+    not the legacy HS256 secret. Regression for the production 401."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    priv = ec.generate_private_key(ec.SECP256R1())
+    token = jwt.encode(
+        {
+            "aud": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
+            "sub": USER_ID,
+            "role": "authenticated",
+        },
+        priv,
+        algorithm="ES256",
+        headers={"kid": "test-kid"},
+    )
+
+    # Mock the JWKS client so get_signing_key_from_jwt returns our public key.
+    fake_client = SimpleNamespace(
+        get_signing_key_from_jwt=lambda _t: SimpleNamespace(key=priv.public_key())
+    )
+    monkeypatch.setattr(security, "_get_jwk_client", lambda: fake_client)
+
+    client = FakeClient(
+        [{"user_id": USER_ID, "equipe_id": EQUIPE_ID, "role": "admin"}]
+    )
+    ctx = security.tenant_from_jwt(f"Bearer {token}", client=client)
+
+    assert ctx.actor_user_id == USER_ID
+    assert ctx.equipe_id == EQUIPE_ID
+
+
 def test_profile_id_fallback_resolves_team():
     client = FakeClient([{"id": USER_ID, "equipe_id": EQUIPE_ID}])
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
 import jwt
@@ -8,6 +9,22 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.config import get_settings
+
+# Modern Supabase projects sign access tokens with asymmetric keys (ES256/RS256)
+# exposed via JWKS; legacy projects use the symmetric HS256 SUPABASE_JWT_SECRET.
+# We support both: pick the verification path from the token's `alg` header.
+_ASYMMETRIC_ALGS = ("ES256", "RS256", "EdDSA")
+
+
+@lru_cache(maxsize=1)
+def _get_jwk_client() -> jwt.PyJWKClient:
+    """Cached JWKS client for the project's asymmetric signing keys.
+
+    Supabase publishes them at <SUPABASE_URL>/auth/v1/.well-known/jwks.json.
+    PyJWKClient caches fetched keys, so this is a one-time network fetch.
+    """
+    base = str(get_settings().supabase_url).rstrip("/")
+    return jwt.PyJWKClient(f"{base}/auth/v1/.well-known/jwks.json")
 
 
 @dataclass(frozen=True)
@@ -54,6 +71,21 @@ def _extract_bearer_token(authorization: str | None) -> str:
 def _decode_token(token: str) -> dict[str, Any]:
     settings = get_settings()
     try:
+        alg = jwt.get_unverified_header(token).get("alg", "")
+    except jwt.PyJWTError as exc:
+        raise _unauthorized("Invalid authentication token") from exc
+
+    try:
+        if alg in _ASYMMETRIC_ALGS:
+            # Asymmetric (modern Supabase): verify against the project's JWKS.
+            signing_key = _get_jwk_client().get_signing_key_from_jwt(token)
+            return jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=list(_ASYMMETRIC_ALGS),
+                audience="authenticated",
+            )
+        # Legacy symmetric secret (HS256).
         return jwt.decode(
             token,
             settings.supabase_jwt_secret,
