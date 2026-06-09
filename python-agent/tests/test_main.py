@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 FAKE_SETTINGS = MagicMock(
     cors_origins=["http://localhost:5173"],
+    cors_origin_regex=r"https://([a-z0-9-]+\.)*soloventures\.com\.br",
     supabase_url="https://fake.supabase.co",
     supabase_service_role_key="fake-key",
     supabase_jwt_secret="fake-jwt-secret",
@@ -126,6 +127,30 @@ def test_root_returns_friendly_banner() -> None:
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
     assert resp.json()["service"] == "solo-copilot"
+
+
+def test_cors_allows_any_soloventures_niche() -> None:
+    """A new niche subdomain is allowed by the *.soloventures.com.br CORS regex
+    without being listed explicitly — so new niches need zero CORS maintenance."""
+    with patch("app.config.get_settings", return_value=FAKE_SETTINGS):
+        import importlib
+
+        import app.main as main_module
+
+        importlib.reload(main_module)
+        client = TestClient(main_module.app)
+
+    # A niche NOT in cors_origins, only matched by the regex.
+    origin = "https://imob.soloventures.com.br"
+    resp = client.options(
+        "/api/v1/sync",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers.get("access-control-allow-origin") == origin
 
 
 # ---------------------------------------------------------------------------

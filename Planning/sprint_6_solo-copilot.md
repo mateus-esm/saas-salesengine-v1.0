@@ -858,7 +858,7 @@ INGEST_ENABLED=false
 
 CORS_ORIGINS=https://saas.soloventures.com.br,https://casaflow.soloventures.com.br,https://solon.soloventures.com.br,https://nutria.soloventures.com.br,https://advai.soloventures.com.br,https://jornadar1.soloventures.com.br,https://rema.soloventures.com.br,https://cb.soloventures.com.br,http://localhost:5173
 
-AGENT_INTERNAL_TOKEN=<redacted — live value lives only in Dokploy env, never in git>
+AGENT_INTERNAL_TOKEN=<redacted — Dokploy env only>
 
 # ==============================================================================
 
@@ -872,17 +872,17 @@ SUPABASE_URL=https://egxzsivzqlqadoqpgfby.supabase.co
 
 VITE_SUPABASE_URL=https://egxzsivzqlqadoqpgfby.supabase.co
 
-VITE_SUPABASE_ANON_KEY=<redacted — live value lives only in Dokploy env, never in git>
+VITE_SUPABASE_ANON_KEY=<redacted — Dokploy env only>
 
-VITE_SUPABASE_PUBLISHABLE_KEY=<redacted — live value lives only in Dokploy env, never in git>
+VITE_SUPABASE_PUBLISHABLE_KEY=<redacted — Dokploy env only>
 
-SUPABASE_SERVICE_ROLE_KEY=<redacted — live value lives only in Dokploy env, never in git>
+SUPABASE_SERVICE_ROLE_KEY=<redacted — Dokploy env only>
 
-SUPABASE_JWT_SECRET=<redacted — live value lives only in Dokploy env, never in git>
+SUPABASE_JWT_SECRET=<redacted — Dokploy env only>
 
-SUPABASE_ACCESS_TOKEN=<redacted — live value lives only in Dokploy env, never in git>
+SUPABASE_ACCESS_TOKEN=<redacted — Dokploy env only>
 
-DATABASE_URL=<redacted — live value lives only in Dokploy env, never in git>
+DATABASE_URL=<redacted — Dokploy env only>
 
 # ==============================================================================
 
@@ -890,15 +890,15 @@ DATABASE_URL=<redacted — live value lives only in Dokploy env, never in git>
 
 # ==============================================================================
 
-OPENAI_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+OPENAI_API_KEY=<redacted — Dokploy env only>
 
-ANTHROPIC_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+ANTHROPIC_API_KEY=<redacted — Dokploy env only>
 
-GEMINI_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+GEMINI_API_KEY=<redacted — Dokploy env only>
 
-GROQ_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+GROQ_API_KEY=<redacted — Dokploy env only>
 
-VERBOO_API_KEY=<redacted — live value lives only in Dokploy env, never in git>
+VERBOO_API_KEY=<redacted — Dokploy env only>
 
 VERBOO_BASE_URL=https://code.verboo.ai/router/v1
 
@@ -1068,32 +1068,31 @@ your wave._
 
 DEBUGS: Space to treat the bugs afther the deploy:
 
-### DBG-1 · Deployment boot crash (Bad Gateway) on `agent.soloventures.com.br` · PM (Opus) · 2026-06-09
+Task: Debug deployment boot crash (Bad Gateway) on agent.soloventures.com.br.
 
-**Symptom:** Traefik returns 502 Bad Gateway for the agent subdomain → the upstream container is not serving on `:8000`.
+Context: The application was deployed via Dokploy. The CORS_ORIGINS environment
+variable is configured as a comma-separated string of domain URLs. Pydantic
+Settings is implicitly trying to parse this sequence field using json.loads()
+before the custom validator runs, throwing a JSONDecodeError.
 
-**What I verified locally (code is NOT the cause):**
-- `import app.main` succeeds; all 10 routes mount, incl. `/health` + the 5 `/api/v1/*`.
-- Reproduced the **exact container Python env**: `uv lock --check` passes (frozen lock is consistent); `uv sync --frozen --no-dev` then import → **boots clean** (so no dev-dep leaked into a runtime import).
-- All runtime deps locked, incl. `psycopg[binary,pool]` (`psycopg`, `psycopg-binary`, `psycopg-pool` all in `uv.lock`).
-- `config.Settings` builds with the 6 required vars (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `DATABASE_URL`, `OPENAI_API_KEY`, `AGENT_INTERNAL_TOKEN`), all present in the locked env. `extra="ignore"` → the extra `VITE_*`/`GROQ`/`ANTHROPIC`/`GEMINI`/`VERBOO` vars are harmless.
-- Nothing connects to Postgres/Supabase at import (db pool + agno store are lazy) → a malformed `DATABASE_URL` would fail at first **runtime** use, not at boot.
+Target File: python-agent/app/config.py
 
-**Conclusion:** the crash is at the **Dokploy/Traefik/container layer**, not the Python code. Ranked suspects + exact checks:
-1. **Container port in the Dokploy Domain ≠ 8000** (the #1 Dokploy 502). Domains tab → port must be `8000`.
-2. **Build type not using the Dockerfile** (Dokploy fell back to Nixpacks). Force Build Type = Dockerfile, path `python-agent/Dockerfile`, context `python-agent`.
-3. The earlier `cannot create /python-agent/.env: Directory nonexistent` — confirm it's gone now that `python-agent/` is on `main`; if Dokploy writes the Env-tab vars to a `.env`, point it inside the build context.
-4. **Healthcheck path** — set to `/health` (app returns 404 on `/`, which a `/`-probe would read as unhealthy → 502).
-5. Confirm the container is actually **running, not crash-looping** (Dokploy container logs / `docker ps` on the VPS).
+Error Logs:
 
-**Decisive next step (need ground truth):** paste the **Dokploy Deployment logs** — the build stage AND the container runtime stdout (where uvicorn either prints `Uvicorn running on http://0.0.0.0:8000` or a traceback). That distinguishes build-fail vs boot-crash vs port/healthcheck. I'll ship the precise fix once I see them.
-
-**Latent runtime bug noted (not the boot cause):** the `DATABASE_URL` password was only partially percent-encoded (raw special chars mixed with one `%`-escape), so the pooler rejects it on first DB use (sync/ingest/approvals/agentic). Fully URL-encode every special char in the password (`!`→`%21`, `(`→`%28`, `)`→`%29`, `@`→`%40`, `%`→`%25`). (Actual value redacted — lives only in Dokploy env.)
-
-**✅ ROOT CAUSE (from the Dokploy runtime logs) + FIX — 2026-06-09.** Docker build succeeded; the container **crash-looped on uvicorn boot**:
-```
-SettingsError: error parsing value for field "cors_origins" from source "EnvSettingsSource"
-  json.loads(value) -> JSONDecodeError: Expecting value: line 1 column 1 (char 0)   (main.py:41 get_settings())
-```
-`config.cors_origins` was typed `list[str]` — pydantic-settings treats list/dict fields as **complex** and runs `json.loads()` on the env string **before** field_validators, so the comma-separated `CORS_ORIGINS` (valid, documented format) failed JSON parsing and `get_settings()` threw → dead container → Traefik 502. (My first local boot test missed it because I hadn't set `CORS_ORIGINS`; it fell back to the default and skipped the JSON path.)
-**Fix:** annotate the field `Annotated[list[str], NoDecode]` (pydantic-settings ≥2.2) so the JSON pre-decode is skipped and `parse_cors_origins` splits the comma string. Added `tests/test_config.py` (5 regression tests: comma / single / whitespace / empty / default). Suite 149→**154 passed**. Reproduced the crash locally with the exact `CORS_ORIGINS`, confirmed the fix boots. Pushed to `main` → auto-deploy. **Also still required:** correct the `DATABASE_URL` encoding (above) for runtime DB access. **DBG-1 boot crash: RESOLVED in code.**
+Plaintext File "/app/app/main.py", line 41, in <module> _settings =
+get_settings() File "/app/app/config.py", line 56, in get_settings return
+Settings() File
+"/app/.venv/lib/python3.12/site-packages/pydantic_settings/main.py", line 247,
+in **init**
+super().**init**(****pydantic_self**.**class**._settings_build_values(sources,
+init_kwargs)) File
+"/app/.venv/lib/python3.12/site-packages/pydantic_settings/main.py", line 470,
+in _settings_build_values source_state = source() File
+"/app/.venv/lib/python3.12/site-packages/pydantic_settings/sources/base.py",
+line 553, in **call** raise SettingsError(
+pydantic_settings.exceptions.SettingsError: error parsing value for field
+"cors_origins" from source "EnvSettingsSource" json.decoder.JSONDecodeError:
+Expecting value: line 1 column 1 (char 0) Objective: Adjust the cors_origins
+field type annotation or setup inside config.py so Pydantic safely handles the
+incoming raw comma-separated environment string without triggering an automatic
+JSON structure check. Fix it and push to main to trigger the auto-deploy.

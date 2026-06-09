@@ -36,6 +36,12 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:5173"]
     )
 
+    # CORS regex — every niche is a domain alias of ONE Netlify site, so rather than
+    # listing each origin in CORS_ORIGINS we allow the whole *.soloventures.com.br
+    # space by regex. New niches then need ZERO CORS maintenance. Starlette matches
+    # this with re.fullmatch. Override with CORS_ORIGIN_REGEX; set "" to disable.
+    cors_origin_regex: str | None = r"https://([a-z0-9-]+\.)*soloventures\.com\.br"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

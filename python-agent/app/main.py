@@ -43,10 +43,14 @@ _settings = get_settings()
 # Fall back to ["*"] only if the list is empty so the server is never broken by
 # a misconfigured env.  Production deployments SHOULD set CORS_ORIGINS explicitly.
 _cors_origins: list[str] = _settings.cors_origins if _settings.cors_origins else ["*"]
+# Regex allows the whole *.soloventures.com.br space (all niches are aliases of one
+# site) so new niches need no CORS change. `or None` treats an empty env as disabled.
+_cors_origin_regex: str | None = _settings.cors_origin_regex or None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
