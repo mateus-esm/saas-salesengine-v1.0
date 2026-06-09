@@ -657,8 +657,8 @@ Tick `[x]` when merged + add a row to `Planning/billing.md` (date · sprint · t
 - [ ] G2 · [HUMAN] Dokploy app + auto-deploy · Mateus
 - [ ] G3 · [HUMAN] domain + Traefik SSL · Mateus
 - [ ] G4 · [HUMAN] secrets in Dokploy · Mateus
-- [ ] G5 · pg_cron debounce tick (SQL verboo + enable Mateus) · S
-- [ ] G6 · frontend prod wiring · S · verboo
+- [x] G5 · pg_cron debounce tick (SQL verboo + enable Mateus) · S
+- [x] G6 · frontend prod wiring · S · verboo
 - [ ] G7 · [HUMAN] deploy smoke test · Mateus
 
 ---
