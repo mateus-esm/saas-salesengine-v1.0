@@ -57,19 +57,19 @@ export const PipelineList = ({
 
   return (
     <>
-      <div className=”flex items-center justify-end mb-2”>
+      <div className="flex items-center justify-end mb-2">
         <Button
-          variant=”outline”
-          size=”sm”
-          className=”gap-1.5”
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
           onClick={() => setShaperOpen(true)}
         >
-          <Sparkles className=”h-4 w-4” />
+          <Sparkles className="h-4 w-4" />
           ✨ Criar com Copilot
         </Button>
       </div>
 
-      <div className=”space-y-2”>
+      <div className="space-y-2">
         {pipelines.map((p) => {
           const fieldCount = p.custom_fields_schema.filter((f) => !f.is_deleted).length;
           const isSelected = p.id === selectedId;
@@ -78,60 +78,60 @@ export const PipelineList = ({
               key={p.id}
               onClick={() => onSelect(p.id)}
               className={`cursor-pointer transition-colors p-4 ${
-                isSelected ? “border-primary bg-primary/5” : “hover:bg-muted/40”
+                isSelected ? "border-primary bg-primary/5" : "hover:bg-muted/40"
               }`}
             >
-              <div className=”flex items-center justify-between gap-3”>
-                <div className=”min-w-0 flex-1”>
-                  <div className=”flex items-center gap-2”>
-                    <h3 className=”font-medium truncate”>{p.name}</h3>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium truncate">{p.name}</h3>
                     {p.is_archived && (
-                      <Badge variant=”outline” className=”text-xs”>Arquivada</Badge>
+                      <Badge variant="outline" className="text-xs">Arquivada</Badge>
                     )}
                   </div>
                   {p.description && (
-                    <p className=”text-xs text-muted-foreground truncate mt-0.5”>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
                       {p.description}
                     </p>
                   )}
-                  <p className=”text-xs text-muted-foreground mt-1”>
-                    {fieldCount} {fieldCount === 1 ? “campo personalizado” : “campos personalizados”}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {fieldCount} {fieldCount === 1 ? "campo personalizado" : "campos personalizados"}
                   </p>
                 </div>
 
-                <div className=”flex items-center gap-1 shrink-0”>
+                <div className="flex items-center gap-1 shrink-0">
                   <Button
-                    variant=”ghost”
-                    size=”icon”
-                    className=”h-8 w-8”
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
                     onClick={(e) => {
                       e.stopPropagation();
                       onArchive(p.id, !p.is_archived);
                     }}
-                    title={p.is_archived ? “Restaurar” : “Arquivar”}
+                    title={p.is_archived ? "Restaurar" : "Arquivar"}
                   >
                     {p.is_archived ? (
-                      <ArchiveRestore className=”h-4 w-4” />
+                      <ArchiveRestore className="h-4 w-4" />
                     ) : (
-                      <Archive className=”h-4 w-4” />
+                      <Archive className="h-4 w-4" />
                     )}
                   </Button>
 
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
-                        variant=”ghost”
-                        size=”icon”
-                        className=”h-8 w-8 text-destructive hover:text-destructive”
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={(e) => e.stopPropagation()}
-                        title=”Excluir”
+                        title="Excluir"
                       >
-                        <Trash2 className=”h-4 w-4” />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Excluir pipeline “{p.name}”?</AlertDialogTitle>
+                        <AlertDialogTitle>Excluir pipeline "{p.name}"?</AlertDialogTitle>
                         <AlertDialogDescription>
                           Leads associados continuarão existindo, mas a pipeline
                           ficará indisponível. Considere arquivar antes de excluir.
@@ -146,7 +146,7 @@ export const PipelineList = ({
                     </AlertDialogContent>
                   </AlertDialog>
 
-                  <ChevronRight className=”h-4 w-4 text-muted-foreground” />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
               </div>
             </Card>
