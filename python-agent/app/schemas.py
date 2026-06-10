@@ -69,6 +69,11 @@ class PipelineBlueprint(BaseModel):
         return self
 
 
+def _none_to_empty_dict(value: Any) -> Any:
+    """LLMs (esp. small models) emit ``null`` for empty objects; coerce to {}."""
+    return {} if value is None else value
+
+
 class RouteDecision(BaseModel):
     contact_type: Literal["lead", "contact", "spam", "other"]
     pipeline_id: str | None = None
@@ -76,6 +81,8 @@ class RouteDecision(BaseModel):
     confidence: float = Field(ge=0, le=1)
     extracted: dict[str, Any] = Field(default_factory=dict)
     reason: str
+
+    _coerce_extracted = field_validator("extracted", mode="before")(_none_to_empty_dict)
 
 
 class IntentDecision(BaseModel):
@@ -87,9 +94,13 @@ class IntentDecision(BaseModel):
     confidence: float = Field(ge=0, le=1)
     reason: str
 
+    _coerce_args = field_validator("args", mode="before")(_none_to_empty_dict)
+
 
 class ActionResult(BaseModel):
     success: bool
     detail: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
+
+    _coerce_detail = field_validator("detail", mode="before")(_none_to_empty_dict)
 
