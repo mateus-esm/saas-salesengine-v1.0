@@ -15,6 +15,7 @@ def record_decision(
     confidence: float,
     status: str = "auto_applied",
     actor: str,
+    error_details: Optional[str] = None,
 ) -> str:
     """
     Record a Copilot cascade/agent decision to public.ai_decisions table.
@@ -39,6 +40,8 @@ def record_decision(
         "status": status,
         "actor": actor,
     }
+    if error_details is not None:
+        payload["error_details"] = error_details
 
     # Execute insert to Supabase
     response = client.table("ai_decisions").insert(payload).execute()

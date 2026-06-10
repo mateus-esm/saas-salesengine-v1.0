@@ -270,6 +270,17 @@ async def run_cascade(
             rules=rules,
             client=client,
         )
+        # Record the REAL outcome: a verb that returned success=False must be
+        # audited as "failed" with its error, not silently as "executed".
+        succeeded = bool(getattr(result, "success", False))
+        action_payload = _output_action_for_decision(decision)
+        if not succeeded:
+            action_payload = {
+                **action_payload,
+                "result_error": getattr(result, "error", None),
+                "result_detail": getattr(result, "detail", None),
+            }
+        final_status = "executed" if succeeded else "failed"
         decision_id = record_decision(
             client,
             equipe_id=equipe_id,
@@ -278,12 +289,13 @@ async def run_cascade(
             pipeline_id=pipe_id,
             agent_role="floor_doorman",
             decision_type="action",
-            output_action=_output_action_for_decision(decision),
+            output_action=action_payload,
             confidence=decision.confidence,
-            status="executed",
+            status=final_status,
             actor=actor,
+            error_details=None if succeeded else getattr(result, "error", "worker action failed"),
         )
-        return {"status": "executed", "decision_id": decision_id, "result": result}
+        return {"status": final_status, "decision_id": decision_id, "result": result}
 
     # Below threshold (background) → queue for approval and notify.
     output_action = _output_action_for_decision(decision)
