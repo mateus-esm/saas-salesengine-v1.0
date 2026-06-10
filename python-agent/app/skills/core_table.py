@@ -272,10 +272,13 @@ class CoreTableSkill:
             return ActionResult(success=False, error=str(exc), detail={"action": "create_opportunity"})
 
     def _resolve_stage(self, *, pipeline_id: str, stage_type: str, stage_name_hint: str | None) -> dict[str, Any] | None:
+        # Load ALL stages for the pipeline; the LLM often passes a real stage NAME
+        # but a bogus stage_type (e.g. "pipeline"), so we resolve by name first and
+        # only use stage_type as a fallback when it is a valid value.
         stages = self._fetch_many(
             "pipeline_stages_v2",
-            {"pipeline_id": pipeline_id, "stage_type": stage_type},
-            "id,equipe_id,name,position",
+            {"pipeline_id": pipeline_id},
+            "id,equipe_id,name,position,stage_type",
             order=("position", True),
         )
         if not stages:
@@ -283,10 +286,21 @@ class CoreTableSkill:
 
         if stage_name_hint:
             needle = stage_name_hint.strip().lower()
-            for stage in stages:
+            for stage in stages:  # exact name match
                 if str(stage.get("name", "")).strip().lower() == needle:
                     return stage
+            for stage in stages:  # then substring match
+                if needle and needle in str(stage.get("name", "")).strip().lower():
+                    return stage
 
+        if stage_type in ("open", "won", "lost"):
+            typed = [s for s in stages if s.get("stage_type") == stage_type]
+            if typed:
+                return typed[0]
+
+        # A name hint was given but nothing matched → don't move to a wrong stage.
+        if stage_name_hint:
+            return None
         return stages[0]
 
     def _stamp_latest_stage_history(self, opportunity_id: str, to_stage_id: str) -> bool:
