@@ -27,6 +27,11 @@ from app.skills.core_table import CoreTableSkill
 
 # Sensible defaults when a pipeline has no pipeline_agent_rules row.
 _DEFAULT_CONFIDENCE_THRESHOLD = 0.75
+# Core-Table is enabled by default for every pipeline of an agent-enabled team,
+# so the copilot can act without per-pipeline config. To turn the copilot off for
+# a team, use the "Agente de CRM" toggle (equipes.is_crm_agent_enabled); to scope
+# skills per pipeline later, set a non-empty enabled_skills on pipeline_agent_rules.
+_DEFAULT_ENABLED_SKILLS = ["core_table"]
 _RECENT_MESSAGE_LIMIT = 30
 
 
@@ -90,8 +95,10 @@ def _load_rules(client: Any, equipe_id: str, pipeline_id: str | None) -> dict[st
     # Tolerate missing rows / null columns with sensible defaults.
     if resolved.get("confidence_threshold") is None:
         resolved["confidence_threshold"] = _DEFAULT_CONFIDENCE_THRESHOLD
-    if resolved.get("enabled_skills") is None:
-        resolved["enabled_skills"] = []
+    # Empty/missing enabled_skills → default to Core-Table so every agent-enabled
+    # team can act out of the box. An explicit non-empty list overrides this.
+    if not resolved.get("enabled_skills"):
+        resolved["enabled_skills"] = list(_DEFAULT_ENABLED_SKILLS)
     resolved.setdefault("autonomy_cost_ceiling", None)
     return resolved
 
