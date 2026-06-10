@@ -24,3 +24,14 @@ def test_routes_to_verboo_when_env_set(monkeypatch):
     assert model.id == "deepseek-v4-flash"
     assert model.base_url == "https://code.verboo.ai/router/v1"
     assert model.api_key == "vbk_test"
+    # role_map forces classic "system" (not OpenAI's "developer") for the router.
+    assert model.role_map is not None
+    assert model.role_map["system"] == "system"
+
+
+def test_no_role_map_override_for_default_openai(monkeypatch):
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    model = build_chat_model("gpt-4o-mini")
+    # Real OpenAI keeps Agno's default mapping (system -> developer).
+    assert model.role_map is None

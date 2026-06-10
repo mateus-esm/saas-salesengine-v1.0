@@ -40,6 +40,17 @@ def build_chat_model(model_id: str) -> OpenAIChat:
     base_url = os.getenv("LLM_BASE_URL")
     if base_url:
         kwargs["base_url"] = base_url
+        # Agno's OpenAIChat maps the system role to OpenAI's newer "developer"
+        # variant, which OpenAI-compatible routers (Verboo/deepseek/etc.) reject
+        # ("unknown variant `developer`"). For a custom provider, force the
+        # classic role names. Real OpenAI (no LLM_BASE_URL) keeps Agno's default.
+        kwargs["role_map"] = {
+            "system": "system",
+            "user": "user",
+            "assistant": "assistant",
+            "tool": "tool",
+            "model": "assistant",
+        }
 
     api_key = os.getenv("LLM_API_KEY")
     if api_key:
