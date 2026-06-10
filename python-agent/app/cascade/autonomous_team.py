@@ -14,7 +14,7 @@ import inspect
 from typing import Any
 
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
+from app.llm import build_chat_model
 
 from app.config import get_settings
 from app.schemas import ActionResult, IntentDecision
@@ -159,7 +159,7 @@ async def run_autonomous(
     model_id = rules.get("worker_model") or get_settings().worker_model
 
     agent_kwargs: dict[str, Any] = {
-        "model": OpenAIChat(id=model_id),
+        "model": build_chat_model(model_id),
         "tools": tools,
         "tool_call_limit": int(ceiling),
         "system_message": _SYSTEM_PT,

@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
+from app.llm import build_chat_model
 
 from app.schemas import IntentDecision
 from app.security import TenantContext
@@ -120,7 +120,7 @@ async def triage_intent(
         ValidationError: if the LLM output fails Pydantic validation (caller maps to 422).
     """
     agent = Agent(
-        model=OpenAIChat(id=model_id),
+        model=build_chat_model(model_id),
         output_schema=IntentDecision,
         system_message=_SYSTEM_PT,
         telemetry=False,

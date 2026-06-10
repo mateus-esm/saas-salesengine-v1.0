@@ -1,7 +1,7 @@
 """JTBD 1 — Track Shaper: NL description → validated PipelineBlueprint via Agno."""
 
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
+from app.llm import build_chat_model
 from pydantic import ValidationError
 
 from app.schemas import PipelineBlueprint
@@ -75,7 +75,7 @@ async def shape_track(
         ValidationError: if the LLM output fails Pydantic validation (caller maps to 422).
     """
     agent = Agent(
-        model=OpenAIChat(id=model_id),
+        model=build_chat_model(model_id),
         output_schema=PipelineBlueprint,
         system_message=_SYSTEM_PT,
         telemetry=False,
