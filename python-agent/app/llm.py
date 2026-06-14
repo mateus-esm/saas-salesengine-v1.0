@@ -57,3 +57,19 @@ def build_chat_model(model_id: str) -> OpenAIChat:
         kwargs["api_key"] = api_key
 
     return OpenAIChat(**kwargs)
+
+
+def build_reasoning_model(model_id: str, *, effort: str = "medium") -> OpenAIChat:
+    """Construct a strategic-tier model for high-stakes reasoning.
+
+    Native OpenAI reasoning models may honor ``reasoning_effort``. For
+    OpenAI-compatible routers, keep the plain chat-model shape so providers that
+    do not support the parameter do not reject the request.
+    """
+    model = build_chat_model(model_id)
+    if not os.getenv("LLM_BASE_URL"):
+        try:
+            model.reasoning_effort = effort
+        except Exception:
+            pass
+    return model
