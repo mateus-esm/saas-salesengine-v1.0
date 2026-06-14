@@ -766,7 +766,7 @@ git commit -m "feat(copilot): pipeline_agent_rules strategic-tier router config"
 (1) `stakes.stage_type in {"won","lost"}`, (2) `stakes.deal_value` ≥ `rules.deal_value_strategic_threshold`
 (when set), (3) `stakes.cheap_confidence` is not None and `< rules.escalate_threshold`. Otherwise cheap.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_router.py
@@ -806,12 +806,12 @@ def test_select_model_uses_rules_then_settings():
     assert strat == "o4-reasoning"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_router.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.cognition.router'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 # app/cognition/router.py
@@ -877,12 +877,12 @@ def select_model(stakes: Stakes, rules: Any, settings: Any) -> str:
     return _rule(rules, "doorman_model") or getattr(settings, "doorman_model")
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd python-agent && python -m pytest tests/test_router.py -v`
 Expected: PASS (5 passed).
 
-- [ ] **Step 5: Add `strategic_model` to Settings**
+- [x] **Step 5: Add `strategic_model` to Settings**
 
 In `python-agent/app/config.py`, add below `shaper_model`:
 ```python
@@ -890,7 +890,7 @@ In `python-agent/app/config.py`, add below `shaper_model`:
     copilot_workflow_enabled: bool = False  # Wave-1 keystone flag (see W0)
 ```
 
-- [ ] **Step 6: Run config test + commit**
+- [x] **Step 6: Run config test + commit**
 
 Run: `cd python-agent && python -m pytest tests/test_config.py tests/test_router.py -v`
 Expected: PASS.

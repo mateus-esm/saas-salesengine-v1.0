@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     doorman_model: str = "gpt-4o-mini"
     worker_model: str = "gpt-4o"
     shaper_model: str = "gpt-4o"
+    strategic_model: str = "o4-mini"
+    copilot_workflow_enabled: bool = False
     ingest_enabled: bool = False
 
     # G6 — Production CORS wiring
