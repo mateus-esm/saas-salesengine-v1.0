@@ -440,7 +440,7 @@ git commit -m "feat(copilot): credit wallet + atomic idempotent charge_credits R
 - Create: `python-agent/app/credits.py`
 - Test: `python-agent/tests/test_credits.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_credits.py
@@ -489,12 +489,12 @@ async def test_insufficient_credits_raises_typed_error():
         await charge_credit(client, equipe_id="e1", idempotency_key="k2", ledger={"verb": "x"})
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_credits.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.credits'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 # app/credits.py
@@ -564,12 +564,12 @@ async def get_balance(client: Any, *, equipe_id: str) -> int:
     return int(row.get("balance", 0))
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd python-agent && python -m pytest tests/test_credits.py -v`
 Expected: PASS (2 passed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python-agent/app/credits.py python-agent/tests/test_credits.py
