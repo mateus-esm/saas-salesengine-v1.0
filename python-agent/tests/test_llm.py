@@ -35,3 +35,27 @@ def test_no_role_map_override_for_default_openai(monkeypatch):
     model = build_chat_model("gpt-4o-mini")
     # Real OpenAI keeps Agno's default mapping (system -> developer).
     assert model.role_map is None
+
+
+def test_build_reasoning_model_sets_reasoning_flag(monkeypatch):
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    from app.llm import build_reasoning_model
+
+    model = build_reasoning_model("o4-mini")
+
+    assert model.id == "o4-mini"
+    assert getattr(model, "reasoning_effort", None) in {"medium", "high", None}
+
+
+def test_build_reasoning_model_degrades_for_openai_compatible_router(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://code.verboo.ai/router/v1")
+    monkeypatch.setenv("LLM_API_KEY", "vbk_test")
+    from app.llm import build_reasoning_model
+
+    model = build_reasoning_model("deepseek-reasoner", effort="high")
+
+    assert model.id == "deepseek-reasoner"
+    assert model.base_url == "https://code.verboo.ai/router/v1"
+    assert model.api_key == "vbk_test"
+    assert model.role_map is not None
+    assert getattr(model, "reasoning_effort", None) is None

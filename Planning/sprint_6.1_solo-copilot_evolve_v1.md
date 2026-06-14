@@ -907,7 +907,7 @@ git commit -m "feat(copilot): cost-tiered cognition router (cheap vs strategic)"
 - Modify: `python-agent/app/llm.py`
 - Test: `python-agent/tests/test_llm.py` (add cases)
 
-- [ ] **Step 1: Write the failing test (append to tests/test_llm.py)**
+- [x] **Step 1: Write the failing test (append to tests/test_llm.py)**
 
 ```python
 def test_build_reasoning_model_sets_reasoning_flag(monkeypatch):
@@ -919,12 +919,12 @@ def test_build_reasoning_model_sets_reasoning_flag(monkeypatch):
     assert getattr(model, "reasoning_effort", None) in {"medium", "high", None}
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_llm.py::test_build_reasoning_model_sets_reasoning_flag -v`
 Expected: FAIL with `ImportError: cannot import name 'build_reasoning_model'`.
 
-- [ ] **Step 3: Implement (append to app/llm.py)**
+- [x] **Step 3: Implement (append to app/llm.py)**
 
 ```python
 def build_reasoning_model(model_id: str, *, effort: str = "medium") -> OpenAIChat:
@@ -940,7 +940,7 @@ def build_reasoning_model(model_id: str, *, effort: str = "medium") -> OpenAICha
     return model
 ```
 
-- [ ] **Step 4: Run to verify it passes + commit**
+- [x] **Step 4: Run to verify it passes + commit**
 
 Run: `cd python-agent && python -m pytest tests/test_llm.py -v`
 Expected: PASS.
