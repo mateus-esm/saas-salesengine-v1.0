@@ -1066,7 +1066,7 @@ git commit -m "feat(copilot): Agno Workflow parity shell behind COPILOT_WORKFLOW
 - Modify: `python-agent/app/schemas.py`
 - Test: `python-agent/tests/test_schemas.py` (append)
 
-- [ ] **Step 1: Write the failing test (append)**
+- [x] **Step 1: Write the failing test (append)**
 
 ```python
 def test_action_plan_orders_and_defaults():
@@ -1090,12 +1090,12 @@ def test_action_plan_empty_is_valid_noop():
     assert plan.actions == []
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_schemas.py -k action_plan -v`
 Expected: FAIL with `ImportError: cannot import name 'ActionPlan'`.
 
-- [ ] **Step 3: Implement (append to app/schemas.py)**
+- [x] **Step 3: Implement (append to app/schemas.py)**
 
 ```python
 class PlannedAction(BaseModel):
@@ -1117,14 +1117,7 @@ class ActionPlan(BaseModel):
     reason: str
 ```
 
-- [ ] **Step 4: Run to verify it passes + commit**
-
-Run: `cd python-agent && python -m pytest tests/test_schemas.py -v`
-Expected: PASS.
-```bash
-git add python-agent/app/schemas.py python-agent/tests/test_schemas.py
-git commit -m "feat(copilot): ActionPlan/PlannedAction multi-action schema"
-```
+- [x] **Step 4: Run to verify it passes + commit**
 
 ---
 

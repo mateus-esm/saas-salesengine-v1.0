@@ -104,3 +104,25 @@ class ActionResult(BaseModel):
 
     _coerce_detail = field_validator("detail", mode="before")(_none_to_empty_dict)
 
+
+class PlannedAction(BaseModel):
+    """A single action the cascade intends to execute."""
+
+    verb: str
+    args: dict[str, Any] = Field(default_factory=dict)
+    requires_confirmation: bool = False
+    skill: str = "core_table"
+
+    _coerce_args = field_validator("args", mode="before")(_none_to_empty_dict)
+
+
+class ActionPlan(BaseModel):
+    """A Floor-doorman output: an ORDERED list of actions for one pulse."""
+
+    relevant: bool
+    actions: list[PlannedAction] = Field(default_factory=list)
+    automation_kind: Literal["none", "deterministic", "agentic"] = "deterministic"
+    urgency: Literal["normal", "urgent"] = "normal"
+    confidence: float = Field(ge=0, le=1)
+    reason: str
+
