@@ -12,7 +12,7 @@ from agno.agent import Agent
 from app.llm import build_chat_model
 
 from app.config import get_settings
-from app.schemas import ActionPlan
+from app.schemas import ActionPlan, PlannedAction
 from app.security import TenantContext
 
 # ---------------------------------------------------------------------------
@@ -38,6 +38,8 @@ REGRAS CRÍTICAS:
 2. Se um fato já constar na memória do contato (fornecida pelo sistema), NÃO repita a ação.
 3. Se não encontrar dados novos, retorne relevant=false com actions=[].
 4. Use APENAS os verbos set_field (para campos da oportunidade) e set_contact_field (para campos do lead).
+   - set_field exige args: { "field_id": "id_do_campo", "value": "valor_extraído" }
+   - set_contact_field exige args: { "key": "nome_do_campo", "value": "valor_extraído" }
 5. Responda APENAS com o JSON do schema ActionPlan — sem texto adicional.
 
 SCHEMA DE SAÍDA (ActionPlan):
@@ -57,6 +59,34 @@ SCHEMA DE SAÍDA (ActionPlan):
   "reason": "explicação curta em português"
 }
 """
+
+_ALLOWED_VERBS = frozenset({"set_field", "set_contact_field"})
+
+
+def _noop(reason: str) -> ActionPlan:
+    return ActionPlan(relevant=False, actions=[], confidence=0.0, reason=reason)
+
+
+def _valid_action(action: PlannedAction) -> bool:
+    if action.skill != "core_table" or action.verb not in _ALLOWED_VERBS:
+        return False
+    if action.verb == "set_field":
+        return bool(action.args.get("field_id")) and "value" in action.args
+    return bool(action.args.get("key")) and "value" in action.args
+
+
+def _sanitize_plan(plan: ActionPlan) -> ActionPlan:
+    actions = [action for action in plan.actions if _valid_action(action)]
+    if not actions:
+        return _noop(f"no valid enrichment actions. Motivo original: {plan.reason}")
+    return ActionPlan(
+        relevant=plan.relevant,
+        actions=actions,
+        automation_kind=plan.automation_kind,
+        urgency=plan.urgency,
+        confidence=plan.confidence,
+        reason=plan.reason,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,17 +160,14 @@ async def enrich(
 
     model_id: str = rules.get("doorman_model") or get_settings().doorman_model
 
-    agent = _build_agent(model_id=model_id, lead_id=lead_id)
-
-    resp = await _arun_agent(agent, conversation or "")
+    try:
+        agent = _build_agent(model_id=model_id, lead_id=lead_id)
+        resp = await _arun_agent(agent, conversation or "")
+    except Exception:
+        return _noop("enricher unavailable")
 
     content = getattr(resp, "content", None)
     if isinstance(content, ActionPlan):
-        return content
+        return _sanitize_plan(content)
 
-    return ActionPlan(
-        relevant=False,
-        actions=[],
-        confidence=0.0,
-        reason="no content",
-    )
+    return _noop("no content")

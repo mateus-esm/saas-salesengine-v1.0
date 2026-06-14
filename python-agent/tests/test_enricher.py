@@ -55,6 +55,58 @@ async def test_enricher_extracts_fields_into_plan(monkeypatch):
     assert plan.actions[0].args["key"] == "kwh"
 
 
+@pytest.mark.asyncio
+async def test_enricher_supports_executable_set_field_args(monkeypatch):
+    monkeypatch.setattr(enricher, "get_settings", _fake_settings)
+
+    async def fake_run(agent, message):
+        return type("R", (), {"content": ActionPlan(
+            relevant=True, confidence=0.77, reason="extracted budget",
+            actions=[PlannedAction(verb="set_field", args={"field_id": "budget", "value": "100k"}, skill="core_table")])})()
+
+    monkeypatch.setattr(enricher, "_arun_agent", fake_run)
+
+    plan = await enricher.enrich(
+        ctx=_ctx(),
+        conversation="orcamento 100k",
+        lead={"id": "l1"},
+        opportunity={"id": "o1"},
+        rules={},
+        client=object(),
+    )
+
+    assert plan.relevant is True
+    assert plan.actions[0].verb == "set_field"
+    assert plan.actions[0].args == {"field_id": "budget", "value": "100k"}
+
+
+@pytest.mark.asyncio
+async def test_enricher_filters_unsupported_actions(monkeypatch):
+    monkeypatch.setattr(enricher, "get_settings", _fake_settings)
+
+    async def fake_run(agent, message):
+        return type("R", (), {"content": ActionPlan(
+            relevant=True, confidence=0.77, reason="bad action",
+            actions=[
+                PlannedAction(verb="set_status", args={"status": "won"}, skill="core_table"),
+                PlannedAction(verb="set_contact_field", args={"key": "kwh", "value": "12"}, skill="core_table"),
+                PlannedAction(verb="set_field", args={"key": "bad", "value": "missing field id"}, skill="core_table"),
+            ])})()
+
+    monkeypatch.setattr(enricher, "_arun_agent", fake_run)
+
+    plan = await enricher.enrich(
+        ctx=_ctx(),
+        conversation="consumo 12 kWp",
+        lead={"id": "l1"},
+        opportunity={"id": "o1"},
+        rules={},
+        client=object(),
+    )
+
+    assert [action.verb for action in plan.actions] == ["set_contact_field"]
+
+
 # ---------------------------------------------------------------------------
 # Test 2: non-ActionPlan content → graceful noop
 # ---------------------------------------------------------------------------
@@ -79,6 +131,28 @@ async def test_enricher_returns_noop_on_non_actionplan_content(monkeypatch):
     assert plan.relevant is False
     assert plan.actions == []
     assert plan.confidence == 0.0
+
+
+@pytest.mark.asyncio
+async def test_enricher_returns_noop_when_agent_run_fails(monkeypatch):
+    monkeypatch.setattr(enricher, "get_settings", _fake_settings)
+
+    async def fake_run(agent, message):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(enricher, "_arun_agent", fake_run)
+
+    plan = await enricher.enrich(
+        ctx=_ctx(),
+        conversation="oi",
+        lead={"id": "l1"},
+        opportunity={"id": "o1"},
+        rules={},
+        client=object(),
+    )
+
+    assert plan.relevant is False
+    assert plan.actions == []
 
 
 # ---------------------------------------------------------------------------
