@@ -964,7 +964,7 @@ git commit -m "feat(copilot): build_reasoning_model for the strategic tier"
 legacy cascade uses, so behavior is identical. Cost-router, multi-action, and memory are slotted into this
 shell in Wave 2. The legacy `run_cascade` remains the default until Wave 5 cutover.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_agno_workflow.py
@@ -989,12 +989,12 @@ async def test_workflow_runs_same_outcome_as_legacy(monkeypatch):
     assert "decision_id" in out
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_agno_workflow.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.cascade.agno_workflow'`.
 
-- [ ] **Step 3: Implement the skeleton**
+- [x] **Step 3: Implement the skeleton**
 
 ```python
 # app/cascade/agno_workflow.py
@@ -1030,7 +1030,7 @@ async def run_workflow(
     )
 ```
 
-- [ ] **Step 4: Add the flag dispatch in `routers/sync.py`**
+- [x] **Step 4: Add the flag dispatch in `routers/sync.py`**
 
 Modify `sync_lead` to choose the path:
 ```python
@@ -1043,7 +1043,7 @@ Modify `sync_lead` to choose the path:
         opportunity_id=body.opportunity_id, pipeline_id=body.pipeline_id, trigger="sync")
 ```
 
-- [ ] **Step 5: Run tests + commit**
+- [x] **Step 5: Run tests + commit**
 
 Run: `cd python-agent && python -m pytest tests/test_agno_workflow.py tests/test_sync_router.py -v`
 Expected: PASS.

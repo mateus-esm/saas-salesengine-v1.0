@@ -156,7 +156,49 @@ def _output_action_for_decision(decision: IntentDecision) -> dict[str, Any]:
     return action
 
 
+def _copilot_workflow_enabled() -> bool:
+    try:
+        return bool(get_settings().copilot_workflow_enabled)
+    except Exception:
+        return False
+
+
 async def run_cascade(
+    *,
+    ctx: TenantContext,
+    lead_id: str,
+    opportunity_id: str | None,
+    pipeline_id: str | None,
+    trigger: str,
+    client: Any = None,
+) -> dict:
+    """Run the active Copilot orchestration path.
+
+    The Agno Workflow path is opt-in during Sprint 6.1. With the flag off,
+    behavior stays on the legacy cascade body.
+    """
+    if _copilot_workflow_enabled():
+        from app.cascade.agno_workflow import run_workflow
+
+        return await run_workflow(
+            ctx=ctx,
+            lead_id=lead_id,
+            opportunity_id=opportunity_id,
+            pipeline_id=pipeline_id,
+            trigger=trigger,
+            client=client,
+        )
+    return await _run_legacy_cascade(
+        ctx=ctx,
+        lead_id=lead_id,
+        opportunity_id=opportunity_id,
+        pipeline_id=pipeline_id,
+        trigger=trigger,
+        client=client,
+    )
+
+
+async def _run_legacy_cascade(
     *,
     ctx: TenantContext,
     lead_id: str,
