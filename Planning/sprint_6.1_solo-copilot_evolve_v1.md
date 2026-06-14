@@ -589,7 +589,7 @@ The metering hook wraps a Core-Table verb call: it runs the verb, and **only whe
 `ActionResult.success is True`** charges 1 credit via `charge_credit`, building a deterministic
 idempotency key from `equipe_id + verb + opportunity/lead id + a per-run nonce`. A failed verb is never charged.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_metering.py
@@ -631,12 +631,12 @@ async def test_hook_does_not_charge_on_failure():
     assert rec.charges == []
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_metering.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.metering'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 # app/metering.py
@@ -699,12 +699,12 @@ def make_metering_hook(
     return hook
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd python-agent && python -m pytest tests/test_metering.py -v`
 Expected: PASS (2 passed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add python-agent/app/metering.py python-agent/tests/test_metering.py
