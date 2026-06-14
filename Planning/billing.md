@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-14 | 6.1 | A1 credit ledger + atomic charge_credits RPC | codex/opus | XL | R$ 28 |
 | 2026-06-09 | Sprint 6 | G6 frontend prod wiring | verboo / deepseek | S | R$ 5 |
 | 2026-06-09 | Sprint 6 | G5 pg_cron ingest tick migration | verboo / deepseek | S | R$ 5 |
 | 2026-06-09 | Sprint 6 | C4 setup dashboard UI | Claude / Sonnet 4.6 | L | R$ 20 |

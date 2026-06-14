@@ -298,7 +298,7 @@ and operational costs.
 - Create: `supabase/migrations/20260614000100_sprint6_1_credit_ledger.sql`
 - Test: `supabase/migrations/tests/test_credit_ledger.sql` (pgTAP-style assertions run via `supabase db` or psql; if no pgTAP harness exists, deliver the verification queries in the PR description and run them against a local `supabase db reset`).
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 ```sql
 -- 20260614000100_sprint6_1_credit_ledger.sql
@@ -405,12 +405,12 @@ end;
 $$;
 ```
 
-- [ ] **Step 2: Apply locally and verify**
+- [x] **Step 2: Apply locally and verify**
 
 Run: `cd saas-salesengine-v1.0 && supabase db reset` (or apply the single migration against your local shadow DB).
 Expected: migration applies cleanly; `\d public.agent_action_ledger` shows the UNIQUE `(equipe_id, idempotency_key)`.
 
-- [ ] **Step 3: Verify the three behaviors with SQL**
+- [x] **Step 3: Verify the three behaviors with SQL**
 
 Run these against a local DB seeded with one equipe + a wallet of 5 credits:
 ```sql
@@ -425,7 +425,7 @@ select public.charge_credits('<equipe>', 99, 'k2', '{"verb":"x","mode":"manual"}
 ```
 Expected: balance 4 after (a) and (b); (c) raises `insufficient_credits`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add supabase/migrations/20260614000100_sprint6_1_credit_ledger.sql
