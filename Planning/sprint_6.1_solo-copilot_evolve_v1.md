@@ -1380,7 +1380,7 @@ Agno `Agent` with `enable_agentic_memory=True` + a `MemoryManager(db=agno_store,
 `set_field`/`set_contact_field` actions extracted from the conversation. Memory persistence is optional —
 degrade gracefully (mirror `autonomous_team._get_storage`) so unit tests run without a DB.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_enricher.py
@@ -1410,12 +1410,12 @@ async def test_enricher_passes_memory_user_id(monkeypatch):
     # ... assert enable_agentic_memory True and user_id == lead id when storage present
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_enricher.py -k extracts -v`
 Expected: FAIL (`app.cascade.enricher` missing).
 
-- [ ] **Step 3: Implement** — build the Enricher agent:
+- [x] **Step 3: Implement** — build the Enricher agent:
 ```python
 # app/cascade/enricher.py  (core of the implementation)
 from agno.agent import Agent
@@ -1452,7 +1452,7 @@ async def enrich(*, ctx, conversation, lead, opportunity, rules, client) -> Acti
 ```
 (Import `get_settings` as `_settings`; mirror Verboo handling used elsewhere.)
 
-- [ ] **Step 4: Run to verify it passes + commit**
+- [x] **Step 4: Run to verify it passes + commit**
 
 Run: `cd python-agent && python -m pytest tests/test_enricher.py -v`
 Expected: PASS.
