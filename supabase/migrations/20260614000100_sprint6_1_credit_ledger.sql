@@ -61,39 +61,54 @@ begin
     return v_existing;
   end if;
 
+  if p_credits is null or p_credits <= 0 then
+    raise exception 'invalid_credits' using errcode = 'P0001';
+  end if;
+
   select balance into v_balance
     from public.agent_credits_balance
    where equipe_id = p_equipe_id
    for update;
 
   if v_balance is null then
-    raise exception 'no_wallet' using errcode = 'P0002';
+    raise exception 'no_wallet' using errcode = 'P0001';
   end if;
   if v_balance < p_credits then
     raise exception 'insufficient_credits' using errcode = 'P0001';
   end if;
 
-  update public.agent_credits_balance
-     set balance = balance - p_credits, updated_at = now()
-   where equipe_id = p_equipe_id;
+  -- Debit + ledger insert in one sub-block: a unique_violation here means a
+  -- concurrent same-key call won the race after our early SELECT (TOCTOU). The
+  -- sub-block rolls back BOTH the debit UPDATE and the INSERT on exception, so
+  -- there is no double-charge; we then return the existing ledger id (replay).
+  begin
+    update public.agent_credits_balance
+       set balance = balance - p_credits, updated_at = now()
+     where equipe_id = p_equipe_id;
 
-  insert into public.agent_action_ledger (
-    equipe_id, opportunity_id, lead_id, decision_id, verb, credits_charged,
-    model, real_input_tokens, real_output_tokens, real_cost_usd, mode, idempotency_key
-  ) values (
-    p_equipe_id,
-    nullif(p_ledger->>'opportunity_id','')::uuid,
-    nullif(p_ledger->>'lead_id','')::uuid,
-    nullif(p_ledger->>'decision_id','')::uuid,
-    p_ledger->>'verb',
-    p_credits,
-    p_ledger->>'model',
-    nullif(p_ledger->>'real_input_tokens','')::int,
-    nullif(p_ledger->>'real_output_tokens','')::int,
-    nullif(p_ledger->>'real_cost_usd','')::numeric,
-    coalesce(p_ledger->>'mode','manual'),
-    p_idempotency_key
-  ) returning id into v_id;
+    insert into public.agent_action_ledger (
+      equipe_id, opportunity_id, lead_id, decision_id, verb, credits_charged,
+      model, real_input_tokens, real_output_tokens, real_cost_usd, mode, idempotency_key
+    ) values (
+      p_equipe_id,
+      nullif(p_ledger->>'opportunity_id','')::uuid,
+      nullif(p_ledger->>'lead_id','')::uuid,
+      nullif(p_ledger->>'decision_id','')::uuid,
+      p_ledger->>'verb',
+      p_credits,
+      p_ledger->>'model',
+      nullif(p_ledger->>'real_input_tokens','')::int,
+      nullif(p_ledger->>'real_output_tokens','')::int,
+      nullif(p_ledger->>'real_cost_usd','')::numeric,
+      coalesce(p_ledger->>'mode','manual'),
+      p_idempotency_key
+    ) returning id into v_id;
+  exception when unique_violation then
+    -- concurrent replay won the race: no double-charge, return the existing row
+    select id into v_id
+      from public.agent_action_ledger
+     where equipe_id = p_equipe_id and idempotency_key = p_idempotency_key;
+  end;
 
   return v_id;
 end;
