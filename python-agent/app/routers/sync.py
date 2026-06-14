@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.cascade.workflow import run_cascade
+from app.config import get_settings
 from app.deps import get_tenant_context
 from app.security import TenantContext
 from pydantic import BaseModel
@@ -31,6 +32,13 @@ class SyncRequest(BaseModel):
     lead_id: str
     opportunity_id: str | None = None
     pipeline_id: str | None = None
+
+
+def _copilot_workflow_enabled() -> bool:
+    try:
+        return bool(get_settings().copilot_workflow_enabled)
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +58,17 @@ async def sync_lead(
 
     Returns the cascade result dict: ``{decision_id, status, result}``.
     """
+    if _copilot_workflow_enabled():
+        from app.cascade.agno_workflow import run_workflow
+
+        return await run_workflow(
+            ctx=ctx,
+            lead_id=body.lead_id,
+            opportunity_id=body.opportunity_id,
+            pipeline_id=body.pipeline_id,
+            trigger="sync",
+        )
+
     return await run_cascade(
         ctx=ctx,
         lead_id=body.lead_id,

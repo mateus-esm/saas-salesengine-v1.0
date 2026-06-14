@@ -766,7 +766,7 @@ git commit -m "feat(copilot): pipeline_agent_rules strategic-tier router config"
 (1) `stakes.stage_type in {"won","lost"}`, (2) `stakes.deal_value` ≥ `rules.deal_value_strategic_threshold`
 (when set), (3) `stakes.cheap_confidence` is not None and `< rules.escalate_threshold`. Otherwise cheap.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_router.py
@@ -806,12 +806,12 @@ def test_select_model_uses_rules_then_settings():
     assert strat == "o4-reasoning"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_router.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.cognition.router'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 # app/cognition/router.py
@@ -877,12 +877,12 @@ def select_model(stakes: Stakes, rules: Any, settings: Any) -> str:
     return _rule(rules, "doorman_model") or getattr(settings, "doorman_model")
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `cd python-agent && python -m pytest tests/test_router.py -v`
 Expected: PASS (5 passed).
 
-- [ ] **Step 5: Add `strategic_model` to Settings**
+- [x] **Step 5: Add `strategic_model` to Settings**
 
 In `python-agent/app/config.py`, add below `shaper_model`:
 ```python
@@ -890,7 +890,7 @@ In `python-agent/app/config.py`, add below `shaper_model`:
     copilot_workflow_enabled: bool = False  # Wave-1 keystone flag (see W0)
 ```
 
-- [ ] **Step 6: Run config test + commit**
+- [x] **Step 6: Run config test + commit**
 
 Run: `cd python-agent && python -m pytest tests/test_config.py tests/test_router.py -v`
 Expected: PASS.
@@ -964,7 +964,7 @@ git commit -m "feat(copilot): build_reasoning_model for the strategic tier"
 legacy cascade uses, so behavior is identical. Cost-router, multi-action, and memory are slotted into this
 shell in Wave 2. The legacy `run_cascade` remains the default until Wave 5 cutover.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_agno_workflow.py
@@ -989,12 +989,12 @@ async def test_workflow_runs_same_outcome_as_legacy(monkeypatch):
     assert "decision_id" in out
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_agno_workflow.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.cascade.agno_workflow'`.
 
-- [ ] **Step 3: Implement the skeleton**
+- [x] **Step 3: Implement the skeleton**
 
 ```python
 # app/cascade/agno_workflow.py
@@ -1030,7 +1030,7 @@ async def run_workflow(
     )
 ```
 
-- [ ] **Step 4: Add the flag dispatch in `routers/sync.py`**
+- [x] **Step 4: Add the flag dispatch in `routers/sync.py`**
 
 Modify `sync_lead` to choose the path:
 ```python
@@ -1043,7 +1043,7 @@ Modify `sync_lead` to choose the path:
         opportunity_id=body.opportunity_id, pipeline_id=body.pipeline_id, trigger="sync")
 ```
 
-- [ ] **Step 5: Run tests + commit**
+- [x] **Step 5: Run tests + commit**
 
 Run: `cd python-agent && python -m pytest tests/test_agno_workflow.py tests/test_sync_router.py -v`
 Expected: PASS.
