@@ -726,7 +726,7 @@ git commit -m "feat(copilot): metering tool-hook (charge 1 credit on successful 
 **Files:**
 - Create: `supabase/migrations/20260614000200_sprint6_1_router_config.sql`
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 ```sql
 -- 20260614000200_sprint6_1_router_config.sql
@@ -740,12 +740,12 @@ alter table public.pipeline_agent_rules
 -- deal_value_strategic_threshold NULL → value alone never forces the strategic tier.
 ```
 
-- [ ] **Step 2: Apply & verify**
+- [x] **Step 2: Apply & verify**
 
 Run: `cd saas-salesengine-v1.0 && supabase db reset`
 Expected: columns present in `\d public.pipeline_agent_rules`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add supabase/migrations/20260614000200_sprint6_1_router_config.sql
