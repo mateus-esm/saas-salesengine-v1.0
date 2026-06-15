@@ -331,3 +331,10 @@ async def test_trigger_webhook_uses_payload(monkeypatch):
             },
         )
     ]
+
+
+def test_high_stakes_verbs_require_confirmation():
+    meta = CoreTableSkill.confirmation_required_verbs()
+    assert "set_status" in meta            # won/lost close
+    assert "trigger_webhook" in meta       # external side effect
+    assert "set_field" not in meta         # routine enrichment is auto

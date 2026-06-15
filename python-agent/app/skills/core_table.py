@@ -38,10 +38,19 @@ async def _post_webhook(url: str, payload: dict[str, Any]) -> None:
 class CoreTableSkill:
     name = "core_table"
 
+    # High-stakes verbs that must pause for human approval when a plan marks them so:
+    # closing a deal (won/lost) and firing an external side effect (webhook).
+    _CONFIRM_VERBS = frozenset({"set_status", "trigger_webhook"})
+
     def __init__(self, client: Any, equipe_id: str, actor: str) -> None:
         self.client = client
         self.equipe_id = str(equipe_id)
         self.actor = actor
+
+    @classmethod
+    def confirmation_required_verbs(cls) -> frozenset[str]:
+        """Verbs that must pause for human approval when the plan marks them so."""
+        return cls._CONFIRM_VERBS
 
     async def move_stage(
         self,

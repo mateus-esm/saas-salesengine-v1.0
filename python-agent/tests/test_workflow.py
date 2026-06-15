@@ -268,6 +268,7 @@ async def test_missing_rules_uses_defaults(ctx):
     )
 
     fake_settings = MagicMock(doorman_model="gpt-4o-mini", worker_model="gpt-4o")
+    fake_settings.copilot_workflow_enabled = False  # this asserts the legacy cascade path
 
     with patch.object(workflow, "classify_and_route", new=AsyncMock(return_value=route)), \
          patch.object(workflow, "triage_intent", new=AsyncMock(return_value=intent)) as mock_floor, \
