@@ -6,7 +6,7 @@ from typing import Any
 from agno.agent import Agent
 from app.llm import build_chat_model
 
-from app.schemas import IntentDecision
+from app.schemas import ActionPlan, IntentDecision, PlannedAction
 from app.security import TenantContext
 from app.skills.registry import SkillRegistryError, get_skill
 
@@ -91,6 +91,15 @@ def _build_user_message(
     )
 
 
+async def _arun_agent(agent: Agent, message: str):
+    """Seam around the Agno run boundary so tests can patch the real API surface.
+
+    See [[agno-agent-api-and-mock-blindspot]] — assert against the actual Agno call,
+    not only a mocked Agent class.
+    """
+    return await agent.arun(message)
+
+
 def _is_skill_active(skill_name: str, enabled_skills: list[str]) -> tuple[bool, str]:
     """Return (is_active, reason_if_not)."""
     if skill_name not in set(enabled_skills):
@@ -129,7 +138,7 @@ async def triage_intent(
         use_json_mode=True,
     )
     message = _build_user_message(conversation, opportunity, pipeline_rules)
-    response = await agent.arun(message)
+    response = await _arun_agent(agent, message)
 
     if isinstance(response.content, IntentDecision):
         decision = response.content
@@ -152,3 +161,102 @@ async def triage_intent(
             )
 
     return decision
+
+
+_PLAN_SYSTEM_PT = """\
+Você é o Porteiro do Andar do Solo Copilot — o segundo filtro no cascata de automação de CRM.
+Você recebe uma conversa já filtrada pela Torre e produz um PLANO ORDENADO de ações de CRM
+(`ActionPlan`) — uma ou mais ações executadas em sequência num único pulso de sincronização.
+
+RESPONSABILIDADES:
+1. Determine se a conversa contém informação relevante para atualizar o CRM (`relevant: true/false`).
+2. Se relevante, monte `actions`: uma lista ORDENADA de `PlannedAction`. Cada ação tem:
+   { "verb": "nome_do_verbo", "args": { ...parâmetros do verbo... }, "skill": "core_table" }
+   Ordene as ações da forma como devem ser aplicadas (ex.: primeiro enriquecer campos, depois mover etapa).
+3. Defina `automation_kind` ("deterministic" | "agentic" | "none") e `urgency` ("normal" | "urgent").
+4. Defina `confidence` entre 0.0 e 1.0 e escreva um `reason` curto em português.
+
+VERBOS DISPONÍVEIS NO SKILL "core_table":
+- move_stage(opportunity_id, stage_type, stage_name_hint)  → muda a etapa kanban
+- set_status(opportunity_id, status)                        → define won/lost/open
+- set_field(opportunity_id, field_id, value)                → grava campo customizado
+- set_contact_field(lead_id, key, value)                    → grava campo do lead
+- add_touchpoint(lead_id, touchpoint_type, content)         → registra touchpoint
+- add_note(lead_id, content)                                → adiciona nota
+- create_task(lead_id, title, due_in_hours)                 → cria tarefa
+- add_tag(lead_id, tag)                                     → adiciona tag
+- trigger_webhook(url, payload)                             → dispara webhook
+
+REGRAS CRÍTICAS:
+- Proponha apenas ações com evidência na conversa — nunca invente dados.
+- Se nada for relevante, retorne relevant=false e actions=[].
+- Responda APENAS com o JSON do schema ActionPlan — sem texto adicional.
+"""
+
+# High-stakes verbs that always pause for human approval (mirrors B5 / CoreTableSkill).
+_HIGH_STAKES_VERBS = frozenset({"set_status", "trigger_webhook"})
+_HIGH_STAKES_STAGES = frozenset({"won", "lost"})
+
+
+def _confirm_verbs() -> frozenset[str]:
+    """High-stakes verb set — prefer the CoreTableSkill source of truth when available."""
+    try:
+        from app.skills.core_table import CoreTableSkill
+
+        return CoreTableSkill.confirmation_required_verbs()
+    except Exception:
+        return _HIGH_STAKES_VERBS
+
+
+def _is_high_stakes(action: PlannedAction) -> bool:
+    if action.verb in _confirm_verbs():
+        return True
+    stage = (action.args or {}).get("stage_type") or (action.args or {}).get("status")
+    return stage in _HIGH_STAKES_STAGES
+
+
+def _mark_confirmations(plan: ActionPlan) -> ActionPlan:
+    """Flag high-stakes actions so the executor defers them to the HITL approval path."""
+    for action in plan.actions:
+        if _is_high_stakes(action):
+            action.requires_confirmation = True
+    return plan
+
+
+async def triage_plan(
+    *,
+    ctx: TenantContext,
+    conversation: str,
+    opportunity: dict[str, Any],
+    pipeline_rules: dict[str, Any],
+    model_id: str,
+    model: Any = None,
+) -> ActionPlan:
+    """Produce a multi-action `ActionPlan` for one sync pulse.
+
+    Like `triage_intent` this is pure classification (no DB writes). High-stakes
+    actions (won/lost moves, status close, webhooks) are flagged
+    `requires_confirmation=True` so the executor defers them to the HITL path.
+
+    When `model` is provided (e.g. a strategic reasoning model from the cost
+    router) it is used as-is; otherwise a cheap chat model is built from `model_id`.
+
+    Raises:
+        ValidationError: if the LLM output fails Pydantic validation (caller maps to 422).
+    """
+    agent = Agent(
+        model=model if model is not None else build_chat_model(model_id),
+        output_schema=ActionPlan,
+        system_message=_PLAN_SYSTEM_PT,
+        telemetry=False,
+        use_json_mode=True,
+    )
+    message = _build_user_message(conversation, opportunity, pipeline_rules)
+    response = await _arun_agent(agent, message)
+
+    if isinstance(response.content, ActionPlan):
+        plan = response.content
+    else:
+        plan = ActionPlan.model_validate(response.content)
+
+    return _mark_confirmations(plan)

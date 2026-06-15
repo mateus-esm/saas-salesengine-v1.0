@@ -10,8 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Import core_table so the registry is populated before tests run.
 import app.skills.core_table  # noqa: F401
-from app.cascade.floor_doorman import triage_intent
-from app.schemas import IntentDecision
+from app.cascade import floor_doorman
+from app.cascade.floor_doorman import triage_intent, triage_plan
+from app.schemas import ActionPlan, IntentDecision, PlannedAction
 from app.security import TenantContext
 
 EQUIPE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -268,3 +269,67 @@ async def test_dict_response_content_is_validated() -> None:
 
     assert isinstance(result, IntentDecision)
     assert result.automation_kind == "deterministic"
+
+
+@pytest.mark.asyncio
+async def test_triage_plan_returns_actionplan(monkeypatch) -> None:
+    async def fake_run(agent, message):
+        return type(
+            "R",
+            (),
+            {
+                "content": ActionPlan(
+                    relevant=True,
+                    actions=[PlannedAction(verb="set_field", args={"field_id": "f1", "value": "x"})],
+                    confidence=0.8,
+                    reason="ok",
+                )
+            },
+        )()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    plan = await triage_plan(
+        ctx=CTX,
+        conversation="oi",
+        opportunity={"id": "o1", "pipeline_id": "p1", "stage_id": "s1"},
+        pipeline_rules={},
+        model_id="deepseek-v4-flash",
+    )
+    assert isinstance(plan, ActionPlan)
+    assert plan.actions[0].verb == "set_field"
+    assert plan.actions[0].requires_confirmation is False
+
+
+@pytest.mark.asyncio
+async def test_triage_plan_flags_high_stakes_confirmation(monkeypatch) -> None:
+    async def fake_run(agent, message):
+        return type(
+            "R",
+            (),
+            {
+                "content": ActionPlan(
+                    relevant=True,
+                    actions=[
+                        PlannedAction(verb="set_field", args={"field_id": "f1", "value": "x"}),
+                        PlannedAction(verb="move_stage", args={"stage_type": "won"}),
+                        PlannedAction(verb="trigger_webhook", args={"url": "https://x"}),
+                    ],
+                    confidence=0.9,
+                    reason="enrich then close",
+                )
+            },
+        )()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    plan = await triage_plan(
+        ctx=CTX,
+        conversation="fechado!",
+        opportunity={"id": "o1", "pipeline_id": "p1", "stage_id": "s1"},
+        pipeline_rules={},
+        model_id="deepseek-v4-flash",
+    )
+    assert plan.actions[0].requires_confirmation is False  # routine set_field
+    assert plan.actions[1].requires_confirmation is True   # won move
+    assert plan.actions[2].requires_confirmation is True   # webhook
