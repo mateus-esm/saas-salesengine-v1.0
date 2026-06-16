@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
 
 const corsHeaders = {
@@ -37,6 +37,113 @@ const SALES_FIELDS_ON_OPPORTUNITY = new Set([
   'lead_score',
 ]);
 
+interface InboundWebhookConfig {
+  id: string;
+  equipe_id: string;
+  pipeline_id: string | null;
+  field_mappings: Array<{
+    source_field: string;
+    target_field: string;
+    target_type: string;
+  }>;
+}
+
+interface InboundPayload {
+  [key: string]: unknown;
+}
+
+/** Apply field_mappings to transform an inbound payload into lead + opportunity data. */
+function applyFieldMappings(
+  payload: InboundPayload,
+  mappings: InboundWebhookConfig['field_mappings'],
+): { leadData: Record<string, unknown>; oppNativeData: Record<string, unknown>; oppCustomData: Record<string, unknown> } {
+  const leadData: Record<string, unknown> = {};
+  const oppNativeData: Record<string, unknown> = {};
+  const oppCustomData: Record<string, unknown> = {};
+
+  for (const mapping of mappings) {
+    const value = payload[mapping.source_field];
+    if (value === undefined || value === null) continue;
+
+    if (mapping.target_type === 'lead') {
+      leadData[mapping.target_field] = value;
+    } else if (mapping.target_type === 'lead_custom') {
+      leadData.custom_fields = { ...(leadData.custom_fields as Record<string, unknown> || {}), [mapping.target_field]: value };
+    } else if (mapping.target_type === 'opportunity') {
+      oppNativeData[mapping.target_field] = value;
+    } else if (mapping.target_type === 'custom_data') {
+      oppCustomData[mapping.target_field] = value;
+    }
+  }
+
+  return { leadData, oppNativeData, oppCustomData };
+}
+
+/** After lead creation, fire configured outbound webhooks and log results. */
+async function dispatchOutboundWebhooks(
+  supabase: SupabaseClient,
+  equipeId: string,
+  leadId: string,
+  opportunityId: string | null,
+  leadData: Record<string, unknown>,
+) {
+  const { data: configs, error } = await supabase
+    .from('webhook_configs')
+    .select('id, url, headers')
+    .eq('equipe_id', equipeId)
+    .eq('trigger_event', 'lead_created')
+    .eq('active', true);
+
+  if (error) {
+    console.error('[crm-webhook] Error fetching outbound webhook configs:', error);
+    return;
+  }
+
+  const payload = {
+    event: 'lead_created',
+    lead_id: leadId,
+    opportunity_id: opportunityId,
+    equipe_id: equipeId,
+    data: leadData,
+    created_at: new Date().toISOString(),
+  };
+
+  for (const config of configs || []) {
+    try {
+      const res = await fetch(config.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(config.headers as Record<string, string> || {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      await supabase.from('webhook_logs').insert({
+        equipe_id: equipeId,
+        webhook_config_id: config.id,
+        direction: 'outbound',
+        event_type: 'lead_created',
+        payload,
+        response_status: res.status,
+        response_body: await res.text(),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[crm-webhook] Error dispatching to webhook ${config.id}:`, message);
+
+      await supabase.from('webhook_logs').insert({
+        equipe_id: equipeId,
+        webhook_config_id: config.id,
+        direction: 'outbound',
+        event_type: 'lead_created',
+        payload,
+        error_message: message,
+      });
+    }
+  }
+}
+
 function splitLeadAndOpportunityFields(updates: Partial<LeadPayload>) {
   const leadUpdates: Record<string, unknown> = {};
   const oppCustomData: Record<string, unknown> = {};
@@ -71,6 +178,184 @@ serve(async (req) => {
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
     const action = pathParts[pathParts.length - 1] || 'create';
+    const body = await req.json();
+
+    // --- Inbound route (configurable field mappings via webhook_configs) ---
+    // Check for /inbound/{config_id} BEFORE secret-based auth.
+    // Inbound webhooks authenticate by config_id (UUID), not webhook_secret.
+    if (pathParts.includes('inbound') && pathParts.length >= 2) {
+      // URL sanitization: strip query params (?fbclid=) and trailing slashes
+      const sanitizeConfigId = (raw: string) => raw.split('?')[0].replace(/\/$/, '');
+      const configId = sanitizeConfigId(pathParts[pathParts.length - 1]);
+
+      // 1. Look up webhook_config
+      const { data: config, error: configError } = await supabase
+        .from('webhook_configs')
+        .select('id, equipe_id, pipeline_id, field_mappings')
+        .eq('id', configId)
+        .eq('inbound_function', 'receive_lead')
+        .maybeSingle();
+
+      if (configError || !config) {
+        return new Response(
+          JSON.stringify({ error: 'Webhook config not found or not configured for inbound' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const payload = body as InboundPayload;
+
+      // 2. Apply field mappings (separates lead, native opp, and custom_data)
+      const { leadData, oppNativeData, oppCustomData } = applyFieldMappings(
+        payload,
+        (config.field_mappings || []) as InboundWebhookConfig['field_mappings'],
+      );
+
+      // 3. Ensure minimum required fields
+      if (!leadData.name) {
+        return new Response(
+          JSON.stringify({ error: 'name is required (map a source field to name)' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 4. Create or update lead (dedup by phone to avoid unique constraint crash)
+      const checkPhone = leadData.phone ? String(leadData.phone).replace(/\D/g, '') : null;
+      let leadId = '';
+      let isNewLead = true;
+
+      if (checkPhone) {
+        const { data: existingLead } = await supabase
+          .from('leads')
+          .select('id, custom_fields')
+          .eq('equipe_id', config.equipe_id)
+          .eq('phone', checkPhone)
+          .maybeSingle();
+
+        if (existingLead) {
+          leadId = existingLead.id;
+          isNewLead = false;
+          const leadUpdate: Record<string, unknown> = {};
+          if (leadData.email) leadUpdate.email = leadData.email;
+          if (leadData.observations) leadUpdate.observations = leadData.observations;
+          if (leadData.tags) leadUpdate.tags = leadData.tags;
+          leadUpdate.custom_fields = {
+            ...(existingLead.custom_fields as Record<string, unknown> || {}),
+            ...(leadData.custom_fields as Record<string, unknown> || {}),
+          };
+
+          const { error: updateErr } = await supabase
+            .from('leads')
+            .update(leadUpdate)
+            .eq('id', leadId);
+          if (updateErr) console.error('[crm-webhook] Error updating existing lead:', updateErr);
+        }
+      }
+
+      if (!leadId) {
+        const leadRow = {
+          equipe_id: config.equipe_id,
+          name: leadData.name,
+          email: leadData.email || null,
+          phone: checkPhone || leadData.phone || null,
+          source: leadData.source || 'webhook_inbound',
+          origem: 'webhook',
+          atendido_por_agente: false,
+          tags: leadData.tags || [],
+          observations: leadData.observations || null,
+          custom_fields: (leadData.custom_fields as Record<string, unknown>) || {},
+        };
+
+        const { data: newLead, error: leadError } = await supabase
+          .from('leads')
+          .insert(leadRow)
+          .select()
+          .single();
+
+        if (leadError) {
+          console.error('[crm-webhook] Error creating lead via inbound:', leadError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to create lead', details: leadError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        leadId = newLead.id;
+      }
+
+      // 5. Resolve pipeline: config.pipeline_id or equipe.default_pipeline_id
+      let pipelineId = config.pipeline_id;
+      if (!pipelineId) {
+        const { data: equipe } = await supabase
+          .from('equipes')
+          .select('default_pipeline_id')
+          .eq('id', config.equipe_id)
+          .maybeSingle();
+        pipelineId = equipe?.default_pipeline_id || null;
+      }
+
+      let opportunityId: string | null = null;
+      if (pipelineId) {
+        try {
+          const opp = await resolveActiveOpportunity(supabase, {
+            equipe_id: config.equipe_id,
+            lead_id: leadId,
+            createIfMissing: true,
+          });
+          opportunityId = opp?.opportunity_id ?? null;
+
+          if (opp?.opportunity_id) {
+            const oppUpdate: Record<string, unknown> = {};
+
+            if (oppNativeData.value !== undefined) {
+              oppUpdate.value = Number(oppNativeData.value);
+            }
+
+            if (Object.keys(oppCustomData).length > 0) {
+              const { data: current } = await supabase
+                .from('opportunities')
+                .select('custom_data')
+                .eq('id', opp.opportunity_id)
+                .maybeSingle();
+              oppUpdate.custom_data = { ...(current?.custom_data || {}), ...oppCustomData };
+            }
+
+            if (Object.keys(oppUpdate).length > 0) {
+              await supabase.from('opportunities').update(oppUpdate).eq('id', opp.opportunity_id);
+            }
+          }
+        } catch (oppErr) {
+          console.error('[crm-webhook] Error creating opportunity for inbound:', oppErr);
+        }
+      }
+
+      // 6. Log activity
+      await supabase.from('lead_activities').insert({
+        lead_id: leadId,
+        tipo: 'webhook_inbound',
+        descricao: isNewLead ? 'Lead criado via inbound webhook' : 'Lead atualizado via inbound webhook',
+        metadata: { config_id: config.id, opportunity_id: opportunityId, is_new: isNewLead },
+      });
+
+      // 7. Dispatch outbound webhooks (→ n8n)
+      await dispatchOutboundWebhooks(
+        supabase,
+        config.equipe_id,
+        leadId,
+        opportunityId,
+        { ...leadData, ...oppNativeData, custom_data: oppCustomData },
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          lead_id: leadId,
+          opportunity_id: opportunityId,
+          is_new: isNewLead,
+          message: isNewLead ? 'Lead created via inbound webhook' : 'Lead updated via inbound webhook',
+        }),
+        { status: isNewLead ? 201 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const webhookSecret = req.headers.get('x-webhook-secret') || url.searchParams.get('secret');
 
@@ -96,8 +381,6 @@ serve(async (req) => {
     }
 
     console.log(`Webhook for equipe: ${equipe.nome}, action: ${action}`);
-
-    const body = await req.json();
 
     if (action === 'create' || req.method === 'POST' && !body.lead_id) {
       const payload = body as LeadPayload;

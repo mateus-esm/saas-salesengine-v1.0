@@ -5,8 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -35,6 +35,8 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 const Webhooks = () => {
   const { equipe } = useAuth();
@@ -44,12 +46,34 @@ const Webhooks = () => {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<WebhookConfig | null>(null);
 
-  // Inbound webhook URL
+  // Fetch pipelines for displaying pipeline names on inbound cards
+  const { data: pipelines = [] } = useQuery({
+    queryKey: ["pipelines", equipe?.id],
+    queryFn: async () => {
+      if (!equipe?.id) return [];
+      const { data } = await supabase
+        .from("pipelines")
+        .select("id, name")
+        .eq("equipe_id", equipe.id)
+        .is("deleted_at", null)
+        .order("name");
+      return data || [];
+    },
+    enabled: !!equipe?.id,
+  });
+
+  // Existing inbound webhook URL (secret-based, kept for backward compatibility)
   const inboundWebhookUrl = equipe?.webhook_secret
     ? `https://padduteanashekmereof.supabase.co/functions/v1/crm-webhook?secret=${equipe.webhook_secret}`
     : "";
 
   const gptMakerWebhookUrl = "https://padduteanashekmereof.supabase.co/functions/v1/gpt-maker-webhook";
+
+  // Separate inbound configs from outbound configs
+  const inboundConfigs = configs.filter((c) => c.inbound_function === "receive_lead");
+  const outboundConfigs = configs.filter((c) => !c.inbound_function);
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://padduteanashekmereof.supabase.co";
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -139,24 +163,26 @@ const Webhooks = () => {
 
         {/* Inbound Webhooks */}
         <TabsContent value="inbound" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Webhook CRM</CardTitle>
-              <CardDescription>
-                Use esta URL para enviar leads de sistemas externos
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input value={inboundWebhookUrl} readOnly className="font-mono text-sm" />
-                <Button variant="outline" onClick={() => copyToClipboard(inboundWebhookUrl)}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="text-sm text-muted-foreground space-y-2">
-                <p><strong>Método:</strong> POST</p>
-                <p><strong>Payload exemplo:</strong></p>
-                <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
+          {/* Legacy webhook cards (kept for backward compatibility) */}
+          {inboundWebhookUrl && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Webhook CRM</CardTitle>
+                <CardDescription>
+                  Use esta URL para enviar leads de sistemas externos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input value={inboundWebhookUrl} readOnly className="font-mono text-sm" />
+                  <Button variant="outline" onClick={() => copyToClipboard(inboundWebhookUrl)}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p><strong>Método:</strong> POST</p>
+                  <p><strong>Payload exemplo:</strong></p>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto">
 {`{
   "name": "João Silva",
   "email": "joao@email.com",
@@ -165,10 +191,11 @@ const Webhooks = () => {
   "value": 5000,
   "tags": ["hot", "indicação"]
 }`}
-                </pre>
-              </div>
-            </CardContent>
-          </Card>
+                  </pre>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -189,11 +216,82 @@ const Webhooks = () => {
               </p>
             </CardContent>
           </Card>
+
+          {/* Custom inbound webhook configs (configurable field mappings) */}
+          {inboundConfigs.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Webhooks de entrada configurados</h3>
+              {inboundConfigs.map((config) => {
+                const inboundUrl = `${supabaseUrl}/functions/v1/crm-webhook/inbound/${config.id}`;
+                return (
+                  <Card key={config.id}>
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium">{config.name}</h3>
+                            <Badge>Receber Lead</Badge>
+                            {config.active ? (
+                              <Badge className="bg-green-600">Ativo</Badge>
+                            ) : (
+                              <Badge variant="secondary">Inativo</Badge>
+                            )}
+                          </div>
+                          <div className="flex gap-2 max-w-xl">
+                            <Input value={inboundUrl} readOnly className="font-mono text-sm flex-1" />
+                            <Button variant="outline" size="icon" onClick={() => copyToClipboard(inboundUrl)}>
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          {config.pipeline_id && (
+                            <p className="text-sm text-muted-foreground">
+                              Pipeline: {pipelines?.find((p: { id: string; name: string }) => p.id === config.pipeline_id)?.name || "Pipeline configurado"}
+                            </p>
+                          )}
+                          {config.field_mappings && config.field_mappings.length > 0 && (
+                            <div className="text-sm text-muted-foreground">
+                              <p>Mapeamentos ({config.field_mappings.length}):</p>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {config.field_mappings.map((m, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {m.source_field} → {m.target_field}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditConfig(config)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteConfig(config.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Empty state for custom inbound */}
+          {inboundConfigs.length === 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-8">
+                <p className="text-muted-foreground">
+                  Nenhum webhook de entrada configurado. Crie um webhook com tipo "Entrada (Receber Lead)".
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Outbound Webhooks */}
         <TabsContent value="outbound" className="space-y-4">
-          {configs.length === 0 ? (
+          {outboundConfigs.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Webhook className="h-12 w-12 text-muted-foreground mb-4" />
@@ -209,7 +307,7 @@ const Webhooks = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {configs.map((config) => (
+              {outboundConfigs.map((config) => (
                 <Card key={config.id}>
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between">

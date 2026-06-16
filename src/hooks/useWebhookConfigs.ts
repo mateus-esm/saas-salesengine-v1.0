@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { WebhookConfig } from "@/types/webhook";
+import { WebhookConfig, FieldMapping } from "@/types/webhook";
 
 interface CreateWebhookData {
   name: string;
@@ -10,6 +10,9 @@ interface CreateWebhookData {
   trigger_event: string;
   headers?: Record<string, string>;
   active?: boolean;
+  inbound_function?: string | null;
+  pipeline_id?: string | null;
+  field_mappings?: FieldMapping[];
 }
 
 interface UpdateWebhookData {
@@ -19,6 +22,9 @@ interface UpdateWebhookData {
   trigger_event?: string;
   headers?: Record<string, string>;
   active?: boolean;
+  inbound_function?: string | null;
+  pipeline_id?: string | null;
+  field_mappings?: FieldMapping[];
 }
 
 export const useWebhookConfigs = () => {
@@ -56,6 +62,9 @@ export const useWebhookConfigs = () => {
           trigger_event: configData.trigger_event,
           headers: configData.headers || {},
           active: configData.active ?? true,
+          inbound_function: configData.inbound_function ?? null,
+          pipeline_id: configData.pipeline_id ?? null,
+          field_mappings: configData.field_mappings ?? [],
         })
         .select()
         .single();
