@@ -13,14 +13,18 @@ import { useTheme } from "next-themes";
 
 import { useMediaUpload, MediaType } from "@/hooks/useMediaUpload";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
+import { SyncButton } from "@/components/crm/copilot/SyncButton";
 
 interface ChatInputProps {
   onSend: (message: string, media?: { url: string; type: MediaType }) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** E3: when set, renders the ⚡ Copilot sync next to the composer. */
+  leadId?: string;
+  pipelineId?: string;
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem..." }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -265,6 +269,16 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
               />
             </PopoverContent>
           </Popover>
+
+          {/* E3: align CRM properties mid-conversation via the Copilot */}
+          {leadId && (
+            <SyncButton
+              mode="single"
+              variant="chat"
+              leadId={leadId}
+              pipelineId={pipelineId}
+            />
+          )}
         </div>
 
         {/* Text input */}

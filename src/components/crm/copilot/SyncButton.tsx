@@ -1,0 +1,169 @@
+// src/components/crm/copilot/SyncButton.tsx
+//
+// Sprint 6.1 · EPIC E · E1 — the ubiquitous ⚡ Sync button.
+//
+// One component, three surfaces:
+//   • variant="card"   — compact ⚡ icon on the Kanban card face
+//   • variant="chat"   — inline ⚡ in the inbox composer
+//   • variant="header" — labeled "Sincronizar Pipeline" (sweep) in the pipeline header
+//
+// mode="single" runs one lead/opportunity via SSE (useCopilotSync); mode="sweep"
+// runs the whole pipeline via Realtime (useCopilotSweep) behind a credit-cost
+// confirmation. Both render the shared TelemetryHUD. The button is disabled with
+// a tooltip when the team's "Agente de CRM" (is_crm_agent_enabled) toggle is off.
+
+import { useEffect, useRef, useState } from "react";
+import { Zap } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCopilotSync, type HudEvent } from "@/hooks/useCopilotSync";
+import { useCopilotSweep } from "@/hooks/useCopilotSweep";
+import { TelemetryHUD } from "@/components/crm/copilot/TelemetryHUD";
+
+export interface SyncButtonProps {
+  leadId?: string;
+  opportunityId?: string;
+  pipelineId?: string;
+  mode: "single" | "sweep";
+  variant?: "card" | "chat" | "header";
+  /** Estimated open-opportunity count, shown in the sweep confirmation. */
+  sweepEstimate?: number;
+  className?: string;
+}
+
+export function SyncButton({
+  leadId,
+  opportunityId,
+  pipelineId,
+  mode,
+  variant = "card",
+  sweepEstimate,
+  className,
+}: SyncButtonProps) {
+  const { equipe } = useAuth();
+  const enabled = equipe?.is_crm_agent_enabled ?? false;
+  const queryClient = useQueryClient();
+
+  const single = useCopilotSync();
+  const sweepHook = useCopilotSweep();
+  const [hudOpen, setHudOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
+  const running = mode === "sweep" ? sweepHook.running : single.running;
+
+  // Invalidate the live data the run may have changed, once it's done.
+  const lastSeen = useRef(0);
+  useEffect(() => {
+    if (events.length === lastSeen.current) return;
+    lastSeen.current = events.length;
+    const done = events.some((e) => e.kind === "done");
+    if (done) {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      queryClient.invalidateQueries({ queryKey: ["leadActivities"] });
+      queryClient.invalidateQueries({ queryKey: ["copilot", "credits"] });
+    }
+  }, [events, queryClient]);
+
+  const runSingle = () => {
+    if (!leadId) return;
+    setHudOpen(true);
+    // useCopilotSync expects snake_case query keys.
+    void single.start({
+      lead_id: leadId,
+      opportunity_id: opportunityId,
+      pipeline_id: pipelineId,
+    });
+  };
+
+  const runSweep = () => {
+    if (!pipelineId) return;
+    setConfirmOpen(false);
+    setHudOpen(true);
+    void sweepHook.start(pipelineId);
+  };
+
+  const onClick = () => {
+    if (!enabled) return;
+    if (mode === "sweep") setConfirmOpen(true);
+    else runSingle();
+  };
+
+  const label =
+    variant === "header" ? "Sincronizar Pipeline" : variant === "chat" ? "Sincronizar" : undefined;
+
+  const button = (
+    <Button
+      type="button"
+      size={variant === "card" ? "icon" : "sm"}
+      variant={variant === "header" ? "default" : "ghost"}
+      disabled={!enabled}
+      className={className}
+      onClick={(e) => {
+        e.stopPropagation(); // don't open the card's detail modal
+        onClick();
+      }}
+      aria-label="Sincronizar com o Copilot"
+    >
+      <Zap className={label ? "mr-1 h-4 w-4" : "h-4 w-4"} />
+      {label}
+    </Button>
+  );
+
+  return (
+    <>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent>
+            {enabled
+              ? "Avaliar e atualizar com o Copilot"
+              : "Ative o Agente de CRM nas configurações da equipe"}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sincronizar o pipeline inteiro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {sweepEstimate != null
+                ? `Isto irá avaliar ${sweepEstimate} oportunidade(s) abertas. Cada ação aplicada consome 1 crédito.`
+                : "Isto irá avaliar todas as oportunidades abertas. Cada ação aplicada consome 1 crédito."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={runSweep}>Sincronizar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <TelemetryHUD
+        open={hudOpen}
+        onOpenChange={setHudOpen}
+        events={events}
+        running={running}
+        title={mode === "sweep" ? "Sweep do Pipeline" : "Telemetria do Copilot"}
+      />
+    </>
+  );
+}

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Zap, TrendingUp, Loader2, RefreshCcw, ExternalLink, MessageCircle, CreditCard, QrCode, Copy, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CreditLedgerPanel } from "@/components/crm/copilot/CreditLedgerPanel";
 
 interface CreditData {
   creditsSpent: number;
@@ -255,6 +256,23 @@ const Billing = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Sprint 6.1 — Copilot credit transparency ledger */}
+        <Card id="copilot">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              Copilot — Consumo de Créditos
+            </CardTitle>
+            <CardDescription>
+              Cada ação estrutural aplicada pelo Copilot consome 1 crédito. Esta carteira é
+              separada dos créditos de mensagens.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreditLedgerPanel />
+          </CardContent>
+        </Card>
 
         {/* Credit Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

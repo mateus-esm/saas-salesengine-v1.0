@@ -54,6 +54,15 @@ export interface SyncOpportunityResult {
 
 const BASE_URL = import.meta.env.VITE_COPILOT_URL as string;
 
+/** Base URL of the Copilot/Agno backend (used by SSE streaming hooks). */
+export const COPILOT_URL = BASE_URL;
+
+/** Current Supabase access token, or undefined when signed out. */
+export async function getCopilotToken(): Promise<string | undefined> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token;
+}
+
 async function copilotFetch<T>(
   path: string,
   body: unknown
@@ -126,6 +135,22 @@ export async function syncOpportunity(
   args: SyncOpportunityArgs
 ): Promise<SyncOpportunityResult> {
   return copilotFetch<SyncOpportunityResult>("/api/v1/sync", args);
+}
+
+export interface SweepResult {
+  run_id: string;
+  total: number;
+}
+
+/**
+ * POST /api/v1/sync/sweep
+ * Global Pipeline Sweep — processes every open opportunity in the pipeline
+ * sequentially server-side. Returns the run_id (for the Realtime HUD) and total.
+ */
+export async function sweep(pipelineId: string): Promise<SweepResult> {
+  return copilotFetch<SweepResult>("/api/v1/sync/sweep", {
+    pipeline_id: pipelineId,
+  });
 }
 
 /**

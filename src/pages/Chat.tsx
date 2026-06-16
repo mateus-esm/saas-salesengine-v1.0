@@ -562,6 +562,7 @@ const Chat = () => {
               onSend={handleSendMessage}
               placeholder="Digite sua mensagem..."
               disabled={loadingMessages}
+              leadId={selectedConversation?.lead_id ?? undefined}
             />
           </>
         ) : (

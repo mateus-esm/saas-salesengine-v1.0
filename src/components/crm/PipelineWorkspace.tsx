@@ -9,6 +9,7 @@ import { useCopilotRealtime } from "@/hooks/useCopilotRealtime";
 
 import { AgentRulesPanel } from "./AgentRulesPanel";
 import { CopilotApprovalsPanel } from "./copilot/CopilotApprovalsPanel";
+import { SyncButton } from "./copilot/SyncButton";
 import { OpportunityKanban } from "./OpportunityKanban";
 import { OpportunityTable } from "./OpportunityTable";
 import { PipelineSelector } from "./PipelineSelector";
@@ -82,6 +83,11 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
             </TabsList>
           </Tabs>
         </div>
+
+        {/* E4: Global Pipeline Sweep ⚡ — only the kanban view, with credit confirm */}
+        {view === "kanban" && (
+          <SyncButton mode="sweep" variant="header" pipelineId={pipelineId} />
+        )}
       </div>
 
       {/* F4: Approval cards — renders only when there are pending decisions */}

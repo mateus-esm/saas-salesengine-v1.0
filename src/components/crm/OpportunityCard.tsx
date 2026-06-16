@@ -24,6 +24,7 @@ import { useLogTouchpoint, type CreateTouchpointData } from "@/hooks/useTouchpoi
 import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { CardTelemetryPillars } from "./CardTelemetryPillars";
+import { SyncButton } from "./copilot/SyncButton";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -139,11 +140,29 @@ export const OpportunityCard = ({
           <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span className="truncate">{formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}</span>
         </div>
-        {nativeFlags.value && valueText && (
-          <span className="text-xs text-green-600 dark:text-green-400 font-semibold shrink-0">
-            {valueText}
-          </span>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {nativeFlags.value && valueText && (
+            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">
+              {valueText}
+            </span>
+          )}
+          {/* E2: on-card ⚡ Sync — stop drag/open propagation so it acts standalone */}
+          {!isDragOverlay && lead?.id && (
+            <span
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={stop}
+              onPointerDown={stop}
+            >
+              <SyncButton
+                mode="single"
+                variant="card"
+                leadId={lead.id}
+                opportunityId={opportunity.id}
+                pipelineId={opportunity.pipeline_id}
+              />
+            </span>
+          )}
+        </div>
       </div>
 
       <CardTelemetryPillars
