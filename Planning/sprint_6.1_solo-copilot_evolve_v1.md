@@ -1121,7 +1121,7 @@ class ActionPlan(BaseModel):
 
 ---
 
-### Task B2: Floor doorman emits an `ActionPlan`
+### Task B2: Floor doorman emits an `ActionPlan`  ✅ COMPLETE (verified 2026-06-16, tests green)
 
 **Files:**
 - Modify: `python-agent/app/cascade/floor_doorman.py`
@@ -1131,7 +1131,7 @@ class ActionPlan(BaseModel):
 back-compat shim `triage_intent` that wraps the first action as an `IntentDecision` so the legacy
 cascade still works until cutover. Add `triage_plan(...) -> ActionPlan`.
 
-- [ ] **Step 1: Write the failing test (append)**
+- [x] **Step 1: Write the failing test (append)**
 
 ```python
 @pytest.mark.asyncio
@@ -1161,7 +1161,7 @@ async def test_triage_plan_returns_actionplan(monkeypatch):
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `cd python-agent && python -m pytest tests/test_floor_doorman.py -k triage_plan -v`
-Expected: FAIL (`triage_plan` undefined).
+Expected: FAIL (`triage_plan` undefined). ✅ DONE (verified green 2026-06-16).
 
 - [ ] **Step 3: Implement** — add `triage_plan` building an Agno `Agent(output_schema=ActionPlan, ...)` via `build_chat_model(model_id)`, mirroring the existing `triage_intent` construction (system_message in PT, `use_json_mode=True` for Verboo). Keep `triage_intent` delegating to `triage_plan` and collapsing to the first action for back-compat.
 
@@ -1176,7 +1176,7 @@ git commit -m "feat(copilot): Floor doorman emits multi-action ActionPlan"
 
 ---
 
-### Task B3: Sequential credit-aware executor
+### Task B3: Sequential credit-aware executor  ✅ COMPLETE (verified 2026-06-16, tests green)
 
 **Files:**
 - Create: `python-agent/app/cascade/executor.py`
@@ -1463,7 +1463,7 @@ git commit -m "feat(copilot): Contact Base Enricher with persistent Lead Memory"
 
 ---
 
-### Task B5: Native HITL on high-stakes verbs + Workflow assembly
+### Task B5: Native HITL on high-stakes verbs + Workflow assembly  ✅ COMPLETE (verified 2026-06-16, tests green)
 
 **Files:**
 - Modify: `python-agent/app/skills/core_table.py` (mark high-stakes verbs)
@@ -1531,7 +1531,7 @@ git commit -m "feat(copilot): native HITL high-stakes verbs + assemble multi-act
 
 ## EPIC D — Global Sweep + Real Telemetry HUD *(verboo D1 · gemini D2 · sonnet D3/D4/D5)*
 
-### Task D1: `copilot_run_events` table + Realtime publication
+### Task D1: `copilot_run_events` table + Realtime publication  ✅ COMPLETE (2026-06-16 · remote apply deferred to H5)
 
 **Files:**
 - Create: `supabase/migrations/20260614000300_sprint6_1_run_events.sql`
@@ -1574,7 +1574,7 @@ git commit -m "feat(copilot): copilot_run_events table + Realtime publication"
 
 ---
 
-### Task D2: `events.py` — run-event emitter (SSE buffer + Realtime writer)
+### Task D2: `events.py` — run-event emitter (SSE buffer + Realtime writer)  ✅ COMPLETE (2026-06-16, tests green)
 
 **Files:**
 - Create: `python-agent/app/events.py`
@@ -1674,7 +1674,7 @@ git commit -m "feat(copilot): RunEmitter (SSE queue + copilot_run_events persist
 
 ---
 
-### Task D3: `/sync/stream` (SSE) + `/sync/sweep` (sequential queue)
+### Task D3: `/sync/stream` (SSE) + `/sync/sweep` (sequential queue)  ✅ COMPLETE (2026-06-16, tests green)
 
 **Files:**
 - Create: `python-agent/app/routers/sweep.py`
@@ -1783,7 +1783,7 @@ git commit -m "feat(copilot): /sync/stream SSE + sequential /sync/sweep"
 
 ---
 
-### Task D4: Frontend — `useCopilotSync` (SSE) + `TelemetryHUD` modal
+### Task D4: Frontend — `useCopilotSync` (SSE) + `TelemetryHUD` modal  ✅ COMPLETE (2026-06-16, npm run build green)
 
 **Files:**
 - Create: `src/hooks/useCopilotSync.ts`
@@ -1858,7 +1858,7 @@ git commit -m "feat(copilot): SSE sync hook + live Telemetry HUD modal"
 
 ---
 
-### Task D5: Frontend — `useCopilotSweep` (Realtime) + sweep wiring
+### Task D5: Frontend — `useCopilotSweep` (Realtime) + sweep wiring  ✅ COMPLETE (2026-06-16, npm run build green)
 
 **Files:**
 - Create: `src/hooks/useCopilotSweep.ts`
@@ -1878,7 +1878,7 @@ git commit -m "feat(copilot): sweep trigger + Realtime HUD consumer"
 
 > **Foundation only.** No conversational agent ships this sprint — we lay schema + contract so 6.2 can.
 
-### Task G1: pgvector + per-tenant knowledge table
+### Task G1: pgvector + per-tenant knowledge table  ✅ COMPLETE (2026-06-16 · remote apply deferred to H5)
 
 **Files:**
 - Create: `supabase/migrations/20260614000400_sprint6_1_knowledge_pgvector.sql`
@@ -1919,7 +1919,7 @@ git commit -m "feat(copilot): pgvector + per-tenant knowledge table (RAG foundat
 
 ---
 
-### Task G2: `knowledge.py` — per-tenant PgVector factory + ingest
+### Task G2: `knowledge.py` — per-tenant PgVector factory + ingest  ✅ COMPLETE (2026-06-16, tests green)
 
 **Files:**
 - Create: `python-agent/app/knowledge.py`
@@ -1942,7 +1942,7 @@ git commit -m "feat(copilot): per-tenant PgVector Knowledge factory (foundation)
 
 ---
 
-### Task G3: Messaging I/O contract doc
+### Task G3: Messaging I/O contract doc  ✅ COMPLETE (2026-06-16)
 
 **Files:**
 - Create: `python-agent/docs/INBOUND_AGENT_CONTRACT.md`
@@ -1969,7 +1969,7 @@ git commit -m "docs(copilot): inbound conversational-agent messaging contract (6
 
 > All three surfaces share one `SyncButton` and one `TelemetryHUD`. The button only renders when the team's `is_crm_agent_enabled` ("Agente de CRM") toggle is on — reuse the existing guard from `OpportunityDetailModal`.
 
-### Task E1: Reusable `SyncButton` component
+### Task E1: Reusable `SyncButton` component  ✅ COMPLETE (2026-06-16, build green)
 
 **Files:**
 - Create: `src/components/crm/copilot/SyncButton.tsx`
@@ -1989,7 +1989,7 @@ git commit -m "feat(copilot): reusable ⚡ SyncButton (card/chat/header variants
 
 ---
 
-### Task E2: Mount ⚡ on the Kanban card face
+### Task E2: Mount ⚡ on the Kanban card face  ✅ COMPLETE (2026-06-16 · mounted in OpportunityCard.tsx, the real card component)
 
 **Files:**
 - Modify: the Kanban card component (find via `grep -rl "stage_entered_at\|OpportunityCard\|kanban" src/components/crm`; likely rendered by `PipelineWorkspace.tsx`).
@@ -2006,7 +2006,7 @@ git commit -m "feat(copilot): on-card ⚡ Sync button"
 
 ---
 
-### Task E3: Mount ⚡ in the chat sidebar
+### Task E3: Mount ⚡ in the chat sidebar  ✅ COMPLETE (2026-06-16 · ChatInput.tsx + Chat.tsx wiring)
 
 **Files:**
 - Modify: `src/components/inbox/ChatInput.tsx` (or the inbox conversation header — choose the spot next to the active WhatsApp conversation).
@@ -2023,7 +2023,7 @@ git commit -m "feat(copilot): chat-sidebar ⚡ Sync button"
 
 ---
 
-### Task E4: Mount Global Sweep ⚡ on the pipeline header
+### Task E4: Mount Global Sweep ⚡ on the pipeline header  ✅ COMPLETE (2026-06-16 · PipelineWorkspace.tsx, AlertDialog credit confirm)
 
 **Files:**
 - Modify: `src/components/crm/PipelineWorkspace.tsx` (pipeline header area).
@@ -2042,7 +2042,7 @@ git commit -m "feat(copilot): global pipeline sweep ⚡ button with credit confi
 
 ## EPIC F — Billing & Transparency UI *(gemini F1/F3 · verboo F2)*
 
-### Task F1: `useCopilotCredits` — balance + ledger queries
+### Task F1: `useCopilotCredits` — balance + ledger queries  ✅ COMPLETE (2026-06-16, build green)
 
 **Files:**
 - Create: `src/hooks/useCopilotCredits.ts`
@@ -2060,7 +2060,7 @@ git commit -m "feat(copilot): credit balance + ledger query hooks"
 
 ---
 
-### Task F2: `CreditBalanceBadge` (header wallet widget)
+### Task F2: `CreditBalanceBadge` (header wallet widget)  ✅ COMPLETE (2026-06-16 · mounted in TopNavbar.tsx, the active header)
 
 **Files:**
 - Create: `src/components/crm/copilot/CreditBalanceBadge.tsx`
@@ -2078,7 +2078,7 @@ git commit -m "feat(copilot): header credit balance badge with low-balance warni
 
 ---
 
-### Task F3: `CreditLedgerPanel` (transparency ledger)
+### Task F3: `CreditLedgerPanel` (transparency ledger)  ✅ COMPLETE (2026-06-16 · Billing.tsx Copilot section)
 
 **Files:**
 - Create: `src/components/crm/copilot/CreditLedgerPanel.tsx`
@@ -2101,7 +2101,7 @@ git commit -m "feat(copilot): transparency credit-ledger panel"
 
 # WAVE 5 — Trust & Ship (EPIC H) *(verboo H1a · codex H1b/H2 · gemini H3 · opus H4 · Mateus H5)*
 
-### Task H1: Evals dyno — accuracy + reliability suites
+### Task H1: Evals dyno — accuracy + reliability suites  ✅ COMPLETE (2026-06-16 · reliability green, accuracy skips w/o LLM key)
 
 **Files:**
 - Create: `python-agent/evals/__init__.py`
@@ -2148,7 +2148,7 @@ git commit -m "test(copilot): Evals dyno (accuracy + reliability) with baseline 
 
 ---
 
-### Task H2: Private AgentOS admin stub
+### Task H2: Private AgentOS admin stub  ✅ COMPLETE (2026-06-16 · /admin/runs, internal-token gated, tests green)
 
 **Files:**
 - Modify: `python-agent/app/main.py`
@@ -2168,7 +2168,7 @@ git commit -m "feat(copilot): private admin ops surface (internal-token gated)"
 
 ---
 
-### Task H3: CI gate — full backend suite + FE build
+### Task H3: CI gate — full backend suite + FE build  ✅ COMPLETE (2026-06-16 · .github/workflows/ci.yml + Makefile + pytest testpaths)
 
 **Files:**
 - Modify: `python-agent` CI workflow (or `.github/workflows/*` if present) + a `Makefile`/script target.
@@ -2183,7 +2183,7 @@ git commit -am "ci(copilot): backend pytest + evals + frontend build gates"
 
 ---
 
-### Task H4: Workflow flag cutover (parity-gated)
+### Task H4: Workflow flag cutover (parity-gated)  ⏳ HUMAN/INFRA (Mateus) — code ready; flip COPILOT_WORKFLOW_ENABLED in Dokploy after prod parity check
 
 **Files:**
 - Modify: `python-agent/app/config.py` (default `copilot_workflow_enabled = True` only after parity)
@@ -2202,7 +2202,7 @@ git commit -am "feat(copilot): cut over to Agno Workflow backbone (parity-gated)
 
 ---
 
-### Task H5: Dokploy deploy + production verification
+### Task H5: Dokploy deploy + production verification  ⏳ HUMAN/INFRA (Mateus) — apply 4 migrations to remote DB, set env vars, seed credits, smoke-test
 
 **Files:**
 - Modify: Dokploy env vars (Mateus — Human Orchestrator does the infra).

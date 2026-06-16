@@ -22,6 +22,27 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-16 | 6.1 | H3 CI gates (pytest + evals + FE build) | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | H2 private admin ops surface (/admin/runs) | Claude / Opus 4.8 (PM) | L | R$ 20 |
+| 2026-06-16 | 6.1 | H1 Evals dyno (accuracy + reliability) | Claude / Opus 4.8 (PM) | L | R$ 20 |
+| 2026-06-16 | 6.1 | F3 transparency credit-ledger panel | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | F2 header credit balance badge | Claude / Opus 4.8 (PM) | S | R$ 5 |
+| 2026-06-16 | 6.1 | F1 credit balance + ledger query hooks | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | E4 global pipeline sweep ⚡ + credit confirm | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | E3 chat-sidebar ⚡ Sync button | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | E2 on-card ⚡ Sync button | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | E1 reusable ⚡ SyncButton (3 variants) | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | D5 sweep trigger + Realtime HUD consumer | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | D4 SSE sync hook + Telemetry HUD modal | Claude / Opus 4.8 (PM) | L | R$ 20 |
+| 2026-06-16 | 6.1 | G3 inbound agent messaging contract doc | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | G2 knowledge.py PgVector factory | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | G1 pgvector + knowledge table migration | Claude / Opus 4.8 (PM) | S | R$ 5 |
+| 2026-06-16 | 6.1 | D3 /sync/stream SSE + /sync/sweep router | Claude / Opus 4.8 (PM) | L | R$ 20 |
+| 2026-06-16 | 6.1 | D2 events.py RunEmitter | Claude / Opus 4.8 (PM) | M | R$ 12 |
+| 2026-06-16 | 6.1 | D1 copilot_run_events + Realtime migration | Claude / Opus 4.8 (PM) | S | R$ 5 |
+| 2026-06-16 | 6.1 | B5 HITL verbs + multi-action Workflow assembly | Claude / Opus 4.8 (PM) | XL | R$ 28 |
+| 2026-06-16 | 6.1 | B3 sequential credit-aware executor | Claude / Opus 4.8 (PM) | XL | R$ 28 |
+| 2026-06-16 | 6.1 | B2 Floor doorman emits ActionPlan | Claude / Opus 4.8 (PM) | L | R$ 20 |
 | 2026-06-14 | 6.1 | B4 Enricher + Lead Memory | Claude / Sonnet 4.6 | L | R$ 20 |
 | 2026-06-14 | 6.1 | B1 ActionPlan/PlannedAction schemas | verboo / deepseek-v4-flash | M | R$ 12 |
 | 2026-06-14 | 6.1 | W0.1 Agno Workflow parity shell + flag | Codex / GPT-5 | XL | R$ 28 |
