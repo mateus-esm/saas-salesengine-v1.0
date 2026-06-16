@@ -29,3 +29,10 @@ dev = [
 [tool.uv]
 package = false
 
+[tool.pytest.ini_options]
+# Unit gate: bare `pytest` collects ONLY tests/ (fast, no model, runs on every PR).
+# The Evals dyno (evals/) is slow / model-hitting — run it explicitly pre-deploy:
+#   python -m pytest evals/
+testpaths = ["tests"]
+asyncio_mode = "auto"
+

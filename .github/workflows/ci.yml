@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+jobs:
+  backend-unit:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python-agent
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Sync deps
+        run: uv sync --dev
+      - name: Unit gate (tests/ only — evals run pre-deploy)
+        run: uv run pytest tests/ -q
+
+  frontend-build:
+    name: Frontend build gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        run: npm ci
+      - name: Build (the real FE gate — tsc passing != vite build passing)
+        run: npm run build
+
+  backend-evals:
+    name: Backend evals (pre-deploy / nightly)
+    runs-on: ubuntu-latest
+    # Evals hit a model (accuracy suite) — run only on main pushes, not every PR.
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: python-agent
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Sync deps
+        run: uv sync --dev
+      - name: Evals dyno
+        run: uv run pytest evals/ -v

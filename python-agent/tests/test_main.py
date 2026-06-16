@@ -247,3 +247,60 @@ def test_openapi_approvals_resolve_path_present() -> None:
         schema = main_module.app.openapi()
 
     assert "/api/v1/approvals/{decision_id}/resolve" in schema["paths"]
+
+
+# ---------------------------------------------------------------------------
+# 4. H2 — private admin ops surface (internal-token gated)
+# ---------------------------------------------------------------------------
+
+
+def test_admin_runs_requires_internal_token() -> None:
+    """GET /admin/runs without the internal token → 401 (never tenant/public)."""
+    with patch("app.config.get_settings", return_value=FAKE_SETTINGS):
+        import importlib
+
+        import app.main as main_module
+
+        importlib.reload(main_module)
+        client = TestClient(main_module.app, raise_server_exceptions=False)
+
+    resp = client.get("/admin/runs")
+    assert resp.status_code == 401
+
+
+def test_admin_runs_with_token_returns_payload(monkeypatch) -> None:
+    """With the correct X-Agent-Token, /admin/runs returns the ops payload."""
+
+    class _FakeQuery:
+        def table(self, _):
+            return self
+
+        def select(self, *_a, **_k):
+            return self
+
+        def order(self, *_a, **_k):
+            return self
+
+        def limit(self, *_a, **_k):
+            return self
+
+        def execute(self):
+            class _R:
+                data: list = []
+                error = None
+
+            return _R()
+
+    with patch("app.config.get_settings", return_value=FAKE_SETTINGS):
+        import importlib
+
+        import app.main as main_module
+
+        importlib.reload(main_module)
+        monkeypatch.setattr("app.routers.admin.get_service_client", lambda: _FakeQuery())
+        client = TestClient(main_module.app)
+
+    resp = client.get("/admin/runs", headers={"X-Agent-Token": "fake-token"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "run_events" in body and "ai_decisions" in body
