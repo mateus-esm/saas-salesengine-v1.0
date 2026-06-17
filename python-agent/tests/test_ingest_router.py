@@ -80,19 +80,26 @@ class FakeTable:
     def __init__(self, client: FakeClient, table_name: str) -> None:
         self._client = client
         self._table_name = table_name
+        # Tracked filters for copilot_ingest_queue reads
+        self._eq_filters: dict[str, object] = {}
+        self._filter_processed_at_null: bool = False
 
     # ── SELECT chain ────────────────────────────────────────────────────────
 
     def select(self, *_: object) -> "FakeTable":
         return self
 
-    def is_(self, *_: object) -> "FakeTable":
+    def is_(self, col: str, val: object) -> "FakeTable":
+        if self._table_name == "copilot_ingest_queue" and col == "processed_at" and val == "null":
+            self._filter_processed_at_null = True
         return self
 
     def lte(self, *_: object) -> "FakeTable":
         return self
 
-    def eq(self, *_: object) -> "FakeTable":
+    def eq(self, col: str, val: object) -> "FakeTable":
+        if self._table_name == "copilot_ingest_queue":
+            self._eq_filters[col] = val
         return self
 
     def limit(self, *_: object) -> "FakeTable":
@@ -102,7 +109,14 @@ class FakeTable:
         resp = MagicMock()
         resp.error = None
         if self._table_name == "copilot_ingest_queue":
-            resp.data = list(self._client._queue_rows)
+            rows = list(self._client._queue_rows)
+            # Apply eq filters
+            for col, val in self._eq_filters.items():
+                rows = [r for r in rows if r.get(col) == val]
+            # Apply processed_at IS NULL filter
+            if self._filter_processed_at_null:
+                rows = [r for r in rows if r.get("processed_at") is None]
+            resp.data = rows
         elif self._table_name == "equipes":
             resp.data = [{"is_crm_agent_enabled": self._client._agent_enabled}]
         else:
@@ -503,6 +517,38 @@ def test_row_not_found_returns_reason_no_cascade() -> None:
     ):
         client = TestClient(_make_app())
         resp = _post_row(client)
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["processed"] == 0
+    assert body["skipped"] == 0
+    assert body["reason"] == "not_found_or_processed"
+    mock_cascade.assert_not_awaited()
+    assert len(fake_client.update_calls) == 0
+
+
+def test_row_already_processed_is_skipped() -> None:
+    """Idempotency: a row with processed_at set must be treated as not found.
+
+    The fake now honours the .is_("processed_at", "null") filter, so
+    _load_pending_row returns None for an already-processed row, run_cascade
+    is never awaited, no update is written, and the response carries the
+    not_found_or_processed reason.
+    """
+    already_processed_row = {
+        **QUEUE_ROW,
+        "processed_at": "2026-01-01T00:00:00+00:00",
+    }
+    fake_settings = _fake_settings()
+    fake_client = _make_client(queue_rows=[already_processed_row], agent_enabled=True)
+
+    with (
+        patch("app.routers.ingest.get_settings", return_value=fake_settings),
+        patch("app.routers.ingest.get_service_client", return_value=fake_client),
+        patch("app.routers.ingest.run_cascade", new_callable=AsyncMock) as mock_cascade,
+    ):
+        client = TestClient(_make_app())
+        resp = _post_row(client, row_id=ROW_ID)
 
     assert resp.status_code == 202
     body = resp.json()
