@@ -303,3 +303,35 @@ A task is accepted only when its box here is satisfied **and** the handoff block
   (`date · 6.3 · <task> · <agent/model> · <tier> · R$`) on their branch before handoff.
 
 ---
+
+## T7 — Epic 6 Verification Findings
+
+**Conclusion: YES — notes added in the opportunity modal ALREADY appear on the contact timeline. DoD-6 is satisfied by the existing lead-scoped design. No code change is needed.**
+
+### Evidence Chain
+
+**Step 1 — What row is written when a note is added in the opportunity modal?**
+
+`src/components/crm/OpportunityDetailModal.tsx:342-344` renders `<TouchpointsList leadId={lead.id} />` (passing the *lead* id, not the opportunity id) inside the "Notas" tab.
+
+`src/components/crm/TouchpointsList.tsx:49-61` (`handleAdd`) calls `createTouchpoint.mutate({ lead_id: leadId, ... })`.
+
+`src/hooks/useTouchpoints.ts:184-193` (`createTouchpoint` mutationFn) inserts into `touchpoints` with only `lead_id`, `user_id`, `touchpoint_type`, `content`, `contact_date` — **no `opportunity_id` column is written**. The row is scoped to `lead_id` (the contact) only.
+
+**Step 2 — Does the contact timeline read the same rows?**
+
+`src/components/crm/ContactDetailsModal.tsx:108` calls `useTouchpoints(lead?.id)`.
+
+`src/hooks/useTouchpoints.ts:139-143` queries `touchpoints` filtered by `.eq("lead_id", leadId)` — the same `lead_id` written in Step 1.
+
+`src/components/crm/ContactDetailsModal.tsx:133-142` merges those touchpoints into `combinedActivities` and renders them in the right-column timeline.
+
+**Step 3 — Realtime / cache invalidation**
+
+`src/hooks/useTouchpoints.ts:156-178` subscribes a Supabase realtime channel filtered by `lead_id`. When a touchpoint is inserted from either surface, both surfaces invalidate `["touchpoints", leadId]` and re-render immediately.
+
+### Verdict
+
+The `touchpoints` table has no `opportunity_id` column; every touchpoint is keyed only by `lead_id`. Both the opportunity modal and the contact timeline pass the same `lead.id` to the same `useTouchpoints` hook. A note created in the opportunity Kanban modal is instantly visible on the contact profile timeline (and vice-versa) through the shared query key and realtime subscription.
+
+**DoD-6: SATISFIED. No code change required.**
