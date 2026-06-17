@@ -32,29 +32,48 @@ import type { AiDecision } from "@/hooks/useCopilotApprovals";
 
 /**
  * Formats the `output_action` JSONB value into a human-readable string.
- * Falls back to a JSON dump when the shape is unexpected.
+ *
+ * Handles two real payload shapes that both reach this card:
+ *   A) verb-keyed  — Floor doorman / cascade path: { verb, ...params }
+ *   B) action-keyed — autonomous §P4 path:         { action, ...*_template }
+ * Plus:
+ *   C) route shape  — Tower doorman pending route: { pipeline_id | contact_type, ... }
+ *   D) summary-only — no-args fallback:            { summary }
+ *
+ * NEVER renders raw JSON to the seller.
  */
 function formatAction(action: unknown): string {
   if (!action || typeof action !== "object") return String(action ?? "—");
   const a = action as Record<string, unknown>;
 
-  // Core-Table Skill verbs (§P4)
-  if (typeof a.action === "string") {
-    switch (a.action) {
-      case "move_stage":
-        return `Mover para etapa${a.stage_name_hint ? ` "${a.stage_name_hint}"` : ""} (${a.stage_type ?? "open"})`;
+  // Resolve verb from either shape (A or B)
+  const verb = a.action ?? a.verb;
+
+  // Core-Table Skill verbs — covers both action-keyed and verb-keyed shapes.
+  // Param fields: prefer plain name first, then *_template variant.
+  if (typeof verb === "string") {
+    switch (verb) {
       case "set_status":
-        return `Definir status → ${a.status}`;
+        switch (a.status) {
+          case "lost": return "Marcar Oportunidade como Perdida";
+          case "won":  return "Marcar Oportunidade como Ganha";
+          case "open": return "Reabrir Oportunidade";
+          default:     return `Definir status: ${a.status}`;
+        }
+      case "move_stage":
+        if (a.stage_type === "won")  return "Avançar Card para a etapa: Ganho";
+        if (a.stage_type === "lost") return "Mover Card para a etapa: Perdido";
+        return `Mover para etapa${a.stage_name_hint ? ` "${a.stage_name_hint}"` : ""}`;
       case "set_field":
-        return `Definir campo [${a.field_id}] = ${JSON.stringify(a.value)}`;
+        return `Atualizar campo [${a.field_id}] = ${JSON.stringify(a.value)}`;
       case "set_contact_field":
-        return `Definir campo do contato [${a.key}] = ${JSON.stringify(a.value)}`;
+        return `Atualizar dado do contato [${a.key}] = ${JSON.stringify(a.value)}`;
       case "add_touchpoint":
-        return `Adicionar touchpoint (${a.touchpoint_type}): ${a.content_template}`;
+        return `Registrar contato (${a.touchpoint_type ?? "nota"}): ${a.content_template ?? a.content ?? ""}`;
       case "add_note":
-        return `Adicionar nota: ${a.content_template}`;
+        return `Adicionar nota: ${a.content_template ?? a.content ?? ""}`;
       case "create_task":
-        return `Criar tarefa: ${a.title_template}`;
+        return `Criar tarefa: ${a.title_template ?? a.title ?? ""}`;
       case "add_tag":
         return `Adicionar tag: ${a.tag}`;
       case "trigger_webhook":
@@ -64,7 +83,17 @@ function formatAction(action: unknown): string {
     }
   }
 
-  return JSON.stringify(action);
+  // Route shape — Tower doorman pending route (no verb/action key)
+  if (a.pipeline_id !== undefined || a.contact_type !== undefined) {
+    return `Rotear contato${a.reason ? `: ${a.reason}` : ""}`;
+  }
+
+  // Summary-only fallback
+  if (typeof a.summary === "string") return a.summary;
+
+  // Absolute fallback — readable label, never raw JSON
+  const hint = a.reason ?? a.skill;
+  return `Ação do Copilot${typeof hint === "string" && hint ? `: ${hint}` : ""}`;
 }
 
 /**
