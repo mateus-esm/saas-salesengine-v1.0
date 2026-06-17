@@ -1,6 +1,8 @@
 """JTBD 2 — Floor Doorman: triage conversation intent and choose the right CRM skill."""
 
 import json
+import re
+import unicodedata
 from typing import Any
 
 from agno.agent import Agent
@@ -9,6 +11,42 @@ from app.llm import build_chat_model
 from app.schemas import ActionPlan, IntentDecision, PlannedAction
 from app.security import TenantContext
 from app.skills.registry import SkillRegistryError, get_skill
+
+# Deterministic high-intent scheduling keyword set.
+# Accent-normalized check is done at detection time; both "reunião" and "reuniao"
+# are listed so the canonical return value is clear.
+HIGH_INTENT_KEYWORDS: frozenset[str] = frozenset(
+    {"reunião", "reuniao", "call", "agendar", "marcar", "zoom", "meeting"}
+)
+
+
+def _normalize(text: str) -> str:
+    """Return a casefolded, accent-stripped version of *text*."""
+    return unicodedata.normalize("NFD", text.casefold()).encode("ascii", "ignore").decode()
+
+
+def _build_normalized_keywords() -> dict[str, str]:
+    """Build a mapping from normalized keyword → canonical keyword (computed once at import)."""
+    mapping: dict[str, str] = {}
+    for kw in HIGH_INTENT_KEYWORDS:
+        norm = _normalize(kw)
+        # Prefer "reunião" over "reuniao" when they collide after normalization.
+        if norm not in mapping or kw == "reunião":
+            mapping[norm] = kw
+    return mapping
+
+
+_NORMALIZED_KEYWORDS: dict[str, str] = _build_normalized_keywords()  # normalized_form → canonical_keyword
+
+
+def detect_high_intent(conversation: str) -> str | None:
+    """Return the first high-conversion scheduling keyword present (accent/case-
+    insensitive), else None. Deterministic — independent of the LLM."""
+    norm_conv = _normalize(conversation)
+    for norm_kw, canonical in _NORMALIZED_KEYWORDS.items():
+        if re.search(r"\b" + re.escape(norm_kw) + r"\b", norm_conv):
+            return canonical
+    return None
 
 _SYSTEM_PT = """\
 Você é o Porteiro do Andar do Solo Copilot — o segundo filtro no cascata de automação de CRM.
@@ -54,6 +92,22 @@ REGRAS CRÍTICAS:
 - Se nenhum skill for habilitado, retorne `automation_kind: "none"`
 - O campo `skill` deve ser o nome exato (ex: "core_table"), não o verbo
 - Responda APENAS com o JSON do schema IntentDecision — sem texto adicional
+
+PRIORIDADE MÁXIMA — PALAVRAS-CHAVE DE AGENDAMENTO:
+Mensagens contendo qualquer uma das seguintes palavras têm MÁXIMA prioridade e DEVEM
+produzir uma decisão ativa (relevant=true; prefira create_task ou move_stage com alta
+confiança). NUNCA retorne automation_kind:"none" quando a palavra indicar claramente
+uma solicitação de agendamento: reunião, call, agendar, marcar, zoom, meeting.
+
+Exemplos few-shot:
+- Conversa: "Vamos marcar uma reunião para amanhã de manhã?"
+  → {"relevant": true, "automation_kind": "deterministic", "skill": "core_table",
+     "args": {"verb": "create_task", "title": "Agendar reunião", "due_in_hours": 18},
+     "urgency": "urgent", "confidence": 0.92, "reason": "Lead solicitou agendamento de reunião."}
+- Conversa: "Podemos fazer uma call na sexta?"
+  → {"relevant": true, "automation_kind": "deterministic", "skill": "core_table",
+     "args": {"verb": "create_task", "title": "Agendar call na sexta", "due_in_hours": 72},
+     "urgency": "normal", "confidence": 0.88, "reason": "Lead pediu call — criar tarefa de acompanhamento."}
 
 SCHEMA DE SAÍDA:
 {
@@ -160,6 +214,11 @@ async def triage_intent(
                 reason=f"[Downgraded] {reason}. Motivo original: {decision.reason}",
             )
 
+    # Deterministic intent detection — overrides LLM under-classification.
+    kw = detect_high_intent(conversation)
+    decision.intent_detected = kw is not None
+    decision.intent_keyword = kw
+
     return decision
 
 
@@ -191,6 +250,18 @@ REGRAS CRÍTICAS:
 - Proponha apenas ações com evidência na conversa — nunca invente dados.
 - Se nada for relevante, retorne relevant=false e actions=[].
 - Responda APENAS com o JSON do schema ActionPlan — sem texto adicional.
+
+PRIORIDADE MÁXIMA — PALAVRAS-CHAVE DE AGENDAMENTO:
+Mensagens contendo qualquer uma das seguintes palavras têm MÁXIMA prioridade e DEVEM
+produzir pelo menos uma ação ativa no plano (prefira create_task ou move_stage com alta
+confiança). NUNCA retorne actions=[] quando a palavra indicar claramente uma solicitação
+de agendamento: reunião, call, agendar, marcar, zoom, meeting.
+
+Exemplos few-shot:
+- Conversa: "Vamos marcar uma reunião para amanhã de manhã?"
+  → actions: [{"verb": "create_task", "args": {"title": "Agendar reunião", "due_in_hours": 18}, "skill": "core_table"}]
+- Conversa: "Podemos fazer uma call na sexta?"
+  → actions: [{"verb": "create_task", "args": {"title": "Agendar call na sexta", "due_in_hours": 72}, "skill": "core_table"}]
 """
 
 # High-stakes verbs that always pause for human approval (mirrors B5 / CoreTableSkill).
@@ -259,4 +330,11 @@ async def triage_plan(
     else:
         plan = ActionPlan.model_validate(response.content)
 
-    return _mark_confirmations(plan)
+    _mark_confirmations(plan)
+
+    # Deterministic intent detection — set on the plan regardless of LLM output.
+    kw = detect_high_intent(conversation)
+    plan.intent_detected = kw is not None
+    plan.intent_keyword = kw
+
+    return plan

@@ -206,6 +206,23 @@ async def run_workflow(
         pipeline_rules=rules, model_id=floor_model,
     )
 
+    # ─── ⑤a Intent Omission Guard ────────────────────────────────────────────
+    # If Floor detected a high-intent scheduling keyword but produced no actions,
+    # record a pending-approval decision so the FE can badge the card.
+    if not floor_plan.actions and floor_plan.intent_detected:
+        did = _record_decision(
+            client, equipe_id=equipe_id, lead_id=lead_id,
+            opportunity_id=opp_id, pipeline_id=pipe_id,
+            agent_role="floor_doorman", decision_type="action",
+            output_action={
+                "intent_detected": True,
+                "intent_keyword": floor_plan.intent_keyword,
+                "reason": floor_plan.reason,
+            },
+            confidence=floor_plan.confidence, status="pending_approval", actor=actor,
+        )
+        return {"status": "pending_approval", "decision_id": did, "result": None}
+
     # ─── ⑥ Cost Router: escalate high-stakes leaf to the strategic tier ──────
     model_used = floor_model
     high_stakes = any(_is_high_stakes(a) for a in floor_plan.actions)

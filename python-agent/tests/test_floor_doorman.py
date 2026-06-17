@@ -333,3 +333,208 @@ async def test_triage_plan_flags_high_stakes_confirmation(monkeypatch) -> None:
     assert plan.actions[0].requires_confirmation is False  # routine set_field
     assert plan.actions[1].requires_confirmation is True   # won move
     assert plan.actions[2].requires_confirmation is True   # webhook
+
+
+# ─── T4: Intent Safety Net tests ────────────────────────────────────────────
+
+from app.cascade.floor_doorman import detect_high_intent, HIGH_INTENT_KEYWORDS  # noqa: E402
+
+
+def test_detect_high_intent_returns_keyword_for_scheduling_message() -> None:
+    """detect_high_intent must return a keyword when a scheduling word is present."""
+    result = detect_high_intent("vamos marcar uma reunião amanhã?")
+    assert result is not None
+    assert result in HIGH_INTENT_KEYWORDS
+
+
+def test_detect_high_intent_matches_accent_insensitively() -> None:
+    """'reuniao' (no accent) must match 'reunião' in the keyword set."""
+    result = detect_high_intent("preciso agendar uma reuniao hoje")
+    assert result is not None
+    # canonical form in HIGH_INTENT_KEYWORDS is "reunião" or "reuniao" — either is fine
+    assert result in HIGH_INTENT_KEYWORDS
+
+
+def test_detect_high_intent_returns_none_for_irrelevant_message() -> None:
+    """detect_high_intent must return None when no scheduling keyword is present."""
+    assert detect_high_intent("bom dia, tudo bem?") is None
+
+
+def test_detect_high_intent_returns_none_for_empty_string() -> None:
+    """Edge case: empty conversation must return None."""
+    assert detect_high_intent("") is None
+
+
+def test_detect_high_intent_no_match_inside_word() -> None:
+    """'call' must NOT match inside 'recall' — word-boundary fix."""
+    assert detect_high_intent("preciso de um recall do produto") is None
+
+
+def test_detect_high_intent_matches_standalone_call() -> None:
+    """'call' as a standalone word must still match."""
+    assert detect_high_intent("vamos fazer uma call?") == "call"
+
+
+def test_high_intent_keywords_appear_in_system_prompt() -> None:
+    """_SYSTEM_PT must contain a high-intent instruction block so the LLM is calibrated."""
+    from app.cascade.floor_doorman import _SYSTEM_PT
+    # The prompt must mention at least one canonical scheduling keyword
+    assert any(kw in _SYSTEM_PT for kw in ("reunião", "agendar", "marcar", "meeting", "call"))
+
+
+@pytest.mark.asyncio
+async def test_triage_intent_sets_intent_detected_even_when_llm_returns_none_action(
+    monkeypatch,
+) -> None:
+    """intent_detected=True must be set on the returned decision even if the LLM
+    classified the conversation as automation_kind='none' (i.e. the deterministic
+    keyword guard overrides the LLM under-classification)."""
+
+    llm_none_decision = IntentDecision(
+        relevant=False,
+        automation_kind="none",
+        skill=None,
+        args={},
+        urgency="normal",
+        confidence=0.4,
+        reason="Sem ação necessária.",
+    )
+
+    async def fake_run(agent, message):
+        return type("R", (), {"content": llm_none_decision})()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    result = await triage_intent(
+        ctx=CTX,
+        conversation="vamos marcar uma reunião amanhã?",
+        opportunity=OPPORTUNITY,
+        pipeline_rules=PIPELINE_RULES_ENABLED,
+        model_id="gpt-4o",
+    )
+
+    assert result.intent_detected is True
+    assert result.intent_keyword in HIGH_INTENT_KEYWORDS
+
+
+@pytest.mark.asyncio
+async def test_triage_intent_no_intent_detected_for_irrelevant_message(monkeypatch) -> None:
+    """intent_detected must remain False when no scheduling keyword is present."""
+
+    llm_decision = IntentDecision(
+        relevant=False,
+        automation_kind="none",
+        skill=None,
+        args={},
+        urgency="normal",
+        confidence=0.9,
+        reason="Saudação sem dados.",
+    )
+
+    async def fake_run(agent, message):
+        return type("R", (), {"content": llm_decision})()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    result = await triage_intent(
+        ctx=CTX,
+        conversation="bom dia, tudo bem?",
+        opportunity=OPPORTUNITY,
+        pipeline_rules=PIPELINE_RULES_ENABLED,
+        model_id="gpt-4o",
+    )
+
+    assert result.intent_detected is False
+    assert result.intent_keyword is None
+
+
+@pytest.mark.asyncio
+async def test_triage_intent_intent_fields_survive_skill_downgrade(monkeypatch) -> None:
+    """intent_detected/intent_keyword must survive the skill-downgrade reconstruction."""
+
+    bad_decision = _make_decision(skill="nonexistent_skill")
+    rules = {**PIPELINE_RULES_ENABLED, "enabled_skills": ["nonexistent_skill"]}
+
+    async def fake_run(agent, message):
+        return type("R", (), {"content": bad_decision})()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    result = await triage_intent(
+        ctx=CTX,
+        conversation="vamos marcar uma reunião amanhã?",
+        opportunity=OPPORTUNITY,
+        pipeline_rules=rules,
+        model_id="gpt-4o",
+    )
+
+    # Skill is downgraded
+    assert result.relevant is False
+    assert "Downgraded" in result.reason
+    # But intent fields must still be set
+    assert result.intent_detected is True
+    assert result.intent_keyword in HIGH_INTENT_KEYWORDS
+
+
+@pytest.mark.asyncio
+async def test_triage_plan_sets_intent_detected(monkeypatch) -> None:
+    """triage_plan must set intent_detected/intent_keyword on the returned ActionPlan."""
+
+    async def fake_run(agent, message):
+        return type(
+            "R",
+            (),
+            {
+                "content": ActionPlan(
+                    relevant=False,
+                    actions=[],
+                    confidence=0.3,
+                    reason="Sem ação.",
+                )
+            },
+        )()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    plan = await triage_plan(
+        ctx=CTX,
+        conversation="vamos agendar uma call amanhã?",
+        opportunity=OPPORTUNITY,
+        pipeline_rules=PIPELINE_RULES_ENABLED,
+        model_id="gpt-4o",
+    )
+
+    assert plan.intent_detected is True
+    assert plan.intent_keyword in HIGH_INTENT_KEYWORDS
+
+
+@pytest.mark.asyncio
+async def test_triage_plan_no_intent_for_non_scheduling_message(monkeypatch) -> None:
+    """triage_plan must leave intent_detected=False for non-scheduling conversations."""
+
+    async def fake_run(agent, message):
+        return type(
+            "R",
+            (),
+            {
+                "content": ActionPlan(
+                    relevant=False,
+                    actions=[],
+                    confidence=0.9,
+                    reason="Saudação.",
+                )
+            },
+        )()
+
+    monkeypatch.setattr(floor_doorman, "_arun_agent", fake_run)
+
+    plan = await triage_plan(
+        ctx=CTX,
+        conversation="bom dia, tudo bem?",
+        opportunity=OPPORTUNITY,
+        pipeline_rules=PIPELINE_RULES_ENABLED,
+        model_id="gpt-4o",
+    )
+
+    assert plan.intent_detected is False
+    assert plan.intent_keyword is None
