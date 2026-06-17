@@ -365,6 +365,16 @@ def test_detect_high_intent_returns_none_for_empty_string() -> None:
     assert detect_high_intent("") is None
 
 
+def test_detect_high_intent_no_match_inside_word() -> None:
+    """'call' must NOT match inside 'recall' — word-boundary fix."""
+    assert detect_high_intent("preciso de um recall do produto") is None
+
+
+def test_detect_high_intent_matches_standalone_call() -> None:
+    """'call' as a standalone word must still match."""
+    assert detect_high_intent("vamos fazer uma call?") == "call"
+
+
 def test_high_intent_keywords_appear_in_system_prompt() -> None:
     """_SYSTEM_PT must contain a high-intent instruction block so the LLM is calibrated."""
     from app.cascade.floor_doorman import _SYSTEM_PT

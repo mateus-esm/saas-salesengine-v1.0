@@ -1,6 +1,7 @@
 """JTBD 2 — Floor Doorman: triage conversation intent and choose the right CRM skill."""
 
 import json
+import re
 import unicodedata
 from typing import Any
 
@@ -18,8 +19,6 @@ HIGH_INTENT_KEYWORDS: frozenset[str] = frozenset(
     {"reunião", "reuniao", "call", "agendar", "marcar", "zoom", "meeting"}
 )
 
-_NORMALIZED_KEYWORDS: dict[str, str] = {}  # normalized_form → canonical_keyword
-
 
 def _normalize(text: str) -> str:
     """Return a casefolded, accent-stripped version of *text*."""
@@ -27,7 +26,7 @@ def _normalize(text: str) -> str:
 
 
 def _build_normalized_keywords() -> dict[str, str]:
-    """Build a mapping from normalized keyword → canonical keyword (lazy, once)."""
+    """Build a mapping from normalized keyword → canonical keyword (computed once at import)."""
     mapping: dict[str, str] = {}
     for kw in HIGH_INTENT_KEYWORDS:
         norm = _normalize(kw)
@@ -37,16 +36,15 @@ def _build_normalized_keywords() -> dict[str, str]:
     return mapping
 
 
+_NORMALIZED_KEYWORDS: dict[str, str] = _build_normalized_keywords()  # normalized_form → canonical_keyword
+
+
 def detect_high_intent(conversation: str) -> str | None:
     """Return the first high-conversion scheduling keyword present (accent/case-
     insensitive), else None. Deterministic — independent of the LLM."""
-    global _NORMALIZED_KEYWORDS
-    if not _NORMALIZED_KEYWORDS:
-        _NORMALIZED_KEYWORDS = _build_normalized_keywords()
-
     norm_conv = _normalize(conversation)
     for norm_kw, canonical in _NORMALIZED_KEYWORDS.items():
-        if norm_kw in norm_conv:
+        if re.search(r"\b" + re.escape(norm_kw) + r"\b", norm_conv):
             return canonical
     return None
 
