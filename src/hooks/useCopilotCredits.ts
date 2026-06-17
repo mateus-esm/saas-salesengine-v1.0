@@ -20,6 +20,7 @@ export interface CreditLedgerRow {
   equipe_id: string;
   opportunity_id: string | null;
   lead_id: string | null;
+  lead: { name: string | null } | null;
   decision_id: string | null;
   verb: string;
   credits_charged: number;
@@ -65,7 +66,7 @@ export function useCreditLedger(range: LedgerRange = {}) {
     queryFn: async (): Promise<CreditLedgerRow[]> => {
       let q = sb
         .from("agent_action_ledger")
-        .select("*")
+        .select("*, lead:leads(name)")
         .eq("equipe_id", equipeId)
         .order("created_at", { ascending: false })
         .limit(limit);
