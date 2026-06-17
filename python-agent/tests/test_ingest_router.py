@@ -359,3 +359,182 @@ def test_tenant_context_has_correct_equipe_id() -> None:
     ctx = captured_ctx[0]
     assert ctx.equipe_id == EQUIPE_ID
     assert ctx.role == "service"
+
+
+# ===========================================================================
+# T5 — Reactive fast-path: POST /api/v1/ingest/row
+# ===========================================================================
+
+
+def _post_row(
+    http_client: TestClient,
+    *,
+    row_id: str = ROW_ID,
+    token: str | None = VALID_TOKEN,
+) -> "Response":  # noqa: F821
+    headers = {}
+    if token is not None:
+        headers["X-Agent-Token"] = token
+    return http_client.post("/api/v1/ingest/row", headers=headers, json={"id": row_id})
+
+
+# ── 503 when ingest disabled ───────────────────────────────────────────────
+
+
+def test_row_ingest_disabled_returns_503() -> None:
+    """Feature gate: 503 when settings.ingest_enabled is False."""
+    fake_settings = _fake_settings(ingest_enabled=False)
+
+    with patch("app.routers.ingest.get_settings", return_value=fake_settings):
+        client = TestClient(_make_app())
+        resp = _post_row(client)
+
+    assert resp.status_code == 503
+
+
+# ── 401 on missing / wrong token ───────────────────────────────────────────
+
+
+def test_row_missing_token_returns_401() -> None:
+    fake_settings = _fake_settings(ingest_enabled=True, token=VALID_TOKEN)
+
+    with patch("app.routers.ingest.get_settings", return_value=fake_settings):
+        client = TestClient(_make_app())
+        resp = _post_row(client, token=None)
+
+    assert resp.status_code == 401
+
+
+def test_row_wrong_token_returns_401() -> None:
+    fake_settings = _fake_settings(ingest_enabled=True, token=VALID_TOKEN)
+
+    with patch("app.routers.ingest.get_settings", return_value=fake_settings):
+        client = TestClient(_make_app())
+        resp = _post_row(client, token="totally-wrong-token")
+
+    assert resp.status_code == 401
+
+
+# ── Happy path: pending row + enabled team → cascade once, marked, 202 ──────
+
+
+def test_row_happy_path_calls_cascade_marks_processed() -> None:
+    fake_settings = _fake_settings()
+    fake_client = _make_client(queue_rows=[QUEUE_ROW], agent_enabled=True)
+
+    with (
+        patch("app.routers.ingest.get_settings", return_value=fake_settings),
+        patch("app.routers.ingest.get_service_client", return_value=fake_client),
+        patch("app.routers.ingest.run_cascade", new_callable=AsyncMock) as mock_cascade,
+    ):
+        mock_cascade.return_value = {"status": "executed"}
+        client = TestClient(_make_app())
+        resp = _post_row(client)
+
+    assert resp.status_code == 202
+    assert resp.json() == {"processed": 1, "skipped": 0}
+    mock_cascade.assert_awaited_once()
+    kwargs = mock_cascade.call_args.kwargs
+    assert kwargs["trigger"] == "ingest"
+    assert kwargs["lead_id"] == LEAD_ID
+    assert kwargs["pipeline_id"] == PIPELINE_ID
+    assert kwargs["opportunity_id"] is None
+    assert len(fake_client.update_calls) == 1
+    assert "processed_at" in fake_client.update_calls[0]
+
+
+def test_row_tenant_context_is_service() -> None:
+    from app.security import TenantContext
+
+    fake_settings = _fake_settings()
+    fake_client = _make_client(queue_rows=[QUEUE_ROW], agent_enabled=True)
+    captured_ctx: list[TenantContext] = []
+
+    async def _capture_cascade(**kwargs: object) -> dict:
+        captured_ctx.append(kwargs["ctx"])  # type: ignore[arg-type]
+        return {"status": "executed"}
+
+    with (
+        patch("app.routers.ingest.get_settings", return_value=fake_settings),
+        patch("app.routers.ingest.get_service_client", return_value=fake_client),
+        patch("app.routers.ingest.run_cascade", side_effect=_capture_cascade),
+    ):
+        client = TestClient(_make_app())
+        _post_row(client)
+
+    assert len(captured_ctx) == 1
+    assert captured_ctx[0].equipe_id == EQUIPE_ID
+    assert captured_ctx[0].role == "service"
+    assert captured_ctx[0].actor_user_id is None
+
+
+# ── Skip path: disabled team → processed:0, skipped:1, no cascade ───────────
+
+
+def test_row_disabled_team_skips_cascade() -> None:
+    fake_settings = _fake_settings()
+    fake_client = _make_client(queue_rows=[QUEUE_ROW], agent_enabled=False)
+
+    with (
+        patch("app.routers.ingest.get_settings", return_value=fake_settings),
+        patch("app.routers.ingest.get_service_client", return_value=fake_client),
+        patch("app.routers.ingest.run_cascade", new_callable=AsyncMock) as mock_cascade,
+    ):
+        client = TestClient(_make_app())
+        resp = _post_row(client)
+
+    assert resp.status_code == 202
+    assert resp.json() == {"processed": 0, "skipped": 1}
+    mock_cascade.assert_not_awaited()
+    assert len(fake_client.update_calls) == 0
+
+
+# ── Not-found / already-processed id → processed:0 reason, no cascade ───────
+
+
+def test_row_not_found_returns_reason_no_cascade() -> None:
+    fake_settings = _fake_settings()
+    fake_client = _make_client(queue_rows=[], agent_enabled=True)
+
+    with (
+        patch("app.routers.ingest.get_settings", return_value=fake_settings),
+        patch("app.routers.ingest.get_service_client", return_value=fake_client),
+        patch("app.routers.ingest.run_cascade", new_callable=AsyncMock) as mock_cascade,
+    ):
+        client = TestClient(_make_app())
+        resp = _post_row(client)
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["processed"] == 0
+    assert body["skipped"] == 0
+    assert body["reason"] == "not_found_or_processed"
+    mock_cascade.assert_not_awaited()
+    assert len(fake_client.update_calls) == 0
+
+
+# ── Cascade error → not marked processed, soft 202 with error reason ────────
+
+
+def test_row_cascade_error_returns_soft_202_unmarked() -> None:
+    fake_settings = _fake_settings()
+    fake_client = _make_client(queue_rows=[QUEUE_ROW], agent_enabled=True)
+
+    with (
+        patch("app.routers.ingest.get_settings", return_value=fake_settings),
+        patch("app.routers.ingest.get_service_client", return_value=fake_client),
+        patch(
+            "app.routers.ingest.run_cascade",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("boom"),
+        ),
+    ):
+        client = TestClient(_make_app())
+        resp = _post_row(client)
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["processed"] == 0
+    assert body["reason"] == "error"
+    # Row left unprocessed so the cron backstop can retry.
+    assert len(fake_client.update_calls) == 0
