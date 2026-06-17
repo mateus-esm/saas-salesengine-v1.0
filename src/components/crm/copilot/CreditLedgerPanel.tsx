@@ -25,6 +25,7 @@ interface LedgerGroup {
   key: string;
   created_at: string;
   opportunity_id: string | null;
+  leadName: string | null;
   verbs: string[];
   mode: "auto" | "manual";
   cost: number;
@@ -44,6 +45,7 @@ function groupRows(rows: CreditLedgerRow[]): LedgerGroup[] {
         key,
         created_at: r.created_at,
         opportunity_id: r.opportunity_id,
+        leadName: r.lead?.name ?? null,
         verbs: [r.verb],
         mode: r.mode,
         cost: r.credits_charged,
@@ -93,7 +95,7 @@ export function CreditLedgerPanel() {
           <TableHeader>
             <TableRow>
               <TableHead>Data / Hora</TableHead>
-              <TableHead>Oportunidade / Canal</TableHead>
+              <TableHead>Lead / Canal</TableHead>
               <TableHead>Ações Executadas</TableHead>
               <TableHead>Modo</TableHead>
               <TableHead className="text-right">Custo (créditos)</TableHead>
@@ -119,8 +121,8 @@ export function CreditLedgerPanel() {
                 <TableCell className="whitespace-nowrap text-xs">
                   {new Date(g.created_at).toLocaleString("pt-BR")}
                 </TableCell>
-                <TableCell className="font-mono text-xs">
-                  {g.opportunity_id ? g.opportunity_id.slice(0, 8) : "—"}
+                <TableCell className="text-xs">
+                  {g.leadName ?? (g.opportunity_id ? g.opportunity_id.slice(0, 8) : "—")}
                 </TableCell>
                 <TableCell className="text-xs">
                   {g.verbs.join(", ")}

@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Bot, LayoutGrid, Table2 } from "lucide-react";
+import { Bot, LayoutGrid, ScrollText, Table2 } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -9,14 +9,15 @@ import { useCopilotRealtime } from "@/hooks/useCopilotRealtime";
 
 import { AgentRulesPanel } from "./AgentRulesPanel";
 import { CopilotApprovalsPanel } from "./copilot/CopilotApprovalsPanel";
+import { CopilotCentralPanel } from "./copilot/CopilotCentralPanel";
 import { SyncButton } from "./copilot/SyncButton";
 import { OpportunityKanban } from "./OpportunityKanban";
 import { OpportunityTable } from "./OpportunityTable";
 import { PipelineSelector } from "./PipelineSelector";
 
-export type PipelineView = "kanban" | "leads" | "agent";
+export type PipelineView = "kanban" | "leads" | "agent" | "copilot";
 
-const PIPELINE_VIEWS: PipelineView[] = ["kanban", "leads", "agent"];
+const PIPELINE_VIEWS: PipelineView[] = ["kanban", "leads", "agent", "copilot"];
 const isPipelineView = (v: string | null): v is PipelineView =>
   !!v && PIPELINE_VIEWS.includes(v as PipelineView);
 
@@ -80,6 +81,10 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
                 <Bot className="h-4 w-4" />
                 Agente CRM
               </TabsTrigger>
+              <TabsTrigger value="copilot" className="flex items-center gap-2">
+                <ScrollText className="h-4 w-4" />
+                Central do Copiloto
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -99,6 +104,7 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
         {view === "agent" && (
           <AgentRulesPanel pipelineId={pipelineId} pipelineName={pipelineName} />
         )}
+        {view === "copilot" && <CopilotCentralPanel />}
       </div>
     </div>
   );
