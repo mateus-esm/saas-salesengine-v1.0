@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel
 
 from app.cascade.workflow import run_cascade
 from app.config import get_settings
@@ -83,6 +84,18 @@ def _is_agent_enabled(client: Any, equipe_id: str) -> bool:
     if row is None:
         return False
     return bool(row.get("is_crm_agent_enabled", False))
+
+
+def _load_pending_row(client: Any, row_id: str) -> dict[str, Any] | None:
+    """Fetch a single queue row WHERE id = :id AND processed_at IS NULL."""
+    query = (
+        client.table("copilot_ingest_queue")
+        .select("id,equipe_id,lead_id,pipeline_id,conversation_ref")
+        .eq("id", row_id)
+        .is_("processed_at", "null")
+        .limit(1)
+    )
+    return _first(query)
 
 
 def _mark_processed(client: Any, row_id: str) -> None:
@@ -169,3 +182,90 @@ async def ingest_trigger(
 
     # ── 5. Summary ─────────────────────────────────────────────────────────
     return {"processed": processed, "skipped": skipped}
+
+
+# ---------------------------------------------------------------------------
+# Reactive fast-path: process ONE queue row immediately (§Sprint 6.3 T5)
+# ---------------------------------------------------------------------------
+
+
+class IngestRowRequest(BaseModel):
+    """Body for the reactive per-row ingest endpoint."""
+
+    id: str
+
+
+@router.post("/row", status_code=status.HTTP_202_ACCEPTED)
+async def ingest_row(
+    payload: IngestRowRequest,
+    x_agent_token: str | None = Header(default=None),
+) -> dict:
+    """Reactive fast-path: process a single ``copilot_ingest_queue`` row now.
+
+    Called by the DB ``AFTER INSERT`` trigger via ``net.http_post`` so new
+    activity is handled sub-2s instead of waiting for the 1-minute cron poll.
+    Idempotent with the cron backstop: only loads rows with
+    ``processed_at IS NULL`` and marks them processed on success.
+
+    Auth: ``X-Agent-Token`` header must equal ``settings.agent_internal_token``.
+    """
+    settings = get_settings()
+
+    # ── 1. Feature gate ────────────────────────────────────────────────────
+    if not settings.ingest_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingest is currently disabled.",
+        )
+
+    # ── 2. Server-to-server auth ────────────────────────────────────────────
+    if x_agent_token is None or x_agent_token != settings.agent_internal_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid X-Agent-Token.",
+        )
+
+    client = get_service_client()
+
+    # ── 3. Load the one pending row (idempotent vs. cron + double-fire) ─────
+    row = _load_pending_row(client, payload.id)
+    if row is None:
+        # Already processed by the cron backstop / another trigger fire, or gone.
+        return {"processed": 0, "skipped": 0, "reason": "not_found_or_processed"}
+
+    equipe_id: str = str(row["equipe_id"])
+    row_id: str = str(row["id"])
+    lead_id: str = str(row["lead_id"])
+    pipeline_id: str | None = row.get("pipeline_id")
+    if pipeline_id is not None:
+        pipeline_id = str(pipeline_id)
+
+    # ── 4. Per-team gate ────────────────────────────────────────────────────
+    if not _is_agent_enabled(client, equipe_id):
+        logger.debug("Skipping row %s — team %s has agent disabled", row_id, equipe_id)
+        return {"processed": 0, "skipped": 1}
+
+    # ── 5. Run the cascade, then mark processed ────────────────────────────
+    ctx = TenantContext(
+        equipe_id=equipe_id,
+        actor_user_id=None,  # type: ignore[arg-type]  # server-to-server, no user
+        role="service",
+    )
+
+    try:
+        await run_cascade(
+            ctx=ctx,
+            lead_id=lead_id,
+            opportunity_id=None,
+            pipeline_id=pipeline_id,
+            trigger="ingest",
+            client=client,
+        )
+    except Exception:
+        logger.exception("Cascade failed for queue row %s (lead %s)", row_id, lead_id)
+        # Do NOT mark processed — the 1-minute cron backstop will retry.
+        # Soft 202 so the trigger's http_post does not hard-fail.
+        return {"processed": 0, "skipped": 0, "reason": "error"}
+
+    _mark_processed(client, row_id)
+    return {"processed": 1, "skipped": 0}
