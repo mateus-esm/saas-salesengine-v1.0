@@ -175,3 +175,49 @@ async def test_cost_router_escalates_won_leaf_to_strategic(monkeypatch):
 
     assert built == ["strategic-x"]          # strategic reasoning model was constructed
     assert out["model"] == "strategic-x"     # ledger model reflects the escalation
+
+
+# ─── T4: Intent Omission Guard ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_intent_omission_guard_records_pending_approval_when_no_actions_but_intent_detected(
+    monkeypatch,
+):
+    """When floor triage returns an empty plan with intent_detected=True, run_workflow
+    must record a pending_approval decision whose output_action contains
+    intent_detected=True and return status='pending_approval'."""
+    from app.cascade import agno_workflow as wf
+
+    # Floor plan: no actions but intent was detected
+    floor_plan = ActionPlan(
+        relevant=False,
+        actions=[],
+        confidence=0.45,
+        reason="Nenhuma ação automática, mas intenção de agendamento detectada.",
+        intent_detected=True,
+        intent_keyword="reunião",
+    )
+    # exec_res won't matter since the guard should fire before execution
+    exec_res = None
+
+    recorded = _patch_common(monkeypatch, floor_plan=floor_plan, exec_res=exec_res)
+
+    out = await wf.run_workflow(
+        ctx=_ctx(), lead_id="l1", opportunity_id="o1", pipeline_id="p1",
+        trigger="sync", client=object(),
+    )
+
+    assert out["status"] == "pending_approval"
+
+    # Exactly one pending_approval decision recorded by the guard
+    pending = [r for r in recorded if r.get("status") == "pending_approval"]
+    assert len(pending) >= 1
+
+    guard_decision = next(
+        (r for r in pending if r.get("output_action", {}).get("intent_detected") is True),
+        None,
+    )
+    assert guard_decision is not None, (
+        "Expected a pending_approval decision with output_action.intent_detected=True"
+    )
+    assert guard_decision["output_action"].get("intent_keyword") == "reunião"

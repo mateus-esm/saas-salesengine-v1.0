@@ -93,6 +93,8 @@ class IntentDecision(BaseModel):
     urgency: Literal["normal", "urgent"] = "normal"
     confidence: float = Field(ge=0, le=1)
     reason: str
+    intent_detected: bool = False
+    intent_keyword: str | None = None
 
     _coerce_args = field_validator("args", mode="before")(_none_to_empty_dict)
 
@@ -125,4 +127,6 @@ class ActionPlan(BaseModel):
     urgency: Literal["normal", "urgent"] = "normal"
     confidence: float = Field(ge=0, le=1)
     reason: str
+    intent_detected: bool = False
+    intent_keyword: str | None = None
 

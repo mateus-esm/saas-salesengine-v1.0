@@ -311,6 +311,29 @@ async def _run_legacy_cascade(
 
     # ─── ⑤ Gate on confidence (sync forces auto-apply) ─────────────────────
     if decision.confidence >= threshold or trigger == "sync":
+        # Intent Omission Guard (legacy path): if intent was detected but the
+        # decision carries no actionable automation, surface as pending_approval
+        # instead of silently recording a no-op "executed".
+        if decision.intent_detected and decision.automation_kind == "none":
+            decision_id = record_decision(
+                client,
+                equipe_id=equipe_id,
+                lead_id=lead_id,
+                opportunity_id=opp_id,
+                pipeline_id=pipe_id,
+                agent_role="floor_doorman",
+                decision_type="action",
+                output_action={
+                    "intent_detected": True,
+                    "intent_keyword": decision.intent_keyword,
+                    "reason": decision.reason,
+                },
+                confidence=decision.confidence,
+                status="pending_approval",
+                actor=actor,
+            )
+            return {"status": "pending_approval", "decision_id": decision_id, "result": None}
+
         result = await run_worker(
             ctx=ctx,
             decision=decision,
@@ -350,6 +373,10 @@ async def _run_legacy_cascade(
     output_action = _output_action_for_decision(decision)
     if decision.urgency == "urgent":
         output_action["urgent"] = True  # flags the decision for Realtime surfacing.
+    # Mirror the intent signal so the FE badge can fire on this pending decision too.
+    if decision.intent_detected:
+        output_action["intent_detected"] = True
+        output_action["intent_keyword"] = decision.intent_keyword
 
     decision_id = record_decision(
         client,
