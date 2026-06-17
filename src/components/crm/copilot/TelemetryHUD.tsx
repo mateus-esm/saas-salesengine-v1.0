@@ -1,20 +1,25 @@
 // src/components/crm/copilot/TelemetryHUD.tsx
 //
 // Sprint 6.1 · EPIC D · D4 — live cognition HUD.
+// Sprint 6.3 · Epic 1 — converted from blocking Dialog to non-blocking right
+//   Sheet drawer (modal={false}, no overlay, run persists on close).
 //
 // Renders the streamed HudEvent[] as a cockpit-style executive log instead of a
 // generic spinner. Shared by single sync (SSE via useCopilotSync) and the global
 // sweep (Realtime via useCopilotSweep) — both produce the same HudEvent[] shape.
 
 import { useEffect, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import * as SheetPrimitive from "@radix-ui/react-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetPortal,
+  SheetHeader,
+  SheetTitle,
+  SheetClose,
+} from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import type { HudEvent } from "@/hooks/useCopilotSync";
 
 interface TelemetryHUDProps {
@@ -78,31 +83,50 @@ export function TelemetryHUD({
   }, [events.length]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {running && <Loader2 className="h-4 w-4 animate-spin" />}
-            {title}
-          </DialogTitle>
-        </DialogHeader>
-
-        <ScrollArea className="h-72 rounded-md bg-zinc-950 p-3 font-mono text-xs">
-          {events.length === 0 && (
-            <p className="text-zinc-500">Aguardando o motor cognitivo…</p>
+    // modal={false} — disables Radix scroll-lock and pointer-event blocking so
+    // the Kanban behind stays fully interactive while the agent runs.
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+      <SheetPortal>
+        {/* No SheetOverlay here — intentionally omitted to avoid the dark cover. */}
+        <SheetPrimitive.Content
+          aria-describedby={undefined}
+          className={cn(
+            "fixed inset-y-0 right-0 z-50 h-full w-3/4 sm:max-w-sm border-l bg-background p-6 shadow-lg relative",
+            "transition ease-in-out",
+            "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
+            "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right",
+            "data-[state=open]:duration-500 data-[state=closed]:duration-300",
           )}
-          {events.map((ev, i) => {
-            const { text, tone } = lineFor(ev);
-            return (
-              <div key={`${ev.seq}-${i}`} className={toneClass[tone]}>
-                <span className="text-zinc-600">{String(ev.seq).padStart(2, "0")} </span>
-                {text}
-              </div>
-            );
-          })}
-          <div ref={bottomRef} />
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+        >
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              {running && <Loader2 className="h-4 w-4 animate-spin" />}
+              {title}
+            </SheetTitle>
+          </SheetHeader>
+
+          <SheetClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fechar</span>
+          </SheetClose>
+
+          <ScrollArea className="mt-4 h-72 rounded-md bg-zinc-950 p-3 font-mono text-xs">
+            {events.length === 0 && (
+              <p className="text-zinc-500">Aguardando o motor cognitivo…</p>
+            )}
+            {events.map((ev, i) => {
+              const { text, tone } = lineFor(ev);
+              return (
+                <div key={`${ev.seq}-${i}`} className={toneClass[tone]}>
+                  <span className="text-zinc-600">{String(ev.seq).padStart(2, "0")} </span>
+                  {text}
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </ScrollArea>
+        </SheetPrimitive.Content>
+      </SheetPortal>
+    </Sheet>
   );
 }

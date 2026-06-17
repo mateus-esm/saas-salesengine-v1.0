@@ -13,6 +13,7 @@
 // a tooltip when the team's "Agente de CRM" (is_crm_agent_enabled) toggle is off.
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Zap } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,9 @@ export function SyncButton({
   const running = mode === "sweep" ? sweepHook.running : single.running;
 
   // Invalidate the live data the run may have changed, once it's done.
+  // hasToasted ensures the completion toast fires exactly once per run.
   const lastSeen = useRef(0);
+  const hasToasted = useRef(false);
   useEffect(() => {
     if (events.length === lastSeen.current) return;
     lastSeen.current = events.length;
@@ -79,11 +82,16 @@ export function SyncButton({
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       queryClient.invalidateQueries({ queryKey: ["leadActivities"] });
       queryClient.invalidateQueries({ queryKey: ["copilot", "credits"] });
+      if (!hasToasted.current) {
+        hasToasted.current = true;
+        toast.success("✓ Copilot concluiu as atualizações.");
+      }
     }
   }, [events, queryClient]);
 
   const runSingle = () => {
     if (!leadId) return;
+    hasToasted.current = false; // reset so the next run can toast again
     setHudOpen(true);
     // useCopilotSync expects snake_case query keys.
     void single.start({
@@ -95,6 +103,7 @@ export function SyncButton({
 
   const runSweep = () => {
     if (!pipelineId) return;
+    hasToasted.current = false; // reset so the next run can toast again
     setConfirmOpen(false);
     setHudOpen(true);
     void sweepHook.start(pipelineId);
