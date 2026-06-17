@@ -53,13 +53,38 @@ interface InboundPayload {
 }
 
 /** Convert a raw string value to a clean number, stripping currency symbols and handling Brazilian/European number formats. */
-function parseNumericValue(raw: unknown): number | undefined {
+export function parseNumericValue(raw: unknown): number | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw === 'number') return raw;
-  const cleaned = String(raw)
-    .replace(/[R$\s]/g, '')     // Remove R$, $, spaces
-    .replace(/\.(?=\d{3})/g, '') // Remove thousand separators (dots followed by 3 digits)
-    .replace(',', '.');          // Brazilian decimal comma → decimal dot
+  
+  let cleaned = String(raw).replace(/[R$\s]/g, ''); // Remove R$, $, spaces
+  
+  if (/,/.test(cleaned) && /\./.test(cleaned)) {
+    const commaIndex = cleaned.indexOf(',');
+    const dotIndex = cleaned.indexOf('.');
+    if (commaIndex < dotIndex) {
+      // US format: 15,000.00
+      cleaned = cleaned.replace(/,/g, '');
+    } else {
+      // Brazilian format: 15.000,00
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    }
+  } else if (/,/.test(cleaned)) {
+    // Only comma is present: check if it has exactly 3 digits (thousand separator)
+    const parts = cleaned.split(',');
+    if (parts[1] && parts[1].length === 3) {
+      cleaned = cleaned.replace(/,/g, '');
+    } else {
+      cleaned = cleaned.replace(',', '.');
+    }
+  } else if (/\./.test(cleaned)) {
+    // Only dot is present: check if it has exactly 3 digits (thousand separator in BR)
+    const parts = cleaned.split('.');
+    if (parts[1] && parts[1].length === 3) {
+      cleaned = cleaned.replace(/\./g, '');
+    }
+  }
+  
   const val = Number(cleaned);
   return isNaN(val) ? undefined : val;
 }
@@ -175,7 +200,8 @@ function splitLeadAndOpportunityFields(updates: Partial<LeadPayload>) {
   return { leadUpdates, oppValue, oppMeetingScheduled, oppNextContact, oppCustomData };
 }
 
-serve(async (req) => {
+if (import.meta.main) {
+  serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -608,4 +634,5 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
-});
+  });
+}
