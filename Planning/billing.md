@@ -23,6 +23,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
 | 2026-06-16 | Trade-off 1 | Inbound Webhook Lead Ingest | verboo / deepseek | XL | R$ 28 |
+| 2026-06-16 | Trade-off 1.1 | Payload Optimization & F1 UX Refinement | verboo / deepseek | L | R$ 20 |
 | 2026-06-16 | 6.1 | H3 CI gates (pytest + evals + FE build) | Claude / Opus 4.8 (PM) | M | R$ 12 |
 | 2026-06-16 | 6.1 | H2 private admin ops surface (/admin/runs) | Claude / Opus 4.8 (PM) | L | R$ 20 |
 | 2026-06-16 | 6.1 | H1 Evals dyno (accuracy + reliability) | Claude / Opus 4.8 (PM) | L | R$ 20 |

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import {
   Dialog,
   DialogContent,
@@ -25,10 +26,28 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import { useAuth } from "@/contexts/AuthContext";
-import { WebhookConfig, WEBHOOK_TRIGGER_EVENTS, FieldMapping, FieldMappingTargetType } from "@/types/webhook";
+import {
+  WebhookConfig,
+  WEBHOOK_TRIGGER_EVENTS,
+  FieldMapping,
+  FieldMappingTargetType,
+  LEAD_FIELD_OPTIONS,
+  PIPELINE_FIELD_OPTIONS,
+} from "@/types/webhook";
 import { Loader2, TestTube, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+interface FormValues {
+  name: string;
+  url: string;
+  trigger_event: string;
+  headers: string;
+  active: boolean;
+  webhookType: "outbound" | "inbound";
+  pipelineId: string;
+  fieldMappings: FieldMapping[];
+}
 
 interface WebhookConfigModalProps {
   open: boolean;
@@ -44,22 +63,39 @@ export const WebhookConfigModal = ({
   const { createConfig, updateConfig } = useWebhookConfigs();
   const isEditing = !!config;
 
-  const [formData, setFormData] = useState({
-    name: "",
-    url: "",
-    trigger_event: "",
-    headers: "{}",
-    active: true,
-    webhookType: "outbound" as "outbound" | "inbound",
-    pipelineId: "",
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<FormValues>({
+    defaultValues: {
+      name: "",
+      url: "",
+      trigger_event: "",
+      headers: "{}",
+      active: true,
+      webhookType: "outbound",
+      pipelineId: "",
+      fieldMappings: [],
+    },
   });
-  const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "fieldMappings",
+  });
 
+  const watchWebhookType = watch("webhookType");
+  const watchFieldMappings = watch("fieldMappings");
+  const isInbound = watchWebhookType === "inbound";
+
+  // Reset form when config or open changes
   useEffect(() => {
     if (config) {
-      setFormData({
+      reset({
         name: config.name,
         url: config.url,
         trigger_event: config.trigger_event,
@@ -67,10 +103,10 @@ export const WebhookConfigModal = ({
         active: config.active,
         webhookType: config.inbound_function === "receive_lead" ? "inbound" : "outbound",
         pipelineId: config.pipeline_id || "",
+        fieldMappings: config.field_mappings || [],
       });
-      setFieldMappings(config.field_mappings || []);
     } else {
-      setFormData({
+      reset({
         name: "",
         url: "",
         trigger_event: "",
@@ -78,13 +114,12 @@ export const WebhookConfigModal = ({
         active: true,
         webhookType: "outbound",
         pipelineId: "",
+        fieldMappings: [],
       });
-      setFieldMappings([]);
     }
-  }, [config, open]);
+  }, [config, open, reset]);
 
   const { equipe } = useAuth();
-  const isInbound = formData.webhookType === "inbound";
 
   // Fetch pipelines for inbound mode
   const { data: pipelines = [] } = useQuery({
@@ -102,36 +137,27 @@ export const WebhookConfigModal = ({
     enabled: !!equipe?.id && isInbound,
   });
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+
   const addMapping = () => {
-    setFieldMappings([...fieldMappings, { source_field: "", target_field: "", target_type: "lead" as FieldMappingTargetType }]);
+    append({ source_field: "", target_field: "", target_type: "lead" as FieldMappingTargetType });
   };
 
-  const updateMapping = (index: number, key: keyof FieldMapping, value: string) => {
-    const updated = [...fieldMappings];
-    updated[index] = { ...updated[index], [key]: key === "target_type" ? value as FieldMappingTargetType : value };
-    setFieldMappings(updated);
-  };
-
-  const removeMapping = (index: number) => {
-    setFieldMappings(fieldMappings.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.name) {
+  const onSubmit = async (data: FormValues) => {
+    if (!data.name) {
       toast.error("Nome é obrigatório");
       return;
     }
 
-    if (!isInbound && (!formData.url || !formData.trigger_event)) {
+    if (!isInbound && (!data.url || !data.trigger_event)) {
       toast.error("URL e evento de disparo são obrigatórios para webhooks de saída");
       return;
     }
 
     let headers: Record<string, string> = {};
     try {
-      headers = JSON.parse(formData.headers);
+      headers = JSON.parse(data.headers);
     } catch {
       toast.error("Headers JSON inválido");
       return;
@@ -140,14 +166,14 @@ export const WebhookConfigModal = ({
     setIsSaving(true);
     try {
       const baseData = {
-        name: formData.name,
-        url: isInbound ? "" : formData.url,
-        trigger_event: isInbound ? "lead_created" : formData.trigger_event,
+        name: data.name,
+        url: isInbound ? "" : data.url,
+        trigger_event: isInbound ? "lead_created" : data.trigger_event,
         headers,
-        active: formData.active,
+        active: data.active,
         inbound_function: isInbound ? "receive_lead" : null,
-        pipeline_id: isInbound ? (formData.pipelineId || null) : null,
-        field_mappings: isInbound ? fieldMappings : [],
+        pipeline_id: isInbound ? (data.pipelineId || null) : null,
+        field_mappings: isInbound ? data.fieldMappings : [],
       };
 
       if (isEditing && config) {
@@ -167,14 +193,15 @@ export const WebhookConfigModal = ({
   };
 
   const handleTest = async () => {
-    if (!formData.url) {
+    const url = watch("url");
+    if (!url) {
       toast.error("URL é obrigatória para testar");
       return;
     }
 
     let headers: Record<string, string> = {};
     try {
-      headers = JSON.parse(formData.headers);
+      headers = JSON.parse(watch("headers"));
     } catch {
       toast.error("Headers JSON inválido");
       return;
@@ -182,7 +209,7 @@ export const WebhookConfigModal = ({
 
     setIsTesting(true);
     try {
-      const response = await fetch(formData.url, {
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -209,6 +236,67 @@ export const WebhookConfigModal = ({
     }
   };
 
+  /** Render the target_field input conditionally based on target_type */
+  const renderTargetField = (index: number) => {
+    const mapping = watchFieldMappings?.[index];
+    const targetType = mapping?.target_type;
+
+    if (targetType === "lead") {
+      return (
+        <Controller
+          control={control}
+          name={`fieldMappings.${index}.target_field`}
+          render={({ field }) => (
+            <Select value={field.value} onValueChange={field.onChange}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Selecione o campo destino" />
+              </SelectTrigger>
+              <SelectContent>
+                {LEAD_FIELD_OPTIONS.filter((opt) => opt.value !== "custom_fields").map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      );
+    }
+
+    if (targetType === "opportunity") {
+      return (
+        <Controller
+          control={control}
+          name={`fieldMappings.${index}.target_field`}
+          render={({ field }) => (
+            <Select value={field.value} onValueChange={field.onChange}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Selecione o campo destino" />
+              </SelectTrigger>
+              <SelectContent>
+                {PIPELINE_FIELD_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      );
+    }
+
+    // lead_custom or custom_data → free text input for dynamic keys
+    return (
+      <Input
+        placeholder="Chave customizada (ex: capacidade_kwp)"
+        {...register(`fieldMappings.${index}.target_field`)}
+        className="flex-1"
+      />
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -221,34 +309,49 @@ export const WebhookConfigModal = ({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nome *</Label>
             <Input
               id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              {...register("name", { required: "Nome é obrigatório" })}
               placeholder="Ex: Facebook Ads - Cliente ABC"
             />
+            {errors.name && (
+              <p className="text-sm text-destructive">{errors.name.message}</p>
+            )}
           </div>
 
           {/* Tipo de Webhook toggle */}
           <div className="space-y-2">
             <Label>Tipo de Webhook</Label>
-            <RadioGroup
-              value={formData.webhookType}
-              onValueChange={(v) => setFormData({ ...formData, webhookType: v as "outbound" | "inbound" })}
-              className="flex gap-4"
-            >
-              <label className="flex items-center gap-2 cursor-pointer">
-                <RadioGroupItem value="outbound" />
-                <span>Saída (disparar para URL)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <RadioGroupItem value="inbound" />
-                <span>Entrada (Receber Lead)</span>
-              </label>
-            </RadioGroup>
+            <Controller
+              control={control}
+              name="webhookType"
+              render={({ field }) => (
+                <RadioGroup
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    // Clear inbound-only fields when switching to outbound
+                    if (v === "outbound") {
+                      setValue("pipelineId", "");
+                      setValue("fieldMappings", []);
+                    }
+                  }}
+                  className="flex gap-4"
+                >
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <RadioGroupItem value="outbound" />
+                    <span>Saída (disparar para URL)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <RadioGroupItem value="inbound" />
+                    <span>Entrada (Receber Lead)</span>
+                  </label>
+                </RadioGroup>
+              )}
+            />
           </div>
 
           {!isInbound && (
@@ -258,31 +361,32 @@ export const WebhookConfigModal = ({
                 <Input
                   id="url"
                   type="url"
-                  value={formData.url}
-                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                  {...register("url", { required: !isInbound })}
                   placeholder="https://..."
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="trigger_event">Evento de disparo *</Label>
-                <Select
-                  value={formData.trigger_event}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, trigger_event: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar evento..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {WEBHOOK_TRIGGER_EVENTS.map((event) => (
-                      <SelectItem key={event.value} value={event.value}>
-                        {event.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={control}
+                  name="trigger_event"
+                  rules={{ required: !isInbound }}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar evento..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WEBHOOK_TRIGGER_EVENTS.map((event) => (
+                          <SelectItem key={event.value} value={event.value}>
+                            {event.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
             </>
           )}
@@ -292,19 +396,22 @@ export const WebhookConfigModal = ({
             <>
               <div className="space-y-2">
                 <Label>Pipeline alvo</Label>
-                <Select
-                  value={formData.pipelineId}
-                  onValueChange={(value) => setFormData({ ...formData, pipelineId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um pipeline" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pipelines.map((p: { id: string; name: string }) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  control={control}
+                  name="pipelineId"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um pipeline" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pipelines.map((p: { id: string; name: string }) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </div>
 
               <div className="space-y-2">
@@ -312,35 +419,44 @@ export const WebhookConfigModal = ({
                 <p className="text-sm text-muted-foreground">
                   Mapeie os campos do payload recebido para campos do CRM
                 </p>
-                {fieldMappings.map((mapping, index) => (
-                  <div key={index} className="flex items-center gap-2">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="flex items-center gap-2">
                     <Input
                       placeholder="Campo de origem (ex: full_name)"
-                      value={mapping.source_field}
-                      onChange={(e) => updateMapping(index, "source_field", e.target.value)}
+                      {...register(`fieldMappings.${index}.source_field`)}
                       className="flex-1"
                     />
-                    <Select
-                      value={mapping.target_type}
-                      onValueChange={(v) => updateMapping(index, "target_type", v)}
+                    <Controller
+                      control={control}
+                      name={`fieldMappings.${index}.target_type`}
+                      render={({ field: typeField }) => (
+                        <Select
+                          value={typeField.value}
+                          onValueChange={(v) => {
+                            typeField.onChange(v);
+                            // Reset target_field when type changes to avoid stale values
+                            setValue(`fieldMappings.${index}.target_field`, "");
+                          }}
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue placeholder="Tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="lead">Base de Contatos</SelectItem>
+                            <SelectItem value="lead_custom">Campo Personalizado (Lead)</SelectItem>
+                            <SelectItem value="opportunity">Valor / Coluna Nativa</SelectItem>
+                            <SelectItem value="custom_data">Pipeline (custom_data)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {renderTargetField(index)}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      onClick={() => remove(index)}
                     >
-                      <SelectTrigger className="w-40">
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="lead">Base de Contatos</SelectItem>
-                        <SelectItem value="lead_custom">Campo Personalizado (Lead)</SelectItem>
-                        <SelectItem value="opportunity">Valor / Coluna Nativa</SelectItem>
-                        <SelectItem value="custom_data">Pipeline (custom_data)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      placeholder="Campo destino"
-                      value={mapping.target_field}
-                      onChange={(e) => updateMapping(index, "target_field", e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button variant="ghost" size="icon" type="button" onClick={() => removeMapping(index)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -357,8 +473,7 @@ export const WebhookConfigModal = ({
             <Label htmlFor="headers">Headers (JSON)</Label>
             <Textarea
               id="headers"
-              value={formData.headers}
-              onChange={(e) => setFormData({ ...formData, headers: e.target.value })}
+              {...register("headers")}
               placeholder='{"Authorization": "Bearer token"}'
               className="font-mono text-sm"
               rows={3}
@@ -367,12 +482,16 @@ export const WebhookConfigModal = ({
 
           <div className="flex items-center justify-between">
             <Label htmlFor="active">Ativo</Label>
-            <Switch
-              id="active"
-              checked={formData.active}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, active: checked })
-              }
+            <Controller
+              control={control}
+              name="active"
+              render={({ field }) => (
+                <Switch
+                  id="active"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
             />
           </div>
 
@@ -382,7 +501,7 @@ export const WebhookConfigModal = ({
                 type="button"
                 variant="outline"
                 onClick={handleTest}
-                disabled={isTesting || !formData.url}
+                disabled={isTesting || !watch("url")}
               >
                 {isTesting ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

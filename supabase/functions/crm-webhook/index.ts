@@ -52,7 +52,17 @@ interface InboundPayload {
   [key: string]: unknown;
 }
 
-/** Apply field_mappings to transform an inbound payload into lead + opportunity data. */
+/** Convert a raw string value to a clean number, stripping currency symbols and handling Brazilian/European number formats. */
+function parseNumericValue(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw === 'number') return raw;
+  const cleaned = String(raw)
+    .replace(/[R$\s]/g, '')     // Remove R$, $, spaces
+    .replace(/\.(?=\d{3})/g, '') // Remove thousand separators (dots followed by 3 digits)
+    .replace(',', '.');          // Brazilian decimal comma → decimal dot
+  const val = Number(cleaned);
+  return isNaN(val) ? undefined : val;
+}
 function applyFieldMappings(
   payload: InboundPayload,
   mappings: InboundWebhookConfig['field_mappings'],
@@ -307,7 +317,8 @@ serve(async (req) => {
             const oppUpdate: Record<string, unknown> = {};
 
             if (oppNativeData.value !== undefined) {
-              oppUpdate.value = Number(oppNativeData.value);
+              const parsedValue = parseNumericValue(oppNativeData.value);
+              if (parsedValue !== undefined) oppUpdate.value = parsedValue;
             }
 
             if (Object.keys(oppCustomData).length > 0) {
