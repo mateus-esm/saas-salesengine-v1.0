@@ -15,11 +15,12 @@ interface MenuItem {
   external: boolean;
   badge?: string;
   requiredRole?: 'user' | 'admin' | 'owner' | 'super_admin';
+  permissionKey?: string;
 }
 
 export function AppSidebar() {
   const { open } = useSidebar();
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, equipe } = useAuth();
   const { hasRole, isSuperAdmin } = useRole();
   const chatHref = profile?.chat_link_base || "/chat";
   const isExternalChatLink = chatHref.startsWith("http");
@@ -29,19 +30,26 @@ export function AppSidebar() {
     { title: "Dashboard", url: "/dashboard", icon: BarChart3, external: false },
     { title: "Chat", url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
-    { title: "AI Studio", url: "/ai-studio", icon: Cpu, external: false, requiredRole: 'admin' },
-    { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false, requiredRole: 'admin' },
-    { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin' },
-    { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin' },
-    { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin' },
-    { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false, requiredRole: 'admin' },
+    { title: "AI Studio", url: "/ai-studio", icon: Cpu, external: false, requiredRole: 'admin', permissionKey: 'ai_studio' },
+    { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false, requiredRole: 'admin', permissionKey: 'webhooks' },
+    { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin', permissionKey: 'billing' },
+    { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'toolkit' },
+    { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'clube' },
+    { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false, requiredRole: 'admin', permissionKey: 'suporte' },
     { title: "Tutorial", url: "/tutorial", icon: BookOpen, external: false },
   ];
 
-  // Filter menu items based on role
+  const permissions = equipe?.page_permissions;
+
+  // Filter menu items based on role and page permissions
   const visibleMenuItems = menuItems.filter(item => {
-    if (item.requiredRole) {
-      return hasRole(item.requiredRole);
+    if (item.requiredRole && !hasRole(item.requiredRole)) {
+      return false;
+    }
+    if (item.permissionKey && permissions && !isSuperAdmin()) {
+      if (permissions[item.permissionKey] === false) {
+        return false;
+      }
     }
     return true;
   });

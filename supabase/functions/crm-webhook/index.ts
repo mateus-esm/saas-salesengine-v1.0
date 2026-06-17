@@ -239,6 +239,20 @@ if (import.meta.main) {
         );
       }
 
+      // Check team page permissions for webhooks
+      const { data: teamPerms, error: teamPermsError } = await supabase
+        .from('equipes')
+        .select('page_permissions')
+        .eq('id', config.equipe_id)
+        .maybeSingle();
+
+      if (teamPerms?.page_permissions?.webhooks === false) {
+        return new Response(
+          JSON.stringify({ error: 'Webhook feature is disabled for this team.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const payload = body as InboundPayload;
 
       // 2. Apply field mappings (separates lead, native opp, and custom_data)
@@ -405,7 +419,7 @@ if (import.meta.main) {
 
     const { data: equipe, error: equipeError } = await supabase
       .from('equipes')
-      .select('id, nome, default_pipeline_id')
+      .select('id, nome, default_pipeline_id, page_permissions')
       .eq('webhook_secret', webhookSecret)
       .maybeSingle();
 
@@ -414,6 +428,13 @@ if (import.meta.main) {
       return new Response(
         JSON.stringify({ error: 'Invalid webhook secret' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (equipe.page_permissions?.webhooks === false) {
+      return new Response(
+        JSON.stringify({ error: 'Webhook feature is disabled for this team.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 

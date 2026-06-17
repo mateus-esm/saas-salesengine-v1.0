@@ -23,6 +23,7 @@ interface Equipe {
   creditos_avulsos: number;
   webhook_secret: string | null;
   is_crm_agent_enabled: boolean;
+  page_permissions?: Record<string, boolean>;
 }
 
 interface AuthContextType {

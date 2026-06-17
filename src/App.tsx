@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthenticatedLayout } from "@/components/AuthenticatedLayout";
+import { PageRouteGuard } from "@/components/PageRouteGuard";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
@@ -69,21 +70,45 @@ const App = () => (
                   {/* Tasks live inside CRM now; keep this redirect for old links/bookmarks. */}
                   <Route path="/tasks" element={<Navigate to="/crm?tab=tasks" replace />} />
                   <Route path="/pipeline" element={<PipelineSettings />} />
-                  <Route path="/webhooks" element={<Webhooks />} />
-                  <Route path="/ai-studio" element={<AIStudioLayout />}>
+                  <Route path="/webhooks" element={
+                    <PageRouteGuard permissionKey="webhooks">
+                      <Webhooks />
+                    </PageRouteGuard>
+                  } />
+                  <Route path="/ai-studio" element={
+                    <PageRouteGuard permissionKey="ai_studio">
+                      <AIStudioLayout />
+                    </PageRouteGuard>
+                  }>
                     <Route path="usage" element={<UsagePage />} />
                     <Route path="knowledge" element={<KnowledgePage />} />
                     <Route path="skills" element={<SkillsPage />} />
                     <Route path="channels" element={<ChannelsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>
-                  <Route path="/billing" element={<Billing />} />
-                  <Route path="/suporte" element={<Suporte />} />
+                  <Route path="/billing" element={
+                    <PageRouteGuard permissionKey="billing">
+                      <Billing />
+                    </PageRouteGuard>
+                  } />
+                  <Route path="/suporte" element={
+                    <PageRouteGuard permissionKey="suporte">
+                      <Suporte />
+                    </PageRouteGuard>
+                  } />
                   <Route path="/tutorial" element={<Tutorial />} />
                   {/* ADD ALL CUSTOM AUTHENTICATED ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="/admin" element={<Admin />} />
-                  <Route path="/toolkit" element={<ToolkitPage />} />
-                  <Route path="/clube" element={<ClubePage />} />
+                  <Route path="/toolkit" element={
+                    <PageRouteGuard permissionKey="toolkit">
+                      <ToolkitPage />
+                    </PageRouteGuard>
+                  } />
+                  <Route path="/clube" element={
+                    <PageRouteGuard permissionKey="clube">
+                      <ClubePage />
+                    </PageRouteGuard>
+                  } />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

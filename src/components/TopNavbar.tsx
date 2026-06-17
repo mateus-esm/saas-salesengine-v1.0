@@ -35,6 +35,7 @@ interface MenuItem {
   external: boolean;
   badge?: string;
   requiredRole?: "user" | "admin" | "owner" | "super_admin";
+  permissionKey?: string;
 }
 
 export function TopNavbar() {
@@ -62,6 +63,7 @@ export function TopNavbar() {
       icon: Cpu,
       external: false,
       requiredRole: "admin",
+      permissionKey: "ai_studio",
     },
     {
       title: "Webhooks",
@@ -69,6 +71,7 @@ export function TopNavbar() {
       icon: Webhook,
       external: false,
       requiredRole: "admin",
+      permissionKey: "webhooks",
     },
     {
       title: "Billing",
@@ -76,6 +79,7 @@ export function TopNavbar() {
       icon: CreditCard,
       external: false,
       requiredRole: "admin",
+      permissionKey: "billing",
     },
     {
       title: "Suporte",
@@ -83,6 +87,7 @@ export function TopNavbar() {
       icon: HelpCircle,
       external: false,
       requiredRole: "admin",
+      permissionKey: "suporte",
     },
     { title: "Tutorial", url: "/tutorial", icon: BookOpen, external: false },
   ];
@@ -96,6 +101,7 @@ export function TopNavbar() {
       external: false,
       badge: "Em Breve",
       requiredRole: "admin",
+      permissionKey: "toolkit",
     },
     {
       title: "Clube Solo",
@@ -104,20 +110,34 @@ export function TopNavbar() {
       external: false,
       badge: "Em Breve",
       requiredRole: "admin",
+      permissionKey: "clube",
     },
   ];
 
+  const { equipe } = useAuth();
+  const permissions = equipe?.page_permissions;
+
   const visibleMenuItems = menuItems.filter((item) => {
-    if (item.requiredRole) {
-      return hasRole(item.requiredRole);
+    if (item.requiredRole && !hasRole(item.requiredRole)) {
+      return false;
+    }
+    if (item.permissionKey && permissions && !isSuperAdmin()) {
+      if (permissions[item.permissionKey] === false) {
+        return false;
+      }
     }
     return true;
   });
 
   const visibleMobileItems = [...visibleMenuItems, ...mobileOnlyItems].filter(
     (item) => {
-      if (item.requiredRole) {
-        return hasRole(item.requiredRole);
+      if (item.requiredRole && !hasRole(item.requiredRole)) {
+        return false;
+      }
+      if (item.permissionKey && permissions && !isSuperAdmin()) {
+        if (permissions[item.permissionKey] === false) {
+          return false;
+        }
       }
       return true;
     }

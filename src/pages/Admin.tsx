@@ -53,6 +53,7 @@ interface Equipe {
   is_crm_agent_enabled: boolean;
   plano_id: number | null;
   created_at: string;
+  page_permissions?: Record<string, boolean>;
 }
 
 interface Profile {
@@ -260,12 +261,22 @@ const Admin = () => {
 
   // ─── Equipe handlers ─────────────────────────────────────────────────────────
 
+  const DEFAULT_PERMISSIONS = {
+    webhooks: true,
+    ai_studio: true,
+    billing: true,
+    toolkit: true,
+    clube: true,
+    suporte: true,
+  };
+
   const openCreateEquipe = () => {
     setEditingEquipe({
       nome: "", niche: "", gpt_maker_agent_id: "", workspace_id: "",
       home_explanation: "", crm_link: "", suporte_link: "",
       webhook_secret: "", limite_creditos: 1000, creditos_avulsos: 0,
       is_crm_agent_enabled: false,
+      page_permissions: { ...DEFAULT_PERMISSIONS },
     });
     setIsNewEquipe(true);
     setEquipeDialog(true);
@@ -295,6 +306,7 @@ const Admin = () => {
           webhook_secret: editingEquipe.webhook_secret || undefined,
           limite_creditos: editingEquipe.limite_creditos ?? 1000,
           is_crm_agent_enabled: editingEquipe.is_crm_agent_enabled ?? false,
+          page_permissions: editingEquipe.page_permissions || DEFAULT_PERMISSIONS,
         } as any);
         if (error) throw error;
         toast.success("Equipe criada!");
@@ -312,6 +324,7 @@ const Admin = () => {
             webhook_secret: editingEquipe.webhook_secret || null,
             limite_creditos: editingEquipe.limite_creditos ?? 1000,
             is_crm_agent_enabled: editingEquipe.is_crm_agent_enabled ?? false,
+            page_permissions: editingEquipe.page_permissions || DEFAULT_PERMISSIONS,
           } as any)
           .eq("id", editingEquipe.id!);
         if (error) throw error;
@@ -1070,6 +1083,112 @@ const Admin = () => {
                     <p className="text-xs text-muted-foreground">
                       Créditos avulsos são gerenciados pelo botão <Coins className="inline h-3 w-3" /> na tabela.
                     </p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* ── Permissões de Páginas */}
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Shield className="h-4 w-4" /> Permissões de Páginas
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Webhooks */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="perm-webhooks" className="text-xs font-semibold">Webhooks</Label>
+                        <p className="text-[10px] text-muted-foreground">Gerenciar webhooks de entrada e saída</p>
+                      </div>
+                      <Switch
+                        id="perm-webhooks"
+                        checked={editingEquipe.page_permissions?.webhooks ?? true}
+                        onCheckedChange={(v) => setEditingEquipe({
+                          ...editingEquipe,
+                          page_permissions: { ...editingEquipe.page_permissions, webhooks: v }
+                        })}
+                      />
+                    </div>
+
+                    {/* AI Studio */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="perm-ai-studio" className="text-xs font-semibold">AI Studio</Label>
+                        <p className="text-[10px] text-muted-foreground">Acesso ao laboratório de prompts de IA</p>
+                      </div>
+                      <Switch
+                        id="perm-ai-studio"
+                        checked={editingEquipe.page_permissions?.ai_studio ?? true}
+                        onCheckedChange={(v) => setEditingEquipe({
+                          ...editingEquipe,
+                          page_permissions: { ...editingEquipe.page_permissions, ai_studio: v }
+                        })}
+                      />
+                    </div>
+
+                    {/* Billing */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="perm-billing" className="text-xs font-semibold">Faturamento (Billing)</Label>
+                        <p className="text-[10px] text-muted-foreground">Acesso a faturas e planos de créditos</p>
+                      </div>
+                      <Switch
+                        id="perm-billing"
+                        checked={editingEquipe.page_permissions?.billing ?? true}
+                        onCheckedChange={(v) => setEditingEquipe({
+                          ...editingEquipe,
+                          page_permissions: { ...editingEquipe.page_permissions, billing: v }
+                        })}
+                      />
+                    </div>
+
+                    {/* Toolkit */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="perm-toolkit" className="text-xs font-semibold">Toolkit</Label>
+                        <p className="text-[10px] text-muted-foreground">Acesso a ferramentas utilitárias</p>
+                      </div>
+                      <Switch
+                        id="perm-toolkit"
+                        checked={editingEquipe.page_permissions?.toolkit ?? true}
+                        onCheckedChange={(v) => setEditingEquipe({
+                          ...editingEquipe,
+                          page_permissions: { ...editingEquipe.page_permissions, toolkit: v }
+                        })}
+                      />
+                    </div>
+
+                    {/* Clube Solo */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="perm-clube" className="text-xs font-semibold">Clube Solo</Label>
+                        <p className="text-[10px] text-muted-foreground">Acesso ao clube de benefícios e recompensas</p>
+                      </div>
+                      <Switch
+                        id="perm-clube"
+                        checked={editingEquipe.page_permissions?.clube ?? true}
+                        onCheckedChange={(v) => setEditingEquipe({
+                          ...editingEquipe,
+                          page_permissions: { ...editingEquipe.page_permissions, clube: v }
+                        })}
+                      />
+                    </div>
+
+                    {/* Suporte */}
+                    <div className="flex items-center justify-between p-3 rounded-lg border bg-card/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="perm-suporte" className="text-xs font-semibold">Suporte</Label>
+                        <p className="text-[10px] text-muted-foreground">Abertura de chamados de suporte técnico</p>
+                      </div>
+                      <Switch
+                        id="perm-suporte"
+                        checked={editingEquipe.page_permissions?.suporte ?? true}
+                        onCheckedChange={(v) => setEditingEquipe({
+                          ...editingEquipe,
+                          page_permissions: { ...editingEquipe.page_permissions, suporte: v }
+                        })}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
