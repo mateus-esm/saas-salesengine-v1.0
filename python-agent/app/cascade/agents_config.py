@@ -34,7 +34,7 @@ def load_agent_config(
             .eq("equipe_id", equipe_id)
             .eq("scope", scope)
         )
-        if pipeline_id:
+        if pipeline_id is not None:
             q = q.eq("pipeline_id", pipeline_id)
         resp = q.execute()
         rows = getattr(resp, "data", None) or []
