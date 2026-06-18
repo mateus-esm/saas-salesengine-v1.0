@@ -22,8 +22,18 @@ export const CopilotApprovalsPanel = ({
 }: CopilotApprovalsPanelProps) => {
   const { data: decisions, isLoading } = useCopilotApprovals(pipelineId);
 
-  // Render nothing while loading or when the queue is empty.
-  if (isLoading || !decisions || decisions.length === 0) return null;
+  // Filter out intent-only guard rows written by the Intent Omission Guard.
+  // Those rows have output_action.intent_detected === true with no verb/action
+  // key, making them non-actionable. Showing them as approve/reject cards is
+  // misleading; the badge in OpportunityCard (T8) handles them independently.
+  const actionable = (decisions ?? []).filter((d) => {
+    const oa = d.output_action as { intent_detected?: boolean; verb?: unknown; action?: unknown } | null;
+    const intentOnly = !!oa?.intent_detected && oa?.verb == null && oa?.action == null;
+    return !intentOnly;
+  });
+
+  // Render nothing while loading or when the actionable queue is empty.
+  if (isLoading || actionable.length === 0) return null;
 
   return (
     <div className="border-b border-border bg-amber-50/40 dark:bg-amber-900/10 px-4 py-3">
@@ -32,14 +42,14 @@ export const CopilotApprovalsPanel = ({
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-amber-500 shrink-0" />
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-            Copilot — {decisions.length} ação
-            {decisions.length > 1 ? "ões aguardando" : " aguardando"} aprovação
+            Copilot — {actionable.length} ação
+            {actionable.length > 1 ? "ões aguardando" : " aguardando"} aprovação
           </p>
         </div>
 
         {/* Cards — displayed in a responsive wrap */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {decisions.map((decision) => (
+          {actionable.map((decision) => (
             <CopilotApprovalCard
               key={decision.id}
               decision={decision}
