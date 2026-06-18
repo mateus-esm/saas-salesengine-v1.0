@@ -126,6 +126,7 @@ def _build_user_message(
     conversation: str,
     opportunity: dict[str, Any],
     pipeline_rules: dict[str, Any],
+    stage_guide: list | None = None,
 ) -> str:
     opportunity_summary = {
         k: opportunity.get(k)
@@ -138,11 +139,19 @@ def _build_user_message(
         "confidence_threshold": pipeline_rules.get("confidence_threshold"),
         "reasoning_enabled": pipeline_rules.get("reasoning_enabled", False),
     }
-    return (
-        f"CONVERSA RECEBIDA:\n{conversation}\n\n"
-        f"OPORTUNIDADE ATUAL:\n{json.dumps(opportunity_summary, ensure_ascii=False, indent=2)}\n\n"
-        f"REGRAS DO PIPELINE:\n{json.dumps(rules_summary, ensure_ascii=False, indent=2)}"
-    )
+    blocks = [
+        f"CONVERSA RECEBIDA:\n{conversation}\n",
+        f"OPORTUNIDADE ATUAL:\n{json.dumps(opportunity_summary, ensure_ascii=False, indent=2)}\n",
+        f"REGRAS DO PIPELINE:\n{json.dumps(rules_summary, ensure_ascii=False, indent=2)}",
+    ]
+    if stage_guide:
+        guide_lines = [
+            f'  - "{s["name"]}" ({s["stage_type"]}): {s.get("description") or "sem descrição"}'
+            + (f' [SLA {s["max_idle_hours"]}h]' if s.get("max_idle_hours") else "")
+            for s in stage_guide
+        ]
+        blocks.append("GUIA DE ETAPAS (use o nome exato em stage_name_hint):\n" + "\n".join(guide_lines))
+    return "\n\n".join(blocks)
 
 
 async def _arun_agent(agent: Agent, message: str):
@@ -172,6 +181,7 @@ async def triage_intent(
     opportunity: dict[str, Any],
     pipeline_rules: dict[str, Any],
     model_id: str,
+    stage_guide: list | None = None,
 ) -> IntentDecision:
     """Determine what CRM action (if any) the conversation warrants.
 
@@ -191,7 +201,7 @@ async def triage_intent(
         # which rejects free-form dict fields (args) and optional fields.
         use_json_mode=True,
     )
-    message = _build_user_message(conversation, opportunity, pipeline_rules)
+    message = _build_user_message(conversation, opportunity, pipeline_rules, stage_guide)
     response = await _arun_agent(agent, message)
 
     if isinstance(response.content, IntentDecision):
@@ -302,6 +312,7 @@ async def triage_plan(
     pipeline_rules: dict[str, Any],
     model_id: str,
     model: Any = None,
+    stage_guide: list | None = None,
 ) -> ActionPlan:
     """Produce a multi-action `ActionPlan` for one sync pulse.
 
@@ -322,7 +333,7 @@ async def triage_plan(
         telemetry=False,
         use_json_mode=True,
     )
-    message = _build_user_message(conversation, opportunity, pipeline_rules)
+    message = _build_user_message(conversation, opportunity, pipeline_rules, stage_guide)
     response = await _arun_agent(agent, message)
 
     if isinstance(response.content, ActionPlan):

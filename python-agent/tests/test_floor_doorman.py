@@ -538,3 +538,28 @@ async def test_triage_plan_no_intent_for_non_scheduling_message(monkeypatch) -> 
 
     assert plan.intent_detected is False
     assert plan.intent_keyword is None
+
+
+def test_build_user_message_includes_stage_guide_when_supplied() -> None:
+    """_build_user_message must include GUIA DE ETAPAS block when stage_guide is non-empty."""
+    from app.cascade.floor_doorman import _build_user_message
+
+    guide = [
+        {"name": "Prospect", "stage_type": "open", "description": "Lead inicial.", "max_idle_hours": 48},
+        {"name": "Proposta", "stage_type": "open", "description": None, "max_idle_hours": None},
+    ]
+    msg = _build_user_message("Oi", OPPORTUNITY, PIPELINE_RULES_ENABLED, stage_guide=guide)
+    assert "GUIA DE ETAPAS" in msg
+    assert '"Prospect"' in msg
+    assert "Lead inicial." in msg
+    assert "[SLA 48h]" in msg
+    assert '"Proposta"' in msg
+    assert "sem descrição" in msg
+
+
+def test_build_user_message_no_guide_block_when_none() -> None:
+    """_build_user_message must NOT include GUIA DE ETAPAS when stage_guide is None."""
+    from app.cascade.floor_doorman import _build_user_message
+
+    msg = _build_user_message("Oi", OPPORTUNITY, PIPELINE_RULES_ENABLED)
+    assert "GUIA DE ETAPAS" not in msg

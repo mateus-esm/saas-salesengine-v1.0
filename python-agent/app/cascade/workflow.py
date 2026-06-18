@@ -18,6 +18,7 @@ from typing import Any
 
 from app.audit import record_decision
 from app.cascade.floor_doorman import triage_intent
+from app.cascade.stages import load_stage_guide
 from app.cascade.tower_doorman import classify_and_route
 from app.cascade.worker import is_pipeline_relevant, run_worker
 from app.config import get_settings
@@ -298,16 +299,17 @@ async def _run_legacy_cascade(
 
     # ─── ④ Floor: triage intent on the (now-known) opportunity ─────────────
     floor_model = rules.get("doorman_model") or get_settings().doorman_model
+    opp_id = opportunity.get("id") if opportunity else None
+    pipe_id = opportunity.get("pipeline_id") if opportunity else pipeline_id
+    stage_guide = load_stage_guide(client, equipe_id, pipe_id)
     decision: IntentDecision = await triage_intent(
         ctx=ctx,
         conversation=conversation,
         opportunity=opportunity,
         pipeline_rules=rules,
         model_id=floor_model,
+        stage_guide=stage_guide,
     )
-
-    opp_id = opportunity.get("id") if opportunity else None
-    pipe_id = opportunity.get("pipeline_id") if opportunity else pipeline_id
 
     # ─── ⑤ Gate on confidence (sync forces auto-apply) ─────────────────────
     if decision.confidence >= threshold or trigger == "sync":

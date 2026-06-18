@@ -29,6 +29,7 @@ from app.audit import record_decision as _record_decision
 from app.cascade.enricher import enrich as _enrich
 from app.cascade.executor import run_plan as _run_plan
 from app.cascade.floor_doorman import _is_high_stakes, triage_plan as _triage_plan
+from app.cascade.stages import load_stage_guide
 from app.cascade.tower_doorman import classify_and_route as _classify_and_route
 from app.cascade.worker import is_pipeline_relevant
 from app.cognition.router import Stakes, select_model
@@ -201,9 +202,10 @@ async def run_workflow(
     )
 
     # ─── ⑤ Floor: multi-action plan (cheap) ─────────────────────────────────
+    stage_guide = load_stage_guide(client, equipe_id, pipe_id)
     floor_plan = await _triage_plan(
         ctx=ctx, conversation=conversation, opportunity=opportunity,
-        pipeline_rules=rules, model_id=floor_model,
+        pipeline_rules=rules, model_id=floor_model, stage_guide=stage_guide,
     )
 
     # ─── ⑤a Intent Omission Guard ────────────────────────────────────────────
@@ -239,6 +241,7 @@ async def run_workflow(
             floor_plan = await _triage_plan(
                 ctx=ctx, conversation=conversation, opportunity=opportunity,
                 pipeline_rules=rules, model_id=chosen, model=strategic_model,
+                stage_guide=stage_guide,
             )
 
     # ─── ⑦ Execute: sequential, credit-metered ──────────────────────────────
