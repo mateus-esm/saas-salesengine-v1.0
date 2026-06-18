@@ -17,6 +17,8 @@ from app.credits import InsufficientCredits
 from app.schemas import ActionPlan, ActionResult, PlannedAction
 from app.security import TenantContext
 from app.skills import registry
+from app.cascade.field_dictionary import contact_dictionary, pipeline_dictionary
+from app.cascade.field_validation import FIELD_WRITE_VERBS, validate_field_action
 
 
 @dataclass
@@ -70,11 +72,30 @@ async def run_plan(
     res = ExecResult()
     actor = ctx.actor_user_id or "copilot"
     seq = 0
+
+    # Field-write guard: any set_field / set_contact_field / attach_file action —
+    # from ANY producer (enricher, Floor doorman, future) — may only target a
+    # field that exists in the dictionaries. Load them once per run.
+    contact_fields = contact_dictionary()
+    try:
+        pipeline_fields = pipeline_dictionary(
+            client, ctx.equipe_id, (opportunity or {}).get("pipeline_id")
+        )
+    except Exception:
+        pipeline_fields = {}
+
     for action in plan.actions:
         if action.requires_confirmation:
             res.pending_confirmations.append(action)
             if emit:
                 await emit("awaiting_confirmation", {"verb": action.verb, "args": action.args})
+            continue
+
+        if action.verb in FIELD_WRITE_VERBS and not validate_field_action(
+            action, pipeline_fields=pipeline_fields, contact_fields=contact_fields
+        ):
+            if emit:
+                await emit("dropped_unknown_field", {"verb": action.verb, "args": action.args})
             continue
 
         skill = _skill_for(action.skill, client=client, equipe_id=ctx.equipe_id, actor=actor)

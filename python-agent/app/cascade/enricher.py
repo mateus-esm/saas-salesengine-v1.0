@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.schemas import ActionPlan, PlannedAction
 from app.security import TenantContext
 from app.cascade.field_dictionary import FieldDef, contact_dictionary, pipeline_dictionary
+from app.cascade.field_validation import validate_field_action
 
 # ---------------------------------------------------------------------------
 # System prompt (PT-BR, following the existing cascade convention)
@@ -85,38 +86,8 @@ def _build_system_prompt(
     )
 
 
-_ALLOWED_VERBS = frozenset({"set_field", "set_contact_field", "attach_file"})
-
-
 def _noop(reason: str) -> ActionPlan:
     return ActionPlan(relevant=False, actions=[], confidence=0.0, reason=reason)
-
-
-def _valid_action(
-    action: PlannedAction,
-    *,
-    pipeline_fields: dict[str, FieldDef],
-    contact_fields: dict[str, FieldDef],
-) -> bool:
-    if action.skill != "core_table" or action.verb not in _ALLOWED_VERBS:
-        return False
-
-    if action.verb == "set_contact_field":
-        key = action.args.get("key")
-        return bool(key) and key in contact_fields and "value" in action.args
-
-    if action.verb == "set_field":
-        field_id = action.args.get("field_id")
-        return bool(field_id) and field_id in pipeline_fields and "value" in action.args
-
-    # attach_file: target must be a real pipeline field of type "file".
-    field_id = action.args.get("field_id")
-    return (
-        bool(field_id)
-        and field_id in pipeline_fields
-        and pipeline_fields[field_id].type == "file"
-        and bool(action.args.get("file_url"))
-    )
 
 
 def _sanitize_plan(
@@ -127,7 +98,7 @@ def _sanitize_plan(
 ) -> ActionPlan:
     actions = [
         a for a in plan.actions
-        if _valid_action(a, pipeline_fields=pipeline_fields, contact_fields=contact_fields)
+        if validate_field_action(a, pipeline_fields=pipeline_fields, contact_fields=contact_fields)
     ]
     if not actions:
         return _noop(f"no valid enrichment actions. Motivo original: {plan.reason}")
