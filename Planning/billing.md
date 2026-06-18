@@ -22,6 +22,16 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-17 | 6.3 | Final-review fixes — ledger lead FK (C1) + filter intent-only approval rows (I1) | Claude / Sonnet 4.6 (PM-subagent) | L | R$ 20 |
+| 2026-06-17 | 6.3 | T8 intent-detected badge on Kanban card (Epic 4) | Claude / Sonnet 4.6 (PM-subagent) | M | R$ 12 |
+| 2026-06-17 | 6.3 | T7 Epic 6 notes-mirroring verification (already lead-scoped) | Claude / Sonnet 4.6 (PM-subagent) | S | R$ 5 |
+| 2026-06-17 | 6.3 | T6 Central do Copiloto tab — ledger into CRM + lead names (Epic 5) | Claude / Sonnet 4.6 (PM-subagent) | L | R$ 20 |
+| 2026-06-17 | 6.3 | T5 reactive ingest fast-path /ingest/row + DB trigger (Epic 3) | Claude / Opus 4.8 (PM-subagent) | XL | R$ 28 |
+| 2026-06-17 | 6.3 | T4 intent safety net — few-shot + detect_high_intent + Omission Guard (Epic 4) | Claude / Sonnet 4.6 (PM-subagent) | L | R$ 20 |
+| 2026-06-17 | 6.3 | T3 ledger leads(name) join (Epic 5) | Claude / Haiku 4.5 (PM-subagent) | S | R$ 5 |
+| 2026-06-17 | 6.3 | T2 humanized approval card — verb+action shapes, no raw JSON (Epic 2) | Claude / Sonnet 4.6 (PM-subagent) | M | R$ 12 |
+| 2026-06-17 | 6.3 | T1 Telemetry HUD drawer — non-blocking Sheet + completion toast (Epic 1) | Claude / Sonnet 4.6 (PM-subagent) | L | R$ 20 |
+| 2026-06-17 | 6.3 | PM implementation plan + waves + final whole-branch review (Opus PM) | Claude / Opus 4.8 (PM) | M | R$ 12 |
 | 2026-06-16 | Trade-off 1 | Inbound Webhook Lead Ingest | verboo / deepseek | XL | R$ 28 |
 | 2026-06-16 | Trade-off 1.1 | Payload Optimization & F1 UX Refinement | verboo / deepseek | L | R$ 20 |
 | 2026-06-16 | 6.2 | Team Page Permissions (Admin UI toggles + route guards) | Antigravity / Gemini 1.5 Pro | L | R$ 20 |

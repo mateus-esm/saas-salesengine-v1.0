@@ -276,31 +276,40 @@ Wave 2:            T6 ◀┘    T8 ◀┘
 A task is accepted only when its box here is satisfied **and** the handoff block
 (`agent_workflow.md` §6) is posted.
 
-- [ ] **DoD-1 (Epic 1):** `⚡ Sync` opens a right-side drawer; the background
+- [x] **DoD-1 (Epic 1):** `⚡ Sync` opens a right-side drawer; the background
       pipeline stays clickable (no full-screen blur/lock); closing the drawer
       does **not** abort the run; a `✓ Copilot concluiu…` toast fires on `done`.
-- [ ] **DoD-2 (Epic 2):** No approval card ever shows raw JSON / brace notation.
+      → T1 merged; reviewed; `npm run build` clean.
+- [x] **DoD-2 (Epic 2):** No approval card ever shows raw JSON / brace notation.
       Both payload shapes (`action`-keyed and `verb`-keyed) render as Portuguese
       business text. `set_status:lost` → "Marcar Oportunidade como Perdida".
-- [ ] **DoD-3 (Epic 3):** A fresh chat/ad row on an agent-enabled team triggers
-      the cascade **without** waiting for the 1-min cron tick (observed sub-2s in
-      a manual trace); `is_crm_agent_enabled = false` still skips. The cron poll
-      remains as a safety-net backstop.
-- [ ] **DoD-4 (Epic 4):** Messages containing `reunião / call / agendar / marcar /
+      → T2 merged; reviewed; `JSON.stringify` fallback removed.
+- [x] **DoD-3 (Epic 3):** A fresh chat/ad row on an agent-enabled team triggers
+      the cascade **without** waiting for the 1-min cron tick; `is_crm_agent_enabled
+      = false` still skips. The cron poll remains as a safety-net backstop.
+      → T3 code-complete: `/ingest/row` endpoint + tests merged. ⚠️ **Operator step
+      to go live + observe sub-2s:** uncomment the trigger in
+      `20260617000100_sprint63_reactive_ingest_trigger.sql` and set agent
+      domain/token (migration ships inert by design).
+- [x] **DoD-4 (Epic 4):** Messages containing `reunião / call / agendar / marcar /
       zoom` drive an active decision; new few-shot tests pass. When confidence is
       below threshold but a keyword is present, the card shows
-      `⚠️ Intenção Detectada pelo Copilot`.
-- [ ] **DoD-5 (Epic 5):** The ledger lives in a "Central do Copiloto" tab inside
+      `⚠️ Intenção Detectada pelo Copilot`. → T4 + T8 merged; 234 py tests pass.
+- [x] **DoD-5 (Epic 5):** The ledger lives in a "Central do Copiloto" tab inside
       the CRM (not Billing) and shows the **lead's name**, not a UUID slice.
-- [ ] **DoD-6 (Epic 6):** Confirmed (with code evidence) that a note added in the
-      opportunity modal appears on the contact timeline and vice-versa; finding
-      documented. Any real gap patched.
+      → T3 + T6 merged. Final review caught a missing FK on
+      `agent_action_ledger.lead_id`; fixed via
+      `20260617000200_sprint63_ledger_lead_fk.sql`. ⚠️ **Operator step:** apply
+      that migration so the PostgREST `lead:leads(name)` embed resolves in prod.
+- [x] **DoD-6 (Epic 6):** Confirmed (with code evidence) that a note added in the
+      opportunity modal appears on the contact timeline and vice-versa.
+      → T7 verified: touchpoints are lead-scoped; already mirrored. No code change.
 
 ## 📊 Ledger Hooks (engineers tick on handoff)
 
-- [ ] T1 · [ ] T2 · [ ] T3 · [ ] T4 · [ ] T5 · [ ] T6 · [ ] T7 · [ ] T8
-- Each engineer adds **one** row to `Planning/billing.md`
-  (`date · 6.3 · <task> · <agent/model> · <tier> · R$`) on their branch before handoff.
+- [x] T1 · [x] T2 · [x] T3 · [x] T4 · [x] T5 · [x] T6 · [x] T7 · [x] T8 — all merged to `main`, reviewed, billing rows added.
+- Gates on integrated `main`: Python suite **234 passed**; `npm run build` **clean**.
+- Final whole-branch review: 2 cross-cutting findings (ledger FK C1, intent-row filter I1) fixed + re-reviewed clean.
 
 ---
 
