@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLogTouchpoint, type CreateTouchpointData } from "@/hooks/useTouchpoints";
+import { useCopilotApprovals } from "@/hooks/useCopilotApprovals";
 import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { CardTelemetryPillars } from "./CardTelemetryPillars";
@@ -121,6 +122,16 @@ export const OpportunityCard = ({
 
   const valueText = formatCurrency(opportunity.value, opportunity.currency);
 
+  // Sprint 6.3 T8 — Intent Detected badge (hits shared React Query cache, no extra request)
+  const { data: approvals = [] } = useCopilotApprovals(opportunity.pipeline_id);
+  const intentDecision = approvals.find(
+    (d) =>
+      d.opportunity_id === opportunity.id &&
+      (d.output_action as { intent_detected?: boolean } | null)?.intent_detected === true,
+  );
+  const intentKeyword =
+    (intentDecision?.output_action as { intent_keyword?: string } | null)?.intent_keyword ?? null;
+
   return (
     <div
       ref={setNodeRef}
@@ -164,6 +175,21 @@ export const OpportunityCard = ({
           )}
         </div>
       </div>
+
+      {/* Sprint 6.3 T8 — Intent Detected badge: shown only on real cards, not drag overlay */}
+      {!isDragOverlay && intentDecision && (
+        <div
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-medium w-full"
+          title={
+            intentKeyword
+              ? `O lead mencionou "${intentKeyword}". Sincronize o Copilot.`
+              : "Intenção comercial detectada pelo Copilot."
+          }
+        >
+          <span className="shrink-0">⚠️</span>
+          <span className="truncate">Intenção Detectada</span>
+        </div>
+      )}
 
       <CardTelemetryPillars
         opportunity={opportunity}
