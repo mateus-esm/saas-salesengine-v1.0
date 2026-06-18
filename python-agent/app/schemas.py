@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 CustomFieldType = Literal[
     "text",
+    "file",
     "number",
     "currency",
     "date",

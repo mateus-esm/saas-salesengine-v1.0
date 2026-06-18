@@ -3,6 +3,7 @@
 
 export type CustomFieldType =
   | "text"
+  | "file"
   | "number"
   | "currency"
   | "date"

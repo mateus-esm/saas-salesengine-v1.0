@@ -120,6 +120,21 @@ class CoreTableSkill:
         except Exception as exc:
             return ActionResult(success=False, error=str(exc), detail={"action": "set_field"})
 
+    async def attach_file(
+        self, opportunity_id: str, field_id: str, file_url: str, file_name: str | None = None
+    ) -> ActionResult:
+        try:
+            opportunity = self._fetch_one("opportunities", {"id": opportunity_id}, "id,equipe_id,custom_data")
+            if opportunity is None:
+                return ActionResult(success=False, error="opportunity_not_found")
+
+            custom_data = dict(opportunity.get("custom_data") or {})
+            custom_data[field_id] = {"url": file_url, "name": file_name}
+            self._update("opportunities", {"custom_data": custom_data}, {"id": opportunity_id})
+            return ActionResult(success=True, detail={"action": "attach_file", "field_id": field_id})
+        except Exception as exc:
+            return ActionResult(success=False, error=str(exc), detail={"action": "attach_file"})
+
     async def set_contact_field(self, lead_id: str, key: str, value: Any) -> ActionResult:
         try:
             lead = self._fetch_one("leads", {"id": lead_id}, "id,equipe_id,personal_custom_data")
