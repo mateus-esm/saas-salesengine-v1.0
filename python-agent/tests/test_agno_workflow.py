@@ -49,7 +49,7 @@ def _patch_common(monkeypatch, *, floor_plan, exec_res, settings=None):
         def __init__(self, **kw):
             self.notes = []
 
-        async def add_note(self, lead_id, text):
+        async def add_note(self, lead_id, text, opportunity_id=None):
             self.notes.append((lead_id, text))
             return ActionResult(success=True, detail={})
 

@@ -398,6 +398,7 @@ async def _run_legacy_cascade(
     await skill.add_note(
         lead_id,
         f"{note_prefix}Ação pendente de aprovação: {decision.reason}",
+        opportunity_id=opp_id,
     )
 
     return {"status": "pending_approval", "decision_id": decision_id, "result": None}

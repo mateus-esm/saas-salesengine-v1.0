@@ -372,3 +372,29 @@ async def test_attach_file_missing_opportunity_returns_error():
 
     assert result.success is False
     assert result.error == "opportunity_not_found"
+
+
+@pytest.mark.asyncio
+async def test_add_note_scopes_to_opportunity_when_given():
+    client = FakeClient({"leads": [[{"id": "lead-1", "equipe_id": "team-1"}]]})
+    skill = CoreTableSkill(client, "team-1", "copilot")
+
+    result = await skill.add_note("lead-1", "Cliente pediu proposta", opportunity_id="opp-9")
+
+    assert result.success is True
+    insert = client.inserts[0]
+    assert insert.table == "lead_activities"
+    assert insert.payload["opportunity_id"] == "opp-9"
+    assert insert.payload["lead_id"] == "lead-1"
+
+
+@pytest.mark.asyncio
+async def test_add_note_without_opportunity_stays_contact_level():
+    client = FakeClient({"leads": [[{"id": "lead-1", "equipe_id": "team-1"}]]})
+    skill = CoreTableSkill(client, "team-1", "copilot")
+
+    result = await skill.add_note("lead-1", "Nota geral do contato")
+
+    assert result.success is True
+    insert = client.inserts[0]
+    assert "opportunity_id" not in insert.payload      # legacy lead-only note

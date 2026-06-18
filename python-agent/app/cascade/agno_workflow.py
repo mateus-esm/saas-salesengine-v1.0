@@ -309,7 +309,11 @@ async def run_workflow(
     if exec_res.pending_confirmations:
         skill = CoreTableSkill(client=client, equipe_id=equipe_id, actor=actor)
         verbs = ", ".join(a.verb for a in exec_res.pending_confirmations)
-        await skill.add_note(lead_id, f"[Copilot] Ações pendentes de aprovação: {verbs}")
+        await skill.add_note(
+            lead_id,
+            f"[Copilot] Ações pendentes de aprovação: {verbs}",
+            opportunity_id=opp_id,
+        )
 
     # ─── Outcome ────────────────────────────────────────────────────────────
     if exec_res.halted:

@@ -164,7 +164,7 @@ class CoreTableSkill:
         except Exception as exc:
             return ActionResult(success=False, error=str(exc), detail={"action": "add_touchpoint"})
 
-    async def add_note(self, lead_id: str, content: str) -> ActionResult:
+    async def add_note(self, lead_id: str, content: str, opportunity_id: str | None = None) -> ActionResult:
         try:
             lead = self._fetch_one("leads", {"id": lead_id}, "id,equipe_id")
             if lead is None:
@@ -176,6 +176,8 @@ class CoreTableSkill:
                 "descricao": _interpolate(content, lead_id=lead_id),
                 "metadata": {"actor": self.actor},
             }
+            if opportunity_id:
+                payload["opportunity_id"] = opportunity_id
             self._insert("lead_activities", payload)
             return ActionResult(success=True, detail={"action": "add_note"})
         except Exception as exc:
