@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.audit import record_decision
+from app.cascade.agents_config import load_agent_config
 from app.cascade.floor_doorman import triage_intent
 from app.cascade.stages import load_stage_guide
 from app.cascade.tower_doorman import classify_and_route
@@ -310,6 +311,59 @@ async def _run_legacy_cascade(
         model_id=floor_model,
         stage_guide=stage_guide,
     )
+
+    # ─── ④a Autonomy gate ──────────────────────────────────────────────────
+    # Resolve mode once after opportunity/pipeline are known.
+    # None sentinel = no copilot_agents row → treat as "autonomous" (legacy behaviour).
+    _agent_cfg = load_agent_config(client, equipe_id, "pipeline", pipe_id)
+    _autonomy_mode = _agent_cfg.get("autonomy_mode")
+
+    if _autonomy_mode == "observe":
+        # Shadow mode: record the proposed action without executing.
+        # An explicit Observe still writes nothing even on manual sync.
+        _output = _output_action_for_decision(decision)
+        _output["proposed"] = True
+        _did = record_decision(
+            client,
+            equipe_id=equipe_id,
+            lead_id=lead_id,
+            opportunity_id=opp_id,
+            pipeline_id=pipe_id,
+            agent_role="floor_doorman",
+            decision_type="action",
+            output_action=_output,
+            confidence=decision.confidence,
+            status="proposed",
+            actor=actor,
+        )
+        return {"status": "observed", "decision_id": _did, "result": None}
+
+    if _autonomy_mode == "suggest":
+        # Suggest mode: always force HITL regardless of confidence.
+        _output = _output_action_for_decision(decision)
+        _output["suggest_mode"] = True
+        _did = record_decision(
+            client,
+            equipe_id=equipe_id,
+            lead_id=lead_id,
+            opportunity_id=opp_id,
+            pipeline_id=pipe_id,
+            agent_role="floor_doorman",
+            decision_type="action",
+            output_action=_output,
+            confidence=decision.confidence,
+            status="pending_approval",
+            actor=actor,
+        )
+        skill = CoreTableSkill(client=client, equipe_id=equipe_id, actor=actor)
+        await skill.add_note(
+            lead_id,
+            f"[Copilot] Ação sugerida pendente de aprovação: {decision.reason}",
+            opportunity_id=opp_id,
+        )
+        return {"status": "pending_approval", "decision_id": _did, "result": None}
+
+    # _autonomy_mode == "autonomous" OR None → fall through to existing confidence gate
 
     # ─── ⑤ Gate on confidence (sync forces auto-apply) ─────────────────────
     if decision.confidence >= threshold or trigger == "sync":

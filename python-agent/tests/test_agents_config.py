@@ -33,17 +33,20 @@ def test_load_agent_config_returns_row_values():
     assert cfg["autonomy_mode"] == "autonomous"
 
 
-def test_load_agent_config_empty_returns_defaults():
-    """When no row exists, loader returns sensible defaults."""
+def test_load_agent_config_empty_returns_no_row_sentinel():
+    """When no row exists, autonomy_mode is None (the no-row sentinel).
+
+    Callers treat None as 'autonomous' so legacy pipelines keep executing.
+    """
     client = _C({"copilot_agents": [[]]})  # empty list
     cfg = agents_config.load_agent_config(client, "equipe-1", "pipeline", pipeline_id="pipe-1")
-    assert cfg["autonomy_mode"] == "observe"
+    assert cfg["autonomy_mode"] is None  # sentinel: caller treats as autonomous
     assert cfg["system_prompt"] is None
     assert "name" in cfg
 
 
-def test_load_agent_config_exception_returns_defaults():
-    """On any exception (e.g. network error), loader returns defaults without raising."""
+def test_load_agent_config_exception_returns_no_row_sentinel():
+    """On any exception (e.g. network error), autonomy_mode is None (no-row sentinel)."""
     class _BrokenQ:
         def select(self, *_): return self
         def eq(self, *_): return self
@@ -52,5 +55,5 @@ def test_load_agent_config_exception_returns_defaults():
         def table(self, _): return _BrokenQ()
 
     cfg = agents_config.load_agent_config(_BrokenC(), "equipe-1", "contact_base")
-    assert cfg["autonomy_mode"] == "observe"
+    assert cfg["autonomy_mode"] is None  # sentinel: caller treats as autonomous
     assert cfg["system_prompt"] is None

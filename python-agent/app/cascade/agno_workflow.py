@@ -26,6 +26,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.audit import record_decision as _record_decision
+from app.cascade.agents_config import load_agent_config
 from app.cascade.enricher import enrich as _enrich
 from app.cascade.executor import run_plan as _run_plan
 from app.cascade.floor_doorman import _is_high_stakes, triage_plan as _triage_plan
@@ -244,9 +245,88 @@ async def run_workflow(
                 stage_guide=stage_guide,
             )
 
-    # ─── ⑦ Execute: sequential, credit-metered ──────────────────────────────
+    # ─── ⑦ Autonomy gate ────────────────────────────────────────────────────
+    # Resolve mode once, after opportunity/pipeline are both known.
+    # None sentinel = no copilot_agents row → treat as "autonomous" (legacy behaviour)
+    # so existing pipelines without an explicit config continue executing normally.
+    agent_cfg = load_agent_config(client, equipe_id, "pipeline", pipe_id)
+    autonomy_mode = agent_cfg.get("autonomy_mode")  # None | "observe" | "suggest" | "autonomous"
+
     combined = _combine(enrich_plan, floor_plan)
 
+    if autonomy_mode == "observe":
+        # Shadow mode: record every proposed action but execute nothing.
+        # A manual ⚡ Sync still does NOT execute when mode is explicitly observe.
+        decision_ids_obs: list[str] = []
+        for action in combined.actions:
+            did = _record_decision(
+                client,
+                equipe_id=equipe_id,
+                lead_id=lead_id,
+                opportunity_id=opp_id,
+                pipeline_id=pipe_id,
+                agent_role="floor_doorman",
+                decision_type="action",
+                output_action={
+                    "verb": action.verb,
+                    "args": action.args,
+                    "skill": action.skill,
+                    "proposed": True,
+                    "reason": combined.reason,
+                },
+                confidence=floor_plan.confidence,
+                status="proposed",
+                actor=actor,
+            )
+            decision_ids_obs.append(did)
+        return {
+            "status": "observed",
+            "decision_id": decision_ids_obs[0] if decision_ids_obs else None,
+            "decision_ids": decision_ids_obs,
+            "result": None,
+            "model": model_used,
+            "run_id": run_id,
+        }
+
+    if autonomy_mode == "suggest":
+        # Suggest mode: always force HITL regardless of confidence.
+        # Send the entire combined plan to the approval queue.
+        did = _record_decision(
+            client,
+            equipe_id=equipe_id,
+            lead_id=lead_id,
+            opportunity_id=opp_id,
+            pipeline_id=pipe_id,
+            agent_role="floor_doorman",
+            decision_type="action",
+            output_action={
+                "suggest_mode": True,
+                "verbs": [a.verb for a in combined.actions],
+                "reason": combined.reason,
+                "model": model_used,
+            },
+            confidence=floor_plan.confidence,
+            status="pending_approval",
+            actor=actor,
+        )
+        skill = CoreTableSkill(client=client, equipe_id=equipe_id, actor=actor)
+        verbs = ", ".join(a.verb for a in combined.actions)
+        await skill.add_note(
+            lead_id,
+            f"[Copilot] Ação sugerida pendente de aprovação: {verbs}",
+            opportunity_id=opp_id,
+        )
+        return {
+            "status": "pending_approval",
+            "decision_id": did,
+            "decision_ids": [did],
+            "result": None,
+            "model": model_used,
+            "run_id": run_id,
+        }
+
+    # autonomy_mode == "autonomous" OR None (no row → legacy autonomous behaviour)
+    # ─── Execute: sequential, credit-metered ────────────────────────────────
     async def _charge(*, equipe_id: str, idempotency_key: str, ledger: dict) -> str:
         ledger = {**ledger, "model": model_used, "decision_id": ""}
         return await _charge_credit(

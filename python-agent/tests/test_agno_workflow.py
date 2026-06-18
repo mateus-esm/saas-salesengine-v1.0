@@ -177,6 +177,181 @@ async def test_cost_router_escalates_won_leaf_to_strategic(monkeypatch):
     assert out["model"] == "strategic-x"     # ledger model reflects the escalation
 
 
+# ─── T5–T7: Autonomy dial (observe / suggest / autonomous) ──────────────────
+
+@pytest.mark.asyncio
+async def test_observe_mode_records_proposed_no_execution(monkeypatch):
+    """autonomy_mode='observe' → run_plan never called; each planned action is
+    recorded as status='proposed'; return value has status='observed'."""
+    from app.cascade import agno_workflow as wf
+
+    floor_plan = ActionPlan(
+        relevant=True, confidence=0.95, reason="observe test",
+        actions=[
+            PlannedAction(verb="set_field", args={"field_id": "f1", "value": "v"}),
+            PlannedAction(verb="move_stage", args={"stage_type": "open"}),
+        ],
+    )
+    exec_res = ExecResult(applied_count=0, results=[])
+    run_plan_called: list = []
+
+    recorded = _patch_common(monkeypatch, floor_plan=floor_plan, exec_res=exec_res)
+
+    # Override _run_plan to track if it was accidentally called
+    async def spy_run_plan(*a, **kw):
+        run_plan_called.append(True)
+        return exec_res
+
+    monkeypatch.setattr(wf, "_run_plan", spy_run_plan)
+
+    # Patch load_agent_config on the module where it is used
+    monkeypatch.setattr(
+        wf, "load_agent_config",
+        lambda *a, **k: {"name": "X", "system_prompt": None, "autonomy_mode": "observe"},
+    )
+
+    out = await wf.run_workflow(
+        ctx=_ctx(), lead_id="l1", opportunity_id="o1", pipeline_id="p1",
+        trigger="ingest", client=object(),
+    )
+
+    assert not run_plan_called, "_run_plan must NOT be called in observe mode"
+    assert out["status"] == "observed"
+    assert out.get("result") is None
+
+    proposed = [r for r in recorded if r.get("status") == "proposed"]
+    assert len(proposed) >= 1, "At least one 'proposed' decision must be recorded"
+
+
+@pytest.mark.asyncio
+async def test_observe_mode_manual_sync_still_no_execution(monkeypatch):
+    """Even a manual ⚡ Sync (trigger='sync') must NOT execute in observe mode."""
+    from app.cascade import agno_workflow as wf
+
+    floor_plan = ActionPlan(
+        relevant=True, confidence=0.95, reason="sync observe",
+        actions=[PlannedAction(verb="move_stage", args={"stage_type": "open"})],
+    )
+    exec_res = ExecResult(applied_count=0, results=[])
+    run_plan_called: list = []
+
+    _patch_common(monkeypatch, floor_plan=floor_plan, exec_res=exec_res)
+
+    async def spy_run_plan(*a, **kw):
+        run_plan_called.append(True)
+        return exec_res
+
+    monkeypatch.setattr(wf, "_run_plan", spy_run_plan)
+    monkeypatch.setattr(
+        wf, "load_agent_config",
+        lambda *a, **k: {"name": "X", "system_prompt": None, "autonomy_mode": "observe"},
+    )
+
+    out = await wf.run_workflow(
+        ctx=_ctx(), lead_id="l1", opportunity_id="o1", pipeline_id="p1",
+        trigger="sync", client=object(),
+    )
+
+    assert not run_plan_called, "observe mode must block execution even on manual sync"
+    assert out["status"] == "observed"
+
+
+@pytest.mark.asyncio
+async def test_suggest_mode_forces_pending_approval_regardless_of_confidence(monkeypatch):
+    """autonomy_mode='suggest' → actionable plan always goes to pending_approval;
+    run_plan is never called even at very high confidence."""
+    from app.cascade import agno_workflow as wf
+
+    floor_plan = ActionPlan(
+        relevant=True, confidence=0.99, reason="suggest test",
+        actions=[PlannedAction(verb="send_message", args={"text": "hi"})],
+    )
+    exec_res = ExecResult(applied_count=1, results=[ActionResult(success=True)])
+    run_plan_called: list = []
+
+    recorded = _patch_common(monkeypatch, floor_plan=floor_plan, exec_res=exec_res)
+
+    async def spy_run_plan(*a, **kw):
+        run_plan_called.append(True)
+        return exec_res
+
+    monkeypatch.setattr(wf, "_run_plan", spy_run_plan)
+    monkeypatch.setattr(
+        wf, "load_agent_config",
+        lambda *a, **k: {"name": "X", "system_prompt": None, "autonomy_mode": "suggest"},
+    )
+
+    out = await wf.run_workflow(
+        ctx=_ctx(), lead_id="l1", opportunity_id="o1", pipeline_id="p1",
+        trigger="ingest", client=object(),
+    )
+
+    assert not run_plan_called, "suggest mode must NOT call run_plan"
+    assert out["status"] == "pending_approval"
+    pending = [r for r in recorded if r.get("status") == "pending_approval"]
+    assert len(pending) >= 1, "At least one pending_approval decision must be recorded"
+
+
+@pytest.mark.asyncio
+async def test_autonomous_mode_unchanged_behavior(monkeypatch):
+    """autonomy_mode='autonomous' (or no row / None) → current behavior unchanged:
+    run_plan IS called and decisions are recorded as 'executed'."""
+    from app.cascade import agno_workflow as wf
+
+    floor_plan = ActionPlan(
+        relevant=True, confidence=0.9, reason="auto test",
+        actions=[PlannedAction(verb="set_field", args={"field_id": "f1", "value": "v"})],
+    )
+    exec_res = ExecResult(
+        applied_count=1,
+        results=[ActionResult(success=True)],
+    )
+    recorded = _patch_common(monkeypatch, floor_plan=floor_plan, exec_res=exec_res)
+
+    monkeypatch.setattr(
+        wf, "load_agent_config",
+        lambda *a, **k: {"name": "X", "system_prompt": None, "autonomy_mode": "autonomous"},
+    )
+
+    out = await wf.run_workflow(
+        ctx=_ctx(), lead_id="l1", opportunity_id="o1", pipeline_id="p1",
+        trigger="ingest", client=object(),
+    )
+
+    assert out["status"] == "executed"
+    executed = [r for r in recorded if r.get("status") == "executed"]
+    assert len(executed) >= 1
+
+
+@pytest.mark.asyncio
+async def test_no_row_sentinel_behaves_as_autonomous(monkeypatch):
+    """autonomy_mode=None (no copilot_agents row) → treated as autonomous;
+    run_plan IS called and the cascade executes normally."""
+    from app.cascade import agno_workflow as wf
+
+    floor_plan = ActionPlan(
+        relevant=True, confidence=0.9, reason="no-row test",
+        actions=[PlannedAction(verb="set_field", args={"field_id": "f1", "value": "v"})],
+    )
+    exec_res = ExecResult(applied_count=1, results=[ActionResult(success=True)])
+    recorded = _patch_common(monkeypatch, floor_plan=floor_plan, exec_res=exec_res)
+
+    # None is the sentinel returned when no copilot_agents row exists
+    monkeypatch.setattr(
+        wf, "load_agent_config",
+        lambda *a, **k: {"name": "X", "system_prompt": None, "autonomy_mode": None},
+    )
+
+    out = await wf.run_workflow(
+        ctx=_ctx(), lead_id="l1", opportunity_id="o1", pipeline_id="p1",
+        trigger="ingest", client=object(),
+    )
+
+    assert out["status"] == "executed"
+    executed = [r for r in recorded if r.get("status") == "executed"]
+    assert len(executed) >= 1
+
+
 # ─── T4: Intent Omission Guard ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
