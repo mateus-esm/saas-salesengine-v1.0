@@ -76,7 +76,7 @@ async def run_plan(
     # Field-write guard: any set_field / set_contact_field / attach_file action —
     # from ANY producer (enricher, Floor doorman, future) — may only target a
     # field that exists in the dictionaries. Load them once per run.
-    contact_fields = contact_dictionary()
+    contact_fields = contact_dictionary(client, ctx.equipe_id)
     try:
         pipeline_fields = pipeline_dictionary(
             client, ctx.equipe_id, (opportunity or {}).get("pipeline_id")

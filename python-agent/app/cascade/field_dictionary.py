@@ -35,8 +35,41 @@ CANONICAL_CONTACT_FIELDS: tuple[FieldDef, ...] = (
 )
 
 
-def contact_dictionary() -> dict[str, FieldDef]:
-    """Canonical contact fields keyed by their snake_case key."""
+def contact_dictionary(client: Any, equipe_id: str) -> dict[str, FieldDef]:
+    """Tenant contact-field dictionary from equipes.contact_fields_schema.
+
+    Falls back to the canonical baseline when the tenant has not defined any.
+    """
+    try:
+        resp = (
+            client.table("equipes")
+            .select("contact_fields_schema")
+            .eq("id", equipe_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(resp, "data", None) or []
+        if isinstance(rows, dict):
+            rows = [rows]
+        schema = (rows[0].get("contact_fields_schema") if rows else None) or []
+    except Exception:
+        schema = []
+
+    out: dict[str, FieldDef] = {}
+    for field in schema:
+        if field.get("is_deleted"):
+            continue
+        key = field.get("key")
+        if not key:
+            continue
+        out[key] = FieldDef(
+            key=key,
+            label=field.get("label") or key,
+            type=field.get("type") or "text",
+            description=field.get("description"),
+        )
+    if out:
+        return out
     return {f.key: f for f in CANONICAL_CONTACT_FIELDS}
 
 

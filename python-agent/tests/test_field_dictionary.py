@@ -36,11 +36,27 @@ class _Client:
 
 
 def test_contact_dictionary_is_canonical_and_keyed_by_key():
-    d = fd.contact_dictionary()
+    d = fd.contact_dictionary(_Client({"equipes": [[]]}), "t")
     assert "cargo" in d
     assert d["cargo"].type == "text"
     # Every canonical field is keyed by its own snake_case key.
     assert all(k == v.key for k, v in d.items())
+
+
+def test_contact_dictionary_reads_tenant_schema():
+    client = _Client({"equipes": [[{"contact_fields_schema": [
+        {"field_id": "c1", "key": "industria", "label": "Indústria", "type": "text",
+         "description": "Setor industrial do contato."},
+    ]}]]})
+    d = fd.contact_dictionary(client, "team-1")
+    assert "industria" in d and d["industria"].description.startswith("Setor")
+    assert "cargo" not in d   # tenant schema replaces the canonical baseline
+
+
+def test_contact_dictionary_falls_back_to_canonical_when_empty():
+    client = _Client({"equipes": [[{"contact_fields_schema": []}]]})
+    d = fd.contact_dictionary(client, "team-1")
+    assert "cargo" in d       # canonical baseline
 
 
 def test_pipeline_dictionary_loads_live_schema_and_skips_deleted():

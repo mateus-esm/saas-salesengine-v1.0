@@ -183,7 +183,7 @@ async def enrich(
     lead_id: str = lead.get("id") or ""
     pipeline_id = opportunity.get("pipeline_id")
 
-    contact_fields = contact_dictionary()
+    contact_fields = contact_dictionary(client, ctx.equipe_id)
     try:
         pipeline_fields = pipeline_dictionary(client, ctx.equipe_id, pipeline_id)
     except Exception:
