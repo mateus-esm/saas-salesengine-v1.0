@@ -57,3 +57,9 @@ def test_action_plan_extra_fields_default():
     plan = ActionPlan(relevant=True, actions=[], confidence=0.9, reason="test")
     assert plan.automation_kind == "deterministic"
     assert plan.urgency == "normal"
+
+
+def test_stage_blueprint_accepts_description():
+    from app.schemas import StageBlueprint
+    s = StageBlueprint(name="Proposta", position=0, description="Cliente recebeu a proposta.")
+    assert s.description == "Cliente recebeu a proposta."
