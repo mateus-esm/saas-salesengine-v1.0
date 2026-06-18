@@ -135,3 +135,49 @@ async def test_attach_file_only_for_file_type_field(monkeypatch):
     # f_conta is type "file" → kept; f_valor is currency → dropped.
     assert len(plan.actions) == 1
     assert plan.actions[0].args["field_id"] == "f_conta"
+
+
+# ---------------------------------------------------------------------------
+# Lead-Memory wiring tests (W2.5 restore)
+# ---------------------------------------------------------------------------
+
+def test_build_agent_with_storage_wires_lead_memory(monkeypatch):
+    """When _get_storage() returns a non-None sentinel, _build_agent must pass
+    db=<sentinel>, enable_agentic_memory=True, and user_id=<lead_id> to Agent."""
+    storage_sentinel = object()
+
+    captured_kwargs: dict = {}
+
+    class _FakeAgent:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    monkeypatch.setattr(enricher, "Agent", _FakeAgent)
+    monkeypatch.setattr(enricher, "build_chat_model", lambda model_id: MagicMock())
+    monkeypatch.setattr(enricher, "_get_storage", lambda: storage_sentinel)
+
+    enricher._build_agent(model_id="m", lead_id="lead-9", system_prompt="x")
+
+    assert captured_kwargs.get("enable_agentic_memory") is True
+    assert captured_kwargs.get("user_id") == "lead-9"
+    assert captured_kwargs.get("db") is storage_sentinel
+
+
+def test_build_agent_without_storage_omits_lead_memory(monkeypatch):
+    """When _get_storage() returns None, _build_agent must NOT include
+    db, enable_agentic_memory, or user_id in the Agent kwargs."""
+    captured_kwargs: dict = {}
+
+    class _FakeAgent:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    monkeypatch.setattr(enricher, "Agent", _FakeAgent)
+    monkeypatch.setattr(enricher, "build_chat_model", lambda model_id: MagicMock())
+    monkeypatch.setattr(enricher, "_get_storage", lambda: None)
+
+    enricher._build_agent(model_id="m", lead_id="lead-9", system_prompt="x")
+
+    assert "enable_agentic_memory" not in captured_kwargs
+    assert "user_id" not in captured_kwargs
+    assert "db" not in captured_kwargs
