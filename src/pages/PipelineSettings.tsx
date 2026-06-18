@@ -30,6 +30,7 @@ import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
 import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
 import { OriginTaxonomyEditor } from "@/components/crm/pipeline-settings/OriginTaxonomyEditor";
+import { ContactFieldsEditor } from "@/components/crm/pipeline-settings/ContactFieldsEditor";
 import type { CustomFieldSchema, Pipeline } from "@/types/pipelines";
 
 const PipelineSettings = () => {
@@ -164,6 +165,22 @@ const PipelineSettings = () => {
 
           {/* T8 — workspace Origem/Canal taxonomy editor */}
           <OriginTaxonomyEditor />
+
+          {/* Sprint 6.4 W2 — tenant contact-field dictionary */}
+          <Card className="max-w-3xl mx-auto">
+            <CardHeader>
+              <CardTitle>Campos do Contato</CardTitle>
+              <CardDescription>
+                Dicionário de campos compartilhado por todos os pipelines.
+                Defina aqui os campos que o copiloto usa para enriquecer e
+                identificar contatos — adicione uma descrição para treinar o
+                copiloto sobre o que cada campo significa.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ContactFieldsEditor />
+            </CardContent>
+          </Card>
         </main>
       </div>
 

@@ -34,7 +34,7 @@ import { Badge } from "@/components/ui/badge";
 
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
-const TYPE_LABELS: Record<CustomFieldType, string> = {
+export const TYPE_LABELS: Record<CustomFieldType, string> = {
   text: "Texto",
   number: "Número",
   currency: "Moeda",
@@ -57,7 +57,7 @@ const TYPES_AS_REF: CustomFieldType[] = [
   "contact_ref",
 ];
 
-const slugify = (s: string) =>
+export const slugify = (s: string) =>
   s
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -67,7 +67,7 @@ const slugify = (s: string) =>
     .replace(/^_+|_+$/g, "")
     .slice(0, 40);
 
-const newFieldId = () =>
+export const newFieldId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -261,7 +261,7 @@ export const CustomFieldsEditor = ({
 
 // ─────────────────────────────────────────────────────────────────────
 
-interface SortableFieldRowProps {
+export interface SortableFieldRowProps {
   field: CustomFieldSchema;
   onCard: boolean;
   onPatch: (patch: Partial<CustomFieldSchema>) => void;
@@ -269,7 +269,7 @@ interface SortableFieldRowProps {
   onToggleCard: () => void;
 }
 
-const SortableFieldRow = ({
+export const SortableFieldRow = ({
   field,
   onCard,
   onPatch,
@@ -361,6 +361,20 @@ const SortableFieldRow = ({
           onPatch={(opts) => onPatch({ options: opts })}
         />
       )}
+
+      {/* Sprint 6.4 W2 — description trains the Copilot on what this field means */}
+      <div>
+        <Label className="text-xs text-muted-foreground">
+          Descrição (treina o copiloto)
+        </Label>
+        <Textarea
+          value={field.description ?? ""}
+          onChange={(e) => onPatch({ description: e.target.value || undefined })}
+          rows={2}
+          className="mt-1 text-xs resize-none"
+          placeholder="Ex.: Potência do sistema fotovoltaico em kWp."
+        />
+      </div>
     </div>
   );
 };

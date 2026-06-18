@@ -173,6 +173,8 @@ export interface UpdateStageV2Data {
   cadence_unit?: 'hours' | 'days' | null;
   /** Sprint 5.3 T8 — webhooks to fire on stage cadence/lifecycle events. */
   webhook_triggers?: StageWebhookTrigger[];
+  /** Sprint 6.4 W2 — human description read by Copilot triage. */
+  description?: string;
 }
 
 export interface CreateOpportunityData {

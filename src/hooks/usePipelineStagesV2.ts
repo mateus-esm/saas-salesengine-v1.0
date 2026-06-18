@@ -28,6 +28,7 @@ interface StageRow {
   cadence_value: number | null;
   cadence_unit: string | null;
   webhook_triggers: PipelineStageV2["webhook_triggers"] | null;
+  description: string | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -45,6 +46,7 @@ const normalize = (row: StageRow): PipelineStageV2 => ({
   cadence_value: row.cadence_value ?? null,
   cadence_unit: (row.cadence_unit as PipelineStageV2["cadence_unit"]) ?? null,
   webhook_triggers: row.webhook_triggers ?? [],
+  description: row.description ?? undefined,
   created_at: row.created_at,
   deleted_at: row.deleted_at ?? null,
 });

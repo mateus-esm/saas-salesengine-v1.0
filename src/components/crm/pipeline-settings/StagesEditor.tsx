@@ -20,6 +20,8 @@ import { GripVertical, Plus, Trash2, Webhook } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -156,6 +158,7 @@ interface SortableStageRowProps {
         | "cadence_value"
         | "cadence_unit"
         | "webhook_triggers"
+        | "description"
       >
     >,
   ) => void;
@@ -176,129 +179,145 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 p-2 bg-card border border-border rounded-md"
+      className="bg-card border border-border rounded-md p-2 space-y-2"
     >
-      <button
-        {...attributes}
-        {...listeners}
-        className="cursor-grab text-muted-foreground hover:text-foreground p-1"
-        aria-label="Reordenar etapa"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab text-muted-foreground hover:text-foreground p-1"
+          aria-label="Reordenar etapa"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
 
-      <input
-        type="color"
-        value={stage.color}
-        onChange={(e) => onChange({ color: e.target.value })}
-        className="h-7 w-9 rounded border border-border bg-transparent cursor-pointer"
-        aria-label="Cor da etapa"
-      />
-
-      <Input
-        value={stage.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        className="flex-1 h-8"
-      />
-
-      <Select
-        value={stage.stage_type}
-        onValueChange={(v) => onChange({ stage_type: v as StageType })}
-      >
-        <SelectTrigger className="h-8 w-[110px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {STAGE_TYPES.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <div className="grid w-[94px] gap-1">
-        <span className="text-[10px] leading-none text-muted-foreground">SLA (h)</span>
-        <Input
-          type="number"
-          min={1}
-          step={1}
-          inputMode="numeric"
-          value={stage.max_idle_hours ?? ""}
-          onChange={(e) =>
-            onChange({ max_idle_hours: parsePositiveIntOrNull(e.target.value) })
-          }
-          className="h-8"
-          aria-label="SLA em horas da etapa"
+        <input
+          type="color"
+          value={stage.color}
+          onChange={(e) => onChange({ color: e.target.value })}
+          className="h-7 w-9 rounded border border-border bg-transparent cursor-pointer"
+          aria-label="Cor da etapa"
         />
-      </div>
 
-      <div className="grid w-[118px] gap-1">
-        <span className="text-[10px] leading-none text-muted-foreground">Máx. interações</span>
         <Input
-          type="number"
-          min={1}
-          step={1}
-          inputMode="numeric"
-          value={stage.max_interactions ?? ""}
-          onChange={(e) =>
-            onChange({ max_interactions: parsePositiveIntOrNull(e.target.value) })
-          }
-          className="h-8"
-          aria-label="Máximo de interações da etapa"
+          value={stage.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          className="flex-1 h-8"
         />
-      </div>
 
-      {/* Sprint 5.3 T7 — per-stage cadence */}
-      <div className="grid w-[90px] gap-1">
-        <span className="text-[10px] leading-none text-muted-foreground">Cadência</span>
-        <div className="flex gap-0.5">
+        <Select
+          value={stage.stage_type}
+          onValueChange={(v) => onChange({ stage_type: v as StageType })}
+        >
+          <SelectTrigger className="h-8 w-[110px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STAGE_TYPES.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="grid w-[94px] gap-1">
+          <span className="text-[10px] leading-none text-muted-foreground">SLA (h)</span>
           <Input
             type="number"
             min={1}
             step={1}
             inputMode="numeric"
-            value={stage.cadence_value ?? ""}
+            value={stage.max_idle_hours ?? ""}
             onChange={(e) =>
-              onChange({ cadence_value: parsePositiveIntOrNull(e.target.value) })
+              onChange({ max_idle_hours: parsePositiveIntOrNull(e.target.value) })
             }
-            className="h-8 w-[44px]"
-            aria-label="Valor da cadência"
-            placeholder="—"
+            className="h-8"
+            aria-label="SLA em horas da etapa"
           />
-          <Select
-            value={stage.cadence_unit ?? NONE}
-            onValueChange={(v) =>
-              onChange({ cadence_unit: v === NONE ? null : (v as 'hours' | 'days') })
-            }
-          >
-            <SelectTrigger className="h-8 w-[44px] px-1">
-              <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>—</SelectItem>
-              <SelectItem value="hours">h</SelectItem>
-              <SelectItem value="days">d</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
+
+        <div className="grid w-[118px] gap-1">
+          <span className="text-[10px] leading-none text-muted-foreground">Máx. interações</span>
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            value={stage.max_interactions ?? ""}
+            onChange={(e) =>
+              onChange({ max_interactions: parsePositiveIntOrNull(e.target.value) })
+            }
+            className="h-8"
+            aria-label="Máximo de interações da etapa"
+          />
+        </div>
+
+        {/* Sprint 5.3 T7 — per-stage cadence */}
+        <div className="grid w-[90px] gap-1">
+          <span className="text-[10px] leading-none text-muted-foreground">Cadência</span>
+          <div className="flex gap-0.5">
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              value={stage.cadence_value ?? ""}
+              onChange={(e) =>
+                onChange({ cadence_value: parsePositiveIntOrNull(e.target.value) })
+              }
+              className="h-8 w-[44px]"
+              aria-label="Valor da cadência"
+              placeholder="—"
+            />
+            <Select
+              value={stage.cadence_unit ?? NONE}
+              onValueChange={(v) =>
+                onChange({ cadence_unit: v === NONE ? null : (v as 'hours' | 'days') })
+              }
+            >
+              <SelectTrigger className="h-8 w-[44px] px-1">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>—</SelectItem>
+                <SelectItem value="hours">h</SelectItem>
+                <SelectItem value="days">d</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Sprint 5.3 T8 — per-stage webhook triggers */}
+        <StageWebhookPopover
+          triggers={stage.webhook_triggers ?? []}
+          onChange={(webhook_triggers) => onChange({ webhook_triggers })}
+        />
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          onClick={onDelete}
+          aria-label="Excluir etapa"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Sprint 5.3 T8 — per-stage webhook triggers */}
-      <StageWebhookPopover
-        triggers={stage.webhook_triggers ?? []}
-        onChange={(webhook_triggers) => onChange({ webhook_triggers })}
-      />
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-destructive hover:text-destructive"
-        onClick={onDelete}
-        aria-label="Excluir etapa"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {/* Sprint 6.4 W2 — description trains the Copilot triage on when a deal belongs here */}
+      <div className="pl-8">
+        <Label className="text-xs text-muted-foreground">
+          Descrição (treina o copiloto)
+        </Label>
+        <Textarea
+          value={stage.description ?? ""}
+          onChange={(e) => onChange({ description: e.target.value || undefined })}
+          rows={2}
+          className="mt-1 text-xs resize-none"
+          placeholder="Ex.: Leads que já receberam proposta e estão avaliando a compra."
+        />
+      </div>
     </div>
   );
 };
