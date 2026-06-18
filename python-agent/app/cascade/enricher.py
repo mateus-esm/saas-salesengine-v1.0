@@ -14,6 +14,7 @@ from app.llm import build_chat_model
 from app.config import get_settings
 from app.schemas import ActionPlan, PlannedAction
 from app.security import TenantContext
+from app.cascade.field_dictionary import FieldDef, contact_dictionary, pipeline_dictionary
 
 # ---------------------------------------------------------------------------
 # System prompt (PT-BR, following the existing cascade convention)
@@ -60,23 +61,74 @@ SCHEMA DE SAÍDA (ActionPlan):
 }
 """
 
-_ALLOWED_VERBS = frozenset({"set_field", "set_contact_field"})
+
+def _render_fields(title: str, fields: dict[str, FieldDef], id_label: str) -> str:
+    if not fields:
+        return f"{title}: (nenhum campo disponível)\n"
+    lines = [f"{title}:"]
+    for ident, field in fields.items():
+        desc = f" — {field.description}" if field.description else ""
+        lines.append(f'  - {id_label}="{ident}" | label="{field.label}" | tipo={field.type}{desc}')
+    return "\n".join(lines) + "\n"
+
+
+def _build_system_prompt(
+    pipeline_fields: dict[str, FieldDef], contact_fields: dict[str, FieldDef]
+) -> str:
+    return (
+        _SYSTEM_PT
+        + "\n\nCAMPOS DISPONÍVEIS (use APENAS estes — nunca invente um campo):\n"
+        + _render_fields("CAMPOS DA OPORTUNIDADE (verbo set_field, use field_id)", pipeline_fields, "field_id")
+        + _render_fields("CAMPOS DO CONTATO (verbo set_contact_field, use key)", contact_fields, "key")
+        + "Para anexar um arquivo/foto a um campo do tipo 'file', use attach_file "
+          "com { field_id, file_url }.\n"
+    )
+
+
+_ALLOWED_VERBS = frozenset({"set_field", "set_contact_field", "attach_file"})
 
 
 def _noop(reason: str) -> ActionPlan:
     return ActionPlan(relevant=False, actions=[], confidence=0.0, reason=reason)
 
 
-def _valid_action(action: PlannedAction) -> bool:
+def _valid_action(
+    action: PlannedAction,
+    *,
+    pipeline_fields: dict[str, FieldDef],
+    contact_fields: dict[str, FieldDef],
+) -> bool:
     if action.skill != "core_table" or action.verb not in _ALLOWED_VERBS:
         return False
+
+    if action.verb == "set_contact_field":
+        key = action.args.get("key")
+        return bool(key) and key in contact_fields and "value" in action.args
+
     if action.verb == "set_field":
-        return bool(action.args.get("field_id")) and "value" in action.args
-    return bool(action.args.get("key")) and "value" in action.args
+        field_id = action.args.get("field_id")
+        return bool(field_id) and field_id in pipeline_fields and "value" in action.args
+
+    # attach_file: target must be a real pipeline field of type "file".
+    field_id = action.args.get("field_id")
+    return (
+        bool(field_id)
+        and field_id in pipeline_fields
+        and pipeline_fields[field_id].type == "file"
+        and bool(action.args.get("file_url"))
+    )
 
 
-def _sanitize_plan(plan: ActionPlan) -> ActionPlan:
-    actions = [action for action in plan.actions if _valid_action(action)]
+def _sanitize_plan(
+    plan: ActionPlan,
+    *,
+    pipeline_fields: dict[str, FieldDef],
+    contact_fields: dict[str, FieldDef],
+) -> ActionPlan:
+    actions = [
+        a for a in plan.actions
+        if _valid_action(a, pipeline_fields=pipeline_fields, contact_fields=contact_fields)
+    ]
     if not actions:
         return _noop(f"no valid enrichment actions. Motivo original: {plan.reason}")
     return ActionPlan(
@@ -116,12 +168,12 @@ async def _arun_agent(agent: Agent, message: str) -> Any:
 # Agent factory
 # ---------------------------------------------------------------------------
 
-def _build_agent(*, model_id: str, lead_id: str) -> Agent:
+def _build_agent(*, model_id: str, lead_id: str, system_prompt: str) -> Agent:
     """Build an Agno Agent with optional Lead Memory wiring."""
     agent_kwargs: dict[str, Any] = {
         "model": build_chat_model(model_id),
         "output_schema": ActionPlan,
-        "system_message": _SYSTEM_PT,
+        "system_message": system_prompt,
         "telemetry": False,
         "use_json_mode": True,
     }
@@ -148,26 +200,35 @@ async def enrich(
     rules: dict | None,
     client: Any,
 ) -> ActionPlan:
-    """Extract CRM enrichment actions from a conversation.
+    """Extract CRM enrichment actions, routed to the field that owns each fact.
 
-    Returns an ``ActionPlan`` with ``set_field`` / ``set_contact_field`` actions
-    derived from the conversation text.  Never raises — any failure or empty
-    response returns a noop ``ActionPlan(relevant=False)``.
+    Every action is validated against the live pipeline-field dictionary and the
+    canonical contact-field dictionary. A fact that matches no field is dropped —
+    the enricher never invents a field. Never raises.
     """
     rules = rules or {}
     lead = lead or {}
+    opportunity = opportunity or {}
     lead_id: str = lead.get("id") or ""
+    pipeline_id = opportunity.get("pipeline_id")
+
+    contact_fields = contact_dictionary()
+    try:
+        pipeline_fields = pipeline_dictionary(client, ctx.equipe_id, pipeline_id)
+    except Exception:
+        pipeline_fields = {}
 
     model_id: str = rules.get("doorman_model") or get_settings().doorman_model
+    system_prompt = _build_system_prompt(pipeline_fields, contact_fields)
 
     try:
-        agent = _build_agent(model_id=model_id, lead_id=lead_id)
+        agent = _build_agent(model_id=model_id, lead_id=lead_id, system_prompt=system_prompt)
         resp = await _arun_agent(agent, conversation or "")
     except Exception:
         return _noop("enricher unavailable")
 
     content = getattr(resp, "content", None)
     if isinstance(content, ActionPlan):
-        return _sanitize_plan(content)
+        return _sanitize_plan(content, pipeline_fields=pipeline_fields, contact_fields=contact_fields)
 
     return _noop("no content")
