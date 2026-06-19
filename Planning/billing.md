@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-19 | 6.5 | T8 Base de Contatos spreadsheet columns (create/edit/resize/delete) | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-18 | 6.4 | W4.3 minimizable telemetry drawer | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-18 | 6.4 | W4.2 Control Room decision log UI | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-18 | 6.4 | W4.1 decisions log endpoint | Codex / GPT-5 + subagent | L | R$ 20 |

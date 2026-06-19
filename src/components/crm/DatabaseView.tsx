@@ -12,8 +12,8 @@ import {
 } from "@tanstack/react-table";
 import { useLeads, Lead } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
+import { useContactFields } from "@/hooks/useContactFields";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
-import { CONTACT_ENRICHMENT_SCHEMA } from "@/config/contactEnrichmentSchema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ColumnVisibilityDropdown } from "@/components/crm/ColumnVisibilityDropdown";
+import { ContactColumnsToolbar } from "@/components/crm/ContactColumnsToolbar";
 import { BulkActions } from "./BulkActions";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
@@ -54,10 +55,7 @@ import {
   Building2,
   Briefcase,
   Home,
-  Check,
-  X,
   ExternalLink,
-  Sparkles,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -182,7 +180,7 @@ const EditableCheckbox = ({ checked, onSave, label }: EditableCheckboxProps) => 
   );
 };
 
-type LeadUpdateValue = string | number | boolean | null | string[] | undefined;
+type LeadUpdateValue = string | number | boolean | null | string[] | Record<string, unknown> | undefined;
 
 // Sprint 5.3 T10/T11 — labels for the shared column visibility dropdown.
 // Enrichment columns (cf_*) fall through to their raw JSONB key as the label.
@@ -203,6 +201,12 @@ const COLUMN_LABELS: Record<string, string> = {
 export const DatabaseView = () => {
   const navigate = useNavigate();
   const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
+  const {
+    fields: contactFields,
+    isLoading: isLoadingContactFields,
+    createField,
+    deleteField,
+  } = useContactFields();
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -247,13 +251,6 @@ export const DatabaseView = () => {
     [],
   );
 
-  const creationSourceOptions = [
-    { id: "ai_agent", label: "IA (Solo Agent)" },
-    { id: "manual", label: "Manual" },
-    { id: "webhook", label: "Webhook" },
-    { id: "import", label: "Import (CSV)" },
-  ];
-
   const filteredLeads = useMemo(() => {
     return leads;
   }, [leads]);
@@ -264,78 +261,60 @@ export const DatabaseView = () => {
   );
   const { data: entitySummary = {} } = useLeadEntitySummary(filteredLeadIds);
 
-  // T6 — Raio-X de Enriquecimento: desempacotar chaves do JSONB em colunas ordenáveis
-  // Sprint 5.3 T11 — seed with the canonical enrichment schema so the columns
-  // ALWAYS appear (populated when data exists, "-" otherwise), then union any
-  // extra keys discovered in the data for forward-compatibility.
+  const visibleContactFields = useMemo(
+    () => contactFields.filter((field) => !field.is_deleted).sort((a, b) => a.position - b.position),
+    [contactFields],
+  );
+  const contactFieldLabelsByColumnId = useMemo(
+    () => new Map(visibleContactFields.map((field) => [`enrichment_${field.key}`, field.label])),
+    [visibleContactFields],
+  );
+
+  // Sprint 6.5 T8: columns follow the tenant contact schema. Deleted fields
+  // disappear from the grid while their existing JSONB values stay preserved.
   const enrichmentColumns = useMemo((): ColumnDef<Lead>[] => {
-    const keySet = new Set<string>();
-    CONTACT_ENRICHMENT_SCHEMA.forEach((f) => {
-      if (!f.is_deleted) keySet.add(f.key);
-    });
-    filteredLeads.forEach((lead) => {
-      if (lead.personal_custom_data && typeof lead.personal_custom_data === "object") {
-        Object.keys(lead.personal_custom_data).forEach((k) => keySet.add(k));
-      }
-    });
-
-    const schemaLabels: Record<string, string> = Object.fromEntries(
-      CONTACT_ENRICHMENT_SCHEMA.map((f) => [f.key, f.label]),
-    );
-
-    const knownLabels: Record<string, string> = {
-      ...schemaLabels,
-      job_title: "Cargo",
-      linkedin_url: "LinkedIn",
-      instagram_url: "Instagram",
-      birthday: "Aniversário",
-      company: "Empresa",
-      website: "Site",
-      industry: "Setor",
-      location: "Localização",
-      facebook_url: "Facebook",
-      twitter_url: "Twitter",
-    };
-
-    const fmtLabel = (k: string) =>
-      knownLabels[k] ||
-      k
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-
-    return Array.from(keySet).map((key) => ({
-      id: `enrichment_${key}`,
-      header: fmtLabel(key),
+    return visibleContactFields.map((field) => ({
+      id: `enrichment_${field.key}`,
+      header: () => (
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate">{field.label}</span>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={(event) => {
+              event.stopPropagation();
+              deleteField.mutate(field.field_id);
+            }}
+            aria-label={`Remover coluna ${field.label}`}
+          >
+            ×
+          </button>
+        </div>
+      ),
       accessorFn: (row: Lead) => {
         const data = row.personal_custom_data as Record<string, unknown> | null | undefined;
-        if (!data || data[key] === undefined || data[key] === null) return "";
-        return String(data[key]);
+        if (!data || data[field.key] === undefined || data[field.key] === null) return "";
+        return String(data[field.key]);
       },
-      cell: ({ getValue }) => {
-        const value = getValue<string>();
-        if (!value) return <span className="text-muted-foreground">-</span>;
-        if (value.startsWith("http://") || value.startsWith("https://")) {
-          return (
-            <a
-              href={value}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline truncate block max-w-[200px]"
-              title={value}
-            >
-              {value.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-            </a>
-          );
-        }
+      cell: ({ row }) => {
+        const data = (row.original.personal_custom_data ?? {}) as Record<string, unknown>;
+        const value = data[field.key] == null ? "" : String(data[field.key]);
         return (
-          <span className="truncate block max-w-[200px]" title={value}>
-            {value}
-          </span>
+          <EditableCell
+            value={value}
+            onSave={(next) =>
+              handleUpdateField(row.original.id, "personal_custom_data", {
+                ...data,
+                [field.key]: next,
+              })
+            }
+            placeholder="-"
+          />
         );
       },
       enableSorting: true,
     }));
-  }, [filteredLeads]);
+  }, [deleteField, handleUpdateField, visibleContactFields]);
 
   const columns: ColumnDef<Lead>[] = useMemo(() => [
     {
@@ -626,6 +605,8 @@ export const DatabaseView = () => {
     // useLeads layer (deleted_at IS NULL + equipe_id) keeps the working set
     // bounded; if a tenant ever crosses ~5k contacts we'll layer row
     // virtualization on top — but for now this beats the pagination clicks.
+    columnResizeMode: "onChange",
+    enableColumnResizing: true,
     enableRowSelection: true,
   });
 
@@ -705,12 +686,18 @@ export const DatabaseView = () => {
                 id: col.id,
                 label:
                   COLUMN_LABELS[col.id] ||
+                  contactFieldLabelsByColumnId.get(col.id) ||
                   (typeof col.columnDef.header === "string"
                     ? col.columnDef.header
                     : col.id),
                 visible: col.getIsVisible(),
               }))}
             onToggle={(id, visible) => table.getColumn(id)?.toggleVisibility(visible)}
+          />
+          <ContactColumnsToolbar
+            onCreate={(field) => createField.mutate(field)}
+            existingKeys={contactFields.map((field) => field.key)}
+            disabled={isLoadingContactFields || createField.isPending}
           />
         </div>
 
@@ -731,13 +718,24 @@ export const DatabaseView = () => {
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="bg-muted/30">
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="whitespace-nowrap">
+                    <TableHead
+                      key={header.id}
+                      className="relative whitespace-nowrap"
+                      style={{ width: header.getSize() }}
+                    >
                       {header.isPlaceholder
                         ? null
                         : flexRender(
                           header.column.columnDef.header,
                           header.getContext()
                         )}
+                      {header.column.getCanResize() && (
+                        <div
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none bg-transparent hover:bg-primary/40"
+                        />
+                      )}
                     </TableHead>
                   ))}
                 </TableRow>

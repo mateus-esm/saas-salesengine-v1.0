@@ -49,15 +49,17 @@ export const useContactFields = () => {
   });
 
   /** Replace the entire schema array on the tenant row. */
+  const saveFields = async (next: CustomFieldSchema[]) => {
+    if (!equipeId) throw new Error("No equipe_id");
+    const { error } = await sb
+      .from(TABLE)
+      .update({ contact_fields_schema: next })
+      .eq("id", equipeId);
+    if (error) throw error;
+  };
+
   const upsertFields = useMutation({
-    mutationFn: async (next: CustomFieldSchema[]) => {
-      if (!equipeId) throw new Error("No equipe_id");
-      const { error } = await sb
-        .from(TABLE)
-        .update({ contact_fields_schema: next })
-        .eq("id", equipeId);
-      if (error) throw error;
-    },
+    mutationFn: saveFields,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
       toast.success("Campos do contato salvos!");
@@ -66,11 +68,32 @@ export const useContactFields = () => {
       toast.error("Erro ao salvar campos do contato: " + e.message),
   });
 
+  const createField = useMutation({
+    mutationFn: async (field: CustomFieldSchema) => saveFields([...(query.data ?? []), field]),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast.success("Coluna criada.");
+    },
+    onError: (e: Error) => toast.error("Erro ao criar coluna: " + e.message),
+  });
+
+  const deleteField = useMutation({
+    mutationFn: async (fieldId: string) =>
+      saveFields((query.data ?? []).map((f) => (f.field_id === fieldId ? { ...f, is_deleted: true } : f))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast.success("Coluna removida.");
+    },
+    onError: (e: Error) => toast.error("Erro ao remover coluna: " + e.message),
+  });
+
   return {
     fields: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
     upsertFields,
+    createField,
+    deleteField,
     refetch: query.refetch,
   };
 };
