@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Building2, Home, LayoutGrid, ListChecks, Plus, Users } from "lucide-react";
+import { Bot, Building2, Home, LayoutGrid, ListChecks, Plus, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,11 @@ import { CompaniesDatabaseView } from "@/components/crm/companies/CompaniesDatab
 import TasksView from "@/components/crm/TasksView";
 import { PropertiesDatabaseView } from "@/components/crm/properties/PropertiesDatabaseView";
 import { usePipelineSelection } from "@/hooks/usePipelineSelection";
+import CopilotCockpit from "@/pages/CopilotCockpit";
 
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks";
+type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
@@ -76,6 +77,10 @@ const CRM = () => {
               <ListChecks className="h-4 w-4" />
               Tarefas
             </TabsTrigger>
+            <TabsTrigger value="copilot" className="flex items-center gap-2">
+              <Bot className="h-4 w-4" />
+              Copilot
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         <AIAgentToggle />
@@ -90,6 +95,8 @@ const CRM = () => {
           <PropertiesDatabaseView />
         ) : tab === "tasks" ? (
           <TasksView />
+        ) : tab === "copilot" ? (
+          <CopilotCockpit />
         ) : !isLoading && pipelines.length === 0 ? (
           <EmptyPipelinesState />
         ) : pipelineId ? (

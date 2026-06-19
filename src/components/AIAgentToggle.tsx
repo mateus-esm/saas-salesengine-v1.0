@@ -41,12 +41,12 @@ export function AIAgentToggle() {
 
       toast.success(
         checked
-          ? "Agente de CRM ativado com sucesso!"
-          : "Agente de CRM desativado."
+          ? "Copilot ativado com sucesso."
+          : "Copilot desativado."
       );
     } catch (error) {
-      console.error("Erro ao atualizar agente CRM:", error);
-      toast.error("Erro ao atualizar status do agente.");
+      console.error("Erro ao atualizar Copilot:", error);
+      toast.error("Erro ao atualizar status do Copilot.");
       // Revert on error
       setIsEnabled(!checked);
     } finally {
@@ -62,7 +62,7 @@ export function AIAgentToggle() {
       <div className="flex items-center gap-2">
         <Bot className={`h-4 w-4 ${isEnabled ? "text-primary" : "text-muted-foreground"}`} />
         <Label htmlFor="crm-agent-toggle" className="text-sm font-medium cursor-pointer">
-          Agente de CRM
+          Copilot
         </Label>
         <TooltipProvider>
           <Tooltip>
@@ -71,7 +71,7 @@ export function AIAgentToggle() {
             </TooltipTrigger>
             <TooltipContent>
               <p className="max-w-xs">
-                Quando ativo, o Agente analisa conversas e executa automações.
+                Quando ativo, o Copilot analisa conversas e executa automações.
                 Desative para economizar custos de processamento.
               </p>
             </TooltipContent>
