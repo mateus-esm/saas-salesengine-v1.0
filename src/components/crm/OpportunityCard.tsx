@@ -277,29 +277,29 @@ function CardQuickActions({ leadId }: { leadId: string }) {
 
   return (
     <div
-      className="flex items-center gap-1 pt-1.5 border-t border-border/60"
+      className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/60"
       onClick={stop}
       onPointerDown={stop}
     >
       <button
         type="button"
         onClick={() => navigate(`/chat?contact=${leadId}`)}
-        className="flex-1 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
+        className="min-w-0 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
         title="Abrir conversa no Sales Engine"
       >
         <MessageSquareText className="h-3 w-3 shrink-0" />
-        Chat
+        <span className="truncate">Chat</span>
       </button>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex-1 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-muted-foreground bg-muted/60 hover:bg-muted transition-colors"
+            className="min-w-0 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-muted-foreground bg-muted/60 hover:bg-muted transition-colors"
             title="Registrar touchpoint"
           >
             <MessageSquarePlus className="h-3 w-3 shrink-0" />
-            Touchpoint
+            <span className="truncate">Touchpoint</span>
           </button>
         </PopoverTrigger>
         <PopoverContent
