@@ -51,6 +51,8 @@
 
 ### Task 1: Field dictionary module
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:**
 - Create: `python-agent/app/cascade/field_dictionary.py`
 - Test: `python-agent/tests/test_field_dictionary.py`
@@ -244,6 +246,8 @@ git commit -m "feat(copilot): field dictionary loader (pipeline live + canonical
 
 ### Task 2: `attach_file` verb + `file` field type
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:**
 - Modify: `python-agent/app/schemas.py` (add `"file"` to `CustomFieldType`)
 - Modify: `python-agent/app/skills/core_table.py` (add `attach_file`)
@@ -384,6 +388,8 @@ git commit -m "feat(copilot): attach_file verb + file custom-field type"
 ---
 
 ### Task 3: Enricher becomes a dictionary-bounded router
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:**
 - Modify: `python-agent/app/cascade/enricher.py`
@@ -732,6 +738,8 @@ git commit -m "feat(copilot): enricher is a dictionary-bounded router (no invent
 
 ### Task 4: Deal-scoped notes
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:**
 - Create: `supabase/migrations/20260618000000_sprint64_note_opportunity_scope.sql`
 - Modify: `python-agent/app/skills/core_table.py` (`add_note` gains `opportunity_id`)
@@ -901,6 +909,8 @@ Wave 1 is done (✅ implemented). The contract Wave 2 builds on:
 
 ### Task W2.1: Stage `description` + contact-dictionary column (migration + schema)
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:**
 - Create: `supabase/migrations/20260619000000_sprint64_w2_training.sql`
 - Modify: `python-agent/app/schemas.py` (StageBlueprint), `src/types/pipelines.ts`
@@ -960,6 +970,8 @@ def test_stage_blueprint_accepts_description():
 - [ ] **Step 7: Commit** — `git add` the migration, `schemas.py`, `pipelines.ts` — `feat(copilot-w2): stage description + tenant contact_fields_schema`.
 
 ### Task W2.2: `contact_dictionary` reads tenant schema (live training)
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:**
 - Modify: `python-agent/app/cascade/field_dictionary.py`, `enricher.py`, `executor.py`
@@ -1041,6 +1053,8 @@ def contact_dictionary(client: Any, equipe_id: str) -> dict[str, FieldDef]:
 - [ ] **Step 7: Commit** — `feat(copilot-w2): contact dictionary reads tenant schema (live training)`.
 
 ### Task W2.3: Feed the stage guide into the Floor triage prompt
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:**
 - Create: `python-agent/app/cascade/stages.py`, `python-agent/tests/test_stages.py`
@@ -1157,6 +1171,8 @@ Thread `stage_guide` through `triage_intent` and `_triage_plan` (add the param, 
 
 ### Task W2.4: FE — edit descriptions on fields & stages, and the contact dictionary
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:**
 - Modify: the pipeline stage editor + custom-field editor components under `src/components/crm/` (read `PipelineSettings` page first to locate them).
 - Create: `src/hooks/useContactFields.ts` (CRUD on `equipes.contact_fields_schema`) + a "Campos do Contato" editor surface in the base-de-contatos settings.
@@ -1179,6 +1195,8 @@ Thread `stage_guide` through `triage_intent` and `_triage_plan` (add the param, 
 > **FE note:** W2.4 edits existing components this plan has not transcribed verbatim. The implementer MUST read the named components first and follow their established prop/state patterns; the steps above define the required behavior and acceptance, not line-level edits.
 
 ### Task W2.5 (cleanup): re-add Lead-Memory wiring tests
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:** Modify `python-agent/tests/test_enricher.py`.
 
@@ -1214,6 +1232,8 @@ W2 done when the suite + build are green and a field/stage description round-tri
 | `src/components/crm/copilot/CopilotApprovalCard.tsx` | humanize the approval prompt | Modify |
 
 ### Task W3.1: `copilot_agents` table + seed
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:** Create `supabase/migrations/20260620000000_sprint64_w3_copilot_agents.sql`.
 
@@ -1259,6 +1279,8 @@ CREATE TRIGGER set_copilot_agents_updated_at
 
 ### Task W3.2: Backend reads system_prompt + autonomy_mode
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:** Create `python-agent/app/cascade/agents_config.py` + `tests/test_agents_config.py`.
 
 **Interfaces:** `load_agent_config(client, equipe_id, scope, pipeline_id=None) -> dict` → `{"name","system_prompt","autonomy_mode"}` with defaults `{"name": <scope default>, "system_prompt": None, "autonomy_mode": "observe"}` when no row.
@@ -1272,6 +1294,8 @@ CREATE TRIGGER set_copilot_agents_updated_at
 - [ ] **Step 4: Commit** — `feat(copilot-w3): agents_config loader`.
 
 ### Task W3.3: Enforce the autonomy dial in the cascade
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:** Modify `python-agent/app/cascade/agno_workflow.py` (+ `workflow.py`), `tests/test_agno_workflow.py`.
 
@@ -1292,6 +1316,8 @@ CREATE TRIGGER set_copilot_agents_updated_at
 
 ### Task W3.4: FE — `useCopilotAgents` + types
 
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
+
 **Files:** Create `src/types/copilot.ts`, `src/hooks/useCopilotAgents.ts`.
 
 **Interfaces:** `AutonomyMode = "observe" | "suggest" | "autonomous"`; `CopilotAgent = { id, scope, pipeline_id, name, system_prompt, autonomy_mode }`; `useCopilotAgents()` → `{ agents, upsert, isLoading }` (react-query + supabase, mirror `useAgentRules`).
@@ -1299,6 +1325,8 @@ CREATE TRIGGER set_copilot_agents_updated_at
 - [ ] **Step 1:** Define the types. **Step 2:** Implement the hook (list all rows for the tenant; `upsert(scope, pipeline_id, patch)`). **Step 3:** `npm run build` green. **Step 4: Commit** — `feat(copilot-w3): useCopilotAgents hook + types`.
 
 ### Task W3.5: FE — the Copiloto Garage section
+
+**Status:** [x] Done (verified by PM 2026-06-19 — code on main, 262 tests pass).
 
 **Files:** Create `src/pages/CopilotCockpit.tsx` + `src/components/crm/copilot/CopilotConfigCard.tsx`; register a route/tab (add `<Route path="/copiloto" ...>` in `src/App.tsx` mirroring `/crm`, and a nav entry).
 

@@ -27,6 +27,20 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | 2026-06-18 | 6.4 | W4.2 Control Room decision log UI | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-18 | 6.4 | W4.1 decisions log endpoint | Codex / GPT-5 + subagent | L | R$ 20 |
 | 2026-06-18 | 6.4 | W3.6 humanized approval prompts | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W1.T1 Field dictionary module | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W1.T2 attach_file verb + file field type | Codex / GPT-5 | L | R$ 20 |
+| 2026-06-18 | 6.4 | W1.T3 Enricher dictionary-bounded router | Codex / GPT-5 | L | R$ 20 |
+| 2026-06-18 | 6.4 | W1.T4 Deal-scoped notes | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W2.1 Stage description + contact_fields_schema migration | Codex / GPT-5 | S | R$ 5 |
+| 2026-06-18 | 6.4 | W2.2 contact_dictionary reads tenant schema | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W2.3 Stage guide feeds Floor triage | Codex / GPT-5 | L | R$ 20 |
+| 2026-06-18 | 6.4 | W2.4 FE — edit descriptions/contact dictionary UI | Codex / GPT-5 | L | R$ 20 |
+| 2026-06-18 | 6.4 | W2.5 re-add Lead-Memory wiring tests | Codex / GPT-5 | S | R$ 5 |
+| 2026-06-18 | 6.4 | W3.1 copilot_agents table + seed migration | Codex / GPT-5 | S | R$ 5 |
+| 2026-06-18 | 6.4 | W3.2 Backend agents_config loader | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W3.3 Enforce autonomy dial in cascade | Codex / GPT-5 | L | R$ 20 |
+| 2026-06-18 | 6.4 | W3.4 FE useCopilotAgents hook + types | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W3.5 FE Copiloto Garage section | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-17 | 6.3 | Final-review fixes — ledger lead FK (C1) + filter intent-only approval rows (I1) | Claude / Sonnet 4.6 (PM-subagent) | L | R$ 20 |
 | 2026-06-17 | 6.3 | T8 intent-detected badge on Kanban card (Epic 4) | Claude / Sonnet 4.6 (PM-subagent) | M | R$ 12 |
 | 2026-06-17 | 6.3 | T7 Epic 6 notes-mirroring verification (already lead-scoped) | Claude / Sonnet 4.6 (PM-subagent) | S | R$ 5 |
