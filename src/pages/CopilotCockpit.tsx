@@ -9,6 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCopilotAgents } from "@/hooks/useCopilotAgents";
 import { usePipelines } from "@/hooks/usePipelines";
 import { CopilotConfigCard } from "@/components/crm/copilot/CopilotConfigCard";
+import { ControlRoom } from "@/components/crm/copilot/ControlRoom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AutonomyMode } from "@/types/copilot";
 
 const CopilotCockpit = () => {
@@ -100,7 +102,14 @@ const CopilotCockpit = () => {
         </div>
       </div>
 
-      <div className="flex-1 container mx-auto px-4 py-6 space-y-6">
+      <div className="flex-1 container mx-auto px-4 py-6">
+        <Tabs defaultValue="garage" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="garage">Garage</TabsTrigger>
+            <TabsTrigger value="control-room">Control Room</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="garage" className="space-y-6">
         {/* Global copilots */}
         <div className="space-y-2">
           <h2 className="text-lg font-semibold text-foreground">
@@ -179,6 +188,12 @@ const CopilotCockpit = () => {
             adicionar copilotos especializados.
           </p>
         )}
+          </TabsContent>
+
+          <TabsContent value="control-room">
+            <ControlRoom pipelines={activePipelines} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
