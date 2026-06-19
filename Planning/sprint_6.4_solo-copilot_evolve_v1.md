@@ -1420,3 +1420,35 @@ When W4 is green and verified, the Copilot Cockpit foundation is delivered: a bo
 - Open an agent-enabled deal and click Sync.
 - Confirm telemetry streams, minimizes/restores while the run continues, and exactly one completion toast appears.
 - Confirm the same run appears in Copiloto -> Control Room with lead, field, credits, status, and pipeline filtering.
+
+## POST-MERGE HOTFIX HANDOFF - Copilot UX / Kanban
+
+**Date:** 2026-06-19
+
+**Branch commit:** `d6bb80e` - `Fix Copilot sync feedback and logs`
+
+**Merged to `origin/main`:** `75b781f784c831b4abfedc23f91ccaf3bb68636a` - `Merge Copilot UX hotfixes`
+
+**Why this hotfix was needed:**
+- Kanban cards could render object/custom-file values as raw object text on the card face.
+- Sync clicks could fail with no visible feedback when the Copilot API URL was missing or unreachable.
+- Control Room logs were too verbose for audit use; operators needed rows closer to: timestamp, lead, action verb, origin.
+
+**Delivered in the hotfix:**
+- `OpportunityCard` now renders file/object custom values as readable labels instead of raw objects.
+- Copilot API clients now fail fast with a clear `VITE_COPILOT_URL` configuration error.
+- `SyncButton` now surfaces Copilot sync/sweep errors with a toast instead of appearing inert.
+- `ControlRoom` log table now shows `Data`, `Lead`, `Acao`, `Origem`, `Campo`, `Valor`, `Status`, with PT-BR timestamps including year and seconds.
+- `.env.example` now documents the production URL example `https://agent.soloventures.com.br`.
+
+**Verification completed after merge:**
+- Feature branch: `npm.cmd run build` -> passed.
+- Feature branch targeted lint: changed source files -> 0 errors, 1 existing Fast Refresh warning in `OpportunityCard.tsx`.
+- Temporary merged `origin/main` worktree: `npm.cmd run build` -> passed.
+- Remote check: `origin/main` points to `75b781f784c831b4abfedc23f91ccaf3bb68636a`.
+
+**Deployment note:**
+- No new Supabase migrations or Edge Function changes were added by this hotfix.
+- The live frontend still depends on the hosting pipeline deploying `origin/main`.
+- Sync still depends on the production frontend env `VITE_COPILOT_URL=https://agent.soloventures.com.br`.
+- The Python agent service still needs the production Dokploy/env check from Wave 1 Task 5, especially `COPILOT_WORKFLOW_ENABLED=true`, for the "alive" Sync workflow to execute in production.
