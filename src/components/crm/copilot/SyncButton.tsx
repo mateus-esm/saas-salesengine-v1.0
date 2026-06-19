@@ -69,6 +69,7 @@ export function SyncButton({
 
   const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
   const running = mode === "sweep" ? sweepHook.running : single.running;
+  const error = mode === "sweep" ? sweepHook.error : single.error;
 
   // Invalidate the live data the run may have changed, once it's done.
   // hasToasted ensures the completion toast fires exactly once per run.
@@ -88,6 +89,13 @@ export function SyncButton({
       }
     }
   }, [events, queryClient]);
+
+  const lastError = useRef<string | null>(null);
+  useEffect(() => {
+    if (!error || error === lastError.current) return;
+    lastError.current = error;
+    toast.error(error);
+  }, [error]);
 
   const runSingle = () => {
     if (!leadId) return;

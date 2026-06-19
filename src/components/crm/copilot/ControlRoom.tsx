@@ -16,8 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
-import { humanizeCopilotAction } from "@/lib/copilotHumanize";
+import { useCopilotDecisions, type CopilotDecisionRow } from "@/hooks/useCopilotDecisions";
 import type { Pipeline } from "@/types/pipelines";
 
 interface ControlRoomProps {
@@ -30,20 +29,67 @@ function formatTime(value: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   }).format(d);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function text(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+function actionVerb(action: unknown): string {
+  const a = asRecord(action);
+  const args = asRecord(a?.args);
+  return (
+    text(a?.verb) ??
+    text(a?.action) ??
+    text(args?.verb) ??
+    text(args?.action) ??
+    text(a?.intent) ??
+    "manual"
+  );
+}
+
+function originLabel(row: CopilotDecisionRow): string {
+  const action = asRecord(row.output_action);
+  const ledger = asRecord(action?.ledger);
+  const mode = text(action?.mode) ?? text(ledger?.mode) ?? text(row.decision_type);
+  if (mode?.toLowerCase() === "manual" || row.agent_role?.toLowerCase() === "manual") {
+    return "Manual";
+  }
+  if (!row.agent_role) return "Manual";
+  const labels: Record<string, string> = {
+    tower_doorman: "Tower",
+    floor_doorman: "Floor",
+    worker: "Worker",
+    autonomous_team: "Copilot",
+    track_shaper: "Copilot",
+  };
+  return labels[row.agent_role] ?? row.agent_role;
 }
 
 function valueLabel(value: unknown): string {
   if (value == null || value === "") return "-";
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
+  if (Array.isArray(value)) return value.map(valueLabel).join(", ");
+  const record = asRecord(value);
+  return (
+    text(record?.name) ??
+    text(record?.label) ??
+    text(record?.title) ??
+    text(record?.url) ??
+    "Dados preenchidos"
+  );
 }
 
 function statusVariant(status: string): "default" | "secondary" | "outline" | "destructive" {
@@ -105,48 +151,48 @@ export function ControlRoom({ pipelines }: ControlRoomProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Hora</TableHead>
-                <TableHead>Pipeline</TableHead>
-                <TableHead>Ação</TableHead>
+                <TableHead>Data</TableHead>
                 <TableHead>Lead</TableHead>
+                <TableHead>Ação</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Campo</TableHead>
                 <TableHead>Valor</TableHead>
-                <TableHead>Créditos</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => {
-                const leadName = row.lead_name ?? "este lead";
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatTime(row.created_at)}
-                    </TableCell>
-                    <TableCell className="min-w-36 text-xs">
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {formatTime(row.created_at)}
+                  </TableCell>
+                  <TableCell className="min-w-32 text-xs">
+                    <div className="font-medium text-foreground">{row.lead_name ?? "-"}</div>
+                    <div className="text-[10px] text-muted-foreground">
                       {row.pipeline_id
                         ? pipelineNames.get(row.pipeline_id) ?? row.pipeline_id.slice(0, 8)
                         : "-"}
-                    </TableCell>
-                    <TableCell className="min-w-64 text-xs font-medium">
-                      {humanizeCopilotAction(row.output_action, leadName)}
-                    </TableCell>
-                    <TableCell className="min-w-32 text-xs">
-                      {row.lead_name ?? "-"}
-                    </TableCell>
-                    <TableCell className="text-xs">{row.field ?? "-"}</TableCell>
-                    <TableCell className="max-w-52 truncate text-xs">
-                      {valueLabel(row.value)}
-                    </TableCell>
-                    <TableCell className="text-xs">{row.credits}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant(row.status)} className="text-[10px]">
-                        {row.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                    </div>
+                  </TableCell>
+                  <TableCell className="min-w-28 text-xs font-medium">
+                    {actionVerb(row.output_action)}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <Badge variant="outline" className="text-[10px]">
+                      {originLabel(row)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">{row.field ?? "-"}</TableCell>
+                  <TableCell className="max-w-52 truncate text-xs">
+                    {valueLabel(row.value)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(row.status)} className="text-[10px]">
+                      {row.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}

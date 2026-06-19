@@ -78,6 +78,31 @@ const formatCurrency = (value: number | null | undefined, currency: string) => {
 
 const renderCustomValue = (field: CustomFieldSchema, raw: unknown): string | null => {
   if (raw === null || raw === undefined || raw === "") return null;
+
+  const fromUrl = (url: string) => {
+    const clean = url.split("?")[0]?.split("#")[0] ?? url;
+    const name = clean.split("/").filter(Boolean).pop();
+    return name ? decodeURIComponent(name) : "Arquivo anexado";
+  };
+
+  const objectLabel = (value: unknown): string => {
+    if (Array.isArray(value)) {
+      const labels = value
+        .map((item) => objectLabel(item))
+        .filter(Boolean);
+      return labels.length ? labels.join(", ") : `${value.length} item(s)`;
+    }
+    if (value && typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      const candidate = record.name ?? record.label ?? record.title ?? record.file_name;
+      if (typeof candidate === "string" && candidate.trim()) return candidate;
+      if (typeof record.url === "string" && record.url.trim()) return fromUrl(record.url);
+      if (typeof record.path === "string" && record.path.trim()) return fromUrl(record.path);
+      return "Dados preenchidos";
+    }
+    return String(value);
+  };
+
   switch (field.type) {
     case "currency":
       return typeof raw === "number"
@@ -91,7 +116,10 @@ const renderCustomValue = (field: CustomFieldSchema, raw: unknown): string | nul
       } catch {
         return String(raw);
       }
+    case "file":
+      return objectLabel(raw);
     default:
+      if (typeof raw === "object") return objectLabel(raw);
       return String(raw);
   }
 };
