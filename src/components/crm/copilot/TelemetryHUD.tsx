@@ -1,12 +1,9 @@
 // src/components/crm/copilot/TelemetryHUD.tsx
 //
-// Sprint 6.1 · EPIC D · D4 — live cognition HUD.
-// Sprint 6.3 · Epic 1 — converted from blocking Dialog to non-blocking right
+// Sprint 6.1 - EPIC D - D4: live cognition HUD.
+// Sprint 6.3 - Epic 1: converted from blocking Dialog to non-blocking right
 //   Sheet drawer (modal={false}, no overlay, run persists on close).
-//
-// Renders the streamed HudEvent[] as a cockpit-style executive log instead of a
-// generic spinner. Shared by single sync (SSE via useCopilotSync) and the global
-// sweep (Realtime via useCopilotSweep) — both produce the same HudEvent[] shape.
+// Sprint 6.5 - T4: compact fast telemetry panel with readable queue cards.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Minus, X } from "lucide-react";
@@ -19,6 +16,7 @@ import {
   SheetClose,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatCopilotActivity } from "@/lib/copilotActivity";
 import { cn } from "@/lib/utils";
 import type { HudEvent } from "@/hooks/useCopilotSync";
 
@@ -30,43 +28,106 @@ interface TelemetryHUDProps {
   title?: string;
 }
 
-function verbOf(ev: HudEvent): string {
-  return String(ev.payload?.verb ?? "");
+type HudTone = "info" | "ok" | "err" | "warn" | "muted";
+
+interface HudQueueItem {
+  title: string;
+  detail: string;
+  meta: string;
+  tone: HudTone;
 }
 
-/** Map a structured event to a human cockpit log line. */
-function lineFor(ev: HudEvent): { text: string; tone: "info" | "ok" | "err" | "warn" | "muted" } {
+function activityFor(ev: HudEvent) {
+  return formatCopilotActivity(ev.payload?.action ?? ev.payload);
+}
+
+/** Map a structured event to a readable queue item. */
+function itemFor(ev: HudEvent): HudQueueItem {
   switch (ev.kind) {
-    case "action_start":
-      return { text: `Executando ${verbOf(ev)}…`, tone: "info" };
-    case "action_done":
+    case "action_start": {
+      const a = activityFor(ev);
+      return {
+        title: a.title,
+        detail: a.description,
+        meta: a.verb,
+        tone: "info",
+      };
+    }
+    case "action_done": {
+      const a = activityFor(ev);
       return ev.payload?.ok
-        ? { text: `✓ ${verbOf(ev)}`, tone: "ok" }
-        : { text: `✗ ${verbOf(ev)}: ${String(ev.payload?.error ?? "falhou")}`, tone: "err" };
-    case "awaiting_confirmation":
-      return { text: `⏸ Aguardando aprovação: ${verbOf(ev)}`, tone: "warn" };
+        ? {
+            title: a.title,
+            detail: a.result,
+            meta: "Concluido",
+            tone: "ok",
+          }
+        : {
+            title: a.title,
+            detail: String(ev.payload?.error ?? "A acao falhou."),
+            meta: "Erro",
+            tone: "err",
+          };
+    }
+    case "awaiting_confirmation": {
+      const a = activityFor(ev);
+      return {
+        title: "Aguardando aprovacao",
+        detail: a.title,
+        meta: a.verb,
+        tone: "warn",
+      };
+    }
     case "halted":
-      return { text: "⛔ Sem créditos — execução interrompida", tone: "err" };
+      return {
+        title: "Execucao interrompida",
+        detail: String(ev.payload?.reason ?? ev.payload?.error ?? "Sem creditos disponiveis."),
+        meta: "Erro",
+        tone: "err",
+      };
     case "sweep_progress": {
-      const opp = String(ev.payload?.opportunity_id ?? "");
-      const state = String(ev.payload?.state ?? "");
-      return { text: `↻ Oportunidade ${opp.slice(0, 8)} — ${state}`, tone: "muted" };
+      const opp = String(ev.payload?.opportunity_id ?? ev.opportunity_id ?? "");
+      const state = String(ev.payload?.state ?? ev.payload?.status ?? "Em andamento");
+      return {
+        title: "Sincronizando pipeline",
+        detail: state,
+        meta: opp ? opp.slice(0, 8) : "pipeline",
+        tone: "muted",
+      };
     }
     case "done": {
-      const status = String(ev.payload?.status ?? "concluído");
-      return { text: `Concluído (${status})`, tone: "ok" };
+      const status = String(ev.payload?.status ?? "concluido");
+      return {
+        title: "Sincronizacao concluida",
+        detail: status,
+        meta: "done",
+        tone: "ok",
+      };
     }
     default:
-      return { text: `${ev.kind}`, tone: "muted" };
+      return {
+        title: String(ev.kind),
+        detail: "Evento recebido do Copilot.",
+        meta: String(ev.seq),
+        tone: "muted",
+      };
   }
 }
 
-const toneClass: Record<string, string> = {
-  info: "text-sky-300",
-  ok: "text-emerald-300",
-  err: "text-red-300",
-  warn: "text-amber-300",
-  muted: "text-zinc-400",
+const toneClass: Record<HudTone, string> = {
+  info: "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-100",
+  ok: "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-100",
+  err: "border-red-200 bg-red-50 text-red-950 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100",
+  warn: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100",
+  muted: "border-border bg-muted/40 text-foreground",
+};
+
+const metaToneClass: Record<HudTone, string> = {
+  info: "text-sky-700 dark:text-sky-300",
+  ok: "text-emerald-700 dark:text-emerald-300",
+  err: "text-red-700 dark:text-red-300",
+  warn: "text-amber-700 dark:text-amber-300",
+  muted: "text-muted-foreground",
 };
 
 export function TelemetryHUD({
@@ -80,7 +141,7 @@ export function TelemetryHUD({
   const [minimized, setMinimized] = useState(false);
   const lastLine = useMemo(() => {
     const last = events[events.length - 1];
-    return last ? lineFor(last).text : "Aguardando o motor cognitivo";
+    return last ? itemFor(last).title : "Conectando ao Copilot";
   }, [events]);
 
   useEffect(() => {
@@ -106,23 +167,19 @@ export function TelemetryHUD({
   }
 
   return (
-    // modal={false} — disables Radix scroll-lock and pointer-event blocking so
-    // the Kanban behind stays fully interactive while the agent runs.
+    // modal={false} disables Radix scroll-lock and pointer-event blocking so
+    // CRM, chat, and Kanban surfaces stay interactive while the agent runs.
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetPortal>
-        {/* No SheetOverlay here — intentionally omitted to avoid the dark cover. */}
+        {/* No SheetOverlay here: intentionally omitted to avoid blocking the page. */}
         <SheetPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed inset-y-0 right-0 z-50 h-full w-3/4 sm:max-w-sm border-l bg-background p-6 shadow-lg relative",
-            "transition ease-in-out",
-            "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
-            "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right",
-            "data-[state=open]:duration-500 data-[state=closed]:duration-300",
+            "fixed right-4 top-20 z-50 w-[min(420px,calc(100vw-2rem))] max-h-[min(560px,calc(100vh-7rem))] rounded-lg border border-border bg-background p-4 shadow-2xl transition ease-in-out data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:slide-in-from-right-4 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:slide-out-to-right-4",
           )}
         >
           <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
+            <SheetTitle className="flex items-center gap-2 pr-16 text-base">
               {running && <Loader2 className="h-4 w-4 animate-spin" />}
               {title}
             </SheetTitle>
@@ -143,16 +200,32 @@ export function TelemetryHUD({
             </SheetClose>
           </div>
 
-          <ScrollArea className="mt-4 h-72 rounded-md bg-zinc-950 p-3 font-mono text-xs">
+          <ScrollArea className="mt-4 h-[min(420px,calc(100vh-13rem))] pr-3">
             {events.length === 0 && (
-              <p className="text-zinc-500">Aguardando o motor cognitivo…</p>
+              <div className="rounded-md border border-border bg-muted/40 p-3">
+                <div className="text-sm font-medium text-foreground">Conectando ao Copilot</div>
+                <div className="mt-1 text-xs text-muted-foreground">Preparando a analise...</div>
+              </div>
             )}
             {events.map((ev, i) => {
-              const { text, tone } = lineFor(ev);
+              const item = itemFor(ev);
               return (
-                <div key={`${ev.seq}-${i}`} className={toneClass[tone]}>
-                  <span className="text-zinc-600">{String(ev.seq).padStart(2, "0")} </span>
-                  {text}
+                <div
+                  key={`${ev.seq}-${i}`}
+                  className={cn("mb-2 rounded-md border p-3 text-sm", toneClass[item.tone])}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 font-medium leading-snug">{item.title}</div>
+                    <div
+                      className={cn(
+                        "shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                        metaToneClass[item.tone],
+                      )}
+                    >
+                      {item.meta}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs leading-relaxed opacity-80">{item.detail}</div>
                 </div>
               );
             })}
