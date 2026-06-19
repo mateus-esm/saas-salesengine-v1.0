@@ -52,10 +52,17 @@ export interface SyncOpportunityResult {
 
 // ── Private helper ─────────────────────────────────────────────────────────────
 
-const BASE_URL = import.meta.env.VITE_COPILOT_URL as string;
+const BASE_URL = ((import.meta.env.VITE_COPILOT_URL as string | undefined) ?? "").replace(/\/$/, "");
 
 /** Base URL of the Copilot/Agno backend (used by SSE streaming hooks). */
 export const COPILOT_URL = BASE_URL;
+
+export function requireCopilotUrl(): string {
+  if (!BASE_URL) {
+    throw new Error("VITE_COPILOT_URL nao configurado para o servico do Copilot.");
+  }
+  return BASE_URL;
+}
 
 /** Current Supabase access token, or undefined when signed out. */
 export async function getCopilotToken(): Promise<string | undefined> {
@@ -70,7 +77,7 @@ async function copilotFetch<T>(
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(`${requireCopilotUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

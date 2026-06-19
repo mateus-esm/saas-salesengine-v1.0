@@ -7,7 +7,7 @@
 // the Authorization header, so we read the stream with fetch + ReadableStream.
 
 import { useCallback, useRef, useState } from "react";
-import { COPILOT_URL, getCopilotToken } from "@/services/copilot";
+import { getCopilotToken, requireCopilotUrl } from "@/services/copilot";
 
 export type HudEvent = {
   kind: string;
@@ -43,8 +43,9 @@ export function useCopilotSync() {
     abortRef.current = controller;
 
     try {
+      const baseUrl = requireCopilotUrl();
       await fetchStream(
-        `${COPILOT_URL}/api/v1/sync/stream?${params.toString()}`,
+        `${baseUrl}/api/v1/sync/stream?${params.toString()}`,
         token,
         controller.signal,
         (ev) => {

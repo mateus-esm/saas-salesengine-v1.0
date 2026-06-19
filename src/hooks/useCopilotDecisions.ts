@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { COPILOT_URL, getCopilotToken } from "@/services/copilot";
+import { getCopilotToken, requireCopilotUrl } from "@/services/copilot";
 import { useAuth } from "@/contexts/AuthContext";
 
 export interface CopilotDecisionRow {
@@ -38,7 +38,7 @@ export function useCopilotDecisions({
       const params = new URLSearchParams({ limit: String(limit) });
       if (pipelineId) params.set("pipeline_id", pipelineId);
 
-      const res = await fetch(`${COPILOT_URL}/api/v1/decisions?${params}`, {
+      const res = await fetch(`${requireCopilotUrl()}/api/v1/decisions?${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
