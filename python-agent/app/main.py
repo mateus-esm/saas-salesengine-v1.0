@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import admin, approvals, ingest, shape, sweep, sync
+from app.routers import admin, approvals, decisions, ingest, shape, sweep, sync
 
 # ---------------------------------------------------------------------------
 # Application instance
@@ -67,6 +67,7 @@ app.include_router(sync.router, prefix=_API_PREFIX)
 app.include_router(sweep.router, prefix=_API_PREFIX)
 app.include_router(ingest.router, prefix=_API_PREFIX)
 app.include_router(approvals.router, prefix=_API_PREFIX)
+app.include_router(decisions.router, prefix=_API_PREFIX)
 # Admin ops surface — NOT under /api/v1 (non-tenant), internal-token gated.
 app.include_router(admin.router)
 
