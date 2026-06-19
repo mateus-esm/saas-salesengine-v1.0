@@ -1,7 +1,7 @@
 // src/pages/CopilotCockpit.tsx
 //
-// Sprint 6 Wave 3 — Copiloto Garage: top-level config UI for the copilot agent team.
-// Lists Chat Copilot, Base de Contatos, and one card per active pipeline.
+// Sprint 6.6 — Copilot Cockpit: Setup / Training / Approvals / Logs.
+// Central de operacao, treinamento e auditoria dos agentes.
 // Gated behind equipe.is_crm_agent_enabled.
 
 import { Bot, Loader2 } from "lucide-react";
@@ -10,6 +10,8 @@ import { useCopilotAgents } from "@/hooks/useCopilotAgents";
 import { usePipelines } from "@/hooks/usePipelines";
 import { CopilotConfigCard } from "@/components/crm/copilot/CopilotConfigCard";
 import { ControlRoom } from "@/components/crm/copilot/ControlRoom";
+import CopilotTrainingPanel from "@/components/crm/copilot/CopilotTrainingPanel";
+import { CopilotApprovalsPanel } from "@/components/crm/copilot/CopilotApprovalsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AutonomyMode } from "@/types/copilot";
 
@@ -27,10 +29,10 @@ const CopilotCockpit = () => {
         <div className="border-b border-border bg-header-bg">
           <div className="container mx-auto px-4 py-4">
             <h1 className="text-2xl font-bold text-foreground">
-              Copiloto <span className="text-primary">Garage</span>
+              Copilot
             </h1>
             <p className="text-sm text-foreground/70 mt-1 font-medium">
-              Configure os agentes do seu time de copiloto
+              Central de operacao, treinamento e auditoria dos agentes.
             </p>
           </div>
         </div>
@@ -94,22 +96,24 @@ const CopilotCockpit = () => {
       <div className="border-b border-border bg-header-bg">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold text-foreground">
-            Copiloto <span className="text-primary">Garage</span>
+            Copilot
           </h1>
           <p className="text-sm text-foreground/70 mt-1 font-medium">
-            Configure os agentes do seu time de copiloto
+            Central de operacao, treinamento e auditoria dos agentes.
           </p>
         </div>
       </div>
 
       <div className="flex-1 container mx-auto px-4 py-6">
-        <Tabs defaultValue="garage" className="space-y-6">
+        <Tabs defaultValue="setup" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="garage">Garage</TabsTrigger>
-            <TabsTrigger value="control-room">Control Room</TabsTrigger>
+            <TabsTrigger value="setup">Setup</TabsTrigger>
+            <TabsTrigger value="training">Treinamento</TabsTrigger>
+            <TabsTrigger value="approvals">Aprovacoes</TabsTrigger>
+            <TabsTrigger value="logs">Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="garage" className="space-y-6">
+          <TabsContent value="setup" className="space-y-6">
         {/* Global copilots */}
         <div className="space-y-2">
           <h2 className="text-lg font-semibold text-foreground">
@@ -184,13 +188,29 @@ const CopilotCockpit = () => {
 
         {activePipelines.length === 0 && (
           <p className="text-sm text-muted-foreground italic">
-            Nenhum pipeline ativo encontrado. Crie pipelines em Configurações para
+            Nenhum pipeline ativo encontrado. Crie pipelines em Configuracoes para
             adicionar copilotos especializados.
           </p>
         )}
           </TabsContent>
 
-          <TabsContent value="control-room">
+          <TabsContent value="training">
+            <CopilotTrainingPanel />
+          </TabsContent>
+
+          <TabsContent value="approvals" className="space-y-4">
+            {activePipelines.length === 0 && (
+              <p className="text-sm text-muted-foreground italic">Nenhum pipeline ativo.</p>
+            )}
+            {activePipelines.map((pipeline) => (
+              <section key={pipeline.id} className="space-y-2">
+                <h3 className="text-sm font-medium">{pipeline.name}</h3>
+                <CopilotApprovalsPanel pipelineId={pipeline.id} />
+              </section>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="logs">
             <ControlRoom pipelines={activePipelines} />
           </TabsContent>
         </Tabs>
