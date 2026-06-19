@@ -1310,6 +1310,8 @@ CREATE TRIGGER set_copilot_agents_updated_at
 
 ### Task W3.6: Humanized approval prompts
 
+**Status:** [x] Completed by Codex on 2026-06-18. Commit `0020305`.
+
 **Files:** Modify `src/components/crm/copilot/CopilotApprovalCard.tsx`; Test: add/extend a component test if the project tests components, else manual.
 
 **Interfaces:** Given a decision's `output_action` (verb + args) + the lead name, render a PT-BR sentence: `move_stage`→"Mover {lead} para {stage}?"; `add_note`→"Adicionar esta nota para {lead}?"; `set_field`/`set_contact_field`→"Atualizar {label} de {lead} para “{value}”?"; `create_task`→"Criar tarefa “{title}” para {lead}?". Never show raw JSON (keep a collapsible "ver detalhes" for the raw payload).
@@ -1342,6 +1344,8 @@ W3 done when the suite + build are green, the dial round-trips and is enforced (
 
 ### Task W4.1: Backend decisions log endpoint
 
+**Status:** [x] Completed by Codex on 2026-06-18. Commit `68f95a9`.
+
 **Files:** Create `python-agent/app/routers/decisions.py` + `tests/test_decisions_router.py`; modify `app/main.py`.
 
 **Interfaces:** `GET /api/v1/decisions?pipeline_id=&limit=` (auth via `get_tenant_context`) → list of `{id, created_at, agent_role, decision_type, status, lead_id, lead_name, opportunity_id, pipeline_id, field, value, confidence, credits}`. Derive `field`/`value` from `output_action`; `credits` from the ledger (or 1 per executed action) — reuse existing audit/ledger reads.
@@ -1356,6 +1360,8 @@ W3 done when the suite + build are green, the dial round-trips and is enforced (
 
 ### Task W4.2: FE — the Control Room log
 
+**Status:** [x] Completed by Codex on 2026-06-18. Commit `3a67fa9`.
+
 **Files:** Create `src/hooks/useCopilotDecisions.ts` + `src/components/crm/copilot/ControlRoom.tsx`; mount `ControlRoom` as the second tab/face of `CopilotCockpit`.
 
 **Interfaces:** `useCopilotDecisions(pipelineId?)` → `{ rows, isLoading }` calling `GET /api/v1/decisions`. `ControlRoom` renders a filterable table: columns Hora, Pipeline, Ação (humanized — reuse the W3.6 `humanize`), Lead, Campo, Valor, Créditos, Status; a pipeline filter dropdown; empty + loading states.
@@ -1363,6 +1369,8 @@ W3 done when the suite + build are green, the dial round-trips and is enforced (
 - [ ] **Step 1:** Implement the hook (uses `COPILOT_URL` + `getCopilotToken` like `useCopilotSync`). **Step 2:** Build `ControlRoom` table + pipeline filter, reusing `humanize` from W3.6 (extract it to a shared `copilotHumanize.ts` if not already). **Step 3:** Mount as the Control Room face of the Copiloto section. **Step 4:** `npm run build` green; manual check filtering. **Step 5: Commit** — `feat(copilot-w4): Control Room decision log`.
 
 ### Task W4.3: FE — the discreet, alive telemetry drawer
+
+**Status:** [x] Completed by Codex on 2026-06-18. Commit `d6cfb5a`.
 
 **Files:** Modify `src/components/crm/copilot/TelemetryHUD.tsx`.
 
