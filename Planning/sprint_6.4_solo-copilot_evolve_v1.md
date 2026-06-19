@@ -1386,3 +1386,37 @@ W3 done when the suite + build are green, the dial round-trips and is enforced (
 
 ### Wave 4 hand-off — Foundation complete
 When W4 is green and verified, the Copilot Cockpit foundation is delivered: a bounded, trustworthy execution spine; training sourced from CRM descriptions; a configurable named team with an autonomy dial and humanized approvals; and a live, auditable Control Room. Strategic intelligence (recommendations, suggested messages, next-best-action) is the next floor up — explicitly out of scope here per the design spec.
+
+## FINAL HANDOFF - Sprint 6.4 Copilot Cockpit Foundation
+
+**Date:** 2026-06-18
+
+**Branch:** `sprint6.4-wave1-precision-spine`
+
+**Code commits:** `87437ec` -> `1ae006a`
+
+**Deployment completed:**
+- Supabase project: `egxzsivzqlqadoqpgfby`.
+- Database migrations applied with `supabase db push`:
+  - `20260618000000_sprint64_note_opportunity_scope.sql`
+  - `20260619000000_sprint64_w2_training.sql`
+  - `20260620000000_sprint64_w3_copilot_agents.sql`
+  - `20260620000100_sprint64_w3_decision_proposed_status.sql`
+- Supabase Edge Functions deployed with `supabase functions deploy`.
+
+**Verification completed:**
+- Backend: `.venv\Scripts\python.exe -m pytest tests/ -q` -> 262 passed.
+- Frontend: `npm run build` -> passed.
+- Known non-blocking warnings: Starlette TestClient deprecation, pytest cache permission warning, Browserslist stale data, Vite large chunk warning.
+
+**Delivered scope:**
+- Wave 1: precision spine, bounded dictionaries, file fields, `attach_file`, deal-scoped notes.
+- Wave 2: tenant contact-field schema, field/stage descriptions, stage guide in triage, contact dictionary UI.
+- Wave 3: `copilot_agents`, autonomy dial, Copiloto Garage, humanized approval cards.
+- Wave 4: tenant decisions endpoint, Control Room decision log, minimizable non-modal telemetry drawer.
+
+**Residual manual browser evidence:**
+- Confirm production agent service env has `COPILOT_WORKFLOW_ENABLED=true`.
+- Open an agent-enabled deal and click Sync.
+- Confirm telemetry streams, minimizes/restores while the run continues, and exactly one completion toast appears.
+- Confirm the same run appears in Copiloto -> Control Room with lead, field, credits, status, and pipeline filtering.
