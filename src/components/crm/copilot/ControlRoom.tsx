@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCopilotDecisions, type CopilotDecisionRow } from "@/hooks/useCopilotDecisions";
+import { formatCopilotActivity } from "@/lib/copilotActivity";
 import type { Pipeline } from "@/types/pipelines";
 
 interface ControlRoomProps {
@@ -46,19 +47,6 @@ function text(value: unknown): string | null {
   return null;
 }
 
-function actionVerb(action: unknown): string {
-  const a = asRecord(action);
-  const args = asRecord(a?.args);
-  return (
-    text(a?.verb) ??
-    text(a?.action) ??
-    text(args?.verb) ??
-    text(args?.action) ??
-    text(a?.intent) ??
-    "manual"
-  );
-}
-
 function originLabel(row: CopilotDecisionRow): string {
   const action = asRecord(row.output_action);
   const ledger = asRecord(action?.ledger);
@@ -75,21 +63,6 @@ function originLabel(row: CopilotDecisionRow): string {
     track_shaper: "Copilot",
   };
   return labels[row.agent_role] ?? row.agent_role;
-}
-
-function valueLabel(value: unknown): string {
-  if (value == null || value === "") return "-";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.map(valueLabel).join(", ");
-  const record = asRecord(value);
-  return (
-    text(record?.name) ??
-    text(record?.label) ??
-    text(record?.title) ??
-    text(record?.url) ??
-    "Dados preenchidos"
-  );
 }
 
 function statusVariant(status: string): "default" | "secondary" | "outline" | "destructive" {
@@ -154,45 +127,55 @@ export function ControlRoom({ pipelines }: ControlRoomProps) {
                 <TableHead>Data</TableHead>
                 <TableHead>Lead</TableHead>
                 <TableHead>Ação</TableHead>
-                <TableHead>Origem</TableHead>
                 <TableHead>Campo</TableHead>
-                <TableHead>Valor</TableHead>
+                <TableHead>Resultado</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Payload</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {formatTime(row.created_at)}
-                  </TableCell>
-                  <TableCell className="min-w-32 text-xs">
-                    <div className="font-medium text-foreground">{row.lead_name ?? "-"}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {row.pipeline_id
-                        ? pipelineNames.get(row.pipeline_id) ?? row.pipeline_id.slice(0, 8)
-                        : "-"}
-                    </div>
-                  </TableCell>
-                  <TableCell className="min-w-28 text-xs font-medium">
-                    {actionVerb(row.output_action)}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <Badge variant="outline" className="text-[10px]">
-                      {originLabel(row)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">{row.field ?? "-"}</TableCell>
-                  <TableCell className="max-w-52 truncate text-xs">
-                    {valueLabel(row.value)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(row.status)} className="text-[10px]">
-                      {row.status}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {rows.map((row) => {
+                const activity = formatCopilotActivity(row.output_action, {
+                  leadName: row.lead_name ?? "este lead",
+                  source: originLabel(row),
+                });
+
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatTime(row.created_at)}
+                    </TableCell>
+                    <TableCell className="min-w-32 text-xs">
+                      <div className="font-medium text-foreground">{row.lead_name ?? "-"}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {row.pipeline_id
+                          ? pipelineNames.get(row.pipeline_id) ?? row.pipeline_id.slice(0, 8)
+                          : "-"}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">{activity.verb}</TableCell>
+                    <TableCell className="text-xs">{activity.field}</TableCell>
+                    <TableCell className="max-w-64 truncate text-xs" title={activity.result}>
+                      {activity.result}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant="outline" className="text-[10px]">{activity.source}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(row.status)} className="text-[10px]">{row.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <details className="text-xs">
+                        <summary className="cursor-pointer text-muted-foreground">Payload</summary>
+                        <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-left text-[11px]">
+                          {activity.technical}
+                        </pre>
+                      </details>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
