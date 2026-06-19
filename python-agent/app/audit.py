@@ -21,7 +21,7 @@ def record_decision(
     Record a Copilot cascade/agent decision to public.ai_decisions table.
     Maps confidence -> confidence_score, and validates status check constraint.
     """
-    allowed_statuses = {"auto_applied", "pending_approval", "approved", "rejected", "executed", "failed"}
+    allowed_statuses = {"auto_applied", "pending_approval", "approved", "rejected", "executed", "failed", "proposed"}
     if status not in allowed_statuses:
         raise ValueError(
             f"Invalid status '{status}'. Must be one of: {', '.join(allowed_statuses)}"

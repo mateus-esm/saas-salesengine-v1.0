@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 CustomFieldType = Literal[
     "text",
+    "file",
     "number",
     "currency",
     "date",
@@ -43,6 +44,7 @@ class StageBlueprint(BaseModel):
     position: int = Field(..., ge=0)
     stage_type: Literal["open", "won", "lost"] = "open"
     color: str = "#64748b"
+    description: str | None = None
     max_idle_hours: int | None = Field(None, gt=0)
     cadence_value: int | None = Field(None, gt=0)
     cadence_unit: Literal["hours", "days"] | None = None

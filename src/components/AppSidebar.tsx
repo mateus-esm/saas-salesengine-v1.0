@@ -30,6 +30,7 @@ export function AppSidebar() {
     { title: "Dashboard", url: "/dashboard", icon: BarChart3, external: false },
     { title: "Chat", url: isExternalChatLink ? chatHref : chatHref || "/chat", icon: MessageCircle, external: isExternalChatLink },
     { title: "CRM", url: "/crm", icon: LayoutDashboard, external: false },
+    { title: "Copiloto", url: "/copiloto", icon: Bot, external: false },
     { title: "AI Studio", url: "/ai-studio", icon: Cpu, external: false, requiredRole: 'admin', permissionKey: 'ai_studio' },
     { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false, requiredRole: 'admin', permissionKey: 'webhooks' },
     { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin', permissionKey: 'billing' },

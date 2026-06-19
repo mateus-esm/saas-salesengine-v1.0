@@ -3,6 +3,7 @@
 
 export type CustomFieldType =
   | "text"
+  | "file"
   | "number"
   | "currency"
   | "date"
@@ -92,6 +93,8 @@ export interface PipelineStageV2 {
   cadence_unit: 'hours' | 'days' | null;
   /** Sprint 5.3 T8 — webhooks to fire on stage cadence/lifecycle events. */
   webhook_triggers: StageWebhookTrigger[];
+  /** Sprint 6.4 W2 — human description read by Copilot triage to know when a deal belongs here. */
+  description?: string;
   created_at: string;
   deleted_at: string | null;
 }
@@ -170,6 +173,8 @@ export interface UpdateStageV2Data {
   cadence_unit?: 'hours' | 'days' | null;
   /** Sprint 5.3 T8 — webhooks to fire on stage cadence/lifecycle events. */
   webhook_triggers?: StageWebhookTrigger[];
+  /** Sprint 6.4 W2 — human description read by Copilot triage. */
+  description?: string;
 }
 
 export interface CreateOpportunityData {

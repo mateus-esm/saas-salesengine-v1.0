@@ -22,6 +22,10 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-18 | 6.4 | W4.3 minimizable telemetry drawer | Codex / GPT-5 | M | R$ 12 |
+| 2026-06-18 | 6.4 | W4.2 Control Room decision log UI | Codex / GPT-5 | L | R$ 20 |
+| 2026-06-18 | 6.4 | W4.1 decisions log endpoint | Codex / GPT-5 + subagent | L | R$ 20 |
+| 2026-06-18 | 6.4 | W3.6 humanized approval prompts | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-17 | 6.3 | Final-review fixes — ledger lead FK (C1) + filter intent-only approval rows (I1) | Claude / Sonnet 4.6 (PM-subagent) | L | R$ 20 |
 | 2026-06-17 | 6.3 | T8 intent-detected badge on Kanban card (Epic 4) | Claude / Sonnet 4.6 (PM-subagent) | M | R$ 12 |
 | 2026-06-17 | 6.3 | T7 Epic 6 notes-mirroring verification (already lead-scoped) | Claude / Sonnet 4.6 (PM-subagent) | S | R$ 5 |

@@ -8,8 +8,8 @@
 // generic spinner. Shared by single sync (SSE via useCopilotSync) and the global
 // sweep (Realtime via useCopilotSweep) — both produce the same HudEvent[] shape.
 
-import { useEffect, useRef } from "react";
-import { Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Minus, X } from "lucide-react";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import {
   Sheet,
@@ -77,10 +77,33 @@ export function TelemetryHUD({
   title = "Telemetria do Copilot",
 }: TelemetryHUDProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [minimized, setMinimized] = useState(false);
+  const lastLine = useMemo(() => {
+    const last = events[events.length - 1];
+    return last ? lineFor(last).text : "Aguardando o motor cognitivo";
+  }, [events]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
+
+  useEffect(() => {
+    if (!open) setMinimized(false);
+  }, [open]);
+
+  if (open && minimized) {
+    return (
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
+        className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-xs text-foreground shadow-lg transition hover:bg-muted"
+        aria-label="Restaurar telemetria do Copilot"
+      >
+        {running && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+        <span className="max-w-64 truncate">{lastLine}</span>
+      </button>
+    );
+  }
 
   return (
     // modal={false} — disables Radix scroll-lock and pointer-event blocking so
@@ -105,10 +128,20 @@ export function TelemetryHUD({
             </SheetTitle>
           </SheetHeader>
 
-          <SheetClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Fechar</span>
-          </SheetClose>
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMinimized(true)}
+              className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <Minus className="h-4 w-4" />
+              <span className="sr-only">Minimizar</span>
+            </button>
+            <SheetClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Fechar</span>
+            </SheetClose>
+          </div>
 
           <ScrollArea className="mt-4 h-72 rounded-md bg-zinc-950 p-3 font-mono text-xs">
             {events.length === 0 && (

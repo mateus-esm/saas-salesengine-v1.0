@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bot, CheckCircle2, XCircle } from "lucide-react";
+import { Bot, CheckCircle2, ChevronDown, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,9 +24,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useAuth } from "@/contexts/AuthContext";
 import { resolveApproval } from "@/services/copilot";
 import type { AiDecision } from "@/hooks/useCopilotApprovals";
+import {
+  humanizeCopilotAction,
+  stringifyActionDetails,
+} from "@/lib/copilotHumanize";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -174,14 +183,17 @@ export const CopilotApprovalCard = ({
     decision.confidence_score != null
       ? `${Math.round(decision.confidence_score * 100)}%`
       : null;
+  const leadName = "este lead";
+  const actionSentence = humanizeCopilotAction(decision.output_action, leadName);
+  const actionDetails = stringifyActionDetails(decision.output_action);
 
   return (
     <Card className="rounded-lg border border-border bg-card">
       <CardHeader className="pb-2 pt-4 px-4">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary shrink-0" />
-            {formatRole(decision.agent_role)}
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-sm font-semibold text-foreground flex items-start gap-2 leading-snug">
+            <Bot className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <span>{actionSentence}</span>
           </CardTitle>
           <div className="flex items-center gap-1.5 shrink-0">
             {confidencePct && (
@@ -203,13 +215,13 @@ export const CopilotApprovalCard = ({
       </CardHeader>
 
       <CardContent className="px-4 pb-3 space-y-2">
-        {/* Action */}
+        {/* Agent */}
         <div className="space-y-0.5">
           <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
-            Ação proposta
+            Agente
           </p>
-          <p className="text-sm text-foreground font-medium break-words">
-            {formatAction(decision.output_action)}
+          <p className="text-xs text-muted-foreground break-words">
+            {formatRole(decision.agent_role)}
           </p>
         </div>
 
@@ -224,6 +236,25 @@ export const CopilotApprovalCard = ({
             </p>
           </div>
         )}
+
+        <Collapsible>
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
+            >
+              Ver detalhes
+              <ChevronDown className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="max-h-40 overflow-auto rounded-md bg-muted p-2 text-[11px] text-muted-foreground whitespace-pre-wrap break-words">
+              {actionDetails}
+            </pre>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
 
       <CardFooter className="px-4 pb-4 pt-0 flex gap-2">
