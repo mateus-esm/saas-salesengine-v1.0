@@ -23,6 +23,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
 | 2026-06-19 | 6.6 | T3 Copilot Cockpit sections (Setup/Treinamento/Aprovações/Logs) | Junior | L | R$ 20 |
+| 2026-06-19 | 6.6 | T4 Sprint 6.5 browser smoke + handoff | Junior | M | R$ 12 |
 | 2026-06-19 | 6.5 | T8 Base de Contatos spreadsheet columns (create/edit/resize/delete) | Codex / GPT-5 | L | R$ 20 |
 | 2026-06-18 | 6.4 | W4.3 minimizable telemetry drawer | Codex / GPT-5 | M | R$ 12 |
 | 2026-06-18 | 6.4 | W4.2 Control Room decision log UI | Codex / GPT-5 | L | R$ 20 |

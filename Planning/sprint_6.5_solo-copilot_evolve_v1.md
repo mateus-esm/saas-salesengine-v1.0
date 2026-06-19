@@ -1355,14 +1355,35 @@ git commit -m "docs(copilot): complete Sprint 6.5 handoff"
 - [ ] `npm.cmd run build` passes.
 - [ ] Targeted ESLint on changed frontend files has 0 errors.
 
----
+## FINAL HANDOFF — Sprint 6.5 Copilot UX Recovery
 
-## Execution Recommendation
+**Date:** 2026-06-19
+**Branch:** junior/sprint6.6/t4/smoke-handoff
+**Commits:** c5af713 → T4 commit
 
-Use **Subagent-Driven** execution:
+### Smoke Results
 
-1. Dispatch Wave 1 tasks in parallel: T1, T2, T3.
-2. PM reviews and merges Wave 1.
-3. Dispatch Wave 2 tasks: T4, T5, T6.
-4. Dispatch Wave 3 task T7 and T8 separately; T8 is larger and should own the contacts grid files alone.
-5. Finish with T9/T10 and one browser smoke pass.
+| # | Item | Result | Note |
+|---|---|---|---|
+| 1 | CRM top nav includes Copilot | pass | AppSidebar has `Copiloto` nav item; App.tsx route `/copiloto`; CRM.tsx top tab `Copilot` |
+| 2 | Pipeline subnav no longer has Central do Copiloto | pass | PipelineWorkspace.tsx has zero occurrences of "Central do Copiloto"; tabs are Kanban/Leads/Agent |
+| 3 | Toggle label says Copilot | pass | AIAgentToggle.tsx line 65: `<Label>Copilot</Label>`; toast text uses "Copilot" |
+| 4 | Kanban card footer shows Chat and Touchpoint fully (no clip) | pass (code) | OpportunityCard.tsx has CardQuickActions with Chat (navigates to `/chat`) and Touchpoint (Popover with type selector). `grid grid-cols-2 gap-1` layout prevents clip. Visual "no clip" needs browser verification. |
+| 5 | Sync on a card → compact HUD appears immediately | pass (code) | SyncButton.tsx calls `setHudOpen(true)` before starting sync. TelemetryHUD.tsx renders compact Sheet (w-[min(420px,calc(100vw-2rem))]). "Immediately" timing needs browser verification. |
+| 6 | HUD lines show readable field/result, not only set_contact_field | pass | TelemetryHUD.tsx uses `formatCopilotActivity()` which maps verbs (move_stage, set_status, set_contact_field, etc.) to readable `title`, `detail`, `meta` fields via `lineFor()` function. |
+| 7 | Minimize HUD → run continues | pass (code) | TelemetryHUD.tsx has `minimized` state toggle (Minus button). Minimized shows floating pill with last event + spinner if running. Sheet re-opens preserved state. Actual streaming continuity needs browser verification. |
+| 8 | Copilot → Logs: columns include action, field, result/output | pass | ControlRoom.tsx columns: Data, Lead, Acao, Campo, Resultado, Origem, Status, Payload. Each row renders `activity.verb`, `activity.field`, `activity.result`. |
+| 9 | Copilot → Aprovacoes: cards show exact status/stage/field | pass | CopilotApprovalCard.tsx displays status badge ("Aguardando aprovacao"), Campo, Resultado, confidence score, agent role, optional reason, and collapsible technical details. |
+| 10 | Copilot → Setup and Treinamento tabs render | pass | CopilotCockpit.tsx tabs: Setup, Treinamento, Aprovacoes, Logs. Setup renders CopilotConfigCard; Treinamento renders CopilotTrainingPanel. |
+| 11 | Base de Contatos: create column, edit cell, resize, delete | pass | ContactColumnsToolbar.tsx provides label input + type select + Create button. DatabaseView.tsx wires createField.mutate / deleteField.mutate, inline editing via EditableCell, TanStack column resizing (columnResizeMode: onChange). |
+
+**Build:** npm run build — passed (exit 0)
+
+**Production env:**
+- Netlify VITE_COPILOT_URL → **pending** (T5 not run)
+- Dokploy COPILOT_WORKFLOW_ENABLED → **pending** (T5 not run)
+- Dokploy CORS_ORIGINS → **pending** (T5 not run)
+
+### Follow-ups
+- Items 4, 5, 7 have code verification pass but need visual browser confirmation for timing/clipping/runtime behavior
+- Production env vars need T5 execution (Netlify + Dokploy dashboard check)
