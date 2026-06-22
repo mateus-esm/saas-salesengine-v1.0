@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bot, Building2, Home, LayoutGrid, ListChecks, Plus, Table2, Users } from "lucide-react";
+import { Bot, Building2, Calendar, Home, LayoutGrid, ListChecks, Plus, Table2, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,11 @@ import { useCustomTables, type CustomTable } from "@/hooks/useCustomTables";
 import { CustomTableManager } from "@/components/crm/customtables/CustomTableManager";
 import { CustomTableView } from "@/components/crm/customtables/CustomTableView";
 import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActivationGrid";
+import { AgendaView } from "@/components/crm/AgendaView";
 
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot" | "tabelas";
+type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot" | "tabelas" | "agenda";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot", "tabelas"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot", "tabelas", "agenda"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
@@ -98,6 +99,10 @@ const CRM = () => {
               <Table2 className="h-4 w-4" />
               Tabelas
             </TabsTrigger>
+            <TabsTrigger value="agenda" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              Agenda
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         <FeatureActivationGrid />
@@ -134,6 +139,8 @@ const CRM = () => {
               }}
             />
           )
+        ) : tab === "agenda" ? (
+          <AgendaView />
         ) : !isLoading && pipelines.length === 0 ? (
           <EmptyPipelinesState />
         ) : pipelineId ? (
