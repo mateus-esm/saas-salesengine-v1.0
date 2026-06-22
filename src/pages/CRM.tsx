@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bot, Building2, Home, LayoutGrid, ListChecks, Plus, Users } from "lucide-react";
+import { Bot, Building2, Home, LayoutGrid, ListChecks, Plus, Table2, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -13,16 +13,21 @@ import TasksView from "@/components/crm/TasksView";
 import { PropertiesDatabaseView } from "@/components/crm/properties/PropertiesDatabaseView";
 import { usePipelineSelection } from "@/hooks/usePipelineSelection";
 import CopilotCockpit from "@/pages/CopilotCockpit";
+import { useCustomTables, type CustomTable } from "@/hooks/useCustomTables";
+import { CustomTableManager } from "@/components/crm/customtables/CustomTableManager";
+import { CustomTableView } from "@/components/crm/customtables/CustomTableView";
+import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActivationGrid";
 
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot";
+type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot" | "tabelas";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot", "tabelas"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
 const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { pipelineId, pipelines, isLoading } = usePipelineSelection();
+  const { tables: customTables } = useCustomTables();
 
   const tab: TopTab = useMemo(() => {
     const raw = searchParams.get("tab");
@@ -47,10 +52,18 @@ const CRM = () => {
       if (next !== "properties") {
         params.delete("property");
       }
+      if (next !== "tabelas") {
+        params.delete("custom_table");
+      }
       setSearchParams(params, { replace: false });
     },
     [searchParams, setSearchParams],
   );
+
+  const customTableSlug = searchParams.get("custom_table");
+  const selectedCustomTable = customTableSlug
+    ? customTables.find((t) => t.slug === customTableSlug) ?? null
+    : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -81,8 +94,13 @@ const CRM = () => {
               <Bot className="h-4 w-4" />
               Copilot
             </TabsTrigger>
+            <TabsTrigger value="tabelas" className="flex items-center gap-2">
+              <Table2 className="h-4 w-4" />
+              Tabelas
+            </TabsTrigger>
           </TabsList>
         </Tabs>
+        <FeatureActivationGrid />
         <AIAgentToggle />
       </div>
 
@@ -97,6 +115,25 @@ const CRM = () => {
           <TasksView />
         ) : tab === "copilot" ? (
           <CopilotCockpit />
+        ) : tab === "tabelas" ? (
+          selectedCustomTable ? (
+            <CustomTableView
+              table={selectedCustomTable}
+              onBack={() => {
+                const params = new URLSearchParams(searchParams);
+                params.delete("custom_table");
+                setSearchParams(params, { replace: false });
+              }}
+            />
+          ) : (
+            <CustomTableManager
+              onSelectTable={(table: CustomTable) => {
+                const params = new URLSearchParams(searchParams);
+                params.set("custom_table", table.slug);
+                setSearchParams(params, { replace: false });
+              }}
+            />
+          )
         ) : !isLoading && pipelines.length === 0 ? (
           <EmptyPipelinesState />
         ) : pipelineId ? (
