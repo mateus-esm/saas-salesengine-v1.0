@@ -300,23 +300,21 @@ class TestLeadVelocityEndpoint:
     """Sprint 6.7 — revenue API lead-velocity endpoint."""
 
     def test_get_lead_velocity_computes_correctly(self, monkeypatch):
-        """2 activities, last at 2026-06-19: velocity computed dynamically."""
-        _last_date = "2026-06-19T14:00:00Z"
-        _expected_vel = _compute_expected_velocity(2, _last_date)
-        _expected_trend = "down" if _expected_vel < 5 else "flat" if _expected_vel <= 20 else "up"
+        """Delegates to fn_calculate_lead_velocity RPC and returns result."""
+        _expected_vel = 14.0
+        _expected_trend = "flat"
 
         tables = {
             "leads": [
                 {"id": LEAD_ID, "equipe_id": EQUIPE_ID},
             ],
-            "lead_activities": [
-                {"id": "act-2", "lead_id": LEAD_ID, "created_at": _last_date},
-                {"id": "act-1", "lead_id": LEAD_ID, "created_at": "2026-06-18T10:00:00Z"},
-            ],
+        }
+        rpc_results = {
+            "fn_calculate_lead_velocity": [{"fn_calculate_lead_velocity": _expected_vel}],
         }
         monkeypatch.setattr(
             "app.routers.revenue.get_service_client",
-            lambda: _FakeClient(tables),
+            lambda: _FakeClient(tables, rpc_results=rpc_results),
         )
 
         client = TestClient(_make_app())
@@ -329,23 +327,18 @@ class TestLeadVelocityEndpoint:
         assert body["trend"] == _expected_trend
 
     def test_get_lead_velocity_trend_up_when_high(self, monkeypatch):
-        """5 activities (50 pts): velocity should be > 20 -> trend=up."""
-        _last_date = "2026-06-20T10:00:00Z"
-        _expected_vel = _compute_expected_velocity(5, _last_date)
-        assert _expected_vel > 20, (
-            "Pre-condition: 5 recent activities must yield velocity > 20"
-        )
+        """Velocity > 20 -> trend=up."""
+        _expected_vel = 30.0
 
         tables = {
             "leads": [{"id": LEAD_ID, "equipe_id": EQUIPE_ID}],
-            "lead_activities": [
-                {"id": f"act-{i}", "lead_id": LEAD_ID, "created_at": _last_date}
-                for i in range(5)
-            ],
+        }
+        rpc_results = {
+            "fn_calculate_lead_velocity": [{"fn_calculate_lead_velocity": _expected_vel}],
         }
         monkeypatch.setattr(
             "app.routers.revenue.get_service_client",
-            lambda: _FakeClient(tables),
+            lambda: _FakeClient(tables, rpc_results=rpc_results),
         )
 
         client = TestClient(_make_app())

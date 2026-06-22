@@ -82,6 +82,7 @@ async def get_lead_velocity(
 ) -> dict:
     """Return lead-velocity score + trend for the given lead.
 
+    Delegates to PL/pgSQL fn_calculate_lead_velocity.
     Tenant-scoped: raises 404 if the lead does not belong to the caller's
     equipe_id.
     """
@@ -103,21 +104,13 @@ async def get_lead_velocity(
             detail="Lead not found",
         )
 
-    # 2. Fetch activities (most recent first).
-    activities_resp = (
-        client.table("lead_activities")
-        .select("created_at")
-        .eq("lead_id", lead_id)
-        .order("created_at", desc=True)
-        .execute()
-    )
-    activities = getattr(activities_resp, "data", None) or []
+    # 2. Call the PL/pgSQL velocity function.
+    result = client.rpc(
+        "fn_calculate_lead_velocity", {"p_lead_id": lead_id}
+    ).execute()
+    rows = getattr(result, "data", None) or []
+    velocity = float(rows[0]["fn_calculate_lead_velocity"]) if rows and isinstance(rows[0], dict) and "fn_calculate_lead_velocity" in rows[0] else 0.0
 
-    activity_count = len(activities)
-    last_date = activities[0].get("created_at") if activity_count > 0 else None
-    days_since_last = _days_since(last_date)
-
-    velocity = _compute_velocity(activity_count, days_since_last)
     trend = _compute_trend(velocity)
 
     return {
