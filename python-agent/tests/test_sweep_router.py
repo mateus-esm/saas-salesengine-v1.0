@@ -51,6 +51,10 @@ class _FakeOppQuery:
     def insert(self, _row):
         return self
 
+    # Lifecycle recompute calls .table().update(); make it a no-op too.
+    def update(self, _data):
+        return self
+
 
 def _make_app() -> FastAPI:
     app = FastAPI()

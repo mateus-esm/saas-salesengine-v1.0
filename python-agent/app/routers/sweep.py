@@ -109,6 +109,25 @@ async def sync_sweep(
     emitter = RunEmitter(
         equipe_id=ctx.equipe_id, run_id=run_id, opportunity_id=None, client=client
     )
+
+    # --- Lifecycle recompute (Sprint 6.7): nudge mql leads so the trigger re-evaluates
+    mql_resp = (
+        client.table("leads")
+        .select("id")
+        .eq("equipe_id", ctx.equipe_id)
+        .eq("lifecycle_stage", "mql")
+        .execute()
+    )
+    mql_leads = getattr(mql_resp, "data", None) or []
+
+    # Self-assignment fires trg_advance_lifecycle without changing the value
+    for lead in mql_leads:
+        client.table("leads").update({"lifecycle_stage": "mql"}).eq("id", lead["id"]).execute()
+
+    mql_count = len(mql_leads)
+    await emitter.emit("lifecycle_recompute", {"mql_checked": mql_count})
+    # --- end lifecycle recompute
+
     for opp in opps:  # SEQUENTIAL — one card at a time.
         await emitter.emit("sweep_progress", {"opportunity_id": opp["id"], "state": "start"})
         await run_workflow(
