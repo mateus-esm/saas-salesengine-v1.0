@@ -12,6 +12,7 @@ import { CopilotConfigCard } from "@/components/crm/copilot/CopilotConfigCard";
 import { ControlRoom } from "@/components/crm/copilot/ControlRoom";
 import CopilotTrainingPanel from "@/components/crm/copilot/CopilotTrainingPanel";
 import { CopilotApprovalsPanel } from "@/components/crm/copilot/CopilotApprovalsPanel";
+import { PipelineCockpitAccordion } from "@/components/crm/copilot/PipelineCockpitAccordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AutonomyMode } from "@/types/copilot";
 
@@ -108,6 +109,7 @@ const CopilotCockpit = () => {
         <Tabs defaultValue="setup" className="space-y-6">
           <TabsList>
             <TabsTrigger value="setup">Setup</TabsTrigger>
+            <TabsTrigger value="pipelines">Pipelines</TabsTrigger>
             <TabsTrigger value="training">Treinamento</TabsTrigger>
             <TabsTrigger value="approvals">Aprovacoes</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
@@ -192,6 +194,19 @@ const CopilotCockpit = () => {
             adicionar copilotos especializados.
           </p>
         )}
+          </TabsContent>
+
+          <TabsContent value="pipelines" className="space-y-6">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-foreground">
+                Painel por Pipeline
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Configure metas, prompt, automacoes e acompanhe logs de cada
+                pipeline individualmente.
+              </p>
+            </div>
+            <PipelineCockpitAccordion />
           </TabsContent>
 
           <TabsContent value="training">
