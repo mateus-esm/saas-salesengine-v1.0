@@ -3,7 +3,7 @@ export type ColumnKind =
   | "formula" | "rollup" | "conditional"; // v2 slots — registered, not implemented
 
 export type JsonbField =
-  | "custom_fields" | "personal_custom_data" | "custom_data" | "record";
+  | "custom_fields" | "personal_custom_data" | "custom_data" | "record" | "data";
 
 export interface ColumnDef {
   key: string;                 // native column name OR JSONB property key
