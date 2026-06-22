@@ -115,13 +115,14 @@ export function InlineCell({
 
   // -- Relation display (non-editing) -------------------------------------
   if (column.kind === "relation" && !isEditing) {
-    const chips = Array.isArray(value)
-      ? (value as { toId: string; label: string }[])
-      : [];
+    // Show resolved links from useRelationResolver even in display mode
+    // so chips appear without double-clicking.
     return (
       <div className="flex h-8 w-full items-center gap-1 px-1 text-sm overflow-hidden">
-        {chips.length > 0 ? (
-          chips.map((chip) => (
+        {linksLoading ? (
+          <span className="text-muted-foreground text-xs">Carregando...</span>
+        ) : links.length > 0 ? (
+          links.map((chip) => (
             <RelationChip key={chip.toId} label={chip.label} />
           ))
         ) : (

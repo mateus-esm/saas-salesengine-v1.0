@@ -28,6 +28,7 @@ import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
 import { ICPScoreBadge } from "./ICPScoreBadge";
 import { VelocityScoreBadge } from "./VelocityScoreBadge";
+import { RelationChip } from "./grid/RelationChip";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -66,6 +67,7 @@ interface OpportunityCardProps {
   velocity?: number | null;                      // W3 — Velocity score for badge display
   onClick: () => void;
   isDragOverlay?: boolean;
+  companies?: { id: string; name: string }[];    // Sprint 6.7 — linked companies for card chips
 }
 
 const formatCurrency = (value: number | null | undefined, currency: string) => {
@@ -139,6 +141,7 @@ export const OpportunityCard = ({
   velocity,
   onClick,
   isDragOverlay,
+  companies = [],
 }: OpportunityCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: opportunity.id,
@@ -228,6 +231,15 @@ export const OpportunityCard = ({
         >
           <span className="shrink-0">⚠️</span>
           <span className="truncate">Intenção Detectada</span>
+        </div>
+      )}
+
+      {/* Sprint 6.7 — Company chips from opportunity_links */}
+      {companies.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          {companies.map((c) => (
+            <RelationChip key={c.id} label={c.name} />
+          ))}
         </div>
       )}
 

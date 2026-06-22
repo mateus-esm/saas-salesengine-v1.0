@@ -16,6 +16,7 @@ interface OpportunityKanbanColumnProps {
   touchpointCounts: Record<string, number>;      // NEW
   nativeFlags: NativeCardFlags;
   onCardClick: (opp: Opportunity) => void;
+  companiesByOppId?: Record<string, { id: string; name: string }[]>;
 }
 
 const sumValues = (opps: Opportunity[]) =>
@@ -38,6 +39,7 @@ export const OpportunityKanbanColumn = ({
   touchpointCounts,
   nativeFlags,
   onCardClick,
+  companiesByOppId = {},
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -108,6 +110,7 @@ export const OpportunityKanbanColumn = ({
                   icpScore={(opp as any)._icp_score ?? null}
                   velocity={(opp as any)._velocity ?? null}
                   onClick={() => onCardClick(opp)}
+                  companies={companiesByOppId[opp.id] ?? []}
                 />
               ))
             )}

@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -21,6 +10,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Loader2, Trash2 } from "lucide-react";
 
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { useOpportunities } from "@/hooks/useOpportunities";
@@ -69,11 +60,13 @@ function toColumnKind(type: CustomFieldType): ColumnDef["kind"] {
 // ---------------------------------------------------------------------------
 
 export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
+  const { profile } = useAuth();
   const { pipelines } = usePipelines();
   const { stages } = usePipelineStagesV2(pipelineId);
   const { opportunities, isLoading, updateOpportunity, bulkDeleteOpportunities } =
     useOpportunities({ pipelineId });
   const { leads, updateLead, deleteLead } = useLeads();
+  const equipeId = profile?.equipe_id;
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -173,11 +166,16 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         editable: false,
       },
       {
-        key: "company_name",
+        key: "company",
         label: "Empresa",
-        kind: "text",
+        kind: "relation" as ColumnKind,
         source: "native",
-        editable: false,
+        editable: true,
+        relation: {
+          table: "companies",
+          displayField: "name",
+          linkTable: "opportunity_links",
+        },
       },
       {
         key: "property_count",
@@ -264,11 +262,6 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         nextContact: null,
       });
 
-      const companyDisplay = summary?.companyName
-        ? summary.companyName +
-          (summary.companyCount > 1 ? ` +${summary.companyCount - 1}` : "")
-        : "";
-
       const row: GridRow = {
         id: opp.id,
         equipe_id: opp.equipe_id,
@@ -277,7 +270,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           lead?.phone,
           "[Novo Contato - WhatsApp]",
         ),
-        company_name: companyDisplay,
+        company: [],
         property_count: summary?.propertyCount ?? 0,
         value: opp.value ?? 0,
         stage_id: opp.stage_id,
@@ -300,6 +293,35 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   // ---- Cell commit --------------------------------------------------------
   const handleCellCommit = useCallback(
     async (m: CellMutation) => {
+      // Sprint 6.7 — opportunity_links relation (companies, properties, etc.)
+      if (m.column.relation?.linkTable === "opportunity_links") {
+        const value = m.value as
+          | { toId: string; label: string; action?: "link" | "remove" }
+          | undefined;
+        if (!value || !equipeId) return;
+
+        if (value.action === "remove" || value.action === "unlink") {
+          // Soft-delete the link row by linked_id
+          await supabase
+            .from("opportunity_links")
+            .update({ deleted_at: new Date().toISOString() })
+            .eq("opportunity_id", m.rowId)
+            .eq("linked_type", "company")
+            .eq("linked_id", value.toId)
+            .eq("equipe_id", equipeId);
+        } else {
+          // Link — insert a new opportunity_links row
+          await supabase.from("opportunity_links").insert({
+            equipe_id: equipeId,
+            opportunity_id: m.rowId,
+            linked_type: "company",
+            linked_id: value.toId,
+            relation: "related",
+          });
+        }
+        return;
+      }
+
       if (m.column.source === "jsonb" && m.column.jsonbField === "custom_data") {
         // Merge into custom_data JSONB
         const opp = opportunities.find((o) => o.id === m.rowId);
@@ -333,7 +355,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         });
       }
     },
-    [updateOpportunity, opportunities],
+    [updateOpportunity, opportunities, equipeId],
   );
 
   // ---- Mass actions -------------------------------------------------------
@@ -422,6 +444,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           onCellCommit={handleCellCommit}
           massActions={massActions}
           loading={isLoading}
+          equipeId={equipeId}
+          fromTable="opportunities"
         />
       </div>
 

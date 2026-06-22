@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   DndContext,
   DragEndEvent,
@@ -27,6 +28,8 @@ import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { useTouchpointCounts } from "@/hooks/useStageTelemetry";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import {
@@ -46,12 +49,14 @@ interface OpportunityKanbanProps {
 }
 
 export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
+  const { profile } = useAuth();
   const { pipelines, updatePipeline } = usePipelines();
   const { stages, isLoading: stagesLoading } = usePipelineStagesV2(pipelineId);
   const { opportunities, isLoading: oppsLoading, updateOpportunity } = useOpportunities({
     pipelineId,
   });
   const { leads, updateLead, deleteLead } = useLeads();
+  const equipeId = profile?.equipe_id;
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -99,6 +104,54 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   const leadIdsForCounts = useMemo(() => Array.from(new Set(localOpps.map((o) => o.lead_id))), [localOpps]);
   const touchpointCounts = useTouchpointCounts(leadIdsForCounts);
+
+  // Sprint 6.7 — batch-fetch company links for all visible opportunities
+  const localOppIds = useMemo(() => localOpps.map((o) => o.id), [localOpps]);
+  const { data: companiesByOppId = {} } = useQuery({
+    queryKey: ["kanban-company-links", localOppIds, equipeId],
+    queryFn: async (): Promise<Record<string, { id: string; name: string }[]>> => {
+      if (!localOppIds.length || !equipeId) return {};
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+
+      const { data: links } = await sb
+        .from("opportunity_links")
+        .select("opportunity_id, linked_id")
+        .in("opportunity_id", localOppIds)
+        .eq("linked_type", "company")
+        .eq("equipe_id", equipeId)
+        .is("deleted_at", null);
+
+      if (!links || links.length === 0) return {};
+
+      const companyIds = [...new Set((links as { linked_id: string }[]).map((l) => l.linked_id))];
+
+      const { data: companies } = await sb
+        .from("companies")
+        .select("id, name")
+        .in("id", companyIds)
+        .is("deleted_at", null);
+
+      const companyMap: Record<string, { id: string; name: string }> = {};
+      if (companies) {
+        for (const c of companies as { id: string; name: string }[]) {
+          companyMap[c.id] = c;
+        }
+      }
+
+      const result: Record<string, { id: string; name: string }[]> = {};
+      for (const link of links as { opportunity_id: string; linked_id: string }[]) {
+        const company = companyMap[link.linked_id];
+        if (!company) continue;
+        if (!result[link.opportunity_id]) result[link.opportunity_id] = [];
+        result[link.opportunity_id].push({ id: company.id, name: company.name });
+      }
+
+      return result;
+    },
+    enabled: localOppIds.length > 0 && !!equipeId,
+  });
 
   const cardFields = useMemo(() => {
     const cardFieldIds = pipeline?.card_field_ids ?? [];
@@ -277,6 +330,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 touchpointCounts={touchpointCounts}
                 nativeFlags={nativeFlags}
                 onCardClick={setSelectedOpp}
+                companiesByOppId={companiesByOppId}
               />
             ))}
           </div>
