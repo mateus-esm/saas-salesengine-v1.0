@@ -26,6 +26,8 @@ import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
+import { ICPScoreBadge } from "./ICPScoreBadge";
+import { VelocityScoreBadge } from "./VelocityScoreBadge";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -60,6 +62,8 @@ interface OpportunityCardProps {
   cardFields: CustomFieldSchema[];   // schema entries whose field_id ∈ pipeline.card_field_ids (already filtered)
   touchpointCount: number;                       // NEW — supplied by parent (batched)
   nativeFlags?: NativeCardFlags;
+  icpScore?: number | null;                      // W3 — ICP score for badge display
+  velocity?: number | null;                      // W3 — Velocity score for badge display
   onClick: () => void;
   isDragOverlay?: boolean;
 }
@@ -131,6 +135,8 @@ export const OpportunityCard = ({
   cardFields,
   touchpointCount,
   nativeFlags = DEFAULT_NATIVE_CARD_FLAGS,
+  icpScore,
+  velocity,
   onClick,
   isDragOverlay,
 }: OpportunityCardProps) => {
@@ -202,6 +208,12 @@ export const OpportunityCard = ({
             </span>
           )}
         </div>
+      </div>
+
+      {/* W3 — ICP + Velocity micro-badges */}
+      <div className="flex items-center gap-1">
+        <ICPScoreBadge score={icpScore ?? null} />
+        <VelocityScoreBadge velocity={velocity ?? null} />
       </div>
 
       {/* Sprint 6.3 T8 — Intent Detected badge: shown only on real cards, not drag overlay */}

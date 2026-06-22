@@ -290,6 +290,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 cardFields={cardFields}
                 touchpointCount={touchpointCounts[activeOpp.lead_id] ?? 0}
                 nativeFlags={nativeFlags}
+                icpScore={(activeOpp as any)._icp_score ?? null}
+                velocity={(activeOpp as any)._velocity ?? null}
                 onClick={() => {}}
                 isDragOverlay
               />

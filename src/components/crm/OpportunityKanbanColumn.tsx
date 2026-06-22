@@ -105,6 +105,8 @@ export const OpportunityKanbanColumn = ({
                   cardFields={cardFields}
                   touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
                   nativeFlags={nativeFlags}
+                  icpScore={(opp as any)._icp_score ?? null}
+                  velocity={(opp as any)._velocity ?? null}
                   onClick={() => onCardClick(opp)}
                 />
               ))

@@ -7,6 +7,8 @@ import type { ColumnDef, CellMutation, GridRow } from "./types";
 import { InlineCell } from "./InlineCell";
 import { MassActionBar, type MassAction } from "./MassActionBar";
 import { useGridSelection } from "./useGridSelection";
+import { ICPScoreBadge } from "../ICPScoreBadge";
+import { VelocityScoreBadge } from "../VelocityScoreBadge";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -53,6 +55,9 @@ export function SpreadsheetGrid({
           <thead>
             <tr className="border-b">
               <th className="w-10 px-2 py-2" />
+              <th className="w-16 px-1 py-2 text-[10px] font-mono text-muted-foreground text-center">
+                ICP Vel
+              </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -70,6 +75,9 @@ export function SpreadsheetGrid({
               <tr key={i} className="border-b">
                 <td className="px-2 py-2">
                   <Skeleton className="h-4 w-4" />
+                </td>
+                <td className="px-1 py-2">
+                  <Skeleton className="h-4 w-14 mx-auto" />
                 </td>
                 {columns.map((col) => (
                   <td key={col.key} className="px-3 py-2">
@@ -106,6 +114,9 @@ export function SpreadsheetGrid({
                   aria-label="Selecionar todos"
                 />
               </th>
+              <th className="w-16 px-1 py-2 text-[10px] font-mono text-muted-foreground text-center">
+                ICP Vel
+              </th>
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -133,7 +144,7 @@ export function SpreadsheetGrid({
           <tbody>
             <tr>
               <td
-                colSpan={columns.length + 1 + (onAddColumn ? 1 : 0)}
+                colSpan={columns.length + 2 + (onAddColumn ? 1 : 0)}
                 className="px-3 py-8 text-center text-sm text-muted-foreground"
               >
                 Nenhum registro encontrado.
@@ -168,6 +179,9 @@ export function SpreadsheetGrid({
                 onCheckedChange={() => toggleAll()}
                 aria-label="Selecionar todos"
               />
+            </th>
+            <th className="w-16 px-1 py-2 text-[10px] font-mono text-muted-foreground text-center">
+              ICP Vel
             </th>
             {columns.map((col) => (
               <th
@@ -207,6 +221,12 @@ export function SpreadsheetGrid({
                   onCheckedChange={() => toggle(row.id)}
                   aria-label={`Selecionar linha ${row.id}`}
                 />
+              </td>
+              <td className="px-1 py-2">
+                <div className="flex items-center gap-1">
+                  <ICPScoreBadge score={(row._icp_score as number | null) ?? null} />
+                  <VelocityScoreBadge velocity={(row._velocity as number | null) ?? null} />
+                </div>
               </td>
               {columns.map((col) => {
                 const value = row[col.key];
