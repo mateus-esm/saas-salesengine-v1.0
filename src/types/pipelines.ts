@@ -67,6 +67,8 @@ export interface Pipeline {
   description: string | null;
   /** Sprint 5.2 - null = cadence automation disabled; positive integer = follow-up days. */
   cadence_days: number | null;
+  /** Sprint 6.7: ICP weight config. Array of {field_key, weight, target_value, label}. */
+  icp_weights: Array<{field_key: string; weight: number; target_value: string; label?: string}>;
   custom_fields_schema: CustomFieldSchema[];
   card_field_ids: string[];        // which custom fields show on Kanban cards
   is_archived: boolean;

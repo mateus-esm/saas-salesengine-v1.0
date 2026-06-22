@@ -132,8 +132,44 @@ async def get_icp_score(
     lead_id: str,
     ctx: Annotated[TenantContext, Depends(get_tenant_context)],
 ) -> dict:
-    """Stub: returns 404 until Task 3.5 implements the real ICP scoring engine."""
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="ICP profile not found",
+    """Return ICP score + field-level breakdown for the given lead.
+
+    Formula: I = (Sigma Wi x Vi) x 100, weights normalized, Vi in [0,1].
+    Delegates to PL/pgSQL fn_calculate_icp_score.
+
+    Tenant-scoped: raises 404 if the lead does not belong to the caller's
+    equipe_id.
+    """
+    client = get_service_client()
+
+    # 1. Verify lead exists and is owned by this tenant.
+    lead_resp = (
+        client.table("leads")
+        .select("id")
+        .eq("id", lead_id)
+        .eq("equipe_id", ctx.equipe_id)
+        .limit(1)
+        .execute()
     )
+    lead_data = getattr(lead_resp, "data", None) or []
+    if not lead_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lead not found",
+        )
+
+    # 2. Call the PL/pgSQL scoring function.
+    result = client.rpc(
+        "fn_calculate_icp_score", {"p_lead_id": lead_id}
+    ).execute()
+    rows = getattr(result, "data", None) or []
+
+    if not rows:
+        return {"lead_id": lead_id, "score": 0, "breakdown": []}
+
+    row = rows[0]
+    return {
+        "lead_id": lead_id,
+        "score": row.get("score", 0),
+        "breakdown": row.get("breakdown", []),
+    }
