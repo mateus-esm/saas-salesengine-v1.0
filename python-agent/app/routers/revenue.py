@@ -8,7 +8,6 @@ All endpoints are tenant-scoped via the authenticated user's equipe_id.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,21 +18,7 @@ from app.security import TenantContext
 
 router = APIRouter(prefix="/revenue", tags=["revenue"])
 
-# ── constants ──────────────────────────────────────────────────────────────
-
-DECAY_FACTOR = 2.0
-ACTIVITY_POINTS = 10
-
-
 # ── helpers (pure functions, testable without DB) ──────────────────────────
-
-
-def _compute_velocity(activity_count: int, days_since_last: int) -> float:
-    """Lead-velocity formula: S = (n * ACTIVITY_POINTS) - (DECAY_FACTOR * t).
-
-    Never returns below 0.0 (floor guard).
-    """
-    return max(0.0, (activity_count * ACTIVITY_POINTS) - (DECAY_FACTOR * days_since_last))
 
 
 def _compute_trend(velocity: float) -> str:
@@ -48,28 +33,6 @@ def _compute_trend(velocity: float) -> str:
     if velocity < 5:
         return "down"
     return "flat"
-
-
-def _days_since(dt_str: str | None, *, now: datetime | None = None) -> int:
-    """Compute whole days elapsed between *dt_str* (ISO-8601 UTC) and *now*.
-
-    When *now* is None (default) the current UTC wall-clock time is used.
-    Returns 0 when *dt_str* is None or unparseable.
-    """
-    if not dt_str:
-        return 0
-
-    try:
-        dt = datetime.fromisoformat(dt_str)
-    except (ValueError, TypeError):
-        return 0
-
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-
-    if now is None:
-        now = datetime.now(timezone.utc)
-    return max(0, (now - dt).days)
 
 
 # ── endpoints ──────────────────────────────────────────────────────────────

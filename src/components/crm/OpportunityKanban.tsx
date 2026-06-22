@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { useLeads } from "@/hooks/useLeads";
+import { useLeadScores } from "@/hooks/useLeadScores";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -104,6 +105,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   const leadIdsForCounts = useMemo(() => Array.from(new Set(localOpps.map((o) => o.lead_id))), [localOpps]);
   const touchpointCounts = useTouchpointCounts(leadIdsForCounts);
+  const { scores: leadScores } = useLeadScores(leadIdsForCounts);
 
   // Sprint 6.7 — batch-fetch company links for all visible opportunities
   const localOppIds = useMemo(() => localOpps.map((o) => o.id), [localOpps]);
@@ -195,6 +197,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     const map: Record<string, Opportunity[]> = {};
     orderedStages.forEach((s) => (map[s.id] = []));
     for (const o of localOpps) {
+      // Attach ICP/velocity scores for badge rendering
+      const s = leadScores[o.lead_id];
+      (o as Record<string, unknown>)._icp_score = s?.icpScore ?? null;
+      (o as Record<string, unknown>)._velocity = s?.velocity ?? null;
       if (map[o.stage_id]) map[o.stage_id].push(o);
     }
     // Sort each column by position to keep visual order stable.
@@ -202,7 +208,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
       map[key].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
     }
     return map;
-  }, [localOpps, orderedStages]);
+  }, [localOpps, orderedStages, leadScores]);
 
   // Sprint 5.1 §5.2 — paddle-shifter siblings: the open card's own column, in view order.
   const siblingsForSelected = useMemo(

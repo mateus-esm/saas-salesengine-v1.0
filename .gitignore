@@ -39,3 +39,6 @@ __pycache__/
 
 # Supabase CLI local state (machine-specific; not source)
 supabase/.temp/
+
+# Vite temp config artifacts
+vite.config.ts.timestamp-*

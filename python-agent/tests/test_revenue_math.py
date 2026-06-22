@@ -240,10 +240,22 @@ FAKE_CTX = TenantContext(equipe_id=EQUIPE_ID, actor_user_id="u1", role="admin")
 def _compute_expected_velocity(
     activity_count: int, last_date_str: str | None,
 ) -> float:
-    """Compute what the API *should* return given today's actual date."""
-    from app.routers.revenue import _compute_velocity, _days_since
+    """Compute what the API *should* return given today's actual date.
 
-    return _compute_velocity(activity_count, _days_since(last_date_str))
+    Velocity is computed by PL/pgSQL fn_calculate_lead_velocity, not Python.
+    This helper is only used to verify floor-at-zero behavior.
+    """
+    if not last_date_str:
+        return 0.0
+    try:
+        dt = datetime.fromisoformat(last_date_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        days = (datetime.now(timezone.utc) - dt).days
+        raw = (activity_count * 10) - (2.0 * days)
+        return max(0.0, raw)
+    except (ValueError, TypeError):
+        return 0.0
 
 
 class _Response:

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
   Select,
@@ -14,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
+import { useLeadScores } from "@/hooks/useLeadScores";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -67,6 +69,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     useOpportunities({ pipelineId });
   const { leads, updateLead, deleteLead } = useLeads();
   const equipeId = profile?.equipe_id;
+  const queryClient = useQueryClient();
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
@@ -143,6 +146,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   );
 
   const { data: entitySummary = {} } = useLeadEntitySummary(rowLeadIds);
+  const { scores: leadScores } = useLeadScores(rowLeadIds);
 
   // ---- Column definitions -------------------------------------------------
   const stageOptions = useMemo(
@@ -286,9 +290,14 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         row[field.field_id] = customData[field.field_id] ?? null;
       }
 
+      // Attach ICP/velocity scores for badge rendering
+      const s = opp.lead_id ? leadScores[opp.lead_id] : undefined;
+      row._icp_score = s?.icpScore ?? null;
+      row._velocity = s?.velocity ?? null;
+
       return row;
     });
-  }, [filteredOpps, leadsById, stagesById, entitySummary, touchpointCounts, schema]);
+  }, [filteredOpps, leadsById, stagesById, entitySummary, touchpointCounts, schema, leadScores]);
 
   // ---- Cell commit --------------------------------------------------------
   const handleCellCommit = useCallback(
@@ -319,6 +328,10 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             relation: "related",
           });
         }
+        // Invalidate relation cache so chips refresh immediately
+        queryClient.invalidateQueries({
+          queryKey: ["relation", "opp_links", m.rowId],
+        });
         return;
       }
 
@@ -355,7 +368,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         });
       }
     },
-    [updateOpportunity, opportunities, equipeId],
+    [updateOpportunity, opportunities, equipeId, queryClient],
   );
 
   // ---- Mass actions -------------------------------------------------------
