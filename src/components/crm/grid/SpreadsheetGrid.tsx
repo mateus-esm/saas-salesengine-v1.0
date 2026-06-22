@@ -21,6 +21,8 @@ export interface SpreadsheetGridProps {
   massActions: MassAction[];
   onAddColumn?: () => void;
   loading?: boolean;
+  equipeId?: string;
+  fromTable?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +36,8 @@ export function SpreadsheetGrid({
   massActions,
   onAddColumn,
   loading = false,
+  equipeId,
+  fromTable,
 }: SpreadsheetGridProps) {
   const allIds = rows.map((r) => r.id);
   const { selectedIds, isSelected, toggle, toggleAll, clear, count } =
@@ -237,6 +241,8 @@ export function SpreadsheetGrid({
                       column={col}
                       value={value}
                       onCommit={handleCellCommit(row, col)}
+                      equipeId={equipeId}
+                      fromTable={fromTable}
                     />
                   </td>
                 );

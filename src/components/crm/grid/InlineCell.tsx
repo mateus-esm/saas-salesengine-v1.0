@@ -8,6 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RelationChip } from "./RelationChip";
+import { RelationPicker } from "./RelationPicker";
+import { useRelationResolver } from "@/hooks/useRelationResolver";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -18,6 +21,8 @@ export interface InlineCellProps {
   column: ColumnDef;
   value: unknown;
   onCommit: (value: unknown) => void;
+  equipeId?: string;
+  fromTable?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -36,15 +41,34 @@ function toDateInputValue(value: unknown): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export function InlineCell({ row, column, value, onCommit }: InlineCellProps) {
+export function InlineCell({
+  row,
+  column,
+  value,
+  onCommit,
+  equipeId,
+  fromTable,
+}: InlineCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const committedRef = useRef(false);
 
   const handler = getHandler(column.kind);
   const displayText = handler.format(value, column);
   const canEdit = column.editable !== false;
+
+  // Resolve relation links (gated: query won't fire without valid context)
+  const relContext =
+    column.kind === "relation" && equipeId && fromTable
+      ? { fromTable, equipeId }
+      : { fromTable: "", equipeId: "" };
+  const { links, loading: linksLoading } = useRelationResolver(
+    column,
+    row.id,
+    relContext,
+  );
 
   // -- Enter edit mode on double-click ------------------------------------
   const handleDoubleClick = useCallback(() => {
@@ -88,6 +112,24 @@ export function InlineCell({ row, column, value, onCommit }: InlineCellProps) {
     },
     [commit],
   );
+
+  // -- Relation display (non-editing) -------------------------------------
+  if (column.kind === "relation" && !isEditing) {
+    const chips = Array.isArray(value)
+      ? (value as { toId: string; label: string }[])
+      : [];
+    return (
+      <div className="flex h-8 w-full items-center gap-1 px-1 text-sm overflow-hidden">
+        {chips.length > 0 ? (
+          chips.map((chip) => (
+            <RelationChip key={chip.toId} label={chip.label} />
+          ))
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        )}
+      </div>
+    );
+  }
 
   // -- Display-only (non-editable) ---------------------------------------
   if (!canEdit) {
@@ -134,16 +176,43 @@ export function InlineCell({ row, column, value, onCommit }: InlineCellProps) {
       );
     }
 
-    // Relation kind → placeholder button
+    // Relation kind → chips + picker
     if (column.kind === "relation") {
+      const handlePick = (toId: string, label: string) => {
+        onCommit({ toId, label });
+        setIsEditing(false);
+      };
+
+      const handleRemove = (linkToId: string) => {
+        onCommit({ toId: linkToId, action: "remove" });
+      };
+
       return (
-        <div className="flex h-8 w-full items-center px-3 text-sm">
+        <div className="flex h-8 w-full items-center gap-1 px-1 text-sm overflow-hidden">
+          {linksLoading ? (
+            <span className="text-muted-foreground text-xs">
+              Carregando...
+            </span>
+          ) : links.length > 0 ? (
+            links.map((link) => (
+              <RelationChip
+                key={link.toId}
+                label={link.label}
+                onRemove={() => handleRemove(link.toId)}
+              />
+            ))
+          ) : null}
+          <RelationPicker
+            column={column}
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            onPick={handlePick}
+            equipeId={equipeId ?? ""}
+          />
           <button
             type="button"
-            onClick={() => {
-              // TODO(W2): relation picker
-            }}
-            className="text-muted-foreground underline hover:text-foreground"
+            onClick={() => setPickerOpen(true)}
+            className="text-muted-foreground underline hover:text-foreground text-xs shrink-0"
           >
             Vincular...
           </button>
