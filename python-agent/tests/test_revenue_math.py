@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.deps import get_tenant_context
+from app.routers.forecast import router as forecast_router
 from app.routers.revenue import router
 from app.security import TenantContext
 
@@ -520,6 +521,187 @@ class TestIcpScoreEndpoint:
 
         assert resp.status_code == 404
         assert resp.json()["detail"] == "Lead not found"
+
+
+# ── forecast endpoint tests ─────────────────────────────────────────────────
+
+PIPELINE_ID = "pipe-forecast-1"
+UNKNOWN_PIPELINE_ID = "pipe-nonexistent"
+
+STAGE_A_ID = "stage-a"
+STAGE_B_ID = "stage-b"
+
+RATES_ROWS = [
+    {"stage_id": STAGE_A_ID, "stage_name": "Discovery", "position": 1, "conversion_rate": 0.5},
+    {"stage_id": STAGE_B_ID, "stage_name": "Proposal", "position": 2, "conversion_rate": 0.5},
+]
+
+
+def _make_forecast_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(forecast_router, prefix="/api/v1")
+    app.dependency_overrides[get_tenant_context] = lambda: FAKE_CTX
+    return app
+
+
+class TestForecastEndpoint:
+    """Sprint 6.7 — pipeline forecast endpoint."""
+
+    def test_forecast_required_inbound(self, monkeypatch):
+        """goal=10, two stages at 0.5 each -> required_inbound = 10 / 0.25 = 40."""
+        tables = {
+            "pipelines": [
+                {"id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "revenue_config": {"goal_deals": 10}},
+            ],
+            "opportunities": [],
+        }
+        rpc_results = {
+            "fn_stage_conversion_rates": RATES_ROWS,
+        }
+        fake = _FakeClient(tables, rpc_results=rpc_results)
+        monkeypatch.setattr(
+            "app.routers.forecast.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_forecast_app())
+        resp = client.get(f"/api/v1/revenue/forecast/{PIPELINE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["pipeline_id"] == PIPELINE_ID
+        assert body["goal_deals"] == 10
+        assert body["required_inbound"] == 40
+
+    def test_forecast_with_manual_overrides(self, monkeypatch):
+        """Override stage B to 1.0 -> cumulative = 0.5 * 1.0 = 0.5 -> 10 / 0.5 = 20."""
+        tables = {
+            "pipelines": [
+                {
+                    "id": PIPELINE_ID,
+                    "equipe_id": EQUIPE_ID,
+                    "revenue_config": {
+                        "goal_deals": 10,
+                        "conversion_overrides": {STAGE_B_ID: 1.0},
+                    },
+                },
+            ],
+            "opportunities": [],
+        }
+        rpc_results = {
+            "fn_stage_conversion_rates": RATES_ROWS,
+        }
+        fake = _FakeClient(tables, rpc_results=rpc_results)
+        monkeypatch.setattr(
+            "app.routers.forecast.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_forecast_app())
+        resp = client.get(f"/api/v1/revenue/forecast/{PIPELINE_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["required_inbound"] == 20
+        # Stage B should show source="manual"
+        stage_b = [r for r in body["conversion_rates"] if r["stage_id"] == STAGE_B_ID][0]
+        assert stage_b["source"] == "manual"
+        assert stage_b["rate"] == 1.0
+
+    def test_forecast_placar_counts_correctly(self, monkeypatch):
+        """Placar counts won=2, open=3 from opportunities."""
+        tables = {
+            "pipelines": [
+                {"id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "revenue_config": {"goal_deals": 5}},
+            ],
+            "opportunities": [
+                {"id": "opp-1", "pipeline_id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "status": "won"},
+                {"id": "opp-2", "pipeline_id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "status": "won"},
+                {"id": "opp-3", "pipeline_id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "status": "open"},
+                {"id": "opp-4", "pipeline_id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "status": "open"},
+                {"id": "opp-5", "pipeline_id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "status": "open"},
+                {"id": "opp-6", "pipeline_id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "status": "lost"},
+            ],
+        }
+        rpc_results = {
+            "fn_stage_conversion_rates": RATES_ROWS,
+        }
+        fake = _FakeClient(tables, rpc_results=rpc_results)
+        monkeypatch.setattr(
+            "app.routers.forecast.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_forecast_app())
+        resp = client.get(f"/api/v1/revenue/forecast/{PIPELINE_ID}")
+
+        assert resp.status_code == 200
+        placar = resp.json()["placar"]
+        assert placar["closed"] == 2
+        assert placar["in_progress"] == 3
+        assert placar["goal"] == 5
+
+    def test_forecast_returns_404_for_unknown_pipeline(self, monkeypatch):
+        """Pipeline ID not found -> 404."""
+        tables = {
+            "pipelines": [],
+            "opportunities": [],
+        }
+        fake = _FakeClient(tables)
+        monkeypatch.setattr(
+            "app.routers.forecast.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_forecast_app())
+        resp = client.get(f"/api/v1/revenue/forecast/{UNKNOWN_PIPELINE_ID}")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Pipeline not found"
+
+    def test_forecast_returns_404_for_other_tenant_pipeline(self, monkeypatch):
+        """Pipeline belongs to another equipe -> 404 (tenant-scoped)."""
+        tables = {
+            "pipelines": [
+                {"id": PIPELINE_ID, "equipe_id": OTHER_EQUIPE_ID, "revenue_config": {}},
+            ],
+            "opportunities": [],
+        }
+        fake = _FakeClient(tables)
+        monkeypatch.setattr(
+            "app.routers.forecast.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_forecast_app())
+        resp = client.get(f"/api/v1/revenue/forecast/{PIPELINE_ID}")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Pipeline not found"
+
+    def test_forecast_no_goal_returns_zero_required(self, monkeypatch):
+        """goal_deals=0 (or missing) -> required_inbound = 0."""
+        tables = {
+            "pipelines": [
+                {"id": PIPELINE_ID, "equipe_id": EQUIPE_ID, "revenue_config": {}},
+            ],
+            "opportunities": [],
+        }
+        rpc_results = {
+            "fn_stage_conversion_rates": RATES_ROWS,
+        }
+        fake = _FakeClient(tables, rpc_results=rpc_results)
+        monkeypatch.setattr(
+            "app.routers.forecast.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_forecast_app())
+        resp = client.get(f"/api/v1/revenue/forecast/{PIPELINE_ID}")
+
+        assert resp.status_code == 200
+        assert resp.json()["goal_deals"] == 0
+        assert resp.json()["required_inbound"] == 0
 
 
 if __name__ == "__main__":
