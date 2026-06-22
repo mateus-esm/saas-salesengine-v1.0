@@ -14,7 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Zap } from "lucide-react";
+import { Loader2, Zap } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,16 +23,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCopilotSync, type HudEvent } from "@/hooks/useCopilotSync";
 import { useCopilotSweep } from "@/hooks/useCopilotSweep";
@@ -65,7 +55,7 @@ export function SyncButton({
   const single = useCopilotSync();
   const sweepHook = useCopilotSweep();
   const [hudOpen, setHudOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSweep, setPendingSweep] = useState(false);
 
   const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
   const running = mode === "sweep" ? sweepHook.running : single.running;
@@ -111,15 +101,15 @@ export function SyncButton({
 
   const runSweep = () => {
     if (!pipelineId) return;
-    hasToasted.current = false; // reset so the next run can toast again
-    setConfirmOpen(false);
-    setHudOpen(true);
+    hasToasted.current = false;
+    setPendingSweep(false);
     void sweepHook.start(pipelineId);
   };
 
   const onClick = () => {
     if (!enabled) return;
-    if (mode === "sweep") setConfirmOpen(true);
+    setHudOpen(true);
+    if (mode === "sweep") setPendingSweep(true);
     else runSingle();
   };
 
@@ -157,22 +147,23 @@ export function SyncButton({
         </Tooltip>
       </TooltipProvider>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Sincronizar o pipeline inteiro?</AlertDialogTitle>
-            <AlertDialogDescription>
+      {/* In-sheet confirmation for sweep mode — non-blocking, inline */}
+      {pendingSweep && (
+        <div className="fixed right-4 top-20 z-50 w-[min(420px,calc(100vw-2rem))] rounded-lg border border-border bg-background p-4 shadow-2xl">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <div className="flex-1 text-sm">
               {sweepEstimate != null
-                ? `Isto irá avaliar ${sweepEstimate} oportunidade(s) abertas. Cada ação aplicada consome 1 crédito.`
-                : "Isto irá avaliar todas as oportunidades abertas. Cada ação aplicada consome 1 crédito."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={runSweep}>Sincronizar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                ? `Avaliar ${sweepEstimate} oportunidade(s) abertas?`
+                : "Avaliar todas as oportunidades abertas?"}
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setPendingSweep(false)}>Cancelar</Button>
+            <Button size="sm" onClick={runSweep}>Sincronizar</Button>
+          </div>
+        </div>
+      )}
 
       <TelemetryHUD
         open={hudOpen}
