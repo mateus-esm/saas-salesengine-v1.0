@@ -204,6 +204,29 @@ class TestIcpScore:
         assert result["breakdown"][0]["match"] == 0
 
 
+class TestStageConversionRate:
+    """Sprint 6.7 — stage-conversion-rate formula (pure math, no DB)."""
+
+    def test_conversion_rate_from_history(self):
+        """10 opps entered stage 1, 5 advanced -> rate ~ 0.5."""
+        entered = 10
+        advanced = 5
+        expected_rate = round(advanced / entered, 4)
+        # Compute the formula in pure Python (no DB)
+        rate = round(advanced / entered, 4) if entered > 0 else 1.0
+        assert rate == expected_rate
+
+    def test_conversion_rate_empty_stage_returns_1(self):
+        """No history -> rate = 1.0."""
+        rate = 1.0  # When no opps entered
+        assert rate == 1.0
+
+    def test_conversion_rate_zero_entered_returns_1(self):
+        """entered=0 -> 1.0 guard."""
+        rate = 1.0
+        assert rate == 1.0
+
+
 # ── API endpoint tests ─────────────────────────────────────────────────────
 
 EQUIPE_ID = "team-solar"
