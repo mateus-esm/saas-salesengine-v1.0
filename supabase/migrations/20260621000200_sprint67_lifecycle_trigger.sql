@@ -59,7 +59,8 @@ COMMENT ON FUNCTION public.fn_advance_lifecycle IS
   'Sprint 6.7: rule-based lifecycle advancement. raw->mql (email+enrichment), mql->sql (opportunity+velocity>=10). Never auto-downgrades.';
 
 -- Attach trigger: fires BEFORE INSERT or when relevant columns update
-CREATE TRIGGER trg_advance_lifecycle
+-- (idempotent: replaces an existing trigger of the same name)
+CREATE OR REPLACE TRIGGER trg_advance_lifecycle
   BEFORE INSERT OR UPDATE OF email, personal_custom_data, lifecycle_stage
   ON public.leads
   FOR EACH ROW

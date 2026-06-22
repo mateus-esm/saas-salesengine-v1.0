@@ -1,6 +1,6 @@
 BEGIN;
 CREATE OR REPLACE FUNCTION public.fn_stage_conversion_rates(p_pipeline_id UUID)
-RETURNS TABLE(stage_id UUID, stage_name TEXT, position INT, conversion_rate NUMERIC)
+RETURNS TABLE(stage_id UUID, stage_name TEXT, stage_position INT, conversion_rate NUMERIC)
 LANGUAGE plpgsql
 STABLE
 AS $$
@@ -20,7 +20,7 @@ BEGIN
   SELECT
     s.id AS stage_id,
     s.name::TEXT AS stage_name,
-    s.position::INT,
+    s.position::INT AS stage_position,
     CASE
       WHEN entered.count = 0 THEN 1.0
       ELSE ROUND(COALESCE(advanced.count, 0)::NUMERIC / entered.count, 4)

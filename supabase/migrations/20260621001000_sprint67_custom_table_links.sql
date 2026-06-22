@@ -15,6 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_ctl_to   ON public.custom_table_links (equipe_id,
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ctl_edge ON public.custom_table_links (equipe_id, from_table, from_id, to_table, to_id, relation_key) WHERE deleted_at IS NULL;
 ALTER TABLE public.custom_table_links ENABLE ROW LEVEL SECURITY;
 -- RLS: equipe_id must match caller's profile equipe_id (copy EXACT pattern from foundations migration)
+DROP POLICY IF EXISTS "tenant_isolation_custom_table_links" ON public.custom_table_links;
 CREATE POLICY "tenant_isolation_custom_table_links"
   ON public.custom_table_links
   FOR ALL

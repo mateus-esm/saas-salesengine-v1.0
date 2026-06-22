@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.agenda_events (
 );
 CREATE INDEX IF NOT EXISTS idx_agenda_events_range ON public.agenda_events (equipe_id, starts_at) WHERE deleted_at IS NULL;
 ALTER TABLE public.agenda_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation_agenda_events" ON public.agenda_events;
 CREATE POLICY "tenant_isolation_agenda_events"
   ON public.agenda_events
   FOR ALL
