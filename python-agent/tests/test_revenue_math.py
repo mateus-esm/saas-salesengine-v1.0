@@ -535,6 +535,102 @@ class TestIcpScoreEndpoint:
         assert resp.json()["detail"] == "Lead not found"
 
 
+class TestLeadScoreEndpoint:
+    """Sprint 6.8 — revenue API lead-score endpoint (0-10 combined score)."""
+
+    def test_lead_score_combines_icp_and_velocity(self, monkeypatch):
+        """ICP=70, velocity=15 -> score=7 with correct breakdown contributions."""
+        icp_rows = [
+            {"score": 70.0, "breakdown": []},
+        ]
+        vel_rows = [
+            {"fn_calculate_lead_velocity": 15.0},
+        ]
+        fake = _FakeClient(
+            {"leads": [{"id": LEAD_ID, "equipe_id": EQUIPE_ID}]},
+            rpc_results={
+                "fn_calculate_icp_score": icp_rows,
+                "fn_calculate_lead_velocity": vel_rows,
+            },
+        )
+        monkeypatch.setattr(
+            "app.routers.revenue.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/revenue/lead-score/{LEAD_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["lead_id"] == LEAD_ID
+        assert body["score"] == 7
+        assert body["breakdown"] == [
+            {"label": "Perfil Ideal (ICP)", "contribution": 4.9},
+            {"label": "Engajamento", "contribution": 2.25},
+        ]
+
+    def test_lead_score_zero_when_no_signal(self, monkeypatch):
+        """ICP=0, velocity=0 -> score=0 with 'Sem dados suficientes' breakdown."""
+        icp_rows = [
+            {"score": 0, "breakdown": []},
+        ]
+        vel_rows = [
+            {"fn_calculate_lead_velocity": 0.0},
+        ]
+        fake = _FakeClient(
+            {"leads": [{"id": LEAD_ID, "equipe_id": EQUIPE_ID}]},
+            rpc_results={
+                "fn_calculate_icp_score": icp_rows,
+                "fn_calculate_lead_velocity": vel_rows,
+            },
+        )
+        monkeypatch.setattr(
+            "app.routers.revenue.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/revenue/lead-score/{LEAD_ID}")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["score"] == 0
+        assert body["breakdown"] == [
+            {"label": "Sem dados suficientes", "contribution": 0},
+        ]
+
+    def test_lead_score_returns_404_for_unknown_lead(self, monkeypatch):
+        """Lead not found -> 404."""
+        fake = _FakeClient({"leads": []})
+        monkeypatch.setattr(
+            "app.routers.revenue.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/revenue/lead-score/{UNKNOWN_LEAD_ID}")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Lead not found"
+
+    def test_lead_score_returns_404_for_other_tenant_lead(self, monkeypatch):
+        """Lead belongs to another equipe -> 404 (tenant-scoped)."""
+        fake = _FakeClient(
+            {"leads": [{"id": LEAD_ID, "equipe_id": OTHER_EQUIPE_ID}]},
+        )
+        monkeypatch.setattr(
+            "app.routers.revenue.get_service_client",
+            lambda: fake,
+        )
+
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/revenue/lead-score/{LEAD_ID}")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Lead not found"
+
+
 # ── forecast endpoint tests ─────────────────────────────────────────────────
 
 PIPELINE_ID = "pipe-forecast-1"
