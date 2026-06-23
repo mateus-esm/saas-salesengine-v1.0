@@ -16,30 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AUTONOMY_OPTIONS } from "@/types/copilot";
 import type { AutonomyMode, CopilotAgent } from "@/types/copilot";
-
-// Each autonomy mode gets a one-line PT-BR helper text.
-const AUTONOMY_OPTIONS: {
-  value: AutonomyMode;
-  label: string;
-  helper: string;
-}[] = [
-  {
-    value: "observe",
-    label: "Observar",
-    helper: "Observa e propõe, não escreve",
-  },
-  {
-    value: "suggest",
-    label: "Sugerir",
-    helper: "Prepara a ação e pede sua aprovação",
-  },
-  {
-    value: "autonomous",
-    label: "Autônomo",
-    helper: "Age sozinho (pausa só em ações de alto risco)",
-  },
-];
 
 export interface CopilotConfigCardProps {
   /** Existing agent row (may be partial / empty if not yet saved) */

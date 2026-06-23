@@ -27,30 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ControlRoom } from "@/components/crm/copilot/ControlRoom";
 import { RevenueGoalsForm } from "@/components/crm/revenue/RevenueGoalsForm";
 import type { Pipeline } from "@/types/pipelines";
+import { AUTONOMY_OPTIONS } from "@/types/copilot";
 import type { AutonomyMode, CopilotAgent } from "@/types/copilot";
-
-// ── Autonomy dial options (same labels as CopilotConfigCard) ────
-const AUTONOMY_OPTIONS: {
-  value: AutonomyMode;
-  label: string;
-  helper: string;
-}[] = [
-  {
-    value: "observe",
-    label: "Observar",
-    helper: "Observa e propõe, não escreve",
-  },
-  {
-    value: "suggest",
-    label: "Sugerir",
-    helper: "Prepara a ação e pede sua aprovação",
-  },
-  {
-    value: "autonomous",
-    label: "Autônomo",
-    helper: "Age sozinho (pausa só em ações de alto risco)",
-  },
-];
 
 // ── Props ───────────────────────────────────────────────────────
 interface PipelineAgentViewProps {
