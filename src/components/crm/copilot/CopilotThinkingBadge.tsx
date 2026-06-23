@@ -5,13 +5,8 @@
 // with expand-to-detail capability via a non-blocking Popover.
 
 import { useMemo, useState } from "react";
-import { ChevronDown, Brain } from "lucide-react";
+import { Brain } from "lucide-react";
 
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Popover,
   PopoverContent,
@@ -25,14 +20,16 @@ import type { HudEvent } from "@/hooks/useCopilotSync";
 export interface CopilotThinkingBadgeProps {
   events: HudEvent[];
   running: boolean;
+  /** Optional callback to open the full TelemetryHUD detail Sheet. */
+  onShowDetails?: () => void;
 }
 
 export function CopilotThinkingBadge({
   events,
   running,
+  onShowDetails,
 }: CopilotThinkingBadgeProps): JSX.Element | null {
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [techOpen, setTechOpen] = useState(false);
 
   // Filter events through humanizeEvent, skipping suppressed ones.
   const visibleEvents = useMemo(() => {
@@ -147,30 +144,16 @@ export function CopilotThinkingBadge({
           </ScrollArea>
         )}
 
-        {/* Ver detalhes tecnicos collapsible */}
-        {visibleEvents.length > 0 && (
+        {/* Ver detalhes técnicos — opens TelemetryHUD Sheet */}
+        {onShowDetails && (
           <div className="border-t border-border px-4 py-2">
-            <Collapsible open={techOpen} onOpenChange={setTechOpen}>
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <ChevronDown
-                    className={cn(
-                      "h-3 w-3 transition-transform",
-                      techOpen && "rotate-180",
-                    )}
-                  />
-                  ver detalhes tecnicos
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-2 text-[10px] leading-relaxed text-muted-foreground">
-                  {visibleEvents.map((e) => e.humanized.technical).join("\n---\n")}
-                </pre>
-              </CollapsibleContent>
-            </Collapsible>
+            <button
+              type="button"
+              onClick={onShowDetails}
+              className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              Ver detalhes técnicos
+            </button>
           </div>
         )}
       </PopoverContent>

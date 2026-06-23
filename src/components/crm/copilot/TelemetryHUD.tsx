@@ -4,6 +4,9 @@
 // Sprint 6.3 - Epic 1: converted from blocking Dialog to non-blocking right
 //   Sheet drawer (modal={false}, no overlay, run persists on close).
 // Sprint 6.5 - T4: compact fast telemetry panel with readable queue cards.
+// Sprint 6.8 - T2.4: secondary detail view; primary indicator is now
+//   CopilotThinkingBadge. Accessible via "Ver detalhes técnicos" in the
+//   badge's popover.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Minus, X } from "lucide-react";

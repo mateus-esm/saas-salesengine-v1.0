@@ -1,6 +1,7 @@
 // src/components/crm/copilot/SyncButton.tsx
 //
 // Sprint 6.1 · EPIC E · E1 — the ubiquitous ⚡ Sync button.
+// Sprint 6.8 · Task 2.4 — non-blocking readable live sync via CopilotThinkingBadge.
 //
 // One component, three surfaces:
 //   • variant="card"   — compact ⚡ icon on the Kanban card face
@@ -8,13 +9,16 @@
 //   • variant="header" — labeled "Sincronizar Pipeline" (sweep) in the pipeline header
 //
 // mode="single" runs one lead/opportunity via SSE (useCopilotSync); mode="sweep"
-// runs the whole pipeline via Realtime (useCopilotSweep) behind a credit-cost
-// confirmation. Both render the shared TelemetryHUD. The button is disabled with
-// a tooltip when the team's "Agente de CRM" (is_crm_agent_enabled) toggle is off.
+// runs the whole pipeline via Realtime (useCopilotSweep) immediately (no
+// confirmation — the CopilotThinkingBadge appears with "Analisando..." within
+// 300 ms). The badge is the primary live sync indicator; the TelemetryHUD Sheet
+// is accessible via "Ver detalhes técnicos" inside the badge's popover.
+// The button is disabled with a tooltip when the team's "Agente de CRM"
+// (is_crm_agent_enabled) toggle is off.
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +31,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCopilotSync, type HudEvent } from "@/hooks/useCopilotSync";
 import { useCopilotSweep } from "@/hooks/useCopilotSweep";
 import { TelemetryHUD } from "@/components/crm/copilot/TelemetryHUD";
+import { CopilotThinkingBadge } from "@/components/crm/copilot/CopilotThinkingBadge";
 
 export interface SyncButtonProps {
   leadId?: string;
@@ -34,7 +39,7 @@ export interface SyncButtonProps {
   pipelineId?: string;
   mode: "single" | "sweep";
   variant?: "card" | "chat" | "header";
-  /** Estimated open-opportunity count, shown in the sweep confirmation. */
+  /** Estimated open-opportunity count. (deprecated — no longer used) */
   sweepEstimate?: number;
   className?: string;
 }
@@ -45,7 +50,6 @@ export function SyncButton({
   pipelineId,
   mode,
   variant = "card",
-  sweepEstimate,
   className,
 }: SyncButtonProps) {
   const { equipe } = useAuth();
@@ -55,7 +59,6 @@ export function SyncButton({
   const single = useCopilotSync();
   const sweepHook = useCopilotSweep();
   const [hudOpen, setHudOpen] = useState(false);
-  const [pendingSweep, setPendingSweep] = useState(false);
 
   const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
   const running = mode === "sweep" ? sweepHook.running : single.running;
@@ -90,7 +93,6 @@ export function SyncButton({
   const runSingle = () => {
     if (!leadId) return;
     hasToasted.current = false; // reset so the next run can toast again
-    setHudOpen(true);
     // useCopilotSync expects snake_case query keys.
     void single.start({
       lead_id: leadId,
@@ -102,14 +104,12 @@ export function SyncButton({
   const runSweep = () => {
     if (!pipelineId) return;
     hasToasted.current = false;
-    setPendingSweep(false);
     void sweepHook.start(pipelineId);
   };
 
   const onClick = () => {
     if (!enabled) return;
-    setHudOpen(true);
-    if (mode === "sweep") setPendingSweep(true);
+    if (mode === "sweep") runSweep();
     else runSingle();
   };
 
@@ -136,34 +136,24 @@ export function SyncButton({
 
   return (
     <>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent>
-            {enabled
-              ? "Avaliar e atualizar com o Copilot"
-              : "Ative o Agente de CRM nas configurações da equipe"}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <div className="flex items-center gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent>
+              {enabled
+                ? "Avaliar e atualizar com o Copilot"
+                : "Ative o Agente de CRM nas configurações da equipe"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
-      {/* In-sheet confirmation for sweep mode — non-blocking, inline */}
-      {pendingSweep && (
-        <div className="fixed right-4 top-20 z-50 w-[min(420px,calc(100vw-2rem))] rounded-lg border border-border bg-background p-4 shadow-2xl">
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <div className="flex-1 text-sm">
-              {sweepEstimate != null
-                ? `Avaliar ${sweepEstimate} oportunidade(s) abertas?`
-                : "Avaliar todas as oportunidades abertas?"}
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={() => setPendingSweep(false)}>Cancelar</Button>
-            <Button size="sm" onClick={runSweep}>Sincronizar</Button>
-          </div>
-        </div>
-      )}
+        <CopilotThinkingBadge
+          events={events}
+          running={running}
+          onShowDetails={() => setHudOpen(true)}
+        />
+      </div>
 
       <TelemetryHUD
         open={hudOpen}
