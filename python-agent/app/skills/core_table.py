@@ -170,10 +170,22 @@ class CoreTableSkill:
             if lead is None:
                 return ActionResult(success=False, error="lead_not_found")
 
+            incoming_descricao = _interpolate(content, lead_id=lead_id)
+            normalized_incoming = incoming_descricao.strip().lower()
+
+            existing = self._fetch_many(
+                "lead_activities",
+                {"lead_id": lead_id, "tipo": "note"},
+                "id,descricao",
+            )
+            for note in existing:
+                if note["descricao"].strip().lower() == normalized_incoming:
+                    return ActionResult(success=True, detail={"action": "add_note", "deduped": True})
+
             payload = {
                 "lead_id": lead_id,
                 "tipo": "note",
-                "descricao": _interpolate(content, lead_id=lead_id),
+                "descricao": incoming_descricao,
                 "metadata": {"actor": self.actor},
             }
             if opportunity_id:
