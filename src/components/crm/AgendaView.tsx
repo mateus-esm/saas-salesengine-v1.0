@@ -23,9 +23,13 @@ function roundHour(d: Date, offset: number) {
   return r;
 }
 
+type ViewMode = "day" | "week";
+
 export function AgendaView() {
   const { events, isLoading, createEvent, deleteEvent } = useAgendaEvents();
+  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 0 }));
+  const [focusedDay, setFocusedDay] = useState(() => new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [type, setType] = useState("meeting");
@@ -69,16 +73,98 @@ export function AgendaView() {
 
   const typeIcon: Record<string, string> = { meeting: "\u{1F4C5}", compromisso: "\u{1F4CC}", block: "\u{1F512}" };
 
+  function goPrev() {
+    if (viewMode === "day") {
+      const prev = new Date(focusedDay);
+      prev.setDate(prev.getDate() - 1);
+      setFocusedDay(prev);
+    } else {
+      setWeekStart(subWeeks(weekStart, 1));
+    }
+  }
+
+  function goNext() {
+    if (viewMode === "day") {
+      const next = new Date(focusedDay);
+      next.setDate(next.getDate() + 1);
+      setFocusedDay(next);
+    } else {
+      setWeekStart(addWeeks(weekStart, 1));
+    }
+  }
+
+  function goToday() {
+    const today = new Date();
+    setFocusedDay(today);
+    setWeekStart(startOfWeek(today, { weekStartsOn: 0 }));
+  }
+
+  function renderEventRow(ev: { id: string; type: string; title: string; starts_at: string; ends_at: string }) {
+    return (
+      <div key={ev.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-accent/30 group">
+        <span className="text-xs">{typeIcon[ev.type] ?? "\u{1F4CC}"}</span>
+        <span className="flex-1">{ev.title}</span>
+        <span className="text-[10px] text-muted-foreground font-mono">
+          {format(parseISO(ev.starts_at), "HH:mm")}-{format(parseISO(ev.ends_at), "HH:mm")}
+        </span>
+        <button
+          type="button"
+          onClick={() => deleteEvent.mutate(ev.id)}
+          className="text-muted-foreground/40 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+          title="Remover evento"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  const headerLabel = viewMode === "day"
+    ? format(focusedDay, "EEEE, dd 'de' MMM", { locale: ptBR })
+    : `${format(weekStart, "dd 'de' MMM", { locale: ptBR })} — ${format(days[6], "dd 'de' MMM", { locale: ptBR })}`;
+
+  const emptyLabel = viewMode === "day"
+    ? "Nenhum evento neste dia."
+    : "Nenhum evento nesta semana.";
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <Button variant="ghost" size="sm" onClick={() => setWeekStart(subWeeks(weekStart, 1))}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="text-sm font-medium">
-          {format(weekStart, "dd 'de' MMM", { locale: ptBR })} — {format(days[6], "dd 'de' MMM", { locale: ptBR })}
-        </span>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={goPrev}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={goToday} className="text-xs">
+            Hoje
+          </Button>
+          <Button variant="ghost" size="sm" onClick={goNext}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <span className="text-sm font-medium">{headerLabel}</span>
         <div className="flex items-center gap-2">
+          <div className="flex rounded-md border border-border overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode("day")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium transition-colors",
+                viewMode === "day" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent",
+              )}
+            >
+              Dia
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("week")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium transition-colors",
+                viewMode === "week" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent",
+              )}
+            >
+              Semana
+            </button>
+          </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" onClick={openDialog}>
@@ -157,9 +243,6 @@ export function AgendaView() {
               </form>
             </DialogContent>
           </Dialog>
-          <Button variant="ghost" size="sm" onClick={() => setWeekStart(addWeeks(weekStart, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
@@ -167,7 +250,21 @@ export function AgendaView() {
         {isLoading ? (
           <p className="text-xs text-muted-foreground p-4">Carregando...</p>
         ) : events.length === 0 ? (
-          <p className="text-xs text-muted-foreground p-4">Nenhum evento nesta semana.</p>
+          <p className="text-xs text-muted-foreground p-4">{emptyLabel}</p>
+        ) : viewMode === "day" ? (
+          <div className="px-4 py-3">
+            <h3 className="text-xs font-semibold text-muted-foreground mb-2">
+              {format(focusedDay, "EEEE, dd/MM", { locale: ptBR })}
+            </h3>
+            <div className="space-y-1">
+              {events
+                .filter((e) => isSameDay(parseISO(e.starts_at), focusedDay))
+                .map((ev) => renderEventRow(ev))}
+            </div>
+            {events.filter((e) => isSameDay(parseISO(e.starts_at), focusedDay)).length === 0 && (
+              <p className="text-xs text-muted-foreground">Nenhum evento neste dia.</p>
+            )}
+          </div>
         ) : (
           <div className="divide-y divide-border/30">
             {days.map((day) => {
@@ -179,23 +276,7 @@ export function AgendaView() {
                     {format(day, "EEEE, dd/MM", { locale: ptBR })}
                   </h3>
                   <div className="space-y-1">
-                    {dayEvents.map((ev) => (
-                      <div key={ev.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-accent/30 group">
-                        <span className="text-xs">{typeIcon[ev.type] ?? "\u{1F4CC}"}</span>
-                        <span className="flex-1">{ev.title}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          {format(parseISO(ev.starts_at), "HH:mm")}-{format(parseISO(ev.ends_at), "HH:mm")}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => deleteEvent.mutate(ev.id)}
-                          className="text-muted-foreground/40 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                          title="Remover evento"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+                    {dayEvents.map((ev) => renderEventRow(ev))}
                   </div>
                 </div>
               );
