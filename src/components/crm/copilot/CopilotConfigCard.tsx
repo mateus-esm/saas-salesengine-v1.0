@@ -27,6 +27,10 @@ export interface CopilotConfigCardProps {
   };
   title: string;
   subtitle?: string;
+  /** Custom label for the system prompt / training textarea (default: "Prompt de Sistema") */
+  trainingLabel?: string;
+  /** Custom placeholder for the system prompt / training textarea (default: "Instruções customizadas para este agente (opcional)") */
+  trainingPlaceholder?: string;
   onSave: (patch: {
     name: string;
     system_prompt: string | null;
@@ -38,6 +42,8 @@ export function CopilotConfigCard({
   agent,
   title,
   subtitle,
+  trainingLabel = "Prompt de Sistema",
+  trainingPlaceholder = "Instruções customizadas para este agente (opcional)",
   onSave,
 }: CopilotConfigCardProps) {
   const [name, setName] = useState(agent.name ?? "");
@@ -83,16 +89,16 @@ export function CopilotConfigCard({
           />
         </div>
 
-        {/* System Prompt */}
+        {/* System Prompt / Training */}
         <div className="space-y-1.5">
           <Label htmlFor={`prompt-${agent.scope}-${agent.pipeline_id ?? "global"}`}>
-            Prompt de Sistema
+            {trainingLabel}
           </Label>
           <Textarea
             id={`prompt-${agent.scope}-${agent.pipeline_id ?? "global"}`}
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
-            placeholder="Instruções customizadas para este agente (opcional)"
+            placeholder={trainingPlaceholder}
             rows={4}
             className="resize-none"
           />

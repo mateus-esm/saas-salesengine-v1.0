@@ -123,8 +123,15 @@ const CopilotCockpit = () => {
             }
             title="Base de Contatos"
             subtitle="Enriquece e organiza seus contatos automaticamente"
+            trainingLabel="Treinamento"
+            trainingPlaceholder="Descreva em linguagem natural o que o agente deve fazer..."
             onSave={makeSaveHandler("contact_base", null)}
           />
+          <p className="mt-4 text-xs text-muted-foreground leading-relaxed">
+            O modo <strong>Copilot</strong> sugere ações que voce revisa antes de aplicar.
+            O modo <strong>Autopilot</strong> executa automaticamente as acoes de enriquecimento
+            e organizacao dos contatos.
+          </p>
         </div>
       );
     }
