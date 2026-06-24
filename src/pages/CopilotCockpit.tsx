@@ -128,9 +128,9 @@ const CopilotCockpit = () => {
             onSave={makeSaveHandler("contact_base", null)}
           />
           <p className="mt-4 text-xs text-muted-foreground leading-relaxed">
-            O modo <strong>Copilot</strong> sugere ações que voce revisa antes de aplicar.
-            O modo <strong>Autopilot</strong> executa automaticamente as acoes de enriquecimento
-            e organizacao dos contatos.
+            O modo <strong>Copilot</strong> sugere ações que você revisa antes de aplicar.
+            O modo <strong>Autopilot</strong> executa automaticamente as ações de enriquecimento
+            e organização dos contatos.
           </p>
         </div>
       );
