@@ -14,12 +14,15 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
+  // Auto-derive slug from name
+  const derivedSlug = newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const displaySlug = newSlug || derivedSlug;
 
   const handleCreate = async () => {
-    if (!newName.trim() || !newSlug.trim()) return;
+    if (!newName.trim()) return;
     await createTable.mutateAsync({
       name: newName.trim(),
-      slug: newSlug.trim().toLowerCase().replace(/\s+/g, "_"),
+      slug: displaySlug,
     });
     setShowCreate(false);
     setNewName("");
@@ -44,15 +47,18 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
               onChange={(e) => setNewName(e.target.value)}
             />
             <Input
-              placeholder="slug_da_tabela"
+              placeholder={derivedSlug || "slug_da_tabela"}
               value={newSlug}
               onChange={(e) => setNewSlug(e.target.value)}
             />
+            <p className="text-[10px] text-muted-foreground -mt-2">
+              Slug auto-gerado. Edite acima se precisar.
+            </p>
             <div className="flex gap-2">
               <Button
                 size="sm"
                 onClick={handleCreate}
-                disabled={!newName || !newSlug}
+                disabled={!newName}
               >
                 Criar
               </Button>
