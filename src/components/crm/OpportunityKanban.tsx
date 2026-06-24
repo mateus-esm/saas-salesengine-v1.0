@@ -197,10 +197,12 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     const map: Record<string, Opportunity[]> = {};
     orderedStages.forEach((s) => (map[s.id] = []));
     for (const o of localOpps) {
-      // Attach ICP/velocity scores for badge rendering
+      // Sprint 6.8 T3.3 — attach combined lead score and breakdown for badge rendering
       const s = leadScores[o.lead_id];
-      (o as Record<string, unknown>)._icp_score = s?.icpScore ?? null;
-      (o as Record<string, unknown>)._velocity = s?.velocity ?? null;
+      (o as Record<string, unknown>)._lead_score = s?.leadScore ?? null;
+      (o as Record<string, unknown>)._lead_breakdown = s
+        ? { icp: s.icpScore, velocity: s.velocity }
+        : undefined;
       if (map[o.stage_id]) map[o.stage_id].push(o);
     }
     // Sort each column by position to keep visual order stable.
@@ -350,8 +352,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 cardFields={cardFields}
                 touchpointCount={touchpointCounts[activeOpp.lead_id] ?? 0}
                 nativeFlags={nativeFlags}
-                icpScore={(activeOpp as any)._icp_score ?? null}
-                velocity={(activeOpp as any)._velocity ?? null}
+                leadScore={(activeOpp as any)._lead_score ?? null}
+                leadScoreBreakdown={(activeOpp as any)._lead_breakdown}
                 onClick={() => {}}
                 isDragOverlay
               />

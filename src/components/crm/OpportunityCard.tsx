@@ -26,8 +26,7 @@ import type { Lead } from "@/types/crm";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
-import { ICPScoreBadge } from "./ICPScoreBadge";
-import { VelocityScoreBadge } from "./VelocityScoreBadge";
+import { LeadScoreBadge, type LeadScoreBreakdown } from "./LeadScoreBadge";
 import { RelationChip } from "./grid/RelationChip";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
@@ -63,8 +62,8 @@ interface OpportunityCardProps {
   cardFields: CustomFieldSchema[];   // schema entries whose field_id ∈ pipeline.card_field_ids (already filtered)
   touchpointCount: number;                       // NEW — supplied by parent (batched)
   nativeFlags?: NativeCardFlags;
-  icpScore?: number | null;                      // W3 — ICP score for badge display
-  velocity?: number | null;                      // W3 — Velocity score for badge display
+  leadScore?: number | null;                     // Sprint 6.8 T3.3 — combined 0-10 lead score
+  leadScoreBreakdown?: LeadScoreBreakdown;       // optional breakdown shown in tooltip
   onClick: () => void;
   isDragOverlay?: boolean;
   companies?: { id: string; name: string }[];    // Sprint 6.7 — linked companies for card chips
@@ -137,8 +136,8 @@ export const OpportunityCard = ({
   cardFields,
   touchpointCount,
   nativeFlags = DEFAULT_NATIVE_CARD_FLAGS,
-  icpScore,
-  velocity,
+  leadScore,
+  leadScoreBreakdown,
   onClick,
   isDragOverlay,
   companies = [],
@@ -213,10 +212,9 @@ export const OpportunityCard = ({
         </div>
       </div>
 
-      {/* W3 — ICP + Velocity micro-badges */}
+      {/* Sprint 6.8 T3.3 — unified Lead Score badge */}
       <div className="flex items-center gap-1">
-        <ICPScoreBadge score={icpScore ?? null} />
-        <VelocityScoreBadge velocity={velocity ?? null} />
+        <LeadScoreBadge score={leadScore ?? null} breakdown={leadScoreBreakdown} />
       </div>
 
       {/* Sprint 6.3 T8 — Intent Detected badge: shown only on real cards, not drag overlay */}

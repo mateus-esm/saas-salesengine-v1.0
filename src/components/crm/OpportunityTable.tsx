@@ -290,10 +290,10 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         row[field.field_id] = customData[field.field_id] ?? null;
       }
 
-      // Attach ICP/velocity scores for badge rendering
+      // Sprint 6.8 T3.3 — attach combined lead score for badge rendering
       const s = opp.lead_id ? leadScores[opp.lead_id] : undefined;
-      row._icp_score = s?.icpScore ?? null;
-      row._velocity = s?.velocity ?? null;
+      row._lead_score = s?.leadScore ?? null;
+      row._lead_breakdown = s ? { icp: s.icpScore, velocity: s.velocity } : undefined;
 
       return row;
     });

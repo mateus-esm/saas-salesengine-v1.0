@@ -8,7 +8,15 @@ export interface LeadScoreMap {
   [leadId: string]: {
     icpScore: number | null;
     velocity: number | null;
+    leadScore: number | null; // 0-10 combined score
   };
+}
+
+/** Combine ICP (0-100) and velocity (0-100) into a single 0-10 score. */
+function computeLeadScore(icpScore: number | null, velocity: number | null): number | null {
+  if (icpScore === null && velocity === null) return null;
+  const avg = ((icpScore ?? 0) + (velocity ?? 0)) / 2;
+  return Math.min(Math.max(Math.round(avg / 10), 0), 10);
 }
 
 /**
@@ -44,13 +52,13 @@ export function useLeadScores(leadIds: string[]) {
                 : Number(velRaw)
               : null;
 
-          return { leadId, icpScore, velocity };
+          return { leadId, icpScore, velocity, leadScore: computeLeadScore(icpScore, velocity) };
         }),
       );
 
       const map: LeadScoreMap = {};
       for (const r of results) {
-        map[r.leadId] = { icpScore: r.icpScore, velocity: r.velocity };
+        map[r.leadId] = { icpScore: r.icpScore, velocity: r.velocity, leadScore: r.leadScore };
       }
       return map;
     },
