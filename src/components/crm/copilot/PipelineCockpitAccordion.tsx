@@ -24,7 +24,7 @@ const PIPELINE_BOXES = [
   },
   {
     id: "automations",
-    label: "Automações Locais",
+    label: "Automações",
     render: () => (
       <p className="text-xs text-muted-foreground p-2">
         Regras de automação (em breve)

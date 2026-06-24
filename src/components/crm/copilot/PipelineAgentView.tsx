@@ -1,16 +1,18 @@
 // src/components/crm/copilot/PipelineAgentView.tsx
 //
-// Sprint 6.8 W1.1 — Per-pipeline detail view with collapsible
-// accordion boxes: prompt config, automations, agentic work,
-// logs, and revenue goals.
+// Sprint 6.9 W1.2 — Per-pipeline Copilot detail view with collapsible
+// accordion boxes: prompt & name, autonomy, automations, logs,
+// approvals, and a pipeline config button.
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Activity,
   ArrowLeft,
   Brain,
+  CheckCheck,
   Cog,
-  DollarSign,
+  ExternalLink,
   FileText,
   Loader2,
 } from "lucide-react";
@@ -24,8 +26,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AgentRulesPanel } from "@/components/crm/AgentRulesPanel";
 import { ControlRoom } from "@/components/crm/copilot/ControlRoom";
-import { RevenueGoalsForm } from "@/components/crm/revenue/RevenueGoalsForm";
+import { CopilotApprovalsPanel } from "@/components/crm/copilot/CopilotApprovalsPanel";
 import type { Pipeline } from "@/types/pipelines";
 import { AUTONOMY_OPTIONS } from "@/types/copilot";
 import type { AutonomyMode, CopilotAgent } from "@/types/copilot";
@@ -49,6 +52,7 @@ export function PipelineAgentView({
   onBack,
   onSave,
 }: PipelineAgentViewProps) {
+  const navigate = useNavigate();
   const [name, setName] = useState(agent.name ?? pipeline.name);
   const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? "");
   const [autonomyMode, setAutonomyMode] = useState<AutonomyMode>(
@@ -95,7 +99,7 @@ export function PipelineAgentView({
           defaultValue="prompt"
           className="space-y-3"
         >
-          {/* ── Prompt & Base de Conhecimento ── */}
+          {/* ── Prompt & Nome ── */}
           <AccordionItem
             value="prompt"
             className="border rounded-lg overflow-hidden bg-card"
@@ -103,7 +107,7 @@ export function PipelineAgentView({
             <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <FileText className="h-4 w-4 text-primary shrink-0" />
-                <span>Prompt & Base de Conhecimento</span>
+                <span>Prompt & Nome</span>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">
@@ -147,7 +151,7 @@ export function PipelineAgentView({
             </AccordionContent>
           </AccordionItem>
 
-          {/* ── Automações Determinísticas ── */}
+          {/* ── Automações ── */}
           <AccordionItem
             value="automations"
             className="border rounded-lg overflow-hidden bg-card"
@@ -155,15 +159,15 @@ export function PipelineAgentView({
             <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Cog className="h-4 w-4 text-primary shrink-0" />
-                <span>Automações Determinísticas</span>
+                <span>Automações</span>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">
-              <p className="text-sm text-muted-foreground italic">Em breve</p>
+              <AgentRulesPanel pipelineId={pipeline.id} pipelineName={pipeline.name} />
             </AccordionContent>
           </AccordionItem>
 
-          {/* ── Trabalho Agêntico ── */}
+          {/* ── Autonomia ── */}
           <AccordionItem
             value="agentic"
             className="border rounded-lg overflow-hidden bg-card"
@@ -171,7 +175,7 @@ export function PipelineAgentView({
             <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Brain className="h-4 w-4 text-primary shrink-0" />
-                <span>Trabalho Agêntico</span>
+                <span>Autonomia</span>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">
@@ -228,22 +232,34 @@ export function PipelineAgentView({
             </AccordionContent>
           </AccordionItem>
 
-          {/* ── Receita & Metas ── */}
+          {/* ── Aprovações ── */}
           <AccordionItem
-            value="revenue"
+            value="approvals"
             className="border rounded-lg overflow-hidden bg-card"
           >
             <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <DollarSign className="h-4 w-4 text-primary shrink-0" />
-                <span>Receita & Metas</span>
+                <CheckCheck className="h-4 w-4 text-primary shrink-0" />
+                <span>Aprovações</span>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">
-              <RevenueGoalsForm pipelineId={pipeline.id} />
+              <CopilotApprovalsPanel pipelineId={pipeline.id} />
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+
+        {/* ── Abrir configuração da pipeline ── */}
+        <div className="mt-4">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => navigate("/pipeline")}
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Abrir configuração da pipeline
+          </Button>
+        </div>
       </div>
     </div>
   );
