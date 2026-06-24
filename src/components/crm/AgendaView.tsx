@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ function roundHour(d: Date, offset: number) {
   return r;
 }
 
-type ViewMode = "day" | "week";
+type ViewMode = "day" | "week" | "month";
 
 export function AgendaView() {
   const { events, isLoading, createEvent, deleteEvent } = useAgendaEvents();
@@ -78,6 +78,8 @@ export function AgendaView() {
       const prev = new Date(focusedDay);
       prev.setDate(prev.getDate() - 1);
       setFocusedDay(prev);
+    } else if (viewMode === "month") {
+      setFocusedDay(subMonths(focusedDay, 1));
     } else {
       setWeekStart(subWeeks(weekStart, 1));
     }
@@ -88,10 +90,18 @@ export function AgendaView() {
       const next = new Date(focusedDay);
       next.setDate(next.getDate() + 1);
       setFocusedDay(next);
+    } else if (viewMode === "month") {
+      setFocusedDay(addMonths(focusedDay, 1));
     } else {
       setWeekStart(addWeeks(weekStart, 1));
     }
   }
+
+  // Calendar grid for the focused month (full weeks, Sun–Sat).
+  const monthGrid = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(focusedDay), { weekStartsOn: 0 }),
+    end: endOfWeek(endOfMonth(focusedDay), { weekStartsOn: 0 }),
+  });
 
   function goToday() {
     const today = new Date();
@@ -121,10 +131,14 @@ export function AgendaView() {
 
   const headerLabel = viewMode === "day"
     ? format(focusedDay, "EEEE, dd 'de' MMM", { locale: ptBR })
+    : viewMode === "month"
+    ? format(focusedDay, "MMMM 'de' yyyy", { locale: ptBR })
     : `${format(weekStart, "dd 'de' MMM", { locale: ptBR })} — ${format(days[6], "dd 'de' MMM", { locale: ptBR })}`;
 
   const emptyLabel = viewMode === "day"
     ? "Nenhum evento neste dia."
+    : viewMode === "month"
+    ? "Nenhum evento neste mês."
     : "Nenhum evento nesta semana.";
 
   return (
@@ -163,6 +177,16 @@ export function AgendaView() {
               )}
             >
               Semana
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("month")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium transition-colors",
+                viewMode === "month" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent",
+              )}
+            >
+              Mês
             </button>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -249,8 +273,51 @@ export function AgendaView() {
       <ScrollArea className="flex-1">
         {isLoading ? (
           <p className="text-xs text-muted-foreground p-4">Carregando...</p>
-        ) : events.length === 0 ? (
+        ) : events.length === 0 && viewMode !== "month" ? (
           <p className="text-xs text-muted-foreground p-4">{emptyLabel}</p>
+        ) : viewMode === "month" ? (
+          <div className="p-3">
+            <div className="grid grid-cols-7 gap-px text-center text-[10px] font-medium text-muted-foreground mb-1">
+              {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
+                <div key={d} className="py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-px bg-border/30 rounded-md overflow-hidden">
+              {monthGrid.map((day) => {
+                const dayEvents = events.filter((e) => isSameDay(parseISO(e.starts_at), day));
+                const inMonth = isSameMonth(day, focusedDay);
+                const today = isSameDay(day, new Date());
+                return (
+                  <button
+                    type="button"
+                    key={day.toISOString()}
+                    onClick={() => { setFocusedDay(day); setViewMode("day"); }}
+                    className={cn(
+                      "min-h-[64px] bg-background p-1 text-left hover:bg-accent/40 transition-colors flex flex-col gap-0.5",
+                      !inMonth && "opacity-40",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium inline-flex h-4 w-4 items-center justify-center rounded-full",
+                        today && "bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    {dayEvents.slice(0, 3).map((ev) => (
+                      <span key={ev.id} className="truncate text-[9px] leading-tight text-foreground/70">
+                        {typeIcon[ev.type] ?? "\u{1F4CC}"} {ev.title}
+                      </span>
+                    ))}
+                    {dayEvents.length > 3 && (
+                      <span className="text-[9px] text-muted-foreground">+{dayEvents.length - 3}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ) : viewMode === "day" ? (
           <div className="px-4 py-3">
             <h3 className="text-xs font-semibold text-muted-foreground mb-2">
