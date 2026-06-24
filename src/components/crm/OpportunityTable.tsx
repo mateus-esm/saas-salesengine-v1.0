@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
   Select,
@@ -9,8 +9,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Loader2, Trash2 } from "lucide-react";
+import { ArrowRight, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/hooks/useLeads";
@@ -83,6 +93,32 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   // Sprint 6.8 T4.2 — sort state
   const [sortKey, setSortKey] = useState<string | undefined>();
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
+
+  // Sprint 6.8 T4.4 — bulk move dialog state
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveIds, setMoveIds] = useState<string[]>([]);
+  const [moveStageId, setMoveStageId] = useState<string>("");
+
+  const bulkMove = useMutation({
+    mutationFn: async ({
+      ids,
+      stageId,
+    }: {
+      ids: string[];
+      stageId: string;
+    }) => {
+      const { error } = await supabase
+        .from("opportunities")
+        .update({ stage_id: stageId })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+      toast.success("Oportunidades movidas com sucesso");
+    },
+    onError: (err) => toast.error("Erro ao mover: " + err.message),
+  });
 
   // Sprint 4 EPIC 2 §2.3 — deep-link via ?opp=<id>
   const [searchParams, setSearchParams] = useSearchParams();
@@ -411,6 +447,16 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const massActions: MassAction[] = useMemo(
     () => [
       {
+        id: "move-stage",
+        label: "Mover para etapa",
+        icon: <ArrowRight className="h-4 w-4" />,
+        run: async (ids: string[]) => {
+          setMoveIds(ids);
+          setMoveStageId("");
+          setMoveDialogOpen(true);
+        },
+      },
+      {
         id: "delete",
         label: "Excluir",
         icon: <Trash2 className="h-4 w-4" />,
@@ -534,6 +580,60 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           setContactDrawerLead(null);
         }}
       />
+
+      {/* Sprint 6.8 T4.4 — bulk move to stage */}
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Mover para etapa</DialogTitle>
+            <DialogDescription>
+              Mover {moveIds.length} oportunidade
+              {moveIds.length !== 1 ? "s" : ""} para qual etapa?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Select value={moveStageId} onValueChange={setMoveStageId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma etapa..." />
+              </SelectTrigger>
+              <SelectContent>
+                {stages.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMoveDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={!moveStageId || bulkMove.isPending}
+              onClick={() => {
+                bulkMove.mutate(
+                  { ids: moveIds, stageId: moveStageId },
+                  {
+                    onSettled: () => {
+                      setMoveDialogOpen(false);
+                      setMoveIds([]);
+                      setMoveStageId("");
+                    },
+                  },
+                );
+              }}
+            >
+              {bulkMove.isPending ? "Movendo..." : "Mover"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
