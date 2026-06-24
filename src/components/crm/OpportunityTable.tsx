@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { useLeadScores } from "@/hooks/useLeadScores";
+import { useColumnLayout } from "@/hooks/useColumnLayout";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -78,6 +79,10 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
   const [contactDrawerLead, setContactDrawerLead] = useState<Lead | null>(null);
+
+  // Sprint 6.8 T4.2 — sort state
+  const [sortKey, setSortKey] = useState<string | undefined>();
+  const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
 
   // Sprint 4 EPIC 2 §2.3 — deep-link via ?opp=<id>
   const [searchParams, setSearchParams] = useSearchParams();
@@ -253,6 +258,18 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     [nativeColumns, customColumns],
   );
 
+  // Sprint 6.8 T4.2 — column layout (persisted widths)
+  const { resizeColumn } = useColumnLayout(allColumns, "opportunity_table");
+
+  // Sprint 6.8 T4.2 — sort handler
+  const handleSort = useCallback(
+    (key: string, dir: "asc" | "desc" | null) => {
+      setSortKey(dir ? key : undefined);
+      setSortDir(dir);
+    },
+    [],
+  );
+
   // ---- Grid rows ----------------------------------------------------------
   const gridRows: GridRow[] = useMemo(() => {
     return filteredOpps.map((opp) => {
@@ -298,6 +315,25 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
       return row;
     });
   }, [filteredOpps, leadsById, stagesById, entitySummary, touchpointCounts, schema, leadScores]);
+
+  // Sprint 6.8 T4.2 — sort rows
+  const sortedRows: GridRow[] = useMemo(() => {
+    if (!sortKey || !sortDir) return gridRows;
+    return [...gridRows].sort((a, b) => {
+      const va = a[sortKey];
+      const vb = b[sortKey];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      let cmp: number;
+      if (typeof va === "number" && typeof vb === "number") {
+        cmp = va - vb;
+      } else {
+        cmp = String(va).localeCompare(String(vb));
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [gridRows, sortKey, sortDir]);
 
   // ---- Cell commit --------------------------------------------------------
   const handleCellCommit = useCallback(
@@ -452,13 +488,17 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
       {/* Grid */}
       <div className="flex-1 overflow-auto p-4">
         <SpreadsheetGrid
-          rows={gridRows}
+          rows={sortedRows}
           columns={allColumns}
           onCellCommit={handleCellCommit}
           massActions={massActions}
           loading={isLoading}
           equipeId={equipeId}
           fromTable="opportunities"
+          onSort={handleSort}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onResizeColumn={resizeColumn}
         />
       </div>
 
