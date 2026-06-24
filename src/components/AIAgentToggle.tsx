@@ -3,8 +3,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useCopilotAgents } from "@/hooks/useCopilotAgents";
 import { toast } from "sonner";
-import { Bot, Info } from "lucide-react";
+import { Bot, Info, Loader2 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -14,6 +15,7 @@ import {
 
 export function AIAgentToggle() {
   const { equipe, profile } = useAuth();
+  const { isLoading: agentsLoading, bulkSetAutonomy } = useCopilotAgents();
   const [isEnabled, setIsEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -39,10 +41,19 @@ export function AIAgentToggle() {
 
       if (error) throw error;
 
+      // Sync agent autonomy modes
+      if (checked) {
+        // Toggle ON → all agents to autonomous (Autopilot)
+        await bulkSetAutonomy.mutateAsync("autonomous");
+      } else {
+        // Toggle OFF → all agents to suggest (Copilot)
+        await bulkSetAutonomy.mutateAsync("suggest");
+      }
+
       toast.success(
         checked
           ? "Copilot ativado com sucesso."
-          : "Copilot desativado."
+          : "Copilot desativado.",
       );
     } catch (error) {
       console.error("Erro ao atualizar Copilot:", error);
@@ -56,6 +67,8 @@ export function AIAgentToggle() {
 
   // Only show for admins or owners? Assuming safe to show if user has access to CRM
   if (!equipe) return null;
+
+  const isLoading = loading || agentsLoading;
 
   return (
     <div className="flex items-center gap-3 bg-card border border-border px-3 py-1.5 rounded-lg shadow-sm">
@@ -78,13 +91,17 @@ export function AIAgentToggle() {
           </Tooltip>
         </TooltipProvider>
       </div>
-      <Switch
-        id="crm-agent-toggle"
-        checked={isEnabled}
-        onCheckedChange={handleToggle}
-        disabled={loading}
-        className="scale-90"
-      />
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      ) : (
+        <Switch
+          id="crm-agent-toggle"
+          checked={isEnabled}
+          onCheckedChange={handleToggle}
+          disabled={loading}
+          className="scale-90"
+        />
+      )}
     </div>
   );
 }

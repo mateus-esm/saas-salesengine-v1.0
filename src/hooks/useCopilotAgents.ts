@@ -122,10 +122,29 @@ export const useCopilotAgents = () => {
       toast.error("Erro ao salvar configuração do copiloto: " + e.message),
   });
 
+  const bulkSetAutonomy = useMutation({
+    mutationFn: async (mode: AutonomyMode) => {
+      if (!equipeId) throw new Error("No equipe");
+      const { data: existing } = await sb
+        .from(TABLE)
+        .select("id, scope, pipeline_id")
+        .eq("equipe_id", equipeId);
+      // Only update existing agents
+      for (const agent of existing ?? []) {
+        await sb
+          .from(TABLE)
+          .update({ autonomy_mode: mode, updated_at: new Date().toISOString() })
+          .eq("id", agent.id);
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
+
   return {
     agents: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
     upsert,
+    bulkSetAutonomy,
   };
 };

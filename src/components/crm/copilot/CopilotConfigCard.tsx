@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { AUTONOMY_OPTIONS } from "@/types/copilot";
+import { DISPLAY_OPTIONS, toDisplayMode, toDbMode } from "@/types/copilot";
 import type { AutonomyMode, CopilotAgent } from "@/types/copilot";
 
 export interface CopilotConfigCardProps {
@@ -43,8 +43,9 @@ export function CopilotConfigCard({
   const [name, setName] = useState(agent.name ?? "");
   const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt ?? "");
   const [autonomyMode, setAutonomyMode] = useState<AutonomyMode>(
-    agent.autonomy_mode ?? "observe",
+    agent.autonomy_mode ?? "suggest",
   );
+  const displayMode = toDisplayMode(autonomyMode);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -97,18 +98,18 @@ export function CopilotConfigCard({
           />
         </div>
 
-        {/* Autonomy Dial — 3-button segmented control */}
+        {/* Autonomy Dial — 2-button segmented control */}
         <div className="space-y-2">
           <Label>Modo de Autonomia</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {AUTONOMY_OPTIONS.map((opt) => (
+          <div className="grid grid-cols-2 gap-2">
+            {DISPLAY_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => setAutonomyMode(opt.value)}
+                onClick={() => setAutonomyMode(toDbMode(opt.value))}
                 className={[
                   "flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-                  autonomyMode === opt.value
+                  displayMode === opt.value
                     ? "border-primary bg-primary/10 text-primary font-medium"
                     : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-accent",
                 ].join(" ")}
