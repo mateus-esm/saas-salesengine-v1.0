@@ -34,6 +34,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
+  refreshEquipe: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -134,6 +135,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error };
   };
 
+  const refreshEquipe = async () => {
+    if (!profile?.equipe_id) return;
+    const { data: equipeData } = await supabase
+      .from("equipes")
+      .select("*")
+      .eq("id", profile.equipe_id)
+      .maybeSingle();
+    if (equipeData) {
+      setEquipe(equipeData as unknown as Equipe);
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
@@ -154,6 +167,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         signIn,
         signOut,
+        refreshEquipe,
       }}
     >
       {children}
