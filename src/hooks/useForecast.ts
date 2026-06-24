@@ -8,7 +8,8 @@ interface ConversionRate {
 }
 
 interface Placar {
-  closed: number;
+  won: number;
+  lost: number;
   in_progress: number;
   goal: number;
 }
@@ -63,10 +64,11 @@ export function useForecast(pipelineId: string | null) {
         .eq("pipeline_id", pipelineId);
 
       const allOpps = (opps ?? []) as any[];
-      const closed = allOpps.filter((o: any) => o.status === "won").length;
+      const won = allOpps.filter((o: any) => o.status === "won").length;
+      const lost = allOpps.filter((o: any) => o.status === "lost").length;
       const in_progress = allOpps.filter((o: any) => o.status === "open").length;
 
-      return { goal_deals, required_inbound, conversion_rates, placar: { closed, in_progress, goal: goal_deals } };
+      return { goal_deals, required_inbound, conversion_rates, placar: { won, lost, in_progress, goal: goal_deals } };
     },
     enabled: !!pipelineId,
     staleTime: 30_000,
