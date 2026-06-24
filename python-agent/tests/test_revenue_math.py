@@ -745,7 +745,8 @@ class TestForecastEndpoint:
 
         assert resp.status_code == 200
         placar = resp.json()["placar"]
-        assert placar["closed"] == 2
+        assert placar["won"] == 2
+        assert placar["lost"] == 1
         assert placar["in_progress"] == 3
         assert placar["goal"] == 5
 

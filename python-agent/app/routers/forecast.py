@@ -60,7 +60,7 @@ async def get_forecast(
         conversion_rates.append({"stage_id": sid, "rate": effective, "source": source})
         cumulative *= effective
 
-    # 3. Compute placar: count won / open opportunities
+    # 3. Compute placar: count won / lost / open opportunities
     placar_resp = (
         client.table("opportunities")
         .select("status")
@@ -69,15 +69,17 @@ async def get_forecast(
         .execute()
     )
     opps = getattr(placar_resp, "data", None) or []
-    closed = sum(1 for o in opps if o.get("status") == "won")
+    won = sum(1 for o in opps if o.get("status") == "won")
+    lost = sum(1 for o in opps if o.get("status") == "lost")
     in_progress = sum(1 for o in opps if o.get("status") == "open")
     goal = revenue_config.get("goal_deals", 0)
 
-    # 4. Required inbound
+    # 4. Required inbound — honest math: only remaining deals needed
     goal_deals = revenue_config.get("goal_deals", 0)
     required_inbound = 0
-    if goal_deals > 0 and cumulative > 0:
-        required_inbound = round(goal_deals / cumulative)
+    remaining = goal_deals - won
+    if remaining > 0 and cumulative > 0:
+        required_inbound = round(remaining / cumulative)
 
     return {
         "pipeline_id": pipeline_id,
@@ -85,7 +87,8 @@ async def get_forecast(
         "required_inbound": required_inbound,
         "conversion_rates": conversion_rates,
         "placar": {
-            "closed": closed,
+            "won": won,
+            "lost": lost,
             "in_progress": in_progress,
             "goal": goal,
         },
