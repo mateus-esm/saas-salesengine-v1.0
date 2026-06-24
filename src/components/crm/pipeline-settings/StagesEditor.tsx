@@ -117,6 +117,7 @@ export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
                 <SortableStageRow
                   key={s.id}
                   stage={s}
+                  pipelineStages={stages}
                   onChange={(patch) => updateStage.mutate({ id: s.id, ...patch })}
                   onDelete={() => deleteStage.mutate(s.id)}
                 />
@@ -147,6 +148,7 @@ export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
 
 interface SortableStageRowProps {
   stage: PipelineStageV2;
+  pipelineStages: PipelineStageV2[];
   onChange: (
     patch: Partial<
       Pick<
@@ -160,6 +162,9 @@ interface SortableStageRowProps {
         | "cadence_unit"
         | "webhook_triggers"
         | "description"
+        | "cycle_days"
+        | "cycle_target_stage_id"
+        | "cycle_webhook_url"
       >
     >,
   ) => void;
@@ -305,6 +310,68 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Sprint 6.8 W6 — ciclo stage config */}
+      {stage.stage_type === "ciclo" && (
+        <div className="flex items-start gap-3 pl-8 pt-2 border-t border-border mt-1">
+          <div className="grid w-[120px] gap-1">
+            <span className="text-[10px] leading-none text-muted-foreground">Dias de ciclo</span>
+            <span className="text-[9px] leading-none text-muted-foreground/60">
+              Após X dias, o lead retorna à etapa de destino
+            </span>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              value={stage.cycle_days ?? ""}
+              onChange={(e) =>
+                onChange({ cycle_days: parsePositiveIntOrNull(e.target.value) })
+              }
+              className="h-8"
+              aria-label="Dias de ciclo"
+            />
+          </div>
+
+          <div className="grid w-[200px] gap-1">
+            <span className="text-[10px] leading-none text-muted-foreground">Etapa de destino</span>
+            <Select
+              value={stage.cycle_target_stage_id ?? NONE}
+              onValueChange={(v) =>
+                onChange({ cycle_target_stage_id: v === NONE ? null : v })
+              }
+            >
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder="Selecionar etapa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>Nenhuma</SelectItem>
+                {pipelineStages
+                  .filter((s) => s.id !== stage.id)
+                  .map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid w-[220px] gap-1">
+            <span className="text-[10px] leading-none text-muted-foreground">Webhook</span>
+            <Input
+              type="text"
+              value={stage.cycle_webhook_url ?? ""}
+              onChange={(e) =>
+                onChange({ cycle_webhook_url: e.target.value || null })
+              }
+              className="h-8"
+              placeholder="https://..."
+              aria-label="Webhook do ciclo"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Sprint 6.4 W2 — description trains the Copilot triage on when a deal belongs here */}
       <div className="pl-8">
