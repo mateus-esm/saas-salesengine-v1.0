@@ -45,7 +45,7 @@ export interface CustomFieldSchema {
   description?: string;
 }
 
-export type StageType = "open" | "won" | "lost";
+export type StageType = "aberto" | "ganho" | "perdido" | "ciclo";
 
 /** Sprint 5.3 T8 — cadence/lifecycle events a stage can fire webhooks on. */
 export type StageWebhookEvent =
@@ -97,6 +97,12 @@ export interface PipelineStageV2 {
   webhook_triggers: StageWebhookTrigger[];
   /** Sprint 6.4 W2 — human description read by Copilot triage to know when a deal belongs here. */
   description?: string;
+  /** Sprint 6.8 W6 — days before a ciclo stage auto-returns the lead to cycle_target_stage_id. */
+  cycle_days: number | null;
+  /** Sprint 6.8 W6 — stage to return the lead to after cycle_days. */
+  cycle_target_stage_id: string | null;
+  /** Sprint 6.8 W6 — optional webhook URL to POST on cycle return. */
+  cycle_webhook_url: string | null;
   created_at: string;
   deleted_at: string | null;
 }

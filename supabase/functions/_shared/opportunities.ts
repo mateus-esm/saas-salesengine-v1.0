@@ -88,7 +88,7 @@ export async function resolveActiveOpportunity(
     .eq("pipeline_id", default_pipeline_id)
     .eq("equipe_id", equipe_id)
     .is("deleted_at", null)
-    .eq("stage_type", "open")
+    .eq("stage_type", "aberto")
     .order("position", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -100,7 +100,7 @@ export async function resolveActiveOpportunity(
 
   if (!firstStage) {
     console.warn(
-      `[opportunities] Pipeline default ${default_pipeline_id} não tem stage 'open'; pulando criação.`,
+      `[opportunities] Pipeline default ${default_pipeline_id} não tem stage 'aberto'; pulando criação.`,
     );
     return null;
   }
@@ -161,7 +161,7 @@ export async function resolveActiveOpportunity(
  * Used by analyze-message to move opportunities on intents like SCHEDULED.
  *
  * Strategy:
- *   - Filter by pipeline + non-deleted + stage_type (open/won/lost).
+ *   - Filter by pipeline + non-deleted + stage_type (aberto/ganho/perdido).
  *   - If nameHint is given, prefer an exact (case-insensitive) match.
  *   - Fall back to the lowest-position stage of that type.
  */
@@ -170,7 +170,7 @@ export async function resolveStageByTypeAndName(
   params: {
     equipe_id: string;
     pipeline_id: string;
-    stage_type: "open" | "won" | "lost";
+    stage_type: "aberto" | "ganho" | "perdido" | "ciclo";
     nameHint?: string | null;
   },
 ): Promise<{ id: string; name: string } | null> {

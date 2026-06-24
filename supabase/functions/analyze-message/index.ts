@@ -308,7 +308,7 @@ serve(async (req) => {
         const target = await resolveStageByTypeAndName(supabase, {
           equipe_id: lead.equipe_id,
           pipeline_id: opp.pipeline_id,
-          stage_type: 'open',
+          stage_type: 'aberto',
           nameHint: STAGE_NAME_HINTS.scheduled,
         });
         if (target && target.id !== currentStageId) {
@@ -323,7 +323,7 @@ serve(async (req) => {
         .eq('equipe_id', lead.equipe_id)
         .eq('pipeline_id', opp.pipeline_id)
         .is('deleted_at', null)
-        .eq('stage_type', 'open')
+        .eq('stage_type', 'aberto')
         .order('position', { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -332,7 +332,7 @@ serve(async (req) => {
         const target = await resolveStageByTypeAndName(supabase, {
           equipe_id: lead.equipe_id,
           pipeline_id: opp.pipeline_id,
-          stage_type: 'open',
+          stage_type: 'aberto',
           nameHint: STAGE_NAME_HINTS.qualified,
         });
         if (target && target.id !== currentStageId) {

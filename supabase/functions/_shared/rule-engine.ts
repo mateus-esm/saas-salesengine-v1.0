@@ -194,7 +194,7 @@ export async function executeActions(
           const target = await resolveStageByTypeAndName(ctx.supabase, {
             equipe_id: ctx.equipe_id,
             pipeline_id: ctx.pipeline_id,
-            stage_type: (action.stage_type as "open" | "won" | "lost") ?? "open",
+            stage_type: (action.stage_type as "aberto" | "ganho" | "perdido" | "ciclo") ?? "aberto",
             nameHint: action.stage_name_hint,
           });
           if (target) {

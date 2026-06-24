@@ -48,9 +48,10 @@ interface StagesEditorProps {
 }
 
 const STAGE_TYPES: Array<{ value: StageType; label: string }> = [
-  { value: "open", label: "Aberto" },
-  { value: "won", label: "Ganho" },
-  { value: "lost", label: "Perdido" },
+  { value: "aberto", label: "Aberto" },
+  { value: "ganho", label: "Ganho" },
+  { value: "perdido", label: "Perdido" },
+  { value: "ciclo", label: "Ciclo" },
 ];
 
 // Sprint 5.3 T8 — cadence/lifecycle events a stage can fire webhooks on.
