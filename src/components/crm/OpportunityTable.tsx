@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { ArrowRight, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,6 +35,7 @@ import { formatDisplayName } from "@/lib/displayName";
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { SpreadsheetGrid } from "./grid/SpreadsheetGrid";
+import { GridToolbar } from "./grid/GridToolbar";
 import type { ColumnDef, CellMutation, GridRow } from "./grid/types";
 import type { MassAction } from "./grid/MassActionBar";
 import type { Lead } from "@/types/crm";
@@ -93,6 +93,21 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   // Sprint 6.8 T4.2 — sort state
   const [sortKey, setSortKey] = useState<string | undefined>();
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
+
+  // Sprint 6.8 T5.3 — grid toolbar derived state
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (stageFilter !== "all") count++;
+    if (statusFilter !== "all") count++;
+    if (globalFilter.length > 0) count++;
+    return count;
+  }, [stageFilter, statusFilter, globalFilter]);
+
+  const handleClearFilters = useCallback(() => {
+    setStageFilter("all");
+    setStatusFilter("all");
+    setGlobalFilter("");
+  }, []);
 
   // Sprint 6.8 T4.4 — bulk move dialog state
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -496,39 +511,30 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <Input
-            placeholder="Buscar por lead, email, telefone..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="max-w-xs"
-          />
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Etapa" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas etapas</SelectItem>
-              {stages.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos status</SelectItem>
-              <SelectItem value="open">Aberta</SelectItem>
-              <SelectItem value="won">Ganha</SelectItem>
-              <SelectItem value="lost">Perdida</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Grid toolbar (search + filters) */}
+        <GridToolbar
+          search={globalFilter}
+          onSearchChange={setGlobalFilter}
+          searchPlaceholder="Buscar por lead, email, telefone..."
+          filters={[
+            {
+              key: "stage",
+              label: "Etapa",
+              value: stageFilter,
+              options: stageOptions,
+              onChange: setStageFilter,
+            },
+            {
+              key: "status",
+              label: "Status",
+              value: statusFilter,
+              options: statusOptions,
+              onChange: setStatusFilter,
+            },
+          ]}
+          onClearFilters={handleClearFilters}
+          activeFilterCount={activeFilterCount}
+        />
       </div>
 
       {/* Grid */}
