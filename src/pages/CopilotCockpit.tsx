@@ -90,7 +90,6 @@ const CopilotCockpit = () => {
       await upsert.mutateAsync({ scope, pipeline_id, ...patch });
     };
 
-  const chatAgent = findAgent("chat", null);
   const contactAgent = findAgent("contact_base", null);
 
   // ── Right panel renderer ──────────────────────────────────
@@ -122,25 +121,6 @@ const CopilotCockpit = () => {
             title="Base de Contatos"
             subtitle="Enriquece e organiza seus contatos automaticamente"
             onSave={makeSaveHandler("contact_base", null)}
-          />
-        </div>
-      );
-    }
-
-    // Chat agent config
-    if (selected === "chat") {
-      return (
-        <div className="p-6">
-          <CopilotConfigCard
-            agent={
-              chatAgent ?? {
-                scope: "chat",
-                pipeline_id: null,
-              }
-            }
-            title="Chat Copilot"
-            subtitle="Auxilia nas conversas do chat com seus leads"
-            onSave={makeSaveHandler("chat", null)}
           />
         </div>
       );

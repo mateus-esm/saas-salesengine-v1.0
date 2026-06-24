@@ -14,7 +14,6 @@ by a scheduler / cron trigger.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -90,6 +89,10 @@ async def cycle_pass() -> dict:
                 continue
 
             # 3. Move opportunity to target stage.
+            #    The BEFORE-UPDATE trigger trg_opportunity_stage_change records
+            #    stage history automatically, so we do NOT insert it manually
+            #    (the manual insert previously used non-existent columns and
+            #    threw, which silently swallowed the webhook below).
             try:
                 now_iso = now.isoformat()
                 (
@@ -102,17 +105,6 @@ async def cycle_pass() -> dict:
                     .execute()
                 )
 
-                # 4. Record stage-transition history.
-                (
-                    client.table("opportunity_stage_history")
-                    .insert({
-                        "stage_id": target_stage_id,
-                        "opportunity_id": opp["id"],
-                        "entered_at": now_iso,
-                    })
-                    .execute()
-                )
-
                 processed += 1
                 details.append({
                     "opportunity_id": opp["id"],
@@ -121,17 +113,16 @@ async def cycle_pass() -> dict:
                     "days_in_stage": (now - entered).days,
                 })
 
-                # 5. Fire webhook (fire-and-forget) if configured.
+                # 4. Fire webhook (best-effort, awaited so it actually sends)
+                #    if configured. _fire_webhook never raises.
                 webhook_url = stage.get("cycle_webhook_url")
                 if webhook_url:
-                    asyncio.create_task(
-                        _fire_webhook(webhook_url, {
-                            "opportunity_id": opp["id"],
-                            "from_stage_id": stage["id"],
-                            "to_stage_id": target_stage_id,
-                            "event": "cycle_pass",
-                        })
-                    )
+                    await _fire_webhook(webhook_url, {
+                        "opportunity_id": opp["id"],
+                        "from_stage_id": stage["id"],
+                        "to_stage_id": target_stage_id,
+                        "event": "cycle_pass",
+                    })
 
             except Exception:
                 errors += 1

@@ -85,7 +85,7 @@ function LeadScoreHeader({
           else onSort(LEAD_SCORE_COL_KEY, "asc");
         }}
       >
-        LS{indicator}
+        Score{indicator}
       </span>
       {/* Resize handle */}
       <div

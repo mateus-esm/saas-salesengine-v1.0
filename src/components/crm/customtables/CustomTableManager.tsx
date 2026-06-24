@@ -13,20 +13,18 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
   const { tables, isLoading, createTable, deleteTable } = useCustomTables();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newSlug, setNewSlug] = useState("");
-  // Auto-derive slug from name
+  // Slug is derived from the name automatically — the founder never types it
+  // (point 16: "the slug is the name adapted for it").
   const derivedSlug = newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-  const displaySlug = newSlug || derivedSlug;
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
     await createTable.mutateAsync({
       name: newName.trim(),
-      slug: displaySlug,
+      slug: derivedSlug,
     });
     setShowCreate(false);
     setNewName("");
-    setNewSlug("");
   };
 
   return (
@@ -42,18 +40,17 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
         <Card>
           <CardContent className="pt-4 space-y-3">
             <Input
-              placeholder="Nome"
+              placeholder="Nome da tabela"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
             />
-            <Input
-              placeholder={derivedSlug || "slug_da_tabela"}
-              value={newSlug}
-              onChange={(e) => setNewSlug(e.target.value)}
-            />
-            <p className="text-[10px] text-muted-foreground -mt-2">
-              Slug auto-gerado. Edite acima se precisar.
-            </p>
+            {derivedSlug && (
+              <p className="text-[10px] text-muted-foreground -mt-1">
+                Identificador: <span className="font-mono">{derivedSlug}</span>
+              </p>
+            )}
             <div className="flex gap-2">
               <Button
                 size="sm"

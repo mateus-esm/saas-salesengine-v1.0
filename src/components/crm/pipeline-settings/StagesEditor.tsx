@@ -47,10 +47,12 @@ interface StagesEditorProps {
   pipelineId: string;
 }
 
+// Internal value stays English; the label is PT-BR (standard i18n: stable codes,
+// translated display). Matches the DB CHECK ('open','won','lost','ciclo').
 const STAGE_TYPES: Array<{ value: StageType; label: string }> = [
-  { value: "aberto", label: "Aberto" },
-  { value: "ganho", label: "Ganho" },
-  { value: "perdido", label: "Perdido" },
+  { value: "open", label: "Aberto" },
+  { value: "won", label: "Ganho" },
+  { value: "lost", label: "Perdido" },
   { value: "ciclo", label: "Ciclo" },
 ];
 

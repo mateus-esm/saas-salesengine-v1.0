@@ -11,16 +11,16 @@ import {
   ChevronDown,
   ChevronRight,
   LayoutList,
-  MessageSquare,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Pipeline } from "@/types/pipelines";
 
 // ── Sidebar selection type ──────────────────────────────────────
+// Chat agent intentionally excluded (founder point 17: "dont have for now
+// this option of chat").
 export type SidebarItem =
   | "contact_base"
-  | "chat"
   | "training"
   | "approvals"
   | { type: "pipeline"; id: string };
@@ -44,7 +44,6 @@ function isSelected(item: SidebarItem, current: SidebarItem | null): boolean {
 // ── Sidebar items config ────────────────────────────────────────
 const TOP_ITEMS = [
   { id: "contact_base" as const, icon: Users, label: "Base de Contatos" },
-  { id: "chat" as const, icon: MessageSquare, label: "Chat Copilot" },
 ];
 
 const BOTTOM_ITEMS = [

@@ -173,13 +173,20 @@ class CoreTableSkill:
             incoming_descricao = _interpolate(content, lead_id=lead_id)
             normalized_incoming = incoming_descricao.strip().lower()
 
-            existing = self._fetch_many(
-                "lead_activities",
-                {"lead_id": lead_id, "tipo": "note"},
-                "id,descricao",
+            # De-dupe against this lead's existing notes. lead_activities has NO
+            # equipe_id column (it is scoped via lead_id, and the lead above was
+            # already tenant-verified), so query directly rather than via
+            # _fetch_many (which would add a non-existent equipe_id filter).
+            existing_resp = (
+                self.client.table("lead_activities")
+                .select("id,descricao")
+                .eq("lead_id", lead_id)
+                .eq("tipo", "note")
+                .execute()
             )
+            existing = getattr(existing_resp, "data", None) or []
             for note in existing:
-                if note["descricao"].strip().lower() == normalized_incoming:
+                if (note.get("descricao") or "").strip().lower() == normalized_incoming:
                     return ActionResult(success=True, detail={"action": "add_note", "deduped": True})
 
             payload = {

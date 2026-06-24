@@ -45,7 +45,9 @@ export interface CustomFieldSchema {
   description?: string;
 }
 
-export type StageType = "aberto" | "ganho" | "perdido" | "ciclo";
+// Internal enum stays English; UI renders PT-BR labels (Aberto/Ganho/Perdido/Ciclo)
+// via a value→label map. 'ciclo' is the Sprint 6.8 cycle/return stage type.
+export type StageType = "open" | "won" | "lost" | "ciclo";
 
 /** Sprint 5.3 T8 — cadence/lifecycle events a stage can fire webhooks on. */
 export type StageWebhookEvent =

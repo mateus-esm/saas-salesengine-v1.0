@@ -16,8 +16,11 @@ interface Placar {
 
 export interface ForecastData {
   goal_deals: number;
-  required_inbound: number;
+  /** null when there isn't enough data to compute an honest number. */
+  required_inbound: number | null;
   conversion_rates: ConversionRate[];
+  /** false → derived metrics (inbound, conversão) are not trustworthy yet. */
+  sufficient_data: boolean;
   placar: Placar;
 }
 
@@ -46,18 +49,18 @@ export function useForecast(pipelineId: string | null) {
         p_pipeline_id: pipelineId,
       });
 
-      const conversion_rates: ConversionRate[] = (rates ?? []).map((r: any) => ({
-        stage_id: r.stage_id,
-        rate: r.stage_id in overrides ? overrides[r.stage_id] : r.conversion_rate,
-        source: r.stage_id in overrides ? "manual" : ("history" as const),
-      }));
+      // Clamp every rate to [0,1]: a bad/over-1 conversion rate must never
+      // explode required_inbound or render as nonsense (e.g. "2600%").
+      const conversion_rates: ConversionRate[] = (rates ?? []).map((r: any) => {
+        const raw = r.stage_id in overrides ? overrides[r.stage_id] : r.conversion_rate;
+        return {
+          stage_id: r.stage_id,
+          rate: Math.max(0, Math.min(1, Number(raw) || 0)),
+          source: r.stage_id in overrides ? "manual" : ("history" as const),
+        };
+      });
 
-      // 3. Cumulative rate
-      const cumulative = conversion_rates.reduce((acc: number, r) => acc * r.rate, 1.0);
-      const required_inbound =
-        goal_deals > 0 && cumulative > 0 ? Math.round(goal_deals / cumulative) : 0;
-
-      // 4. Placar
+      // 3. Placar
       const { data: opps } = await sb
         .from("opportunities")
         .select("status")
@@ -68,7 +71,22 @@ export function useForecast(pipelineId: string | null) {
       const lost = allOpps.filter((o: any) => o.status === "lost").length;
       const in_progress = allOpps.filter((o: any) => o.status === "open").length;
 
-      return { goal_deals, required_inbound, conversion_rates, placar: { won, lost, in_progress, goal: goal_deals } };
+      // 4. Derived metrics are only honest when a goal is set AND there is real
+      //    pipeline data to base conversion on. Otherwise we say so instead of
+      //    rendering impossible numbers.
+      const cumulative = conversion_rates.reduce((acc: number, r) => acc * r.rate, 1.0);
+      const sufficient_data =
+        goal_deals > 0 && conversion_rates.length > 0 && allOpps.length > 0;
+      const required_inbound =
+        sufficient_data && cumulative > 0 ? Math.round(goal_deals / cumulative) : null;
+
+      return {
+        goal_deals,
+        required_inbound,
+        conversion_rates,
+        sufficient_data,
+        placar: { won, lost, in_progress, goal: goal_deals },
+      };
     },
     enabled: !!pipelineId,
     staleTime: 30_000,

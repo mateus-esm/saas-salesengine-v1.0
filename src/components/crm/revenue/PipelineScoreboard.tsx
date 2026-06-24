@@ -35,7 +35,7 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
         <button className="flex w-full items-center justify-between px-4 py-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors border-b border-border/40">
           <span className="flex items-center gap-2">
             <BarChart3 className="h-3 w-3" />
-            Placar de Receita
+            Painel de Receita
           </span>
           {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </button>
@@ -51,12 +51,16 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
             </div>
           </div>
 
-          {/* Inbound necessário */}
+          {/* Inbound necessário — only shown when the math is trustworthy */}
           <div className="flex items-center gap-2 px-4 border-r border-border/20 shrink-0">
             <Users className="h-3.5 w-3.5 text-blue-500" />
             <div>
               <span className="text-muted-foreground">Inbound</span>
-              <span className="ml-2 font-semibold">{data.required_inbound}</span>
+              <span className="ml-2 font-semibold">
+                {data.sufficient_data && data.required_inbound !== null
+                  ? data.required_inbound
+                  : "—"}
+              </span>
             </div>
           </div>
 
@@ -98,13 +102,19 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
             </div>
           </div>
 
-          {/* Per-stage conversion chips */}
-          {data.conversion_rates.slice(0, 5).map((r) => (
-            <div key={r.stage_id} className="flex items-center gap-1 px-2 text-[10px] shrink-0">
-              <span className={`w-1.5 h-1.5 rounded-full ${r.source === "manual" ? "bg-amber-400" : "bg-emerald-400"}`} />
-              <span className="text-muted-foreground">{(r.rate * 100).toFixed(0)}%</span>
+          {/* Per-stage conversion chips — only when we have enough data */}
+          {data.sufficient_data ? (
+            data.conversion_rates.slice(0, 5).map((r) => (
+              <div key={r.stage_id} className="flex items-center gap-1 px-2 text-[10px] shrink-0">
+                <span className={`w-1.5 h-1.5 rounded-full ${r.source === "manual" ? "bg-amber-400" : "bg-emerald-400"}`} />
+                <span className="text-muted-foreground">{(r.rate * 100).toFixed(0)}%</span>
+              </div>
+            ))
+          ) : (
+            <div className="flex items-center px-4 text-[10px] text-muted-foreground/70 italic shrink-0">
+              dados insuficientes
             </div>
-          ))}
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>
