@@ -94,18 +94,24 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const [sortKey, setSortKey] = useState<string | undefined>();
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
 
+  // Sprint 6.8 T5 — creation ordering (newest first by default) + canal filter
+  const [orderBy, setOrderBy] = useState<"recent" | "oldest">("recent");
+  const [originFilter, setOriginFilter] = useState<string>("all");
+
   // Sprint 6.8 T5.3 — grid toolbar derived state
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (stageFilter !== "all") count++;
     if (statusFilter !== "all") count++;
+    if (originFilter !== "all") count++;
     if (globalFilter.length > 0) count++;
     return count;
-  }, [stageFilter, statusFilter, globalFilter]);
+  }, [stageFilter, statusFilter, originFilter, globalFilter]);
 
   const handleClearFilters = useCallback(() => {
     setStageFilter("all");
     setStatusFilter("all");
+    setOriginFilter("all");
     setGlobalFilter("");
   }, []);
 
@@ -181,11 +187,15 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     [pipeline],
   );
 
-  // ---- Filter -------------------------------------------------------------
+  // ---- Filter + creation ordering -----------------------------------------
   const filteredOpps = useMemo(() => {
-    return opportunities.filter((o) => {
+    const rows = opportunities.filter((o) => {
       if (stageFilter !== "all" && o.stage_id !== stageFilter) return false;
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      if (originFilter !== "all") {
+        const lead = leadsById[o.lead_id];
+        if ((lead?.origin ?? "") !== originFilter) return false;
+      }
       if (globalFilter) {
         const lead = leadsById[o.lead_id];
         const needle = globalFilter.toLowerCase();
@@ -194,7 +204,29 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
       }
       return true;
     });
-  }, [opportunities, leadsById, stageFilter, statusFilter, globalFilter]);
+    // Default ordering by creation date (newest first). An explicit column
+    // sort (sortKey/sortDir) still overrides this in `sortedRows` below.
+    return [...rows].sort((a, b) => {
+      const cmp = String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
+      return orderBy === "recent" ? -cmp : cmp;
+    });
+  }, [opportunities, leadsById, stageFilter, statusFilter, originFilter, globalFilter, orderBy]);
+
+  // Canal (origin) options derived from the leads present in this pipeline.
+  const ORIGIN_LABELS: Record<string, string> = {
+    whatsapp: "WhatsApp",
+    manual: "Manual",
+    web: "Web",
+    import: "Importação",
+  };
+  const originOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of opportunities) {
+      const lead = leadsById[o.lead_id];
+      if (lead?.origin) set.add(lead.origin);
+    }
+    return Array.from(set).map((v) => ({ value: v, label: ORIGIN_LABELS[v] ?? v }));
+  }, [opportunities, leadsById]);
 
   const rowLeadIds = useMemo(
     () => filteredOpps.map((o) => o.lead_id).filter(Boolean),
@@ -531,10 +563,29 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
               options: statusOptions,
               onChange: setStatusFilter,
             },
+            ...(originOptions.length > 0
+              ? [{
+                  key: "origin",
+                  label: "Canal",
+                  value: originFilter,
+                  options: originOptions,
+                  onChange: setOriginFilter,
+                }]
+              : []),
           ]}
           onClearFilters={handleClearFilters}
           activeFilterCount={activeFilterCount}
-        />
+        >
+          <Select value={orderBy} onValueChange={(v) => setOrderBy(v as "recent" | "oldest")}>
+            <SelectTrigger className="w-[150px] h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Mais recentes</SelectItem>
+              <SelectItem value="oldest">Mais antigos</SelectItem>
+            </SelectContent>
+          </Select>
+        </GridToolbar>
       </div>
 
       {/* Grid */}
