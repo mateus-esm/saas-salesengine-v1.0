@@ -13,6 +13,7 @@ import { CopilotConfigCard } from "@/components/crm/copilot/CopilotConfigCard";
 import CopilotTrainingPanel from "@/components/crm/copilot/CopilotTrainingPanel";
 import { CopilotApprovalsPanel } from "@/components/crm/copilot/CopilotApprovalsPanel";
 import { PipelineAgentView } from "@/components/crm/copilot/PipelineAgentView";
+import { ControlRoom } from "@/components/crm/copilot/ControlRoom";
 import {
   CopilotSidebar,
   type SidebarItem,
@@ -35,7 +36,7 @@ const CopilotCockpit = () => {
           <div className="container mx-auto px-4 py-4">
             <h1 className="text-2xl font-bold text-foreground">Copilot</h1>
             <p className="text-sm text-foreground/70 mt-1 font-medium">
-              Central de operacao, treinamento e auditoria dos agentes.
+              Central de operação, treinamento e auditoria dos agentes.
             </p>
           </div>
         </div>
@@ -96,13 +97,12 @@ const CopilotCockpit = () => {
   const renderDetail = () => {
     if (selected === null) {
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-2">
-            <Bot className="mx-auto h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">
-              Selecione um item na barra lateral
-            </p>
-          </div>
+        <div className="p-6">
+          <ControlRoom
+            pipelines={activePipelines}
+            showAgentFilter
+            showTypeFilter
+          />
         </div>
       );
     }
@@ -194,7 +194,7 @@ const CopilotCockpit = () => {
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold text-foreground">Copilot</h1>
           <p className="text-sm text-foreground/70 mt-1 font-medium">
-            Central de operacao, treinamento e auditoria dos agentes.
+            Central de operação, treinamento e auditoria dos agentes.
           </p>
         </div>
       </div>
