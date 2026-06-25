@@ -255,7 +255,7 @@ export function PipelineAgentView({
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => navigate("/pipeline")}
+            onClick={() => navigate(`/pipeline?selected=${pipeline.id}`)}
           >
             <ExternalLink className="h-4 w-4 mr-2" />
             Abrir configuração da pipeline

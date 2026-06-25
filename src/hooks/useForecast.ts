@@ -67,7 +67,7 @@ export function useForecast(pipelineId: string | null) {
       // 3. Placar — now with timestamps for velocity computation
       const { data: opps } = await sb
         .from("opportunities")
-        .select("status, created_at, updated_at")
+        .select("status, created_at, closed_at")
         .eq("pipeline_id", pipelineId);
 
       const allOpps = (opps ?? []) as any[];
@@ -79,15 +79,15 @@ export function useForecast(pipelineId: string | null) {
       const win_rate =
         won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
 
-      // 3b. Pipeline velocity: avg days from created_at to won
-      const wonOpps = allOpps.filter((o: any) => o.status === "won" && o.created_at && o.updated_at);
+      // 3b. Pipeline velocity: avg days from created_at to closed_at (when stage changed to won)
+      const wonOpps = allOpps.filter((o: any) => o.status === "won" && o.created_at && o.closed_at);
       const avg_velocity_days =
         wonOpps.length > 0
           ? Math.round(
               wonOpps.reduce((sum: number, o: any) => {
                 const created = new Date(o.created_at).getTime();
-                const updated = new Date(o.updated_at).getTime();
-                return sum + (updated - created) / (1000 * 60 * 60 * 24);
+                const closed = new Date(o.closed_at).getTime();
+                return sum + (closed - created) / (1000 * 60 * 60 * 24);
               }, 0) / wonOpps.length
             )
           : null;
