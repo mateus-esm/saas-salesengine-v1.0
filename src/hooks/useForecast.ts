@@ -22,6 +22,10 @@ export interface ForecastData {
   /** false → derived metrics (inbound, conversão) are not trustworthy yet. */
   sufficient_data: boolean;
   placar: Placar;
+  /** Win rate as 0-100 percentage. null when no decisions (won+lost === 0). */
+  win_rate: number | null;
+  /** Average days from created_at to won. null when no won opportunities. */
+  avg_velocity_days: number | null;
 }
 
 export function useForecast(pipelineId: string | null) {
@@ -60,16 +64,33 @@ export function useForecast(pipelineId: string | null) {
         };
       });
 
-      // 3. Placar
+      // 3. Placar — now with timestamps for velocity computation
       const { data: opps } = await sb
         .from("opportunities")
-        .select("status")
+        .select("status, created_at, updated_at")
         .eq("pipeline_id", pipelineId);
 
       const allOpps = (opps ?? []) as any[];
       const won = allOpps.filter((o: any) => o.status === "won").length;
       const lost = allOpps.filter((o: any) => o.status === "lost").length;
       const in_progress = allOpps.filter((o: any) => o.status === "open").length;
+
+      // 3a. Win rate: won / (won + lost) as percentage, null when no decisions
+      const win_rate =
+        won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
+
+      // 3b. Pipeline velocity: avg days from created_at to won
+      const wonOpps = allOpps.filter((o: any) => o.status === "won" && o.created_at && o.updated_at);
+      const avg_velocity_days =
+        wonOpps.length > 0
+          ? Math.round(
+              wonOpps.reduce((sum: number, o: any) => {
+                const created = new Date(o.created_at).getTime();
+                const updated = new Date(o.updated_at).getTime();
+                return sum + (updated - created) / (1000 * 60 * 60 * 24);
+              }, 0) / wonOpps.length
+            )
+          : null;
 
       // 4. Derived metrics are only honest when a goal is set AND there is real
       //    pipeline data to base conversion on. Otherwise we say so instead of
@@ -86,7 +107,9 @@ export function useForecast(pipelineId: string | null) {
         conversion_rates,
         sufficient_data,
         placar: { won, lost, in_progress, goal: goal_deals },
-      };
+        win_rate,
+        avg_velocity_days,
+      } as ForecastData;
     },
     enabled: !!pipelineId,
     staleTime: 30_000,
