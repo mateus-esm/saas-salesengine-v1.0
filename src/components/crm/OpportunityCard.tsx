@@ -65,6 +65,7 @@ interface OpportunityCardProps {
   leadScore?: number | null;                     // Sprint 6.8 T3.3 — combined 0-10 lead score
   leadScoreBreakdown?: LeadScoreBreakdown;       // optional breakdown shown in tooltip
   onClick: () => void;
+  onOpenContact?: (leadId: string) => void;
   isDragOverlay?: boolean;
   companies?: { id: string; name: string }[];    // Sprint 6.7 — linked companies for card chips
 }
@@ -139,6 +140,7 @@ export const OpportunityCard = ({
   leadScore,
   leadScoreBreakdown,
   onClick,
+  onOpenContact,
   isDragOverlay,
   companies = [],
 }: OpportunityCardProps) => {
@@ -185,7 +187,20 @@ export const OpportunityCard = ({
       <div className="flex items-center justify-between gap-1.5 text-sm font-medium">
         <div className="flex items-center gap-1.5 min-w-0">
           <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="truncate">{formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}</span>
+          <span
+            className={cn(
+              "truncate",
+              onOpenContact && lead?.id && "cursor-pointer hover:text-primary",
+            )}
+            onClick={(e) => {
+              if (onOpenContact && lead?.id) {
+                e.stopPropagation();
+                onOpenContact(lead.id);
+              }
+            }}
+          >
+            {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
+          </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {nativeFlags.value && valueText && (
@@ -215,6 +230,9 @@ export const OpportunityCard = ({
       {/* Sprint 6.8 T3.3 — unified Lead Score badge */}
       <div className="flex items-center gap-1">
         <LeadScoreBadge score={leadScore ?? null} breakdown={leadScoreBreakdown} />
+        {leadScore !== null && leadScore !== undefined && (
+          <span className="text-[10px] text-muted-foreground">Score</span>
+        )}
       </div>
 
       {/* Sprint 6.3 T8 — Intent Detected badge: shown only on real cards, not drag overlay */}

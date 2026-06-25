@@ -341,6 +341,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 touchpointCounts={touchpointCounts}
                 nativeFlags={nativeFlags}
                 onCardClick={setSelectedOpp}
+                onOpenContact={(leadId) => {
+                  const target = leadsById[leadId];
+                  if (target) setContactDrawerLead(target);
+                }}
                 companiesByOppId={companiesByOppId}
               />
             ))}
