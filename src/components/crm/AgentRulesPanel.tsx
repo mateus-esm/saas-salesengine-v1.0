@@ -30,6 +30,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { toast } from "sonner";
 
 import { useAgentRules } from "@/hooks/useAgentRules";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -89,6 +90,7 @@ const STAGE_TYPE_LABELS: Record<StageType, string> = {
   open: "Aberta",
   won: "Ganha",
   lost: "Perdida",
+  ciclo: "Ciclo",
 };
 
 // ─── Defaults ────────────────────────────────────────────────────────────
@@ -140,6 +142,106 @@ const newRule = (): AgentRuleTrigger => ({
   do: [],
   active: true,
 });
+
+// ─── Presets ──────────────────────────────────────────────────────────────
+
+interface Preset {
+  label: string;
+  description: string;
+  build: () => AgentRuleTrigger;
+}
+
+const PRESETS: Preset[] = [
+  {
+    label: "Lead interessado",
+    description: "Mover para Qualificação quando o lead demonstrar interesse",
+    build: () => ({
+      id: crypto.randomUUID(),
+      name: "Lead interessado → Qualificação",
+      when: { type: "intent_detected", intent: "interested" },
+      do: [{ action: "move_stage", stage_type: "open" }],
+      active: true,
+    }),
+  },
+  {
+    label: "Objeção de preço",
+    description: "Criar tarefa de follow-up quando o lead questionar preço",
+    build: () => ({
+      id: crypto.randomUUID(),
+      name: "Objeção de preço → Follow-up",
+      when: { type: "intent_detected", intent: "objection_price" },
+      do: [
+        { action: "add_note", content_template: "Lead manifestou objeção de preço — revisar proposta." },
+        { action: "create_task", title_template: "Follow-up objeção de preço", due_in_hours: 24 },
+      ],
+      active: true,
+    }),
+  },
+  {
+    label: "Sem resposta",
+    description: "Criar touchpoint quando o lead ficar ocioso",
+    build: () => ({
+      id: crypto.randomUUID(),
+      name: "Sem resposta → Touchpoint",
+      when: { type: "idle_in_stage", hours: 48 },
+      do: [{ action: "add_touchpoint", touchpoint_type: "call", content_template: "Tentativa de contato — lead ocioso há 48h" }],
+      active: true,
+    }),
+  },
+  {
+    label: "Campo preenchido",
+    description: "Executar ação quando um campo personalizado for preenchido",
+    build: () => ({
+      id: crypto.randomUUID(),
+      name: "Campo preenchido → Ação",
+      when: { type: "custom_field_set", field_id: "" },
+      do: [{ action: "add_note", content_template: "Campo personalizado atualizado." }],
+      active: true,
+    }),
+  },
+];
+
+// ─── Validation ───────────────────────────────────────────────────────────
+
+interface ValidationError {
+  ruleIndex: number;
+  message: string;
+}
+
+function validateRules(rules: AgentRuleTrigger[], stages: { id: string; name: string }[], fields: CustomFieldSchema[]): ValidationError[] {
+  const errors: ValidationError[] = [];
+  rules.forEach((rule, i) => {
+    if (!rule.name.trim()) {
+      errors.push({ ruleIndex: i, message: "Dê um nome à regra." });
+    }
+    if (rule.do.length === 0) {
+      errors.push({ ruleIndex: i, message: "Adicione ao menos uma ação à regra." });
+    }
+    if (rule.when.type === "stage_entered" && !rule.when.stage_id) {
+      errors.push({ ruleIndex: i, message: "Selecione a etapa de entrada." });
+    }
+    if (rule.when.type === "custom_field_set" && !rule.when.field_id) {
+      errors.push({ ruleIndex: i, message: "Selecione o campo personalizado." });
+    }
+    // Check actions that require a stage
+    rule.do.forEach((action, ai) => {
+      if (action.action === "move_stage") {
+        const moveAction = action as AgentAction & { action: "move_stage" };
+        if (!moveAction.stage_type) {
+          errors.push({ ruleIndex: i, message: `Ação ${ai + 1}: selecione a etapa de destino.` });
+        }
+      }
+    });
+  });
+  return errors;
+}
+
+/** Build a one-line summary of a rule */
+function ruleSummary(rule: AgentRuleTrigger): string {
+  const whenLabel = TRIGGER_LABELS[rule.when.type] ?? rule.when.type;
+  const actions = rule.do.map((a) => ACTION_LABELS[a.action] ?? a.action).join(", ");
+  return `${whenLabel} → ${actions}`;
+}
 
 // ─── Sub-components ──────────────────────────────────────────────────────
 
@@ -558,6 +660,10 @@ const RuleCard = ({
     });
   };
 
+  const summary = rule.name
+    ? `${rule.name}: ${ruleSummary(rule)}`
+    : ruleSummary(rule);
+
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="rounded-lg border border-border bg-card">
@@ -573,12 +679,18 @@ const RuleCard = ({
             </Button>
           </CollapsibleTrigger>
 
-          <Input
-            placeholder="Nome da regra…"
-            value={rule.name}
-            onChange={(e) => onChange({ ...rule, name: e.target.value })}
-            className="h-8 text-sm flex-1"
-          />
+          {open ? (
+            <Input
+              placeholder="Nome da regra…"
+              value={rule.name}
+              onChange={(e) => onChange({ ...rule, name: e.target.value })}
+              className="h-8 text-sm flex-1"
+            />
+          ) : (
+            <span className="flex-1 text-sm truncate text-muted-foreground">
+              {summary}
+            </span>
+          )}
 
           <div className="flex items-center gap-2 shrink-0">
             <Switch
@@ -756,6 +868,11 @@ export const AgentRulesPanel = ({
   );
 
   const handleSave = () => {
+    const errors = validateRules(triggers, stageList, customFields);
+    if (errors.length > 0) {
+      errors.forEach((e) => toast.error(`Regra ${e.ruleIndex + 1}: ${e.message}`));
+      return;
+    }
     upsertRules.mutate({
       auto_create_opportunity: autoCreate,
       auto_advance_stages: autoAdvance,
@@ -899,6 +1016,31 @@ export const AgentRulesPanel = ({
             </div>
           </div>
         </section>
+
+        {/* Section — Presets (only when no rules exist) */}
+        {triggers.length === 0 && (
+          <section className="rounded-lg border border-border bg-card p-5 space-y-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Comece com um modelo
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    setTriggers((prev) => [...prev, p.build()]);
+                    setDirty(true);
+                  }}
+                  className="text-left p-3 rounded-md border border-border/60 hover:border-primary/40 hover:bg-muted/30 transition-colors"
+                >
+                  <span className="text-sm font-medium">{p.label}</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Section B — Rules List */}
         <section className="space-y-4">
