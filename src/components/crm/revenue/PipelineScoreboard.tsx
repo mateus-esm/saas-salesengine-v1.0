@@ -10,6 +10,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useForecast } from "@/hooks/useForecast";
+import { usePipelines } from "@/hooks/usePipelines";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface PipelineScoreboardProps {
@@ -18,27 +19,27 @@ interface PipelineScoreboardProps {
 
 const ALL_METRIC_KEYS = ["goal_progress", "win_rate", "velocity", "inbound"] as const;
 
-function metricHideKey(pipelineId: string, metricKey: string): string {
-  return `scoreboard_hidden_${pipelineId}_${metricKey}`;
-}
-
-function loadHiddenMetrics(pipelineId: string): Set<string> {
-  const hidden = new Set<string>();
-  for (const k of ALL_METRIC_KEYS) {
-    if (localStorage.getItem(metricHideKey(pipelineId, k)) === "true") {
-      hidden.add(k);
-    }
-  }
-  return hidden;
+/** Safely read hidden_scoreboard_metrics from the pipeline's revenue_config. */
+function getHiddenMetrics(pipeline: { revenue_config: Record<string, unknown> } | undefined): Set<string> {
+  const raw = pipeline?.revenue_config?.hidden_scoreboard_metrics;
+  if (Array.isArray(raw)) return new Set(raw.filter((k): k is string => typeof k === "string"));
+  return new Set();
 }
 
 export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
   const storageKey = `scoreboard_open_${pipelineId}`;
   const [open, setOpen] = useState(() => localStorage.getItem(storageKey) !== "false");
+  const { pipelines, updatePipeline } = usePipelines();
+  const pipeline = pipelines.find((p) => p.id === pipelineId);
   const [hiddenMetrics, setHiddenMetrics] = useState<Set<string>>(() =>
-    loadHiddenMetrics(pipelineId)
+    getHiddenMetrics(pipeline)
   );
   const { data, isLoading } = useForecast(pipelineId);
+
+  // Sync hiddenMetrics when pipeline data loads (first render may not have it yet)
+  useEffect(() => {
+    setHiddenMetrics(getHiddenMetrics(pipeline));
+  }, [pipeline?.revenue_config?.hidden_scoreboard_metrics]);
 
   useEffect(() => {
     localStorage.setItem(storageKey, String(open));
@@ -46,18 +47,30 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
 
   const hideMetric = useCallback(
     (metricKey: string) => {
-      localStorage.setItem(metricHideKey(pipelineId, metricKey), "true");
-      setHiddenMetrics((prev) => new Set([...prev, metricKey]));
+      const current = getHiddenMetrics(pipeline);
+      current.add(metricKey);
+      setHiddenMetrics(new Set(current));
+      updatePipeline.mutate({
+        id: pipelineId,
+        revenue_config: {
+          ...(pipeline?.revenue_config ?? {}),
+          hidden_scoreboard_metrics: Array.from(current),
+        },
+      });
     },
-    [pipelineId]
+    [pipeline, pipelineId, updatePipeline]
   );
 
   const showAllMetrics = useCallback(() => {
-    for (const k of ALL_METRIC_KEYS) {
-      localStorage.removeItem(metricHideKey(pipelineId, k));
-    }
     setHiddenMetrics(new Set());
-  }, [pipelineId]);
+    updatePipeline.mutate({
+      id: pipelineId,
+      revenue_config: {
+        ...(pipeline?.revenue_config ?? {}),
+        hidden_scoreboard_metrics: [],
+      },
+    });
+  }, [pipeline, pipelineId, updatePipeline]);
 
   if (isLoading) {
     return <div className="h-10 bg-black/5 animate-pulse rounded-md mx-4 mt-2" />;

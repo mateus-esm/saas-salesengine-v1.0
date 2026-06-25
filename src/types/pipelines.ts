@@ -73,6 +73,8 @@ export interface Pipeline {
   icp_weights: Array<{field_key: string; weight: number; target_value: string; label?: string}>;
   custom_fields_schema: CustomFieldSchema[];
   card_field_ids: string[];        // which custom fields show on Kanban cards
+  /** Sprint 6.9 R4.1: Revenue predictability config (goal_deals, period, conversion_overrides, hidden_scoreboard_metrics, etc.). */
+  revenue_config: Record<string, unknown>;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
@@ -156,6 +158,7 @@ export interface UpdatePipelineData {
   cadence_days?: number | null;
   custom_fields_schema?: CustomFieldSchema[];
   card_field_ids?: string[];
+  revenue_config?: Record<string, unknown>;
   is_archived?: boolean;
 }
 

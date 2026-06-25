@@ -25,6 +25,7 @@ interface PipelineRow {
   cadence_days: number | null;
   custom_fields_schema: CustomFieldSchema[] | null;
   card_field_ids: string[] | null;
+  revenue_config: Record<string, unknown> | null;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
@@ -41,6 +42,7 @@ const normalizePipeline = (row: PipelineRow): Pipeline => ({
     ? row.custom_fields_schema
     : [],
   card_field_ids: Array.isArray(row.card_field_ids) ? row.card_field_ids : [],
+  revenue_config: row.revenue_config ?? {},
   is_archived: !!row.is_archived,
   created_at: row.created_at,
   updated_at: row.updated_at,

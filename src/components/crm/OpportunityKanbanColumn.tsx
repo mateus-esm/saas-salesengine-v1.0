@@ -100,20 +100,21 @@ export const OpportunityKanbanColumn = ({
               </div>
             ) : (
               opportunities.map((opp) => (
-                <OpportunityCard
-                  key={opp.id}
-                  opportunity={opp}
-                  lead={leadsById[opp.lead_id]}
-                  stage={stage}
-                  cardFields={cardFields}
-                  touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
-                  nativeFlags={nativeFlags}
-                  leadScore={(opp as any)._lead_score ?? null}
-                  leadScoreBreakdown={(opp as any)._lead_breakdown}
-                  onClick={() => onCardClick(opp)}
-                  onOpenContact={onOpenContact}
-                  companies={companiesByOppId[opp.id] ?? []}
-                />
+                <div key={opp.id} className="shrink-0">
+                  <OpportunityCard
+                    opportunity={opp}
+                    lead={leadsById[opp.lead_id]}
+                    stage={stage}
+                    cardFields={cardFields}
+                    touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
+                    nativeFlags={nativeFlags}
+                    leadScore={(opp as any)._lead_score ?? null}
+                    leadScoreBreakdown={(opp as any)._lead_breakdown}
+                    onClick={() => onCardClick(opp)}
+                    onOpenContact={onOpenContact}
+                    companies={companiesByOppId[opp.id] ?? []}
+                  />
+                </div>
               ))
             )}
           </div>
