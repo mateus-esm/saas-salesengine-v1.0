@@ -64,8 +64,8 @@ export function CopilotThinkingBadge({
           )}
           aria-label={
             isActive
-              ? "Copilot em execucao — clique para ver detalhes"
-              : "Historico do Copilot — clique para ver detalhes"
+              ? "Copilot em execu\u00e7\u00e3o — clique para ver detalhes"
+              : "Hist\u00f3rico do Copilot — clique para ver detalhes"
           }
         >
           {/* Pulse dot */}
@@ -107,12 +107,12 @@ export function CopilotThinkingBadge({
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Brain className="h-4 w-4 shrink-0 text-primary" />
           <span className="text-sm font-medium">
-            {isActive ? "Atividade do Copilot" : "Historico do Copilot"}
+            {isActive ? "Atividade do Copilot" : "Hist\u00f3rico do Copilot"}
           </span>
           {isActive && (
             <span className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span className="inline-block h-1.5 w-1.5 animate-pulse-dot rounded-full bg-primary" />
-              Em execucao
+              Em execu\u00e7\u00e3o
             </span>
           )}
         </div>

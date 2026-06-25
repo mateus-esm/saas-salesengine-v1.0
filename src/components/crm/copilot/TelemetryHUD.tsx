@@ -83,7 +83,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     }
     case "halted":
       return {
-        title: "Execucao interrompida",
+        title: "Execu\u00e7\u00e3o interrompida",
         detail: String(ev.payload?.reason ?? ev.payload?.error ?? "Sem creditos disponiveis."),
         meta: "Erro",
         tone: "err",
