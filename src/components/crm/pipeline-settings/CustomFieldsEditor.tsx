@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Eye, EyeOff, GripVertical, Plus, Trash2 } from "lucide-react";
+import { Eye, EyeOff, GripVertical, Info, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
@@ -364,9 +370,21 @@ export const SortableFieldRow = ({
 
       {/* Sprint 6.4 W2 — description trains the Copilot on what this field means */}
       <div>
-        <Label className="text-xs text-muted-foreground">
-          Descrição (treina o copiloto)
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label className="text-xs text-muted-foreground">
+            Descrição (treina o copiloto)
+          </Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3 w-3 text-muted-foreground/60 hover:text-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-[240px] text-xs">
+                Use este campo para dar contexto ao copiloto sobre o que esta informação significa.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <Textarea
           value={field.description ?? ""}
           onChange={(e) => onPatch({ description: e.target.value || undefined })}

@@ -8,6 +8,7 @@ import {
   Loader2,
   Plus,
   Save,
+  Settings,
   Star,
   StarOff,
   Tag,
@@ -210,7 +211,35 @@ const PipelineSettings = () => {
           )}
 
           {/* T8 — workspace Origem/Canal taxonomy editor */}
-          <OriginTaxonomyEditor />
+          <Collapsible defaultOpen={false}>
+            <Card>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group max-w-3xl mx-auto">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CardTitle>Origem & Canal</CardTitle>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="right" className="max-w-[220px] text-xs">
+                            Tags que classificam a origem e o canal de cada contato. Por exemplo: &ldquo;Instagram&rdquo; (canal) ou &ldquo;Indicação&rdquo; (origem).
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <OriginTaxonomyEditor />
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           {/* Sprint 6.4 W2 — tenant contact-field dictionary */}
           <Card className="max-w-3xl mx-auto">
@@ -298,6 +327,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const isDefault = defaultPipelineId === pipeline.id;
 
   // All sections start collapsed — clean first impression
+  const [geralOpen, setGeralOpen] = useState(false);
   const [identidadeOpen, setIdentidadeOpen] = useState(false);
   const [etapasOpen, setEtapasOpen] = useState(false);
   const [metasOpen, setMetasOpen] = useState(false);
@@ -370,6 +400,52 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
         </div>
       </div>
 
+      {/* 0. Geral */}
+      <Collapsible open={geralOpen} onOpenChange={setGeralOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Geral</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                        Configurações gerais da pipeline, como nome e cadência padrão.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <SectionChevron />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Cadência (dias)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={cadenceDays}
+                  onChange={(e) => setCadenceDays(e.target.value)}
+                  placeholder="Ex.: 2"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Vazio desativa o cálculo automático de próximo contato.
+                </p>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       {/* 1. Identidade */}
       <Collapsible open={identidadeOpen} onOpenChange={setIdentidadeOpen}>
         <Card>
@@ -385,7 +461,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                         <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
                       </TooltipTrigger>
                       <TooltipContent side="right" className="max-w-[200px] text-xs">
-                        Nome, descrição e cadência da pipeline. Define a identidade do seu processo de vendas.
+                        Nome e descrição da pipeline. Define a identidade do seu processo de vendas.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -407,21 +483,6 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                 />
-              </div>
-              <div>
-                <Label>Cadência (dias)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={cadenceDays}
-                  onChange={(e) => setCadenceDays(e.target.value)}
-                  placeholder="Ex.: 2"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Vazio desativa o cálculo automático de próximo contato.
-                </p>
               </div>
             </CardContent>
           </CollapsibleContent>
