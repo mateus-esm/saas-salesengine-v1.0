@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Bot,
   ChevronDown,
   Grip,
   Info,
@@ -209,53 +210,6 @@ const PipelineSettings = () => {
           ) : (
             <EmptyEditorState onCreate={() => setCreatingOpen(true)} />
           )}
-
-          {/* T8 — workspace Origem/Canal taxonomy editor */}
-          <Collapsible defaultOpen={false}>
-            <Card>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group max-w-3xl mx-auto">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CardTitle>Origem & Canal</CardTitle>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
-                          </TooltipTrigger>
-                          <TooltipContent side="right" className="max-w-[220px] text-xs">
-                            Tags que classificam a origem e o canal de cada contato. Por exemplo: &ldquo;Instagram&rdquo; (canal) ou &ldquo;Indicação&rdquo; (origem).
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                  </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent>
-                  <OriginTaxonomyEditor />
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-
-          {/* Sprint 6.4 W2 — tenant contact-field dictionary */}
-          <Card className="max-w-3xl mx-auto">
-            <CardHeader>
-              <CardTitle>Campos do Contato</CardTitle>
-              <CardDescription>
-                Dicionário de campos compartilhado por todos os pipelines.
-                Defina aqui os campos que o copiloto usa para enriquecer e
-                identificar contatos — adicione uma descrição para treinar o
-                copiloto sobre o que cada campo significa.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ContactFieldsEditor />
-            </CardContent>
-          </Card>
         </main>
       </div>
 
@@ -327,11 +281,15 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const isDefault = defaultPipelineId === pipeline.id;
 
   // All sections start collapsed — clean first impression
-  const [geralOpen, setGeralOpen] = useState(false);
   const [identidadeOpen, setIdentidadeOpen] = useState(false);
   const [etapasOpen, setEtapasOpen] = useState(false);
   const [metasOpen, setMetasOpen] = useState(false);
+  const [automacoesOpen, setAutomacoesOpen] = useState(false);
+  const [origemOpen, setOrigemOpen] = useState(false);
   const [camposOpen, setCamposOpen] = useState(false);
+  const [geralOpen, setGeralOpen] = useState(false);
+
+  const stagesCount = 0; // will be rendered by StagesEditor internally
 
   const dirty =
     name !== pipeline.name ||
@@ -366,41 +324,245 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* Action bar — save / default pipeline */}
-      <div className="flex items-center justify-between">
-        <div>
-          {isDefault && (
-            <Badge variant="secondary" className="gap-1">
-              <Star className="h-3 w-3" />
-              Padrão
-            </Badge>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {isDefault ? (
-            <Button
-              variant="outline"
-              onClick={() => setDefault.mutate(null)}
-              disabled={setDefault.isPending}
-            >
-              <StarOff className="h-4 w-4 mr-2" /> Remover padrão
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => setDefault.mutate(pipeline.id)}
-              disabled={setDefault.isPending}
-            >
-              <Star className="h-4 w-4 mr-2" /> Tornar padrão
-            </Button>
-          )}
-          <Button onClick={handleSave} disabled={!dirty}>
-            <Save className="h-4 w-4 mr-2" /> Salvar
-          </Button>
-        </div>
-      </div>
+      {/* ── Summary bar ── */}
+      <Card className="border-border/60">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold">{name || pipeline.name}</h2>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                {isDefault && (
+                  <Badge variant="secondary" className="gap-1 text-[10px] px-1.5 py-0">
+                    <Star className="h-3 w-3" />
+                    Padrão
+                  </Badge>
+                )}
+                {description && <span>{description}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isDefault ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDefault.mutate(null)}
+                  disabled={setDefault.isPending}
+                  className="text-xs"
+                >
+                  <StarOff className="h-3 w-3 mr-1" /> Remover padrão
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDefault.mutate(pipeline.id)}
+                  disabled={setDefault.isPending}
+                  className="text-xs"
+                >
+                  <Star className="h-3 w-3 mr-1" /> Tornar padrão
+                </Button>
+              )}
+              <Button onClick={handleSave} disabled={!dirty} size="sm">
+                <Save className="h-4 w-4 mr-1" /> Salvar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* 0. Geral */}
+      {/* ── 1. Identidade ── */}
+      <Collapsible open={identidadeOpen} onOpenChange={setIdentidadeOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Identidade</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!identidadeOpen && (
+                <CardDescription className="mt-1">
+                  Nome e descrição da pipeline para identificar o processo de vendas.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Nome</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Vendas Solar" />
+              </div>
+              <div>
+                <Label>Descrição</Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Para que serve esta pipeline? Ex.: Leads qualificados de energia solar residencial."
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A descrição ajuda o copiloto a entender o contexto e classificar leads corretamente.
+                </p>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── 2. Etapas ── */}
+      <Collapsible open={etapasOpen} onOpenChange={setEtapasOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Etapas</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!etapasOpen && (
+                <CardDescription className="mt-1">
+                  Etapas do funil de vendas: nome, SLA, cadência e regras de ciclo para cada estágio.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <StagesEditor pipelineId={pipeline.id} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── 3. Metas ── */}
+      <Collapsible open={metasOpen} onOpenChange={setMetasOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Metas</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!metasOpen && (
+                <CardDescription className="mt-1">
+                  Metas mensais ou trimestrais de negócios fechados. Alimenta o placar de performance no Kanban.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <RevenueGoalsForm pipelineId={pipeline.id} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── 4. Automações (shortcut) ── */}
+      <Collapsible open={automacoesOpen} onOpenChange={setAutomacoesOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Automações</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!automacoesOpen && (
+                <CardDescription className="mt-1">
+                  Regras automáticas que o agente segue: gatilhos, ações e instruções de treinamento.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Configure as regras automáticas do agente para esta pipeline na aba <strong>Copilot</strong> do pipeline.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Inclui: gatilhos baseados em intenção do lead, mensagens recebidas, tempo ocioso, entrada em etapas e campos preenchidos.
+              </p>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── 5. Origem & Canal ── */}
+      <Collapsible open={origemOpen} onOpenChange={setOrigemOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Origem &amp; Canal</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!origemOpen && (
+                <CardDescription className="mt-1">
+                  Tags que classificam como cada lead chegou até você. Compartilhado entre todos os pipelines.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <OriginTaxonomyEditor />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── 6. Campos do Contato ── */}
+      <Collapsible open={camposOpen} onOpenChange={setCamposOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Grip className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Campos do Contato</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!camposOpen && (
+                <CardDescription className="mt-1">
+                  Dicionário de campos compartilhado por todos os pipelines. Use descrições para treinar o copiloto.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-6">
+              <ContactFieldsEditor />
+              <div className="border-t border-border pt-4">
+                <CardFieldsPicker
+                  schema={schema}
+                  cardFieldIds={cardFieldIds}
+                  onChange={setCardFieldIds}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Escolha quais campos aparecem nos cards do Kanban para acesso rápido.
+                </p>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── 7. Geral (configurações avançadas) ── */}
       <Collapsible open={geralOpen} onOpenChange={setGeralOpen}>
         <Card>
           <CollapsibleTrigger asChild>
@@ -409,23 +571,18 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                 <div className="flex items-center gap-2">
                   <Settings className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>Geral</CardTitle>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[200px] text-xs">
-                        Configurações gerais da pipeline, como nome e cadência padrão.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
                 </div>
                 <SectionChevron />
               </div>
+              {!geralOpen && (
+                <CardDescription className="mt-1">
+                  Configurações avançadas: cadência, campos personalizados da pipeline e visibilidade nos cards.
+                </CardDescription>
+              )}
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div>
                 <Label>Cadência (dias)</Label>
                 <Input
@@ -438,173 +595,23 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                   placeholder="Ex.: 2"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Vazio desativa o cálculo automático de próximo contato.
+                  Intervalo padrão entre contatos automáticos. Vazio desativa o cálculo automático. Cada etapa pode ter seu próprio valor.
                 </p>
               </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
 
-      {/* 1. Identidade */}
-      <Collapsible open={identidadeOpen} onOpenChange={setIdentidadeOpen}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Tag className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Identidade</CardTitle>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[200px] text-xs">
-                        Nome e descrição da pipeline. Define a identidade do seu processo de vendas.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <SectionChevron />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Nome</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div>
-                <Label>Descrição</Label>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
+              <div className="border-t border-border pt-4">
+                <CustomFieldsEditor
+                  schema={schema}
+                  cardFieldIds={cardFieldIds}
+                  onChange={({ schema: s, cardFieldIds: c }) => {
+                    setSchema(s);
+                    setCardFieldIds(c);
+                  }}
                 />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Campos personalizados são exclusivos desta pipeline. Use para coletar informações específicas do seu processo.
+                </p>
               </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* 2. Etapas */}
-      <Collapsible open={etapasOpen} onOpenChange={setEtapasOpen}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <GitBranch className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Etapas</CardTitle>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[200px] text-xs">
-                        Configure as etapas do funil: nome, tipo (aberto/ganho/perdido), SLA, e descrições que treinam o Copiloto.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <SectionChevron />
-              </div>
-              <CardDescription>
-                Arraste para reordenar. O tipo da etapa (aberto / ganho / perdido)
-                controla quais leads aparecem nos relatórios. Defina a descrição
-                (para treinar o copiloto) e o SLA (horas máximas) de cada etapa.
-              </CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent>
-              <StagesEditor pipelineId={pipeline.id} />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* 3. Metas */}
-      <Collapsible open={metasOpen} onOpenChange={setMetasOpen}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Metas</CardTitle>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[200px] text-xs">
-                        Defina metas mensais ou trimestrais. Alimenta o placar de receita no Kanban.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <SectionChevron />
-              </div>
-              <CardDescription>
-                Defina a meta mensal ou trimestral de negócios fechados para esta
-                pipeline. Usado nos relatórios de previsão.
-              </CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent>
-              <RevenueGoalsForm pipelineId={pipeline.id} />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* 4. Campos Personalizados */}
-      <Collapsible open={camposOpen} onOpenChange={setCamposOpen}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Grip className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Campos Personalizados</CardTitle>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[200px] text-xs">
-                        Crie campos exclusivos desta pipeline e escolha quais aparecem no card do Kanban.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <SectionChevron />
-              </div>
-              <CardDescription>
-                Defina campos exclusivos desta pipeline e escolha quais aparecem
-                no card do Kanban. Lembre de salvar.
-              </CardDescription>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="space-y-6">
-              <CustomFieldsEditor
-                schema={schema}
-                cardFieldIds={cardFieldIds}
-                onChange={({ schema: s, cardFieldIds: c }) => {
-                  setSchema(s);
-                  setCardFieldIds(c);
-                }}
-              />
-              <CardFieldsPicker
-                schema={schema}
-                cardFieldIds={cardFieldIds}
-                onChange={setCardFieldIds}
-              />
             </CardContent>
           </CollapsibleContent>
         </Card>

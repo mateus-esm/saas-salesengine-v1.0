@@ -16,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, Trash2, Webhook } from "lucide-react";
+import { Clock, GripVertical, MessageSquare, Plus, RefreshCw, Repeat, Trash2, Webhook } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,7 +173,7 @@ interface SortableStageRowProps {
   onDelete: () => void;
 }
 
-const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) => {
+const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: SortableStageRowProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stage.id,
   });
@@ -183,14 +183,16 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const stageTypeLabel = STAGE_TYPES.find((t) => t.value === stage.stage_type)?.label ?? stage.stage_type;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-card border border-border rounded-md p-3 space-y-3"
+      className="bg-card border border-border rounded-lg p-4 space-y-4"
     >
-      {/* Row 1: drag handle + color + name + type + delete */}
-      <div className="flex items-center gap-2">
+      {/* ── Header: drag handle, color, name, type, actions ── */}
+      <div className="flex items-center gap-3">
         <button
           {...attributes}
           {...listeners}
@@ -200,40 +202,26 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
           <GripVertical className="h-4 w-4" />
         </button>
 
-        <input
-          type="color"
-          value={stage.color}
-          onChange={(e) => onChange({ color: e.target.value })}
-          className="h-7 w-9 rounded border border-border bg-transparent cursor-pointer"
+        <div
+          className="h-5 w-5 rounded-full shrink-0 border border-border"
+          style={{ backgroundColor: stage.color }}
           aria-label="Cor da etapa"
         />
 
         <Input
           value={stage.name}
           onChange={(e) => onChange({ name: e.target.value })}
-          className="flex-1 h-8"
+          className="flex-1 h-8 font-medium"
         />
 
-        <Select
-          value={stage.stage_type}
-          onValueChange={(v) => onChange({ stage_type: v as StageType })}
-        >
-          <SelectTrigger className="h-8 w-[110px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STAGE_TYPES.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
+          {stageTypeLabel}
+        </span>
 
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-destructive hover:text-destructive"
+          className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
           onClick={onDelete}
           aria-label="Excluir etapa"
         >
@@ -241,10 +229,14 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
         </Button>
       </div>
 
-      {/* Row 2: SLA + Max interactions + Cadence */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="grid gap-1">
-          <Label className="text-xs text-muted-foreground">SLA (horas)</Label>
+      {/* ── Operational row: SLA, interações, cadência, webhook ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* SLA */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3 text-muted-foreground" />
+            <Label className="text-xs text-muted-foreground font-normal">SLA (horas)</Label>
+          </div>
           <Input
             type="number"
             min={1}
@@ -256,11 +248,19 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
             }
             className="h-8"
             aria-label="SLA em horas da etapa"
+            placeholder="Sem SLA"
           />
+          <p className="text-[10px] text-muted-foreground/60 leading-tight">
+            Tempo máximo que o lead pode ficar sem resposta antes de acionar um alerta.
+          </p>
         </div>
 
-        <div className="grid gap-1">
-          <Label className="text-xs text-muted-foreground">Máx. interações</Label>
+        {/* Max interações */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <MessageSquare className="h-3 w-3 text-muted-foreground" />
+            <Label className="text-xs text-muted-foreground font-normal">Máx. interações</Label>
+          </div>
           <Input
             type="number"
             min={1}
@@ -272,11 +272,19 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
             }
             className="h-8"
             aria-label="Máximo de interações da etapa"
+            placeholder="Ilimitado"
           />
+          <p className="text-[10px] text-muted-foreground/60 leading-tight">
+            Número máximo de trocas de mensagem antes de escalar para revisão manual.
+          </p>
         </div>
 
-        <div className="grid gap-1">
-          <Label className="text-xs text-muted-foreground">Cadência</Label>
+        {/* Cadência */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <RefreshCw className="h-3 w-3 text-muted-foreground" />
+            <Label className="text-xs text-muted-foreground font-normal">Cadência</Label>
+          </div>
           <div className="flex gap-1">
             <Input
               type="number"
@@ -287,9 +295,9 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
               onChange={(e) =>
                 onChange({ cadence_value: parsePositiveIntOrNull(e.target.value) })
               }
-              className="h-8 flex-1"
+              className="h-8 flex-1 min-w-0"
               aria-label="Valor da cadência"
-              placeholder="—"
+              placeholder="Herda"
             />
             <Select
               value={stage.cadence_unit ?? NONE}
@@ -307,92 +315,117 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
               </SelectContent>
             </Select>
           </div>
+          <p className="text-[10px] text-muted-foreground/60 leading-tight">
+            Intervalo entre contatos automáticos. Herda o valor da pipeline quando vazio.
+          </p>
+        </div>
+
+        {/* Webhook */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <Webhook className="h-3 w-3 text-muted-foreground" />
+            <Label className="text-xs text-muted-foreground font-normal">Webhook</Label>
+          </div>
+          <div className="pt-1">
+            <StageWebhookPopover
+              triggers={stage.webhook_triggers ?? []}
+              onChange={(webhook_triggers) => onChange({ webhook_triggers })}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground/60 leading-tight">
+            Notificação externa ao entrar, estourar SLA ou vencer cadência.
+          </p>
         </div>
       </div>
 
-      {/* Row 3: Webhook */}
-      <div>
-        <StageWebhookPopover
-          triggers={stage.webhook_triggers ?? []}
-          onChange={(webhook_triggers) => onChange({ webhook_triggers })}
-        />
-      </div>
-
-      {/* Row 4: Ciclo config (conditional) */}
-      {stage.stage_type === "ciclo" && (
-        <div className="flex items-start gap-3 pt-2 border-t border-border">
-          <div className="grid w-[120px] gap-1">
-            <span className="text-[10px] leading-none text-muted-foreground">Dias de ciclo</span>
-            <span className="text-[9px] leading-none text-muted-foreground/60">
-              Após X dias, o lead retorna à etapa de destino
-            </span>
-            <Input
-              type="number"
-              min={1}
-              step={1}
-              inputMode="numeric"
-              value={stage.cycle_days ?? ""}
-              onChange={(e) =>
-                onChange({ cycle_days: parsePositiveIntOrNull(e.target.value) })
-              }
-              className="h-8"
-              aria-label="Dias de ciclo"
-            />
-          </div>
-
-          <div className="grid flex-1 gap-1">
-            <span className="text-[10px] leading-none text-muted-foreground">Etapa de destino</span>
-            <Select
-              value={stage.cycle_target_stage_id ?? NONE}
-              onValueChange={(v) =>
-                onChange({ cycle_target_stage_id: v === NONE ? null : v })
-              }
-            >
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder="Selecionar etapa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>Nenhuma</SelectItem>
-                {pipelineStages
-                  .filter((s) => s.id !== stage.id)
-                  .map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid flex-1 gap-1">
-            <span className="text-[10px] leading-none text-muted-foreground">Webhook</span>
-            <Input
-              type="text"
-              value={stage.cycle_webhook_url ?? ""}
-              onChange={(e) =>
-                onChange({ cycle_webhook_url: e.target.value || null })
-              }
-              className="h-8"
-              placeholder="https://..."
-              aria-label="Webhook do ciclo"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Row 5: Description */}
+      {/* ── Training row: description ── */}
       <div>
         <Label className="text-xs text-muted-foreground">
-          Descrição (treina o copiloto)
+          O que o agente deve saber sobre esta etapa
         </Label>
         <Textarea
           value={stage.description ?? ""}
           onChange={(e) => onChange({ description: e.target.value || undefined })}
           rows={2}
           className="mt-1 text-xs resize-none"
-          placeholder="Ex.: Leads que já receberam proposta e estão avaliando a compra."
+          placeholder="Ex.: Leads que já receberam proposta técnica e estão avaliando o investimento. O agente deve focar em esclarecer dúvidas sobre retorno financeiro."
         />
       </div>
+
+      {/* ── Ciclo config (condicional) ── */}
+      {stage.stage_type === "ciclo" && (
+        <div className="border-t border-border pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Repeat className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">Configurações de Ciclo</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Dias de ciclo</Label>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={stage.cycle_days ?? ""}
+                onChange={(e) =>
+                  onChange({ cycle_days: parsePositiveIntOrNull(e.target.value) })
+                }
+                className="h-8"
+                aria-label="Dias de ciclo"
+                placeholder="Ex.: 30"
+              />
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                Após este período, o lead retorna automaticamente à etapa de destino.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Etapa de destino</Label>
+              <Select
+                value={stage.cycle_target_stage_id ?? NONE}
+                onValueChange={(v) =>
+                  onChange({ cycle_target_stage_id: v === NONE ? null : v })
+                }
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Selecionar etapa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Nenhuma</SelectItem>
+                  {pipelineStages
+                    .filter((s) => s.id !== stage.id)
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                Para onde o lead volta quando o ciclo encerra.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Webhook de ciclo</Label>
+              <Input
+                type="text"
+                value={stage.cycle_webhook_url ?? ""}
+                onChange={(e) =>
+                  onChange({ cycle_webhook_url: e.target.value || null })
+                }
+                className="h-8"
+                placeholder="https://..."
+                aria-label="Webhook do ciclo"
+              />
+              <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                URL chamada ao devolver o lead à etapa de destino.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

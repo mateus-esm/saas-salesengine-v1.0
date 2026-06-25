@@ -42,6 +42,7 @@ import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 export const TYPE_LABELS: Record<CustomFieldType, string> = {
   text: "Texto",
+  file: "Arquivo",
   number: "Número",
   currency: "Moeda",
   date: "Data",
