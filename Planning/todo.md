@@ -56,3 +56,49 @@ Goal: no full-page reloads; preserve in-progress input and unsaved edits across 
       Inicio/Observacoes".
 - [ ] Wire the two "em breve" rail stubs on the opportunity card: **Agenda do card** (→ agenda_events)
       and **Decisões do Copilot** (→ ai_decisions feed).
+
+## Sprint 6.9 — deferred items (select for a future sprint / 6.10)
+> Sprint 6.9 ("Copilot, Clarified") was scoped to A (agent IA), B (pipeline config),
+> C (predictability goals/scoreboard), E (kanban/card craft), G (navigation). The
+> items below were consciously deferred out of 6.9. See
+> `sprint_6.9_solo-copilot_evolve_v1.md`.
+
+- [ ] **Excel-style tables** (founder pts 6, 13; folds in 6.8-W4/W5): column
+      **drag-reorder** + **hide** + **inline cell edit** + **filter/sort** across
+      **Leads**, **Base de Contatos** (`DatabaseView.tsx`), and **Custom Tables**.
+      Include the **live-linked relation column** (target-table picker → resolves
+      live via RelationPicker/RelationChip/useRelationResolver). Goal: feels like a
+      Supabase/Excel grid — copy, don't reinvent.
+- [ ] **Telemetry humanization + agent latency** (founder pt 3): streaming responses
+      / progress indicators for perceived latency; further humanize agent telemetry
+      output beyond the 6.8 pass.
+- [ ] **Sync persistence across navigation** (founder pts 2, 10, 12): keep the sync
+      badge/job visible after navigating away and back (CRM sweep + per-card sync).
+      Overlaps the "State persistence" architectural item above — treat as one
+      architectural pass, not a bolt-on.
+- [ ] **Agenda week grid** (founder pt 16): Google-Calendar-style time-grid week
+      view (day-by-day columns with hour rows), beyond the existing Dia/Semana/Mês
+      from 6.8. Copy Google's layout.
+
+## Tech debt surfaced during Sprint 6.9 review (do soon)
+> Found while reviewing 6.9. Not feature work — guardrails + cleanup.
+
+- [ ] **Wire the REAL typecheck into CI/verification** *(important — silent gate)*.
+      Root `tsconfig.json` is `files: []` + references-only, so `tsc --noEmit`
+      typechecks **nothing** (always exit 0). Every "tsc clean" claim so far has been
+      hollow. Use `tsc -b` (or `tsc -p tsconfig.app.json`) in the build/CI gate. This
+      is how the `useQueryClient` runtime-crash regression in `RevenueGoalsForm.tsx`
+      slipped past "build green."
+- [ ] **Burn down the pre-existing type-error backlog** that the real typecheck
+      exposes (none block the Vite/SWC build, but they erode the safety net):
+      `useRelationResolver.ts` (Supabase query result casts), `mockChatData.ts`
+      (`completed` not on `Task`), `usePipelines.ts` (`icp_weights` missing on
+      normalized row), `usePipelineStagesV2.ts` (cycle_* fields), `OpportunityTable.tsx`
+      (`ColumnKind` / link-unlink union), `AgentRulesPanel.tsx` + `CustomFieldsEditor.tsx`
+      (missing `ciclo` / `file` keys in `Record<…>`), `useSubtasks.ts` (excessively
+      deep instantiation).
+- [ ] **Per-owner predictability depth**: rep-level activity targets + projection-vs-pace
+      (today per-owner is deals/revenue goals only; the run-rate/funnel math is
+      pipeline-level).
+- [ ] **Scoreboard `profiles` query is unscoped** (`select id,name` with no equipe
+      filter; relies on RLS). Tighten to the equipe if RLS ever loosens.
