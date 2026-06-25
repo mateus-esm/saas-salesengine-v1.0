@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ChevronDown,
@@ -71,11 +71,25 @@ const PipelineSettings = () => {
     deletePipeline,
   } = usePipelines();
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<"active" | "archived">("active");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Seed selection from ?selected= URL param; fall back to null
+  const [selectedId, setSelectedId_] = useState<string | null>(
+    searchParams.get("selected") || null
+  );
   const [creatingOpen, setCreatingOpen] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
+
+  // Keep URL in sync when selection changes
+  const setSelectedId = (id: string | null) => {
+    setSelectedId_(id);
+    if (id) {
+      setSearchParams({ selected: id }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
 
   // Auto-select first available pipeline of the visible tab
   useEffect(() => {
