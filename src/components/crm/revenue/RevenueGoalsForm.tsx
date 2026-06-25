@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2 } from "lucide-react";
+import { OwnerGoal } from "@/types/pipelines";
 
 interface RevenueGoalsFormProps {
   pipelineId: string;
@@ -22,6 +23,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
   const [goalDeals, setGoalDeals] = useState("");
   const [goalRevenue, setGoalRevenue] = useState("");
   const [period, setPeriod] = useState("month");
+  const [ownerGoals, setOwnerGoals] = useState<OwnerGoal[]>([]);
 
   const { data: config } = useQuery({
     queryKey: ["revenue_config", pipelineId],
@@ -36,6 +38,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
       setGoalDeals(String(rc.goal_deals ?? ""));
       setGoalRevenue(String(rc.goal_revenue ?? ""));
       setPeriod(rc.period ?? "month");
+      setOwnerGoals(rc.owner_goals ?? []);
       return rc;
     },
     enabled: !!pipelineId,
@@ -49,6 +52,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
       goal_deals: parseInt(goalDeals) || 0,
       goal_revenue: parseFloat(goalRevenue) || 0,
       period,
+      owner_goals: ownerGoals,
     };
     await sb
       .from("pipelines")
@@ -94,6 +98,64 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
             <SelectItem value="quarter">Trimestral</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      {/* Owner goals section */}
+      <div className="border-t pt-3 mt-3">
+        <h4 className="text-xs font-medium text-muted-foreground mb-2">
+          Metas por vendedor
+        </h4>
+        {ownerGoals.map((og, idx) => (
+          <div key={idx} className="flex items-center gap-2 mb-2">
+            <Input
+              value={og.owner_id}
+              onChange={(e) => {
+                const updated = [...ownerGoals];
+                updated[idx] = { ...updated[idx], owner_id: e.target.value };
+                setOwnerGoals(updated);
+              }}
+              placeholder="ID do vendedor"
+              className="h-7 text-xs flex-1"
+            />
+            <Input
+              type="number"
+              value={og.target_deals}
+              onChange={(e) => {
+                const updated = [...ownerGoals];
+                updated[idx] = { ...updated[idx], target_deals: parseInt(e.target.value) || 0 };
+                setOwnerGoals(updated);
+              }}
+              placeholder="Deals"
+              className="h-7 text-xs w-20"
+            />
+            <Input
+              type="number"
+              value={og.target_revenue}
+              onChange={(e) => {
+                const updated = [...ownerGoals];
+                updated[idx] = { ...updated[idx], target_revenue: parseFloat(e.target.value) || 0 };
+                setOwnerGoals(updated);
+              }}
+              placeholder="R$"
+              className="h-7 text-xs w-24"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setOwnerGoals(ownerGoals.filter((_, i) => i !== idx))}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs w-full"
+          onClick={() => setOwnerGoals([...ownerGoals, { owner_id: "", target_deals: 0, target_revenue: 0 }])}
+        >
+          <Plus className="h-3 w-3 mr-1" /> Adicionar vendedor
+        </Button>
       </div>
       <Button size="sm" onClick={handleSave} className="text-xs">
         Salvar metas
