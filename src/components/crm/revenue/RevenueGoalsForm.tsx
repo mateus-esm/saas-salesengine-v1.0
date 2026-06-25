@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,6 +42,16 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
       return rc;
     },
     enabled: !!pipelineId,
+  });
+
+  // Team members for the per-owner goal picker (RLS scopes to the equipe).
+  const { data: members = [] } = useQuery({
+    queryKey: ["team_members_for_goals"],
+    queryFn: async () => {
+      const sb = supabase as any;
+      const { data } = await sb.from("profiles").select("id, name");
+      return (data ?? []) as { id: string; name: string | null }[];
+    },
   });
 
   const handleSave = async () => {
@@ -106,16 +116,31 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
         </h4>
         {ownerGoals.map((og, idx) => (
           <div key={idx} className="flex items-center gap-2 mb-2">
-            <Input
-              value={og.owner_id}
-              onChange={(e) => {
+            <Select
+              value={og.owner_id || undefined}
+              onValueChange={(val) => {
                 const updated = [...ownerGoals];
-                updated[idx] = { ...updated[idx], owner_id: e.target.value };
+                updated[idx] = { ...updated[idx], owner_id: val };
                 setOwnerGoals(updated);
               }}
-              placeholder="ID do vendedor"
-              className="h-7 text-xs flex-1"
-            />
+            >
+              <SelectTrigger className="h-7 text-xs flex-1">
+                <SelectValue placeholder="Selecione o vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {members.map((m) => (
+                  <SelectItem
+                    key={m.id}
+                    value={m.id}
+                    disabled={ownerGoals.some(
+                      (g, i) => i !== idx && g.owner_id === m.id,
+                    )}
+                  >
+                    {m.name ?? m.id.slice(0, 8)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
               type="number"
               value={og.target_deals}
