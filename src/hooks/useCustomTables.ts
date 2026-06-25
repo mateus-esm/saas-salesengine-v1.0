@@ -12,6 +12,11 @@ export interface CustomTableColumn {
   label: string;
   type: "text" | "number" | "date" | "boolean" | "select" | "relation";
   options?: string[];
+  relationConfig?: {
+    targetTable: string;
+    targetTableSlug: string;
+    displayField: string;
+  };
 }
 
 export interface CustomTable {

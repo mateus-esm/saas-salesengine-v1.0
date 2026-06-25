@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowLeft, Plus, Settings2, Grip, Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
@@ -20,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface CustomTableViewProps {
   table: CustomTable;
@@ -37,16 +39,43 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const [newColKey, setNewColKey] = useState("");
   const [newColLabel, setNewColLabel] = useState("");
   const [newColType, setNewColType] = useState<CustomTableColumn["type"]>("text");
+  const [newColTargetTable, setNewColTargetTable] = useState("");
+  const [newColDisplayField, setNewColDisplayField] = useState("");
+
+  // Fetch other custom tables for relation target picker
+  const { data: otherTables = [] } = useQuery({
+    queryKey: ["custom_tables_all"],
+    queryFn: async () => {
+      const sb = supabase as any;
+      const { data } = await sb
+        .from("custom_tables")
+        .select("id, name, slug, table_schema")
+        .neq("id", table.id)
+        .eq("equipe_id", profile?.equipe_id)
+        .order("name");
+      return (data ?? []) as CustomTable[];
+    },
+    enabled: !!profile?.equipe_id,
+  });
 
   const columns = useMemo(() => {
-    return table.table_schema.map((col: CustomTableColumn): ColumnDef => ({
-      key: col.key,
-      label: col.label,
-      kind: col.type as ColumnDef["kind"],
-      source: "jsonb",
-      jsonbField: "data",
-      editable: true,
-    }));
+    return table.table_schema.map((col: CustomTableColumn): ColumnDef => {
+      const def: ColumnDef = {
+        key: col.key,
+        label: col.label,
+        kind: col.type as ColumnDef["kind"],
+        source: "jsonb",
+        jsonbField: "data",
+        editable: true,
+      };
+      if (col.type === "relation" && col.relationConfig) {
+        def.relation = {
+          table: col.relationConfig.targetTableSlug,
+          displayField: col.relationConfig.displayField,
+        };
+      }
+      return def;
+    });
   }, [table.table_schema]);
 
   const rows = useMemo(() => {
@@ -99,16 +128,29 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const handleAddColumn = async () => {
     if (!newColKey.trim()) return;
     const key = newColKey.trim().toLowerCase().replace(/\s+/g, "_");
+    const column: CustomTableColumn = {
+      key,
+      label: newColLabel.trim() || key,
+      type: newColType,
+    };
+    if (newColType === "relation") {
+      const target = otherTables.find((t) => t.id === newColTargetTable);
+      if (!target) return;
+      column.relationConfig = {
+        targetTable: target.name,
+        targetTableSlug: target.slug,
+        displayField: newColDisplayField || "name",
+      };
+    }
     await updateTable.mutateAsync({
       id: table.id,
-      table_schema: [
-        ...table.table_schema,
-        { key, label: newColLabel.trim() || key, type: newColType },
-      ],
+      table_schema: [...table.table_schema, column],
     });
     setNewColKey("");
     setNewColLabel("");
     setNewColType("text");
+    setNewColTargetTable("");
+    setNewColDisplayField("");
   };
 
   const handleRemoveColumn = async (key: string) => {
@@ -152,11 +194,16 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
                     key={col.key}
                     className="flex items-center justify-between rounded border border-border px-3 py-1.5 text-sm"
                   >
-                    <span className="flex items-center gap-2">
-                      <Grip className="h-3 w-3 text-muted-foreground" />
-                      <span className="font-medium">{col.label}</span>
-                      <span className="text-[10px] text-muted-foreground uppercase">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Grip className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="font-medium truncate">{col.label}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase shrink-0">
                         {col.type}
+                        {col.type === "relation" && col.relationConfig && (
+                          <span className="text-muted-foreground/60 normal-case ml-1">
+                            → {col.relationConfig.targetTable}
+                          </span>
+                        )}
                       </span>
                     </span>
                     <Button
@@ -185,9 +232,13 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
                   />
                   <Select
                     value={newColType}
-                    onValueChange={(v) =>
-                      setNewColType(v as CustomTableColumn["type"])
-                    }
+                    onValueChange={(v) => {
+                      setNewColType(v as CustomTableColumn["type"]);
+                      if (v !== "relation") {
+                        setNewColTargetTable("");
+                        setNewColDisplayField("");
+                      }
+                    }}
                   >
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue />
@@ -201,11 +252,37 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
                       <SelectItem value="relation">Relação</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {/* Relation config (conditional) */}
+                  {newColType === "relation" && (
+                    <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
+                      <p className="text-[10px] text-muted-foreground font-medium">Configurar relação</p>
+                      <Select value={newColTargetTable} onValueChange={setNewColTargetTable}>
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue placeholder="Tabela alvo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {otherTables.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={newColDisplayField}
+                        onChange={(e) => setNewColDisplayField(e.target.value)}
+                        placeholder="Campo de exibição (ex: name)"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  )}
+
                   <Button
                     size="sm"
                     className="w-full h-8 text-xs"
                     onClick={handleAddColumn}
-                    disabled={!newColKey.trim()}
+                    disabled={!newColKey.trim() || (newColType === "relation" && !newColTargetTable)}
                   >
                     Adicionar coluna
                   </Button>

@@ -180,7 +180,7 @@ export const OpportunityCard = ({
       className={cn(
         "group cursor-grab active:cursor-grabbing select-none",
         "rounded-md border border-border bg-card hover:border-primary/50 hover:shadow-sm",
-        "p-2.5 space-y-1.5 transition-colors",
+        "p-2.5 space-y-1.5 transition-colors overflow-hidden",
         isDragOverlay && "shadow-lg rotate-1 scale-[1.02]",
       )}
     >
@@ -227,13 +227,13 @@ export const OpportunityCard = ({
         </div>
       </div>
 
-      {/* Sprint 6.8 T3.3 — unified Lead Score badge */}
-      <div className="flex items-center gap-1">
-        <LeadScoreBadge score={leadScore ?? null} breakdown={leadScoreBreakdown} />
-        {leadScore !== null && leadScore !== undefined && (
+      {/* Sprint 6.8 T3.3 — unified Lead Score badge (hidden when no score) */}
+      {leadScore !== null && leadScore !== undefined && (
+        <div className="flex items-center gap-1">
+          <LeadScoreBadge score={leadScore} breakdown={leadScoreBreakdown} />
           <span className="text-[10px] text-muted-foreground">Score</span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Sprint 6.3 T8 — Intent Detected badge: shown only on real cards, not drag overlay */}
       {!isDragOverlay && intentDecision && (
