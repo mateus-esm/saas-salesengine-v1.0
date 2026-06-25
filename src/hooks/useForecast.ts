@@ -1,6 +1,29 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+/** Days elapsed in the current period. */
+function daysElapsed(period: "month" | "quarter"): number {
+  const now = new Date();
+  if (period === "month") return now.getDate();
+  const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+  const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
+  return Math.floor((now.getTime() - quarterStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+/** Total days in the current period. */
+function daysInPeriod(period: "month" | "quarter"): number {
+  const now = new Date();
+  if (period === "month") {
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  }
+  const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+  let total = 0;
+  for (let i = 0; i < 3; i++) {
+    total += new Date(now.getFullYear(), quarterMonth + i + 1, 0).getDate();
+  }
+  return total;
+}
+
 /** Compute win rate as 0-100 percentage. null when no decisions. */
 export function computeWinRate(won: number, lost: number): number | null {
   return won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
@@ -53,6 +76,13 @@ export interface ForecastData {
   opportunities_needed: number | null;
   proposals_needed: number | null;
   meetings_needed: number | null;
+  /** Sprint 6.9.1 W3 — touchpoints needed from meetings */
+  touchpoints_needed: number | null;
+  /** Sprint 6.9.1 W3 — gap between current and goal */
+  deals_gap: number;
+  revenue_gap: number;
+  /** Sprint 6.9.1 W3 — pace status derived from run-rate */
+  pace_status: "ahead" | "on_track" | "behind";
   conversion_rates: ConversionRate[];
   /** false → derived metrics (inbound, conversão) are not trustworthy yet. */
   sufficient_data: boolean;
@@ -177,6 +207,25 @@ export function useForecast(pipelineId: string | null) {
           ? Math.round(proposals_needed / stage2Rate)
           : null;
 
+      // W3 — touchpoints: apply stage3→stage4 rate to meetings_needed
+      const stage3Rate = conversion_rates.length > 2 ? conversion_rates[2].rate : null;
+      const touchpoints_needed =
+        meetings_needed !== null && stage3Rate !== null && stage3Rate > 0
+          ? Math.round(meetings_needed / stage3Rate)
+          : null;
+
+      // W3 — gap & pace
+      const deals_gap = Math.max(0, goal_deals - won);
+      const revenue_gap = Math.max(0, goal_revenue - won_revenue);
+      const pctElapsed = Math.min(1, daysElapsed(period) / daysInPeriod(period));
+      const expectPct = pctElapsed > 0 ? won / (goal_deals * pctElapsed) : 0;
+      const pace_status: "ahead" | "on_track" | "behind" =
+        goal_deals === 0 ? "on_track"
+        : won >= goal_deals ? "ahead"
+        : expectPct >= 1.1 ? "ahead"
+        : expectPct >= 0.9 ? "on_track"
+        : "behind";
+
       return {
         goal_deals,
         goal_revenue,
@@ -185,6 +234,10 @@ export function useForecast(pipelineId: string | null) {
         opportunities_needed,
         proposals_needed,
         meetings_needed,
+        touchpoints_needed,
+        deals_gap,
+        revenue_gap,
+        pace_status,
         conversion_rates,
         sufficient_data,
         placar: { won, lost, in_progress, goal: goal_deals },
