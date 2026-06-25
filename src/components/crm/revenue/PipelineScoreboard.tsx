@@ -10,6 +10,8 @@ import {
   DollarSign,
   Users,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useForecast } from "@/hooks/useForecast";
 import { usePipelines } from "@/hooks/usePipelines";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -83,6 +85,20 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
     getHiddenMetrics(pipeline)
   );
   const { data, isLoading } = useForecast(pipelineId);
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const sb = supabase as any;
+      const { data } = await sb.from("profiles").select("id, name");
+      return (data ?? []) as { id: string; name: string }[];
+    },
+    staleTime: 60_000,
+  });
+
+  const ownerName = (ownerId: string) => {
+    const profile = profiles?.find((p) => p.id === ownerId);
+    return profile?.name || ownerId.slice(0, 8) + "...";
+  };
 
   // Sync hiddenMetrics when pipeline data loads (first render may not have it yet)
   useEffect(() => {
@@ -131,12 +147,12 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
     const dealsRunRate =
       data.goal_deals > 0 && pctElapsed > 0
         ? Math.round((data.placar.won / data.goal_deals) * (1 / pctElapsed) * 100)
-        : 0;
+        : null;
 
     // Revenue run-rate
     const revenueRunRate =
       data.goal_revenue > 0 && pctElapsed > 0
-        ? Math.round((data.placar.won * (data.goal_revenue / data.goal_deals) / data.goal_revenue) * (1 / pctElapsed) * 100)
+        ? Math.round((data.won_revenue / data.goal_revenue) * (1 / pctElapsed) * 100)
         : 0;
 
     return { elapsed, total, pctElapsed, dealsRunRate, revenueRunRate };
@@ -158,15 +174,15 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
       label: "Negócios",
       target: String(data.goal_deals),
       current: String(won),
-      runRate: runRateData ? `${runRateData.dealsRunRate}%` : "\u2014",
-      gap: runRateData ? runRateData.dealsRunRate - 100 : null,
+      runRate: runRateData && runRateData.dealsRunRate !== null ? `${runRateData.dealsRunRate}%` : "\u2014",
+      gap: runRateData && runRateData.dealsRunRate !== null ? runRateData.dealsRunRate - 100 : null,
       icon: <Target className="h-4 w-4 text-emerald-500" />,
     },
     {
       key: "revenue",
       label: "Faturamento",
       target: data.goal_revenue > 0 ? formatBRL(data.goal_revenue) : "\u2014",
-      current: data.goal_revenue > 0 ? formatBRL((won / Math.max(goal, 1)) * data.goal_revenue) : "\u2014",
+      current: data.goal_revenue > 0 ? formatBRL(data.won_revenue) : "\u2014",
       runRate: data.goal_revenue > 0 && runRateData ? `${runRateData.revenueRunRate}%` : "\u2014",
       gap: data.goal_revenue > 0 && runRateData ? runRateData.revenueRunRate - 100 : null,
       icon: <DollarSign className="h-4 w-4 text-blue-500" />,
@@ -276,7 +292,7 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
                 )}
               </div>
             </div>
-            {runRateData && (
+            {runRateData && runRateData.dealsRunRate !== null && (
               <div className="text-right">
                 <span className="text-xs text-muted-foreground">Run Rate</span>
                 <span
@@ -441,7 +457,7 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
                   return (
                     <div key={og.owner_id} className="flex items-center gap-3 text-sm">
                       <span className="w-32 truncate text-muted-foreground font-mono text-xs">
-                        {og.owner_id.slice(0, 8)}...
+                        {ownerName(og.owner_id)}
                       </span>
                       <span className="w-28 text-xs font-medium">
                         {current} / {og.target_deals} negócios

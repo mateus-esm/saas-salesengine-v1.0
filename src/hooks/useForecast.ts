@@ -1,6 +1,36 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+/** Compute win rate as 0-100 percentage. null when no decisions. */
+export function computeWinRate(won: number, lost: number): number | null {
+  return won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
+}
+
+/** Compute avg days from created_at to closed_at for won opps. null when none. */
+export function computeAvgVelocityDays(
+  wonOpps: { created_at: string; closed_at: string }[]
+): number | null {
+  if (wonOpps.length === 0) return null;
+  return Math.round(
+    wonOpps.reduce((sum, o) => {
+      const created = new Date(o.created_at).getTime();
+      const closed = new Date(o.closed_at).getTime();
+      return sum + (closed - created) / (1000 * 60 * 60 * 24);
+    }, 0) / wonOpps.length
+  );
+}
+
+/** Compute run-rate: (current/target) * (total/elapsed) * 100. */
+export function computeRunRate(
+  current: number,
+  target: number,
+  elapsed: number,
+  total: number
+): number | null {
+  if (target <= 0 || elapsed <= 0 || total <= 0) return null;
+  return Math.round((current / target) * (total / elapsed) * 100);
+}
+
 interface ConversionRate {
   stage_id: string;
   rate: number;
@@ -31,6 +61,8 @@ export interface ForecastData {
   win_rate: number | null;
   /** Average days from created_at to won. null when no won opportunities. */
   avg_velocity_days: number | null;
+  /** Sum of value for won opportunities. */
+  won_revenue: number;
   /** Per-owner placar: owner_id → { won, lost, in_progress } */
   owner_placar: Record<string, { won: number; lost: number; in_progress: number }>;
   /** Per-owner goals from revenue_config */
@@ -79,7 +111,7 @@ export function useForecast(pipelineId: string | null) {
       // 3. Placar — now with timestamps for velocity computation + assigned_to for per-owner
       const { data: opps } = await sb
         .from("opportunities")
-        .select("status, created_at, closed_at, assigned_to")
+        .select("status, created_at, closed_at, assigned_to, value")
         .eq("pipeline_id", pipelineId);
 
       const allOpps = (opps ?? []) as any[];
@@ -88,23 +120,18 @@ export function useForecast(pipelineId: string | null) {
       const in_progress = allOpps.filter((o: any) => o.status === "open").length;
 
       // 3a. Win rate: won / (won + lost) as percentage, null when no decisions
-      const win_rate =
-        won + lost > 0 ? Math.round((won / (won + lost)) * 100) : null;
+      const win_rate = computeWinRate(won, lost);
 
       // 3b. Pipeline velocity: avg days from created_at to closed_at (when stage changed to won)
       const wonOpps = allOpps.filter((o: any) => o.status === "won" && o.created_at && o.closed_at);
-      const avg_velocity_days =
-        wonOpps.length > 0
-          ? Math.round(
-              wonOpps.reduce((sum: number, o: any) => {
-                const created = new Date(o.created_at).getTime();
-                const closed = new Date(o.closed_at).getTime();
-                return sum + (closed - created) / (1000 * 60 * 60 * 24);
-              }, 0) / wonOpps.length
-            )
-          : null;
+      const avg_velocity_days = computeAvgVelocityDays(wonOpps);
 
-      // 3c. Per-owner placar
+      // 3c. Revenue from won opportunities
+      const won_revenue = allOpps
+        .filter((o: any) => o.status === "won")
+        .reduce((sum: number, o: any) => sum + (parseFloat(o.value) || 0), 0);
+
+      // 3d. Per-owner placar
       const owner_placar: Record<string, { won: number; lost: number; in_progress: number }> = {};
       for (const opp of allOpps) {
         const ownerId = opp.assigned_to;
@@ -163,6 +190,7 @@ export function useForecast(pipelineId: string | null) {
         placar: { won, lost, in_progress, goal: goal_deals },
         win_rate,
         avg_velocity_days,
+        won_revenue,
         owner_placar,
         owner_goals,
       } as ForecastData;
