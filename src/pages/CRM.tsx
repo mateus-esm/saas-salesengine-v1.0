@@ -4,6 +4,13 @@ import { Bot, Building2, Calendar, Home, LayoutGrid, ListChecks, Plus, Table2, U
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 import { AIAgentToggle } from "@/components/AIAgentToggle";
 import { DatabaseView } from "@/components/crm/DatabaseView";
@@ -24,6 +31,17 @@ type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "
 const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot", "tabelas", "agenda"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
+
+const TAB_LABELS: Record<TopTab, string> = {
+  pipeline: "Pipeline",
+  contacts: "Base de Contatos",
+  companies: "Empresas",
+  properties: "Imóveis",
+  tasks: "Tarefas",
+  copilot: "Copilot",
+  tabelas: "Tabelas",
+  agenda: "Agenda",
+};
 
 const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -68,8 +86,22 @@ const CRM = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-border bg-card px-4 py-2 flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={tab} onValueChange={setTab}>
+      <div className="border-b border-border bg-card px-4 py-2">
+        <Breadcrumb className="mb-2">
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage className="text-sm font-medium">CRM</BreadcrumbPage>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage className="text-sm text-muted-foreground">
+                {TAB_LABELS[tab]}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="pipeline" className="flex items-center gap-2">
               <LayoutGrid className="h-4 w-4" />
@@ -107,6 +139,7 @@ const CRM = () => {
         </Tabs>
         <FeatureActivationGrid />
         <AIAgentToggle />
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">

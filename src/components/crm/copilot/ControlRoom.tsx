@@ -22,6 +22,8 @@ import type { Pipeline } from "@/types/pipelines";
 
 interface ControlRoomProps {
   pipelines: Pipeline[];
+  showAgentFilter?: boolean;
+  showTypeFilter?: boolean;
 }
 
 function formatTime(value: string): string {
@@ -72,8 +74,14 @@ function statusVariant(status: string): "default" | "secondary" | "outline" | "d
   return "outline";
 }
 
-export function ControlRoom({ pipelines }: ControlRoomProps) {
+export function ControlRoom({
+  pipelines,
+  showAgentFilter = false,
+  showTypeFilter = false,
+}: ControlRoomProps) {
   const [pipelineId, setPipelineId] = useState<string>("all");
+  const [agentType, setAgentType] = useState<string>("all");
+  const [decisionType, setDecisionType] = useState<string>("all");
   const selectedPipelineId = pipelineId === "all" ? null : pipelineId;
   const { data: rows = [], isLoading, error } = useCopilotDecisions({
     pipelineId: selectedPipelineId,
@@ -84,6 +92,17 @@ export function ControlRoom({ pipelines }: ControlRoomProps) {
     [pipelines],
   );
 
+  const filteredRows = useMemo(() => {
+    let result = rows;
+    if (showAgentFilter && agentType !== "all") {
+      result = result.filter((row) => originLabel(row) === agentType);
+    }
+    if (showTypeFilter && decisionType !== "all") {
+      result = result.filter((row) => row.status === decisionType);
+    }
+    return result;
+  }, [rows, showAgentFilter, agentType, showTypeFilter, decisionType]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -91,19 +110,52 @@ export function ControlRoom({ pipelines }: ControlRoomProps) {
           <Activity className="h-4 w-4 text-primary" />
           <h2 className="text-lg font-semibold text-foreground">Control Room</h2>
         </div>
-        <Select value={pipelineId} onValueChange={setPipelineId}>
-          <SelectTrigger className="w-full sm:w-72">
-            <SelectValue placeholder="Pipeline" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os pipelines</SelectItem>
-            {pipelines.map((pipeline) => (
-              <SelectItem key={pipeline.id} value={pipeline.id}>
-                {pipeline.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap gap-2">
+          {showAgentFilter && (
+            <Select value={agentType} onValueChange={setAgentType}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Agente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="Tower">Tower</SelectItem>
+                <SelectItem value="Floor">Floor</SelectItem>
+                <SelectItem value="Worker">Worker</SelectItem>
+                <SelectItem value="Copilot">Copilot</SelectItem>
+                <SelectItem value="Manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {showTypeFilter && (
+            <Select value={decisionType} onValueChange={setDecisionType}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="executed">executed</SelectItem>
+                <SelectItem value="approved">approved</SelectItem>
+                <SelectItem value="rejected">rejected</SelectItem>
+                <SelectItem value="failed">failed</SelectItem>
+                <SelectItem value="pending_approval">pending_approval</SelectItem>
+                <SelectItem value="proposed">proposed</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={pipelineId} onValueChange={setPipelineId}>
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder="Pipeline" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os pipelines</SelectItem>
+              {pipelines.map((pipeline) => (
+                <SelectItem key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-card">
@@ -116,7 +168,7 @@ export function ControlRoom({ pipelines }: ControlRoomProps) {
           <div className="p-6 text-sm text-destructive">
             Não foi possível carregar o histórico do Copilot.
           </div>
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground">
             Nenhuma decisão registrada para este filtro.
           </div>
@@ -135,7 +187,7 @@ export function ControlRoom({ pipelines }: ControlRoomProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => {
+              {filteredRows.map((row) => {
                 const activity = formatCopilotActivity(row.output_action, {
                   leadName: row.lead_name ?? "este lead",
                   source: originLabel(row),

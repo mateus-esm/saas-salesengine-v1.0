@@ -13,7 +13,6 @@ import { SyncButton } from "./copilot/SyncButton";
 import { OpportunityKanban } from "./OpportunityKanban";
 import { OpportunityTable } from "./OpportunityTable";
 import { PipelineSelector } from "./PipelineSelector";
-import { PipelineScoreboard } from "./revenue/PipelineScoreboard";
 
 export type PipelineView = "kanban" | "leads" | "agent";
 
@@ -93,9 +92,6 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
 
       {/* F4: Approval cards — renders only when there are pending decisions */}
       <CopilotApprovalsPanel pipelineId={pipelineId} />
-
-      {/* Sprint 6.7: Revenue scoreboard — collapsible HUD strip */}
-      <PipelineScoreboard pipelineId={pipelineId} />
 
       <div className="flex-1 overflow-hidden">
         {view === "kanban" && <OpportunityKanban pipelineId={pipelineId} />}

@@ -187,8 +187,9 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-card border border-border rounded-md p-2 space-y-2"
+      className="bg-card border border-border rounded-md p-3 space-y-3"
     >
+      {/* Row 1: drag handle + color + name + type + delete */}
       <div className="flex items-center gap-2">
         <button
           {...attributes}
@@ -229,8 +230,21 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
           </SelectContent>
         </Select>
 
-        <div className="grid w-[94px] gap-1">
-          <span className="text-[10px] leading-none text-muted-foreground">SLA (h)</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          onClick={onDelete}
+          aria-label="Excluir etapa"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Row 2: SLA + Max interactions + Cadence */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="grid gap-1">
+          <Label className="text-xs text-muted-foreground">SLA (horas)</Label>
           <Input
             type="number"
             min={1}
@@ -245,8 +259,8 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
           />
         </div>
 
-        <div className="grid w-[118px] gap-1">
-          <span className="text-[10px] leading-none text-muted-foreground">Máx. interações</span>
+        <div className="grid gap-1">
+          <Label className="text-xs text-muted-foreground">Máx. interações</Label>
           <Input
             type="number"
             min={1}
@@ -261,10 +275,9 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
           />
         </div>
 
-        {/* Sprint 5.3 T7 — per-stage cadence */}
-        <div className="grid w-[90px] gap-1">
-          <span className="text-[10px] leading-none text-muted-foreground">Cadência</span>
-          <div className="flex gap-0.5">
+        <div className="grid gap-1">
+          <Label className="text-xs text-muted-foreground">Cadência</Label>
+          <div className="flex gap-1">
             <Input
               type="number"
               min={1}
@@ -274,7 +287,7 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
               onChange={(e) =>
                 onChange({ cadence_value: parsePositiveIntOrNull(e.target.value) })
               }
-              className="h-8 w-[44px]"
+              className="h-8 flex-1"
               aria-label="Valor da cadência"
               placeholder="—"
             />
@@ -284,7 +297,7 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
                 onChange({ cadence_unit: v === NONE ? null : (v as 'hours' | 'days') })
               }
             >
-              <SelectTrigger className="h-8 w-[44px] px-1">
+              <SelectTrigger className="h-8 w-16 px-1">
                 <SelectValue placeholder="—" />
               </SelectTrigger>
               <SelectContent>
@@ -295,27 +308,19 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
             </Select>
           </div>
         </div>
+      </div>
 
-        {/* Sprint 5.3 T8 — per-stage webhook triggers */}
+      {/* Row 3: Webhook */}
+      <div>
         <StageWebhookPopover
           triggers={stage.webhook_triggers ?? []}
           onChange={(webhook_triggers) => onChange({ webhook_triggers })}
         />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-destructive hover:text-destructive"
-          onClick={onDelete}
-          aria-label="Excluir etapa"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
       </div>
 
-      {/* Sprint 6.8 W6 — ciclo stage config */}
+      {/* Row 4: Ciclo config (conditional) */}
       {stage.stage_type === "ciclo" && (
-        <div className="flex items-start gap-3 pl-8 pt-2 border-t border-border mt-1">
+        <div className="flex items-start gap-3 pt-2 border-t border-border">
           <div className="grid w-[120px] gap-1">
             <span className="text-[10px] leading-none text-muted-foreground">Dias de ciclo</span>
             <span className="text-[9px] leading-none text-muted-foreground/60">
@@ -335,7 +340,7 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
             />
           </div>
 
-          <div className="grid w-[200px] gap-1">
+          <div className="grid flex-1 gap-1">
             <span className="text-[10px] leading-none text-muted-foreground">Etapa de destino</span>
             <Select
               value={stage.cycle_target_stage_id ?? NONE}
@@ -359,7 +364,7 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
             </Select>
           </div>
 
-          <div className="grid w-[220px] gap-1">
+          <div className="grid flex-1 gap-1">
             <span className="text-[10px] leading-none text-muted-foreground">Webhook</span>
             <Input
               type="text"
@@ -375,8 +380,8 @@ const SortableStageRow = ({ stage, onChange, onDelete }: SortableStageRowProps) 
         </div>
       )}
 
-      {/* Sprint 6.4 W2 — description trains the Copilot triage on when a deal belongs here */}
-      <div className="pl-8">
+      {/* Row 5: Description */}
+      <div>
         <Label className="text-xs text-muted-foreground">
           Descrição (treina o copiloto)
         </Label>

@@ -171,3 +171,27 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-05-23 | CRM V1   | Sprint 5.5 | Merge + finalization + push    | OPUS 4.7      | ~40k / ~5k      | $0.98    | R$ 4,90  |
 
 **Legacy total (CRM V1):** $34.59 · R$ 172,95
+| 2026-06-23 | 6.8 W1 | W1.1 Copilot Sidebar + Detail View | Verboo Code / deepseek-v4-flash | L | R$ 20 |
+| 2026-06-23 | 6.8 W1 | W1.2 Pipeline Config Redesign | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W1 | W1.3 Card Detail Layout Redesign | Verboo Code / deepseek-v4-flash | L | R$ 20 |
+| 2026-06-23 | 6.8 W2 | 2.1 Note de-duplication (backend) | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W2 | 2.2 Event humanizer | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W2 | 2.3 Thinking badge | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W2 | 2.4 Non-blocking sync surface | Verboo Code / deepseek-v4-flash | L | R$ 20 |
+| 2026-06-23 | 6.8 W3 | 3.1 Lead-score endpoint | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W3 | 3.2 LeadScoreBadge | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W3 | 3.3 Replace ICP/Vel badges | Verboo Code / deepseek-v4-flash | L | R$ 20 |
+| 2026-06-23 | 6.8 W3 | 3.4 Honest forecast math | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W3 | 3.5 Scoreboard redesign | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W4 | 4.1 Column layout hook | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W4 | 4.2+4.3 Resizable headers + wire | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W4 | 4.4 Bulk move-to-stage | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W5 | 5.1 Query state hook | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W5 | 5.2+5.3 GridToolbar + wire | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W6 | 6.1 Stage migration | Verboo Code / deepseek-v4-flash | L | R$ 20 |
+| 2026-06-23 | 6.8 W6 | 6.2 Stage Engine types | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W6 | 6.3 Ciclo stage UI | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W6 | 6.4 Cycle pass backend | Verboo Code / deepseek-v4-flash | M | R$ 12 |
+| 2026-06-23 | 6.8 W7 | 7.1 Derive slug | Verboo Code / deepseek-v4-flash | S | R$ 6 |
+| 2026-06-23 | 6.8 W7 | 7.1-7.3 Custom Tables | Verboo Code / deepseek-v4-flash | M | R$ 15 |
+| 2026-06-23 | 6.8 W8 | 8.1+8.2 Agenda day/week views | Verboo Code / deepseek-v4-flash | M | R$ 12 |

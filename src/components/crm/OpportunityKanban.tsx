@@ -41,6 +41,7 @@ import {
 import { OpportunityKanbanColumn } from "./OpportunityKanbanColumn";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { CardFieldsPicker, NATIVE_CARD_FIELDS } from "./pipeline-settings/CardFieldsPicker";
+import { PipelineScoreboard } from "./revenue/PipelineScoreboard";
 
 import type { Lead } from "@/types/crm";
 import type { Opportunity } from "@/types/pipelines";
@@ -320,6 +321,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         </div>
       </div>
 
+      <PipelineScoreboard pipelineId={pipelineId} />
+
       <div className="flex-1 overflow-x-auto p-4 bg-muted/30">
         <DndContext
           sensors={sensors}
@@ -338,6 +341,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 touchpointCounts={touchpointCounts}
                 nativeFlags={nativeFlags}
                 onCardClick={setSelectedOpp}
+                onOpenContact={(leadId) => {
+                  const target = leadsById[leadId];
+                  if (target) setContactDrawerLead(target);
+                }}
                 companiesByOppId={companiesByOppId}
               />
             ))}

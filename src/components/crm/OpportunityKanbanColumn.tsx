@@ -1,7 +1,6 @@
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 import type { Lead } from "@/types/crm";
@@ -16,6 +15,7 @@ interface OpportunityKanbanColumnProps {
   touchpointCounts: Record<string, number>;      // NEW
   nativeFlags: NativeCardFlags;
   onCardClick: (opp: Opportunity) => void;
+  onOpenContact?: (leadId: string) => void;
   companiesByOppId?: Record<string, { id: string; name: string }[]>;
 }
 
@@ -39,6 +39,7 @@ export const OpportunityKanbanColumn = ({
   touchpointCounts,
   nativeFlags,
   onCardClick,
+  onOpenContact,
   companiesByOppId = {},
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
@@ -87,7 +88,7 @@ export const OpportunityKanbanColumn = ({
         )}
       </div>
 
-      <ScrollArea className="flex-1 p-2" ref={setNodeRef}>
+      <div className="flex-1 p-2 overflow-y-auto" ref={setNodeRef}>
         <SortableContext
           items={opportunities.map((o) => o.id)}
           strategy={verticalListSortingStrategy}
@@ -99,24 +100,26 @@ export const OpportunityKanbanColumn = ({
               </div>
             ) : (
               opportunities.map((opp) => (
-                <OpportunityCard
-                  key={opp.id}
-                  opportunity={opp}
-                  lead={leadsById[opp.lead_id]}
-                  stage={stage}
-                  cardFields={cardFields}
-                  touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
-                  nativeFlags={nativeFlags}
-                  leadScore={(opp as any)._lead_score ?? null}
-                  leadScoreBreakdown={(opp as any)._lead_breakdown}
-                  onClick={() => onCardClick(opp)}
-                  companies={companiesByOppId[opp.id] ?? []}
-                />
+                <div key={opp.id} className="shrink-0">
+                  <OpportunityCard
+                    opportunity={opp}
+                    lead={leadsById[opp.lead_id]}
+                    stage={stage}
+                    cardFields={cardFields}
+                    touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
+                    nativeFlags={nativeFlags}
+                    leadScore={(opp as any)._lead_score ?? null}
+                    leadScoreBreakdown={(opp as any)._lead_breakdown}
+                    onClick={() => onCardClick(opp)}
+                    onOpenContact={onOpenContact}
+                    companies={companiesByOppId[opp.id] ?? []}
+                  />
+                </div>
               ))
             )}
           </div>
         </SortableContext>
-      </ScrollArea>
+      </div>
     </div>
   );
 };

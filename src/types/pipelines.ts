@@ -1,6 +1,21 @@
 // CRM v1 — Multi-Pipeline Engine types (Sprint 3)
 // Lives alongside src/types/crm.ts. Legacy Lead/PipelineStage stay there.
 
+export interface OwnerGoal {
+  owner_id: string;
+  target_deals: number;
+  target_revenue: number;
+}
+
+export interface RevenueConfig {
+  goal_deals?: number;
+  goal_revenue?: number;
+  period?: "month" | "quarter";
+  owner_goals?: OwnerGoal[];
+  hidden_scoreboard_metrics?: string[];
+  conversion_overrides?: Record<string, number>;
+}
+
 export type CustomFieldType =
   | "text"
   | "file"
@@ -73,6 +88,8 @@ export interface Pipeline {
   icp_weights: Array<{field_key: string; weight: number; target_value: string; label?: string}>;
   custom_fields_schema: CustomFieldSchema[];
   card_field_ids: string[];        // which custom fields show on Kanban cards
+  /** Sprint 6.9 R4.1: Revenue predictability config (goal_deals, period, conversion_overrides, hidden_scoreboard_metrics, etc.). */
+  revenue_config: Record<string, unknown>;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
@@ -156,6 +173,7 @@ export interface UpdatePipelineData {
   cadence_days?: number | null;
   custom_fields_schema?: CustomFieldSchema[];
   card_field_ids?: string[];
+  revenue_config?: Record<string, unknown>;
   is_archived?: boolean;
 }
 

@@ -1,25 +1,31 @@
 export type AutonomyMode = "observe" | "suggest" | "autonomous";
 
-/** Each autonomy mode gets a one-line PT-BR helper text. */
-export const AUTONOMY_OPTIONS: {
-  value: AutonomyMode;
-  label: string;
-  helper: string;
-}[] = [
+/** UI-facing display modes (2-mode abstraction over 3-value DB enum) */
+export type DisplayMode = "copilot" | "autopilot";
+
+/** Map DB value → display mode */
+export function toDisplayMode(mode: AutonomyMode): DisplayMode {
+  if (mode === "autonomous") return "autopilot";
+  return "copilot"; // observe + suggest → copilot
+}
+
+/** Map display mode → DB value (the one to persist) */
+export function toDbMode(mode: DisplayMode): AutonomyMode {
+  if (mode === "autopilot") return "autonomous";
+  return "suggest";
+}
+
+/** Display-mode options for the UI */
+export const DISPLAY_OPTIONS: { value: DisplayMode; label: string; helper: string }[] = [
   {
-    value: "observe",
-    label: "Observar",
-    helper: "Observa e propõe, não escreve",
+    value: "copilot",
+    label: "Copilot",
+    helper: "Pergunta antes de agir; você aprova ou sincroniza",
   },
   {
-    value: "suggest",
-    label: "Sugerir",
-    helper: "Prepara a ação e pede sua aprovação",
-  },
-  {
-    value: "autonomous",
-    label: "Autônomo",
-    helper: "Age sozinho (pausa só em ações de alto risco)",
+    value: "autopilot",
+    label: "Autopilot",
+    helper: "Age sozinho; só pausa em ações de alto risco",
   },
 ];
 
