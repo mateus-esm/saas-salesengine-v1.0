@@ -37,7 +37,7 @@ import type { AutonomyMode, CopilotAgent } from "@/types/copilot";
 interface PipelineAgentViewProps {
   pipeline: Pipeline;
   agent: Partial<CopilotAgent> & { scope: "pipeline"; pipeline_id: string };
-  onBack: () => void;
+  onBack?: () => void;
   onSave: (patch: {
     name: string;
     system_prompt: string | null;
@@ -77,20 +77,22 @@ export function PipelineAgentView({
   return (
     <div className="h-full flex flex-col">
       {/* ── Header with back button ── */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Voltar
-        </button>
-        <div className="h-4 w-px bg-border" />
-        <h2 className="text-lg font-semibold text-foreground">
-          {pipeline.name}
-        </h2>
-      </div>
+      {onBack && (
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar
+          </button>
+          <div className="h-4 w-px bg-border" />
+          <h2 className="text-lg font-semibold text-foreground">
+            {pipeline.name}
+          </h2>
+        </div>
+      )}
 
       {/* ── Accordion content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -108,7 +110,7 @@ export function PipelineAgentView({
             <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-accent/40 transition-colors">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <FileText className="h-4 w-4 text-primary shrink-0" />
-                <span>Prompt & Nome</span>
+                <span>Treinamento</span>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">

@@ -5,9 +5,11 @@ import { Bot, LayoutGrid, Table2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { usePipelines } from "@/hooks/usePipelines";
+import { useCopilotAgents } from "@/hooks/useCopilotAgents";
 import { useCopilotRealtime } from "@/hooks/useCopilotRealtime";
+import type { CopilotAgent } from "@/types/copilot";
 
-import { AgentRulesPanel } from "./AgentRulesPanel";
+import { PipelineAgentView } from "./copilot/PipelineAgentView";
 import { CopilotApprovalsPanel } from "./copilot/CopilotApprovalsPanel";
 import { SyncButton } from "./copilot/SyncButton";
 import { OpportunityKanban } from "./OpportunityKanban";
@@ -46,7 +48,11 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
     return isPipelineView(raw) ? raw : "kanban";
   }, [searchParams]);
 
-  const pipelineName = pipelines.find((p) => p.id === pipelineId)?.name;
+  const pipeline = pipelines.find((p) => p.id === pipelineId);
+  const pipelineName = pipeline?.name;
+
+  const { agents, upsert } = useCopilotAgents();
+  const pipelineAgent = agents.find((a) => a.pipeline_id === pipelineId);
 
   const setView = useCallback(
     (next: string) => {
@@ -96,8 +102,26 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
       <div className="flex-1 overflow-hidden">
         {view === "kanban" && <OpportunityKanban pipelineId={pipelineId} />}
         {view === "leads" && <OpportunityTable pipelineId={pipelineId} />}
-        {view === "agent" && (
-          <AgentRulesPanel pipelineId={pipelineId} pipelineName={pipelineName} />
+        {view === "agent" && pipeline && (
+          <PipelineAgentView
+            pipeline={pipeline}
+            agent={
+              (pipelineAgent ?? {
+                scope: "pipeline" as const,
+                pipeline_id: pipelineId,
+              }) as Partial<CopilotAgent> & {
+                scope: "pipeline";
+                pipeline_id: string;
+              }
+            }
+            onSave={async (patch) => {
+              await upsert.mutateAsync({
+                scope: "pipeline",
+                pipeline_id: pipelineId,
+                ...patch,
+              });
+            }}
+          />
         )}
       </div>
     </div>

@@ -643,9 +643,8 @@ const RuleCard = ({
               />
               {(rule.when.type === "stage_entered" ||
                 rule.when.type === "idle_in_stage") && (
-                <p className="text-[11px] text-amber-500/80 mt-1">
-                  ⚠ Este gatilho será ativado via evento de banco/cron (Sprint
-                  5), não pela análise de mensagem.
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  🔄 Esta regra é verificada automaticamente ao longo do tempo, sem depender de mensagens do contato.
                 </p>
               )}
             </div>
@@ -943,15 +942,14 @@ export const AgentRulesPanel = ({
           </div>
         </section>
 
-        {/* Section C — Extraction Hints */}
+        {/* Section C — Training */}
         <section className="rounded-lg border border-border bg-card p-5 space-y-3">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            Hints de extração
+            Treinamento
           </h3>
           <p className="text-xs text-muted-foreground">
-            Texto livre que orienta a IA a extrair campos específicos desta
-            pipeline. Enviado como sufixo no prompt do sistema.
+            Instruções adicionais para o agente sobre como interpretar e extrair informações dos contatos desta pipeline.
           </p>
           <Textarea
             placeholder="Ex: Extrair kWp das contas de luz. Capturar tipo de telhado quando mencionado. Se o lead mencionar concorrentes, adicionar tag 'competitive'."
