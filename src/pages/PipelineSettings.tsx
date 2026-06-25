@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   Grip,
+  Info,
   Loader2,
   Plus,
   Save,
@@ -30,6 +31,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -268,9 +275,9 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const { defaultPipelineId, setDefault } = useDefaultPipeline();
   const isDefault = defaultPipelineId === pipeline.id;
 
-  // Section collapse state: first 2 expanded, rest collapsed
-  const [identidadeOpen, setIdentidadeOpen] = useState(true);
-  const [etapasOpen, setEtapasOpen] = useState(true);
+  // All sections start collapsed — clean first impression
+  const [identidadeOpen, setIdentidadeOpen] = useState(false);
+  const [etapasOpen, setEtapasOpen] = useState(false);
   const [metasOpen, setMetasOpen] = useState(false);
   const [camposOpen, setCamposOpen] = useState(false);
 
@@ -350,6 +357,16 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                 <div className="flex items-center gap-2">
                   <Tag className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>Identidade</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                        Nome, descrição e cadência da pipeline. Define a identidade do seu processo de vendas.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <SectionChevron />
               </div>
@@ -398,6 +415,16 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                 <div className="flex items-center gap-2">
                   <GitBranch className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>Etapas</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                        Configure as etapas do funil: nome, tipo (aberto/ganho/perdido), SLA, e descrições que treinam o Copiloto.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <SectionChevron />
               </div>
@@ -425,6 +452,16 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                 <div className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>Metas</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                        Defina metas mensais ou trimestrais. Alimenta o placar de receita no Kanban.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <SectionChevron />
               </div>
@@ -451,6 +488,16 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                 <div className="flex items-center gap-2">
                   <Grip className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>Campos Personalizados</CardTitle>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[200px] text-xs">
+                        Crie campos exclusivos desta pipeline e escolha quais aparecem no card do Kanban.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <SectionChevron />
               </div>
@@ -484,12 +531,14 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
 };
 
 const EmptyEditorState = ({ onCreate }: { onCreate: () => void }) => (
-  <div className="h-full flex items-center justify-center">
+  <div className="h-full flex items-center justify-center p-8">
     <div className="max-w-sm text-center space-y-4">
-      <h2 className="text-lg font-medium">Nenhuma pipeline selecionada</h2>
+      <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+        <GitBranch className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <h2 className="text-lg font-semibold">Nenhuma pipeline selecionada</h2>
       <p className="text-sm text-muted-foreground">
-        Crie sua primeira pipeline para começar a estruturar processos de venda
-        independentes — cada um com suas etapas e campos personalizados.
+        Selecione uma pipeline ao lado ou crie uma nova para começar a estruturar seus processos de venda.
       </p>
       <Button onClick={onCreate}>
         <Plus className="h-4 w-4 mr-2" /> Criar Pipeline
