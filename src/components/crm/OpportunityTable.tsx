@@ -36,7 +36,7 @@ import { ContactDetailsModal } from "./ContactDetailsModal";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { SpreadsheetGrid } from "./grid/SpreadsheetGrid";
 import { GridToolbar } from "./grid/GridToolbar";
-import type { ColumnDef, CellMutation, GridRow } from "./grid/types";
+import type { ColumnDef, CellMutation, ColumnKind, GridRow } from "./grid/types";
 import type { MassAction } from "./grid/MassActionBar";
 import type { Lead } from "@/types/crm";
 import type {
@@ -428,7 +428,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           | undefined;
         if (!value || !equipeId) return;
 
-        if (value.action === "remove" || value.action === "unlink") {
+        if (value.action === "remove") {
           // Soft-delete the link row by linked_id
           await supabase
             .from("opportunity_links")

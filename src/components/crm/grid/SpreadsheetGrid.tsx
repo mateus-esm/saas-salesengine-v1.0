@@ -28,6 +28,16 @@ export interface SpreadsheetGridProps {
   sortKey?: string;
   sortDir?: "asc" | "desc" | null;
   onResizeColumn?: (key: string, width: number) => void;
+  // Sprint 6.9.1 W6 — grid capabilities
+  showLeadScore?: boolean;
+  allowColumnReorder?: boolean;
+  allowColumnResize?: boolean;
+  allowColumnHide?: boolean;
+  allowColumnCreate?: boolean;
+  surfaceKey?: string;
+  onReorderColumn?: (fromIndex: number, toIndex: number) => void;
+  /** Column visibility toggle callback: (key) => void */
+  onToggleColumn?: (key: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +139,12 @@ export function SpreadsheetGrid({
   sortKey,
   sortDir,
   onResizeColumn,
+  showLeadScore = false,
+  allowColumnReorder = false,
+  allowColumnResize = true,
+  allowColumnCreate = true,
+  onReorderColumn,
+  onToggleColumn,
 }: SpreadsheetGridProps) {
   const allIds = rows.map((r) => r.id);
   const { selectedIds, isSelected, toggle, toggleAll, clear, count } =
@@ -200,9 +216,12 @@ export function SpreadsheetGrid({
     [onSort, sortKey, sortDir],
   );
 
-  // ---- Render a column header with sort + resize --------------------------
+  // ---- Column reorder: drag state ----------------------------------------
+  const [dragCol, setDragCol] = useState<{ key: string; index: number } | null>(null);
+
+  // ---- Render a column header with sort + resize + reorder ----------------
   const renderColumnHeader = useCallback(
-    (col: ColumnDef) => {
+    (col: ColumnDef, index: number) => {
       const key = col.key;
       const width = liveWidths[key] ?? col.width;
       const isSorted = sortKey === key;
@@ -211,12 +230,35 @@ export function SpreadsheetGrid({
           ? " \u2191"
           : " \u2193"
         : "";
+      const isDragging = dragCol?.key === key;
 
       return (
         <th
           key={key}
-          className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider relative select-none"
+          className={`px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider relative select-none ${
+            allowColumnReorder ? "cursor-grab" : ""
+          } ${isDragging ? "opacity-50" : ""}`}
           style={width ? { width } : undefined}
+          draggable={allowColumnReorder}
+          onDragStart={(e) => {
+            if (!allowColumnReorder) return;
+            setDragCol({ key, index });
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(e) => {
+            if (!allowColumnReorder || !dragCol) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          }}
+          onDrop={(e) => {
+            if (!allowColumnReorder || !dragCol || !onReorderColumn) return;
+            e.preventDefault();
+            if (dragCol.index !== index) {
+              onReorderColumn(dragCol.index, index);
+            }
+            setDragCol(null);
+          }}
+          onDragEnd={() => setDragCol(null)}
         >
           <span
             className={onSort ? "cursor-pointer" : undefined}
@@ -226,7 +268,7 @@ export function SpreadsheetGrid({
             {indicator}
           </span>
           {/* Resize handle */}
-          {onResizeColumn && (
+          {allowColumnResize && onResizeColumn && (
             <div
               className="absolute right-0 top-0 bottom-0 w-[4px] cursor-col-resize group/resize"
               onMouseDown={(e) => {
@@ -245,7 +287,7 @@ export function SpreadsheetGrid({
         </th>
       );
     },
-    [liveWidths, sortKey, sortDir, onSort, onResizeColumn, cycleSort],
+    [liveWidths, sortKey, sortDir, onSort, allowColumnResize, onResizeColumn, cycleSort, allowColumnReorder, onReorderColumn, dragCol],
   );
 
   // -- Loading skeleton -----------------------------------------------------
@@ -256,7 +298,7 @@ export function SpreadsheetGrid({
           <thead>
             <tr className="border-b">
               <th className="w-10 px-2 py-2" />
-              <LeadScoreHeader />
+              {showLeadScore && <LeadScoreHeader />}
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -266,7 +308,7 @@ export function SpreadsheetGrid({
                   {col.label}
                 </th>
               ))}
-              {onAddColumn && <th className="w-10 px-2 py-2" />}
+              {allowColumnCreate && onAddColumn && <th className="w-10 px-2 py-2" />}
             </tr>
           </thead>
           <tbody>
@@ -275,15 +317,17 @@ export function SpreadsheetGrid({
                 <td className="px-2 py-2">
                   <Skeleton className="h-4 w-4" />
                 </td>
-                <td className="px-1 py-2 text-center">
-                  <Skeleton className="h-4 w-4 mx-auto rounded-full" />
-                </td>
+                {showLeadScore && (
+                  <td className="px-1 py-2 text-center">
+                    <Skeleton className="h-4 w-4 mx-auto rounded-full" />
+                  </td>
+                )}
                 {columns.map((col) => (
                   <td key={col.key} className="px-3 py-2">
                     <Skeleton className="h-4 w-full" />
                   </td>
                 ))}
-                {onAddColumn && <td className="px-2 py-2" />}
+                {allowColumnCreate && onAddColumn && <td className="px-2 py-2" />}
               </tr>
             ))}
           </tbody>
@@ -313,7 +357,7 @@ export function SpreadsheetGrid({
                   aria-label="Selecionar todos"
                 />
               </th>
-              <LeadScoreHeader />
+              {showLeadScore && <LeadScoreHeader />}
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -323,7 +367,7 @@ export function SpreadsheetGrid({
                   {col.label}
                 </th>
               ))}
-              {onAddColumn && (
+              {allowColumnCreate && onAddColumn && (
                 <th className="w-10 px-2 py-2">
                   <Button
                     variant="ghost"
@@ -341,7 +385,7 @@ export function SpreadsheetGrid({
           <tbody>
             <tr>
               <td
-                colSpan={columns.length + 2 + (onAddColumn ? 1 : 0)}
+                colSpan={columns.length + 1 + (showLeadScore ? 1 : 0) + (allowColumnCreate && onAddColumn ? 1 : 0)}
                 className="px-3 py-8 text-center text-sm text-muted-foreground"
               >
                 Nenhum registro encontrado.
@@ -377,14 +421,16 @@ export function SpreadsheetGrid({
                 aria-label="Selecionar todos"
               />
             </th>
-            <LeadScoreHeader
-              onSort={onSort}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onResize={onResizeColumn}
-            />
+            {showLeadScore && (
+              <LeadScoreHeader
+                onSort={onSort}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onResize={onResizeColumn}
+              />
+            )}
             {columns.map(renderColumnHeader)}
-            {onAddColumn && (
+            {allowColumnCreate && onAddColumn && (
               <th className="w-10 px-2 py-2">
                 <Button
                   variant="ghost"
@@ -414,15 +460,17 @@ export function SpreadsheetGrid({
                   aria-label={`Selecionar linha ${row.id}`}
                 />
               </td>
-              <td className="px-1 py-2 text-center">
-                <LeadScoreBadge
-                  score={(row._lead_score as number | null) ?? undefined}
-                  breakdown={
-                    row._lead_breakdown as LeadScoreBreakdown | undefined
-                  }
-                  size="sm"
-                />
-              </td>
+              {showLeadScore && (
+                <td className="px-1 py-2 text-center">
+                  <LeadScoreBadge
+                    score={(row._lead_score as number | null) ?? undefined}
+                    breakdown={
+                      row._lead_breakdown as LeadScoreBreakdown | undefined
+                    }
+                    size="sm"
+                  />
+                </td>
+              )}
               {columns.map((col) => {
                 const value = row[col.key];
                 return (
@@ -438,7 +486,7 @@ export function SpreadsheetGrid({
                   </td>
                 );
               })}
-              {onAddColumn && <td className="px-2 py-2" />}
+              {allowColumnCreate && onAddColumn && <td className="px-2 py-2" />}
             </tr>
           ))}
         </tbody>
