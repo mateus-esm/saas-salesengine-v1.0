@@ -1,6 +1,21 @@
 // CRM v1 — Multi-Pipeline Engine types (Sprint 3)
 // Lives alongside src/types/crm.ts. Legacy Lead/PipelineStage stay there.
 
+export interface OwnerGoal {
+  owner_id: string;
+  target_deals: number;
+  target_revenue: number;
+}
+
+export interface RevenueConfig {
+  goal_deals?: number;
+  goal_revenue?: number;
+  period?: "month" | "quarter";
+  owner_goals?: OwnerGoal[];
+  hidden_scoreboard_metrics?: string[];
+  conversion_overrides?: Record<string, number>;
+}
+
 export type CustomFieldType =
   | "text"
   | "file"

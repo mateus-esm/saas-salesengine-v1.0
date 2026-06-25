@@ -20,6 +20,7 @@ interface RevenueGoalsFormProps {
 export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
   const queryClient = useQueryClient();
   const [goalDeals, setGoalDeals] = useState("");
+  const [goalRevenue, setGoalRevenue] = useState("");
   const [period, setPeriod] = useState("month");
 
   const { data: config } = useQuery({
@@ -33,6 +34,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
         .single();
       const rc = data?.revenue_config ?? {};
       setGoalDeals(String(rc.goal_deals ?? ""));
+      setGoalRevenue(String(rc.goal_revenue ?? ""));
       setPeriod(rc.period ?? "month");
       return rc;
     },
@@ -45,6 +47,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
     const updated = {
       ...existing,
       goal_deals: parseInt(goalDeals) || 0,
+      goal_revenue: parseFloat(goalRevenue) || 0,
       period,
     };
     await sb
@@ -66,6 +69,18 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
           value={goalDeals}
           onChange={(e) => setGoalDeals(e.target.value)}
           className="h-7 text-xs w-24"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-muted-foreground w-24">
+          Meta (R$)
+        </label>
+        <Input
+          type="number"
+          value={goalRevenue}
+          onChange={(e) => setGoalRevenue(e.target.value)}
+          className="h-7 text-xs w-24"
+          placeholder="0,00"
         />
       </div>
       <div className="flex items-center gap-2">
