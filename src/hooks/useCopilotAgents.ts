@@ -122,54 +122,10 @@ export const useCopilotAgents = () => {
       toast.error("Erro ao salvar configuração do copiloto: " + e.message),
   });
 
-  /**
-   * Sync the equipe toggle (is_crm_agent_enabled) to match all agents' modes.
-   * - All autonomous → toggle ON
-   * - All suggest/observe → toggle OFF
-   * - Mixed or empty → leave unchanged
-   */
-  const syncToggleToAgents = async () => {
-    if (!equipeId) return;
-    const agents = query.data ?? [];
-    if (agents.length === 0) return;
-
-    const allAutonomous = agents.every((a) => a.autonomy_mode === "autonomous");
-    const allNonAutonomous = agents.every(
-      (a) => a.autonomy_mode === "suggest" || a.autonomy_mode === "observe",
-    );
-
-    if (!allAutonomous && !allNonAutonomous) return; // mixed — leave toggle as-is
-
-    await sb
-      .from("equipes")
-      .update({ is_crm_agent_enabled: allAutonomous })
-      .eq("id", equipeId);
-  };
-
-  const bulkSetAutonomy = useMutation({
-    mutationFn: async (mode: AutonomyMode) => {
-      if (!equipeId) throw new Error("No equipe");
-      const { data: existing } = await sb
-        .from(TABLE)
-        .select("id, scope, pipeline_id")
-        .eq("equipe_id", equipeId);
-      // Only update existing agents
-      for (const agent of existing ?? []) {
-        await sb
-          .from(TABLE)
-          .update({ autonomy_mode: mode, updated_at: new Date().toISOString() })
-          .eq("id", agent.id);
-      }
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
-  });
-
   return {
     agents: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
     upsert,
-    bulkSetAutonomy,
-    syncToggleToAgents,
   };
 };

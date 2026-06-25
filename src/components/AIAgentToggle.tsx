@@ -15,7 +15,7 @@ import {
 
 export function AIAgentToggle() {
   const { equipe, profile } = useAuth();
-  const { isLoading: agentsLoading, bulkSetAutonomy } = useCopilotAgents();
+  const { isLoading: agentsLoading } = useCopilotAgents();
   const [isEnabled, setIsEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -40,15 +40,6 @@ export function AIAgentToggle() {
         .eq("id", equipe.id);
 
       if (error) throw error;
-
-      // Sync agent autonomy modes
-      if (checked) {
-        // Toggle ON → all agents to autonomous (Autopilot)
-        await bulkSetAutonomy.mutateAsync("autonomous");
-      } else {
-        // Toggle OFF → all agents to suggest (Copilot)
-        await bulkSetAutonomy.mutateAsync("suggest");
-      }
 
       toast.success(
         checked

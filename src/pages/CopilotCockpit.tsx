@@ -21,8 +21,8 @@ import {
 import type { AutonomyMode } from "@/types/copilot";
 
 const CopilotCockpit = () => {
-  const { equipe, refreshEquipe } = useAuth();
-  const { agents, isLoading: agentsLoading, upsert, syncToggleToAgents } = useCopilotAgents();
+  const { equipe } = useAuth();
+  const { agents, isLoading: agentsLoading, upsert } = useCopilotAgents();
   const { activePipelines, isLoading: pipelinesLoading } = usePipelines();
   const [selected, setSelected] = useState<SidebarItem | null>(null);
 
@@ -89,9 +89,6 @@ const CopilotCockpit = () => {
       autonomy_mode: AutonomyMode;
     }) => {
       await upsert.mutateAsync({ scope, pipeline_id, ...patch });
-      // Sync the AI toggle to match the new agent mode consensus
-      await syncToggleToAgents();
-      await refreshEquipe();
     };
 
   const contactAgent = findAgent("contact_base", null);
