@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
+  ArrowLeft,
   ChevronDown,
   Grip,
   Info,
@@ -113,6 +115,12 @@ const PipelineSettings = () => {
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card px-6 py-4">
+        <Link
+          to="/crm"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 mb-1"
+        >
+          <ArrowLeft className="h-3 w-3" /> Voltar ao CRM
+        </Link>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Pipelines</h1>
