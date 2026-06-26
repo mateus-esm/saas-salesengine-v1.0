@@ -200,8 +200,10 @@ took **three review cycles** (2 reviewer passes + manual) to reach the bar:
 
 > **Sprint:** Solo Copilot Evolve — Premium Fix Cycle
 > (`sprint_6.9.1_solo-copilot_evolve_v1.md`)
-> **Status:** Code-complete on branch
-> `engineer/sprint6.9.1/wave4/per-pipeline-copilot` (NOT yet merged to `main`).
+> **Closed:** 2026-06-26 **Branch:** `engineer/sprint6.9.1/wave4/per-pipeline-copilot`
+> → merged (fast-forward) to `main`, pushed to `origin/main`. Founder explicitly
+> **waived the screenshot/live-verification gates** (§4) for this merge — they are
+> deferred, not satisfied.
 > **Verification:** `npm run build` green · `npm test` 27/27 green ·
 > `tsc -p tsconfig.app.json` touched-file errors = **0** (only the known
 > pre-existing backlog of 15 errors across 7 untouched files remains;
@@ -259,12 +261,11 @@ the prior "all waves complete" ledger was partly hollow:
 - **MINOR** — dead scoreboard `pace` fields, "Prompt de Sistema" label under the
   "Treinamento" accordion, dead `stagesCount`. Cleaned.
 
-## 4. NOT done — requires the founder's authenticated app session
+## 4. Deferred (founder-waived for this merge) — needs an authenticated app session
 
-Per the sprint's explicit non-negotiable *"do not claim a visual fix without a
-screenshot at the problem viewport,"* these gates are **outstanding** because they
-need a running, logged-in Supabase session (credentials not available to the
-engineer):
+The founder chose to merge without these on 2026-06-26. They remain **unverified**,
+not done — track them as a fast follow. Each needs a running, logged-in Supabase
+session:
 
 - **W8 kanban after-screenshot** at the founder viewport (`Captura ...132721`).
 - **W9 before/after screenshot set** (pipeline setup, goals, scoreboard, Copilot,
@@ -275,13 +276,14 @@ engineer):
 
 ## 5. Deploy / DB state
 
-- **Frontend-only.** No new migrations. Relation links reuse the existing
-  `custom_table_links` table (verify its columns match before relying on
-  cross-table relations in production).
+- **Frontend-only.** Branch touched only `Planning/` + `src/` — **no migrations,
+  no edge functions, no python-agent changes**, so **nothing to `supabase db push`
+  or `supabase functions deploy`** this sprint. Relation links reuse the existing
+  `custom_table_links` table (migration `20260621001000`).
 - **Caveat (carried from 6.9):** root `tsc --noEmit` is hollow — always use
   `tsc -p tsconfig.app.json`. Touched files are clean; the pre-existing backlog
   (15 errors / 7 files: `useRelationResolver`, `mockChatData`, `OpportunityKanban`,
   `CopilotCockpit`, `useSubtasks`, `usePipelineStagesV2`, `usePipelines`) is
   unchanged and logged in `todo.md`.
-- **Branch not merged.** Merge to `main` after the §4 visual/live gates pass.
-- Commits this cycle: `a9a8fbf` → `cd95fd5`.
+- **Merged to `main`** (fast-forward) and pushed on 2026-06-26.
+- Commits this cycle: `a9a8fbf` → `bb45202` (+ this doc update).
