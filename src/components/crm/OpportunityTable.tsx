@@ -25,7 +25,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/hooks/useLeads";
 import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { useLeadScores } from "@/hooks/useLeadScores";
-import { useColumnLayout } from "@/hooks/useColumnLayout";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -341,9 +340,6 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     [nativeColumns, customColumns],
   );
 
-  // Sprint 6.8 T4.2 — column layout (persisted widths)
-  const { resizeColumn } = useColumnLayout(allColumns, "opportunity_table");
-
   // Sprint 6.8 T4.2 — sort handler
   const handleSort = useCallback(
     (key: string, dir: "asc" | "desc" | null) => {
@@ -601,7 +597,11 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           onSort={handleSort}
           sortKey={sortKey}
           sortDir={sortDir}
-          onResizeColumn={resizeColumn}
+          surfaceKey="opportunity_table"
+          allowColumnReorder
+          allowColumnResize
+          allowColumnHide
+          showLeadScore
         />
       </div>
 

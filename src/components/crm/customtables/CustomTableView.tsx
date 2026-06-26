@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
+import { GridToolbar } from "@/components/crm/grid/GridToolbar";
 import { useCustomTableRecords } from "@/hooks/useCustomTableRecords";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +34,9 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const { records, isLoading, createRecord, updateRecord } =
     useCustomTableRecords(table.id);
   const { updateTable } = useCustomTables();
+
+  // Search state
+  const [search, setSearch] = useState("");
 
   // Column editor state
   const [colEditorOpen, setColEditorOpen] = useState(false);
@@ -78,13 +82,23 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
     });
   }, [table.table_schema]);
 
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     return records.map((r) => ({
       id: r.id,
       equipe_id: profile?.equipe_id ?? "",
       ...(r.data as Record<string, unknown>),
     }));
   }, [records, profile?.equipe_id]);
+
+  const rows = useMemo(() => {
+    if (!search.trim()) return allRows;
+    const q = search.toLowerCase();
+    return allRows.filter((row) =>
+      Object.values(row).some(
+        (v) => typeof v === "string" && v.toLowerCase().includes(q),
+      ),
+    );
+  }, [allRows, search]);
 
   const handleCellCommit = async (m: CellMutation) => {
     const record = records.find((r) => r.id === m.rowId);
@@ -174,13 +188,23 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
         </Button>
         <h2 className="text-lg font-semibold">{table.name}</h2>
-        <div className="ml-auto flex items-center gap-2">
-          <Popover open={colEditorOpen} onOpenChange={setColEditorOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings2 className="mr-1 h-3 w-3" /> Colunas
-              </Button>
-            </PopoverTrigger>
+      </div>
+
+      {/* Toolbar: search + add column + add row */}
+      <GridToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Buscar..."
+        filters={[]}
+        onClearFilters={() => {}}
+        activeFilterCount={0}
+      >
+        <Popover open={colEditorOpen} onOpenChange={setColEditorOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings2 className="mr-1 h-3 w-3" /> Colunas
+            </Button>
+          </PopoverTrigger>
             <PopoverContent className="w-80" align="end">
               <div className="space-y-3">
                 <h4 className="text-sm font-medium">Colunas</h4>
@@ -293,8 +317,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           <Button variant="outline" size="sm" onClick={handleAddRow}>
             <Plus className="mr-1 h-3 w-3" /> Linha
           </Button>
-        </div>
-      </div>
+      </GridToolbar>
       <SpreadsheetGrid
         rows={rows}
         columns={columns}
@@ -303,6 +326,10 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         loading={isLoading}
         equipeId={profile?.equipe_id ?? ""}
         fromTable={table.slug}
+        surfaceKey={`custom_table_${table.id}`}
+        allowColumnReorder
+        allowColumnResize
+        allowColumnHide
       />
     </div>
   );

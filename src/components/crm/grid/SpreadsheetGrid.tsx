@@ -2,13 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Columns2, GripVertical } from "lucide-react";
 import type { ColumnDef, CellMutation, GridRow } from "./types";
 import { InlineCell } from "./InlineCell";
 import { MassActionBar, type MassAction } from "./MassActionBar";
 import { useGridSelection } from "./useGridSelection";
 import { LeadScoreBadge } from "../LeadScoreBadge";
 import type { LeadScoreBreakdown } from "../LeadScoreBadge";
+import { useColumnLayout } from "@/hooks/useColumnLayout";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -78,9 +88,9 @@ function LeadScoreHeader({
 
   const indicator =
     sortKey === LEAD_SCORE_COL_KEY && sortDir === "asc"
-      ? " \u2191"
+      ? " ↑"
       : sortKey === LEAD_SCORE_COL_KEY && sortDir === "desc"
-        ? " \u2193"
+        ? " ↓"
         : "";
 
   return (
@@ -112,16 +122,6 @@ function LeadScoreHeader({
   );
 }
 
-/** Resize-handle element placed in each <th>. */
-function ResizeHandle({
-  onResize,
-}: {
-  onResize: (key: string, w: number) => void;
-}) {
-  // Handled in parent via column-specific state — placeholder maintains structure.
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -142,13 +142,30 @@ export function SpreadsheetGrid({
   showLeadScore = false,
   allowColumnReorder = false,
   allowColumnResize = true,
+  allowColumnHide = false,
   allowColumnCreate = true,
+  surfaceKey,
   onReorderColumn,
-  onToggleColumn,
+  onToggleColumn: _onToggleColumn,
 }: SpreadsheetGridProps) {
   const allIds = rows.map((r) => r.id);
   const { selectedIds, isSelected, toggle, toggleAll, clear, count } =
     useGridSelection(allIds);
+
+  // ---- Internal layout management ----------------------------------------
+  // Hook is always called (React rules); results only applied when surfaceKey set.
+  const columnLayout = useColumnLayout(columns, surfaceKey ?? "_noop_");
+  const {
+    visibleColumns: layoutVisibleColumns,
+    resizeColumn: layoutResizeColumn,
+    reorderColumn: layoutReorderColumn,
+    toggleColumn: layoutToggleColumn,
+    resetLayout: layoutResetLayout,
+    hiddenColumns: layoutHiddenColumns,
+  } = columnLayout;
+
+  const layoutEnabled = !!surfaceKey;
+  const renderColumns = layoutEnabled ? layoutVisibleColumns : columns;
 
   const handleCellCommit = useCallback(
     (row: GridRow, column: ColumnDef) =>
@@ -165,8 +182,10 @@ export function SpreadsheetGrid({
     startWidth: number;
   } | null>(null);
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
-  const onResizeRef = useRef(onResizeColumn);
-  onResizeRef.current = onResizeColumn;
+
+  // Combined resize ref: routes to internal layout or external callback
+  const onResizeRef = useRef<((key: string, w: number) => void) | undefined>(undefined);
+  onResizeRef.current = layoutEnabled ? layoutResizeColumn : onResizeColumn;
 
   useEffect(() => {
     if (!resizing) return;
@@ -219,6 +238,21 @@ export function SpreadsheetGrid({
   // ---- Column reorder: drag state ----------------------------------------
   const [dragCol, setDragCol] = useState<{ key: string; index: number } | null>(null);
 
+  // Combined reorder: routes to internal layout or external callback
+  const handleReorder = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (layoutEnabled) {
+        layoutReorderColumn(fromIndex, toIndex);
+      } else {
+        onReorderColumn?.(fromIndex, toIndex);
+      }
+    },
+    [layoutEnabled, layoutReorderColumn, onReorderColumn],
+  );
+
+  // Whether resize handles should be shown
+  const resizeEnabled = allowColumnResize && (layoutEnabled || !!onResizeColumn);
+
   // ---- Render a column header with sort + resize + reorder ----------------
   const renderColumnHeader = useCallback(
     (col: ColumnDef, index: number) => {
@@ -227,15 +261,15 @@ export function SpreadsheetGrid({
       const isSorted = sortKey === key;
       const indicator = isSorted
         ? sortDir === "asc"
-          ? " \u2191"
-          : " \u2193"
+          ? " ↑"
+          : " ↓"
         : "";
       const isDragging = dragCol?.key === key;
 
       return (
         <th
           key={key}
-          className={`px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider relative select-none ${
+          className={`px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider relative select-none group/th ${
             allowColumnReorder ? "cursor-grab" : ""
           } ${isDragging ? "opacity-50" : ""}`}
           style={width ? { width } : undefined}
@@ -251,15 +285,18 @@ export function SpreadsheetGrid({
             e.dataTransfer.dropEffect = "move";
           }}
           onDrop={(e) => {
-            if (!allowColumnReorder || !dragCol || !onReorderColumn) return;
+            if (!allowColumnReorder || !dragCol) return;
             e.preventDefault();
             if (dragCol.index !== index) {
-              onReorderColumn(dragCol.index, index);
+              handleReorder(dragCol.index, index);
             }
             setDragCol(null);
           }}
           onDragEnd={() => setDragCol(null)}
         >
+          {allowColumnReorder && (
+            <GripVertical className="h-3 w-3 mr-0.5 opacity-0 group-hover/th:opacity-40 inline-block align-middle shrink-0" />
+          )}
           <span
             className={onSort ? "cursor-pointer" : undefined}
             onClick={() => cycleSort(key)}
@@ -268,7 +305,7 @@ export function SpreadsheetGrid({
             {indicator}
           </span>
           {/* Resize handle */}
-          {allowColumnResize && onResizeColumn && (
+          {resizeEnabled && (
             <div
               className="absolute right-0 top-0 bottom-0 w-[4px] cursor-col-resize group/resize"
               onMouseDown={(e) => {
@@ -287,8 +324,51 @@ export function SpreadsheetGrid({
         </th>
       );
     },
-    [liveWidths, sortKey, sortDir, onSort, allowColumnResize, onResizeColumn, cycleSort, allowColumnReorder, onReorderColumn, dragCol],
+    [liveWidths, sortKey, sortDir, onSort, resizeEnabled, cycleSort, allowColumnReorder, handleReorder, dragCol],
   );
+
+  // ---- Colunas dropdown (column visibility menu) --------------------------
+  const colunasMenu =
+    layoutEnabled && allowColumnHide ? (
+      <th className="w-10 px-2 py-2 text-center">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground"
+              title="Visibilidade de colunas"
+              aria-label="Colunas"
+            >
+              <Columns2 className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel>Colunas</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {columns.map((col) => (
+              <DropdownMenuCheckboxItem
+                key={col.key}
+                checked={!layoutHiddenColumns.includes(col.key)}
+                onCheckedChange={() => layoutToggleColumn(col.key)}
+              >
+                {col.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => layoutResetLayout()}>
+              Restaurar layout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </th>
+    ) : null;
+
+  // Extra empty td in body rows when colunas menu th is present
+  const colunasBodyCell =
+    layoutEnabled && allowColumnHide ? (
+      <td className="px-2 py-2" />
+    ) : null;
 
   // -- Loading skeleton -----------------------------------------------------
   if (loading) {
@@ -299,7 +379,7 @@ export function SpreadsheetGrid({
             <tr className="border-b">
               <th className="w-10 px-2 py-2" />
               {showLeadScore && <LeadScoreHeader />}
-              {columns.map((col) => (
+              {renderColumns.map((col) => (
                 <th
                   key={col.key}
                   className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
@@ -309,6 +389,7 @@ export function SpreadsheetGrid({
                 </th>
               ))}
               {allowColumnCreate && onAddColumn && <th className="w-10 px-2 py-2" />}
+              {colunasMenu}
             </tr>
           </thead>
           <tbody>
@@ -322,12 +403,13 @@ export function SpreadsheetGrid({
                     <Skeleton className="h-4 w-4 mx-auto rounded-full" />
                   </td>
                 )}
-                {columns.map((col) => (
+                {renderColumns.map((col) => (
                   <td key={col.key} className="px-3 py-2">
                     <Skeleton className="h-4 w-full" />
                   </td>
                 ))}
                 {allowColumnCreate && onAddColumn && <td className="px-2 py-2" />}
+                {colunasBodyCell}
               </tr>
             ))}
           </tbody>
@@ -358,7 +440,7 @@ export function SpreadsheetGrid({
                 />
               </th>
               {showLeadScore && <LeadScoreHeader />}
-              {columns.map((col) => (
+              {renderColumns.map((col) => (
                 <th
                   key={col.key}
                   className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider"
@@ -380,12 +462,19 @@ export function SpreadsheetGrid({
                   </Button>
                 </th>
               )}
+              {colunasMenu}
             </tr>
           </thead>
           <tbody>
             <tr>
               <td
-                colSpan={columns.length + 1 + (showLeadScore ? 1 : 0) + (allowColumnCreate && onAddColumn ? 1 : 0)}
+                colSpan={
+                  renderColumns.length +
+                  1 +
+                  (showLeadScore ? 1 : 0) +
+                  (allowColumnCreate && onAddColumn ? 1 : 0) +
+                  (layoutEnabled && allowColumnHide ? 1 : 0)
+                }
                 className="px-3 py-8 text-center text-sm text-muted-foreground"
               >
                 Nenhum registro encontrado.
@@ -429,7 +518,7 @@ export function SpreadsheetGrid({
                 onResize={onResizeColumn}
               />
             )}
-            {columns.map(renderColumnHeader)}
+            {renderColumns.map(renderColumnHeader)}
             {allowColumnCreate && onAddColumn && (
               <th className="w-10 px-2 py-2">
                 <Button
@@ -443,6 +532,7 @@ export function SpreadsheetGrid({
                 </Button>
               </th>
             )}
+            {colunasMenu}
           </tr>
         </thead>
         <tbody>
@@ -471,7 +561,7 @@ export function SpreadsheetGrid({
                   />
                 </td>
               )}
-              {columns.map((col) => {
+              {renderColumns.map((col) => {
                 const value = row[col.key];
                 return (
                   <td key={col.key} className="px-0 py-0">
@@ -487,6 +577,7 @@ export function SpreadsheetGrid({
                 );
               })}
               {allowColumnCreate && onAddColumn && <td className="px-2 py-2" />}
+              {colunasBodyCell}
             </tr>
           ))}
         </tbody>

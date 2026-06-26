@@ -4,7 +4,6 @@ import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
 import { useContactFields } from "@/hooks/useContactFields";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,15 +14,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ColumnVisibilityDropdown } from "@/components/crm/ColumnVisibilityDropdown";
 import { ContactColumnsToolbar } from "@/components/crm/ContactColumnsToolbar";
+import { GridToolbar } from "@/components/crm/grid/GridToolbar";
 import { ImportModal } from "./ImportModal";
 import { ExportModal } from "./ExportModal";
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
 import { AddContactModal } from "./AddContactModal";
 import {
-  Search,
   Download,
   Upload,
   RefreshCw,
@@ -92,9 +90,8 @@ export const DatabaseView = () => {
   const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ---- Filter / visibility -----------------------------------------------
+  // ---- Filter ------------------------------------------------------------
   const [globalFilter, setGlobalFilter] = useState("");
-  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
 
   // ---- Derived -----------------------------------------------------------
   const filteredLeads = useMemo(() => {
@@ -226,34 +223,6 @@ export const DatabaseView = () => {
   const allColumns = useMemo(
     () => [...nativeColumns, ...enrichmentColumns],
     [nativeColumns, enrichmentColumns],
-  );
-
-  const visibleColumns = useMemo(
-    () => allColumns.filter((col) => !hiddenColumns.has(col.key)),
-    [allColumns, hiddenColumns],
-  );
-
-  // ---- Column visibility helpers -----------------------------------------
-  const columnVisibilityItems = useMemo(
-    () =>
-      allColumns.map((col) => ({
-        id: col.key,
-        label: col.label,
-        visible: !hiddenColumns.has(col.key),
-      })),
-    [allColumns, hiddenColumns],
-  );
-
-  const toggleColumnVisibility = useCallback(
-    (id: string, visible: boolean) => {
-      setHiddenColumns((prev) => {
-        const next = new Set(prev);
-        if (visible) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-    },
-    [],
   );
 
   // ---- Flat row builder --------------------------------------------------
@@ -401,43 +370,36 @@ export const DatabaseView = () => {
         </div>
       </div>
 
-      {/* Filters & Actions */}
-      <div className="p-4 border-b border-border bg-card/50 space-y-4">
-        <div className="flex flex-wrap gap-4 items-center">
-          {/* Global Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome, email, telefone..."
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          {/* Column Visibility */}
-          <ColumnVisibilityDropdown
-            columns={columnVisibilityItems}
-            onToggle={toggleColumnVisibility}
-          />
-
-          {/* Add Columns */}
+      {/* Toolbar */}
+      <div className="p-4 border-b border-border bg-card/50">
+        <GridToolbar
+          search={globalFilter}
+          onSearchChange={setGlobalFilter}
+          searchPlaceholder="Buscar por nome, email, telefone..."
+          filters={[]}
+          onClearFilters={() => {}}
+          activeFilterCount={0}
+        >
           <ContactColumnsToolbar
             onCreate={(field) => createField.mutate(field)}
             existingKeys={contactFields.map((field) => field.key)}
             disabled={isLoadingContactFields || createField.isPending}
           />
-        </div>
+        </GridToolbar>
       </div>
 
       {/* Grid */}
       <div className="flex-1 overflow-auto p-4">
         <SpreadsheetGrid
           rows={gridRows}
-          columns={visibleColumns}
+          columns={allColumns}
           onCellCommit={handleCellCommit}
           massActions={massActions}
           loading={isLoading}
+          surfaceKey="base_contatos"
+          allowColumnReorder
+          allowColumnResize
+          allowColumnHide
         />
       </div>
 
