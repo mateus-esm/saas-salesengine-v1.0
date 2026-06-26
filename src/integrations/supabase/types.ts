@@ -14,6 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
+      agenda_events: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          ends_at: string
+          equipe_id: string
+          id: string
+          lead_id: string | null
+          notes: string | null
+          starts_at: string
+          task_id: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          ends_at: string
+          equipe_id: string
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          starts_at: string
+          task_id?: string | null
+          title: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          ends_at?: string
+          equipe_id?: string
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          starts_at?: string
+          task_id?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_action_ledger: {
+        Row: {
+          created_at: string
+          credits_charged: number
+          decision_id: string | null
+          equipe_id: string
+          id: string
+          idempotency_key: string
+          lead_id: string | null
+          mode: string
+          model: string | null
+          opportunity_id: string | null
+          real_cost_usd: number | null
+          real_input_tokens: number | null
+          real_output_tokens: number | null
+          verb: string
+        }
+        Insert: {
+          created_at?: string
+          credits_charged?: number
+          decision_id?: string | null
+          equipe_id: string
+          id?: string
+          idempotency_key: string
+          lead_id?: string | null
+          mode: string
+          model?: string | null
+          opportunity_id?: string | null
+          real_cost_usd?: number | null
+          real_input_tokens?: number | null
+          real_output_tokens?: number | null
+          verb: string
+        }
+        Update: {
+          created_at?: string
+          credits_charged?: number
+          decision_id?: string | null
+          equipe_id?: string
+          id?: string
+          idempotency_key?: string
+          lead_id?: string | null
+          mode?: string
+          model?: string | null
+          opportunity_id?: string | null
+          real_cost_usd?: number | null
+          real_input_tokens?: number | null
+          real_output_tokens?: number | null
+          verb?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_action_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_action_ledger_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_credits_balance: {
+        Row: {
+          balance: number
+          equipe_id: string
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          equipe_id: string
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          equipe_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_credits_balance_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_trainings: {
         Row: {
           content: string | null
@@ -57,6 +206,8 @@ export type Database = {
       }
       ai_decisions: {
         Row: {
+          actor: string | null
+          agent_role: string | null
           confidence_score: number | null
           created_at: string
           decision_type: string
@@ -65,11 +216,17 @@ export type Database = {
           id: string
           input_summary: string | null
           lead_id: string | null
+          opportunity_id: string | null
           output_action: Json
+          pipeline_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
           rule_id: string | null
           status: string | null
         }
         Insert: {
+          actor?: string | null
+          agent_role?: string | null
           confidence_score?: number | null
           created_at?: string
           decision_type: string
@@ -78,11 +235,17 @@ export type Database = {
           id?: string
           input_summary?: string | null
           lead_id?: string | null
+          opportunity_id?: string | null
           output_action: Json
+          pipeline_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           rule_id?: string | null
           status?: string | null
         }
         Update: {
+          actor?: string | null
+          agent_role?: string | null
           confidence_score?: number | null
           created_at?: string
           decision_type?: string
@@ -91,7 +254,11 @@ export type Database = {
           id?: string
           input_summary?: string | null
           lead_id?: string | null
+          opportunity_id?: string | null
           output_action?: Json
+          pipeline_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
           rule_id?: string | null
           status?: string | null
         }
@@ -108,6 +275,20 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decisions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decisions_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
             referencedColumns: ["id"]
           },
         ]
@@ -334,6 +515,330 @@ export type Database = {
           },
         ]
       }
+      copilot_agents: {
+        Row: {
+          autonomy_mode: string
+          created_at: string
+          equipe_id: string
+          id: string
+          name: string
+          pipeline_id: string | null
+          scope: string
+          system_prompt: string | null
+          updated_at: string
+        }
+        Insert: {
+          autonomy_mode?: string
+          created_at?: string
+          equipe_id: string
+          id?: string
+          name?: string
+          pipeline_id?: string | null
+          scope: string
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Update: {
+          autonomy_mode?: string
+          created_at?: string
+          equipe_id?: string
+          id?: string
+          name?: string
+          pipeline_id?: string | null
+          scope?: string
+          system_prompt?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_agents_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_agents_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_ingest_queue: {
+        Row: {
+          conversation_ref: string | null
+          created_at: string
+          due_at: string
+          equipe_id: string
+          id: string
+          lead_id: string
+          pipeline_id: string | null
+          processed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          conversation_ref?: string | null
+          created_at?: string
+          due_at: string
+          equipe_id: string
+          id?: string
+          lead_id: string
+          pipeline_id?: string | null
+          processed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          conversation_ref?: string | null
+          created_at?: string
+          due_at?: string
+          equipe_id?: string
+          id?: string
+          lead_id?: string
+          pipeline_id?: string | null
+          processed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_ingest_queue_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_ingest_queue_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_ingest_queue_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_knowledge: {
+        Row: {
+          content: string
+          created_at: string
+          embedding: string | null
+          equipe_id: string
+          id: string
+          metadata: Json
+          source: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          embedding?: string | null
+          equipe_id: string
+          id?: string
+          metadata?: Json
+          source?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          equipe_id?: string
+          id?: string
+          metadata?: Json
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_knowledge_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_run_events: {
+        Row: {
+          created_at: string
+          equipe_id: string
+          id: string
+          kind: string
+          opportunity_id: string | null
+          payload: Json
+          run_id: string
+          seq: number
+        }
+        Insert: {
+          created_at?: string
+          equipe_id: string
+          id?: string
+          kind: string
+          opportunity_id?: string | null
+          payload?: Json
+          run_id: string
+          seq: number
+        }
+        Update: {
+          created_at?: string
+          equipe_id?: string
+          id?: string
+          kind?: string
+          opportunity_id?: string | null
+          payload?: Json
+          run_id?: string
+          seq?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_run_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_table_links: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          equipe_id: string
+          from_id: string
+          from_table: string
+          id: string
+          relation_key: string
+          to_id: string
+          to_table: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          equipe_id: string
+          from_id: string
+          from_table: string
+          id?: string
+          relation_key: string
+          to_id: string
+          to_table: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          equipe_id?: string
+          from_id?: string
+          from_table?: string
+          id?: string
+          relation_key?: string
+          to_id?: string
+          to_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_table_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_table_records: {
+        Row: {
+          created_at: string
+          data: Json
+          deleted_at: string | null
+          equipe_id: string
+          id: string
+          table_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          deleted_at?: string | null
+          equipe_id: string
+          id?: string
+          table_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          deleted_at?: string | null
+          equipe_id?: string
+          id?: string
+          table_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_table_records_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_table_records_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "custom_tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_tables: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          equipe_id: string
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+          table_schema: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          equipe_id: string
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+          table_schema?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          equipe_id?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          table_schema?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_tables_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       epic1_merge_log: {
         Row: {
           canonical_lead_id: string | null
@@ -368,6 +873,7 @@ export type Database = {
         Row: {
           asaas_customer_id: string | null
           asaas_subscription_id: string | null
+          contact_fields_schema: Json
           created_at: string
           creditos_avulsos: number
           crm_link: string
@@ -380,6 +886,7 @@ export type Database = {
           limite_creditos: number | null
           niche: string | null
           nome: string
+          page_permissions: Json
           plano_id: number | null
           subscription_status: string | null
           suporte_link: string
@@ -390,6 +897,7 @@ export type Database = {
         Insert: {
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
+          contact_fields_schema?: Json
           created_at?: string
           creditos_avulsos?: number
           crm_link: string
@@ -402,6 +910,7 @@ export type Database = {
           limite_creditos?: number | null
           niche?: string | null
           nome: string
+          page_permissions?: Json
           plano_id?: number | null
           subscription_status?: string | null
           suporte_link: string
@@ -412,6 +921,7 @@ export type Database = {
         Update: {
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
+          contact_fields_schema?: Json
           created_at?: string
           creditos_avulsos?: number
           crm_link?: string
@@ -424,6 +934,7 @@ export type Database = {
           limite_creditos?: number | null
           niche?: string | null
           nome?: string
+          page_permissions?: Json
           plano_id?: number | null
           subscription_status?: string | null
           suporte_link?: string
@@ -499,6 +1010,7 @@ export type Database = {
           id: string
           lead_id: string
           metadata: Json | null
+          opportunity_id: string | null
           tipo: string
           user_id: string | null
         }
@@ -508,6 +1020,7 @@ export type Database = {
           id?: string
           lead_id: string
           metadata?: Json | null
+          opportunity_id?: string | null
           tipo: string
           user_id?: string | null
         }
@@ -517,6 +1030,7 @@ export type Database = {
           id?: string
           lead_id?: string
           metadata?: Json | null
+          opportunity_id?: string | null
           tipo?: string
           user_id?: string | null
         }
@@ -526,6 +1040,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
         ]
@@ -550,6 +1071,7 @@ export type Database = {
           interaction_id: string | null
           last_message_at: string | null
           lead_type: string | null
+          lifecycle_stage: string
           meeting_date: string | null
           meeting_done: boolean | null
           meeting_notes: string | null
@@ -594,6 +1116,7 @@ export type Database = {
           interaction_id?: string | null
           last_message_at?: string | null
           lead_type?: string | null
+          lifecycle_stage?: string
           meeting_date?: string | null
           meeting_done?: boolean | null
           meeting_notes?: string | null
@@ -638,6 +1161,7 @@ export type Database = {
           interaction_id?: string | null
           last_message_at?: string | null
           lead_type?: string | null
+          lifecycle_stage?: string
           meeting_date?: string | null
           meeting_done?: boolean | null
           meeting_notes?: string | null
@@ -1170,8 +1694,10 @@ export type Database = {
       }
       opportunity_stage_history: {
         Row: {
+          actor: string | null
           changed_at: string
           changed_by: string | null
+          changed_by_type: string
           equipe_id: string
           from_stage_id: string | null
           id: number
@@ -1179,8 +1705,10 @@ export type Database = {
           to_stage_id: string
         }
         Insert: {
+          actor?: string | null
           changed_at?: string
           changed_by?: string | null
+          changed_by_type?: string
           equipe_id: string
           from_stage_id?: string | null
           id?: number
@@ -1188,8 +1716,10 @@ export type Database = {
           to_stage_id: string
         }
         Update: {
+          actor?: string | null
           changed_at?: string
           changed_by?: string | null
+          changed_by_type?: string
           equipe_id?: string
           from_stage_id?: string | null
           id?: number
@@ -1263,40 +1793,70 @@ export type Database = {
           auto_advance_stages: boolean
           auto_create_opportunity: boolean
           auto_extract_custom_fields: boolean
+          autonomy_cost_ceiling: number | null
+          confidence_threshold: number
           cooldown_minutes: number
           created_at: string
+          deal_value_strategic_threshold: number | null
+          doorman_model: string | null
+          enabled_skills: Json
           equipe_id: string
+          escalate_threshold: number | null
           extraction_hints: string | null
           id: string
           pipeline_id: string
+          reasoning_enabled: boolean
+          strategic_model: string | null
+          tools_enabled: boolean
           triggers: Json
           updated_at: string
+          worker_model: string | null
         }
         Insert: {
           auto_advance_stages?: boolean
           auto_create_opportunity?: boolean
           auto_extract_custom_fields?: boolean
+          autonomy_cost_ceiling?: number | null
+          confidence_threshold?: number
           cooldown_minutes?: number
           created_at?: string
+          deal_value_strategic_threshold?: number | null
+          doorman_model?: string | null
+          enabled_skills?: Json
           equipe_id: string
+          escalate_threshold?: number | null
           extraction_hints?: string | null
           id?: string
           pipeline_id: string
+          reasoning_enabled?: boolean
+          strategic_model?: string | null
+          tools_enabled?: boolean
           triggers?: Json
           updated_at?: string
+          worker_model?: string | null
         }
         Update: {
           auto_advance_stages?: boolean
           auto_create_opportunity?: boolean
           auto_extract_custom_fields?: boolean
+          autonomy_cost_ceiling?: number | null
+          confidence_threshold?: number
           cooldown_minutes?: number
           created_at?: string
+          deal_value_strategic_threshold?: number | null
+          doorman_model?: string | null
+          enabled_skills?: Json
           equipe_id?: string
+          escalate_threshold?: number | null
           extraction_hints?: string | null
           id?: string
           pipeline_id?: string
+          reasoning_enabled?: boolean
+          strategic_model?: string | null
+          tools_enabled?: boolean
           triggers?: Json
           updated_at?: string
+          worker_model?: string | null
         }
         Relationships: [
           {
@@ -1358,9 +1918,15 @@ export type Database = {
       }
       pipeline_stages_v2: {
         Row: {
+          cadence_unit: string | null
+          cadence_value: number | null
           color: string
           created_at: string
+          cycle_days: number | null
+          cycle_target_stage_id: string | null
+          cycle_webhook_url: string | null
           deleted_at: string | null
+          description: string | null
           equipe_id: string
           id: string
           max_idle_hours: number | null
@@ -1369,11 +1935,18 @@ export type Database = {
           pipeline_id: string
           position: number
           stage_type: string
+          webhook_triggers: Json
         }
         Insert: {
+          cadence_unit?: string | null
+          cadence_value?: number | null
           color?: string
           created_at?: string
+          cycle_days?: number | null
+          cycle_target_stage_id?: string | null
+          cycle_webhook_url?: string | null
           deleted_at?: string | null
+          description?: string | null
           equipe_id: string
           id?: string
           max_idle_hours?: number | null
@@ -1382,11 +1955,18 @@ export type Database = {
           pipeline_id: string
           position: number
           stage_type?: string
+          webhook_triggers?: Json
         }
         Update: {
+          cadence_unit?: string | null
+          cadence_value?: number | null
           color?: string
           created_at?: string
+          cycle_days?: number | null
+          cycle_target_stage_id?: string | null
+          cycle_webhook_url?: string | null
           deleted_at?: string | null
+          description?: string | null
           equipe_id?: string
           id?: string
           max_idle_hours?: number | null
@@ -1395,8 +1975,16 @@ export type Database = {
           pipeline_id?: string
           position?: number
           stage_type?: string
+          webhook_triggers?: Json
         }
         Relationships: [
+          {
+            foreignKeyName: "pipeline_stages_v2_cycle_target_stage_id_fkey"
+            columns: ["cycle_target_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pipeline_stages_v2_equipe_id_fkey"
             columns: ["equipe_id"]
@@ -1415,42 +2003,48 @@ export type Database = {
       }
       pipelines: {
         Row: {
-          card_field_ids: Json
           cadence_days: number | null
+          card_field_ids: Json
           created_at: string
           custom_fields_schema: Json
           deleted_at: string | null
           description: string | null
           equipe_id: string
+          icp_weights: Json
           id: string
           is_archived: boolean
           name: string
+          revenue_config: Json
           updated_at: string
         }
         Insert: {
-          card_field_ids?: Json
           cadence_days?: number | null
+          card_field_ids?: Json
           created_at?: string
           custom_fields_schema?: Json
           deleted_at?: string | null
           description?: string | null
           equipe_id: string
+          icp_weights?: Json
           id?: string
           is_archived?: boolean
           name: string
+          revenue_config?: Json
           updated_at?: string
         }
         Update: {
-          card_field_ids?: Json
           cadence_days?: number | null
+          card_field_ids?: Json
           created_at?: string
           custom_fields_schema?: Json
           deleted_at?: string | null
           description?: string | null
           equipe_id?: string
+          icp_weights?: Json
           id?: string
           is_archived?: boolean
           name?: string
+          revenue_config?: Json
           updated_at?: string
         }
         Relationships: [
@@ -1704,6 +2298,8 @@ export type Database = {
           due_date: string | null
           id: string
           lead_id: string
+          observations: string | null
+          parent_task_id: string | null
           status: string | null
           title: string
         }
@@ -1715,6 +2311,8 @@ export type Database = {
           due_date?: string | null
           id?: string
           lead_id: string
+          observations?: string | null
+          parent_task_id?: string | null
           status?: string | null
           title: string
         }
@@ -1726,6 +2324,8 @@ export type Database = {
           due_date?: string | null
           id?: string
           lead_id?: string
+          observations?: string | null
+          parent_task_id?: string | null
           status?: string | null
           title?: string
         }
@@ -1749,6 +2349,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -1798,6 +2405,59 @@ export type Database = {
           },
         ]
       }
+      transacoes: {
+        Row: {
+          data_pagamento: string | null
+          data_transacao: string | null
+          descricao: string | null
+          equipe_id: string
+          forma_pagamento: string | null
+          gateway_id: string | null
+          id: string
+          invoice_url: string | null
+          metadata: Json | null
+          status: string | null
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          data_pagamento?: string | null
+          data_transacao?: string | null
+          descricao?: string | null
+          equipe_id: string
+          forma_pagamento?: string | null
+          gateway_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          metadata?: Json | null
+          status?: string | null
+          tipo: string
+          valor: number
+        }
+        Update: {
+          data_pagamento?: string | null
+          data_transacao?: string | null
+          descricao?: string | null
+          equipe_id?: string
+          forma_pagamento?: string | null
+          gateway_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          metadata?: Json | null
+          status?: string | null
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transacoes_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -1821,9 +2481,12 @@ export type Database = {
           active: boolean | null
           created_at: string | null
           equipe_id: string
+          field_mappings: Json
           headers: Json | null
           id: string
+          inbound_function: string | null
           name: string
+          pipeline_id: string | null
           trigger_event: string
           url: string
         }
@@ -1831,9 +2494,12 @@ export type Database = {
           active?: boolean | null
           created_at?: string | null
           equipe_id: string
+          field_mappings?: Json
           headers?: Json | null
           id?: string
+          inbound_function?: string | null
           name: string
+          pipeline_id?: string | null
           trigger_event: string
           url: string
         }
@@ -1841,9 +2507,12 @@ export type Database = {
           active?: boolean | null
           created_at?: string | null
           equipe_id?: string
+          field_mappings?: Json
           headers?: Json | null
           id?: string
+          inbound_function?: string | null
           name?: string
+          pipeline_id?: string | null
           trigger_event?: string
           url?: string
         }
@@ -1853,6 +2522,13 @@ export type Database = {
             columns: ["equipe_id"]
             isOneToOne: false
             referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_configs_pipeline_id_fkey"
+            columns: ["pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
             referencedColumns: ["id"]
           },
         ]
@@ -1916,7 +2592,36 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      charge_credits: {
+        Args: {
+          p_credits: number
+          p_equipe_id: string
+          p_idempotency_key: string
+          p_ledger: Json
+        }
+        Returns: string
+      }
       ensure_negative_stages: { Args: never; Returns: undefined }
+      fn_calculate_icp_score: {
+        Args: { p_lead_id: string }
+        Returns: {
+          breakdown: Json
+          score: number
+        }[]
+      }
+      fn_calculate_lead_velocity: {
+        Args: { p_lead_id: string }
+        Returns: number
+      }
+      fn_stage_conversion_rates: {
+        Args: { p_pipeline_id: string }
+        Returns: {
+          conversion_rate: number
+          stage_id: string
+          stage_name: string
+          stage_position: number
+        }[]
+      }
       get_dashboard_kpis: {
         Args: {
           p_end_date?: string
@@ -1943,6 +2648,10 @@ export type Database = {
       }
       normalize_phone_br: { Args: { raw: string }; Returns: string }
       set_default_pipeline: { Args: { p_pipeline_id: string }; Returns: string }
+      shape_pipeline: {
+        Args: { p_equipe_id: string; p_payload: Json }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "user" | "admin" | "owner" | "super_admin"
