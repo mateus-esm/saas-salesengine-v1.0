@@ -39,22 +39,6 @@ import type { ColumnDef, CellMutation, GridRow } from "@/components/crm/grid/typ
 import type { MassAction } from "@/components/crm/grid/MassActionBar";
 
 // ---------------------------------------------------------------------------
-// Labels for the shared column-visibility dropdown (Sprint 5.3 T10/T11)
-// ---------------------------------------------------------------------------
-const COLUMN_LABELS: Record<string, string> = {
-  name: "Nome",
-  email: "Email",
-  phone: "Telefone",
-  company_link: "Empresa",
-  property_count: "Imóveis",
-  origin_category: "Origem",
-  channel: "Canal",
-  observations: "Observações",
-  tags: "Tags",
-  created_at: "Criado em",
-};
-
-// ---------------------------------------------------------------------------
 // Helper — map CustomFieldType to grid ColumnKind
 // ---------------------------------------------------------------------------
 function toColumnKind(type: string): ColumnDef["kind"] {

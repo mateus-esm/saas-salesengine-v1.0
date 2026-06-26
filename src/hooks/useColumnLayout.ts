@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@/components/crm/grid/types";
 
 const DEFAULT_WIDTH = 150;
@@ -26,8 +26,32 @@ function saveLayout(storageKey: string, layout: PersistedLayout) {
   }
 }
 
+/**
+ * Pure reorder helper — exported for unit tests.
+ * When `prev` is null (no persisted order), falls back to `columnKeys`
+ * (the full ordered list of column keys) so the result is always a valid
+ * full-length array with no undefined entries.
+ */
+export function resolveReorder(
+  prev: string[] | null,
+  columnKeys: string[],
+  fromIndex: number,
+  toIndex: number,
+): string[] {
+  const base = prev ?? columnKeys;
+  const list = [...base];
+  const [moved] = list.splice(fromIndex, 1);
+  list.splice(toIndex, 0, moved);
+  return list;
+}
+
 export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
   const persisted = useMemo(() => loadLayout(storageKey), [storageKey]);
+
+  // Keep a ref to `columns` so reorderColumn stays stable (no dep on columns)
+  // while still reading the latest value inside the setOrder updater.
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
 
   const [widths, setWidths] = useState<Record<string, number>>(
     () => persisted?.widths ?? {},
@@ -40,6 +64,7 @@ export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
   );
 
   useEffect(() => {
+    if (storageKey === "_noop_") return;
     saveLayout(storageKey, { widths, order: order ?? [], hidden: [...hidden] });
   }, [widths, order, hidden, storageKey]);
 
@@ -83,13 +108,9 @@ export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
   }, []);
 
   const reorderColumn = useCallback((fromIndex: number, toIndex: number) => {
-    setOrder((prev) => {
-      const current = prev ?? [];
-      const list = [...current];
-      const [moved] = list.splice(fromIndex, 1);
-      list.splice(toIndex, 0, moved);
-      return list;
-    });
+    setOrder((prev) =>
+      resolveReorder(prev, columnsRef.current.map((c) => c.key), fromIndex, toIndex),
+    );
   }, []);
 
   const resetLayout = useCallback(() => {
