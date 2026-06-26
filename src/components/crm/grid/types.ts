@@ -12,7 +12,13 @@ export interface ColumnDef {
   source: "native" | "jsonb";
   jsonbField?: JsonbField;      // required when source === "jsonb"
   options?: { value: string; label: string }[]; // for kind "select"
-  relation?: { table: string; displayField: string; linkTable?: string }; // for kind "relation"
+  relation?: {
+    table: string;
+    displayField: string;
+    linkTable?: string;
+    /** UUID of the target custom table; present when the target is a virtual (custom_table_records) table. */
+    targetTableId?: string;
+  }; // for kind "relation"
   editable?: boolean;          // default true
   width?: number;
 }

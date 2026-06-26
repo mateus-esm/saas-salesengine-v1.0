@@ -91,18 +91,21 @@ export function useRelationResolver(
       const resolved: ResolvedLink[] = [];
 
       // Fetch display labels per target table.
+      // to_table stores the target custom table UUID (written by CustomTableView).
+      // Rows live in custom_table_records keyed by table_id; display value is in data[displayField].
       for (const [toTable, ids] of Object.entries(tableGroups)) {
-        const { data: records } = await supabase
-          .from(toTable as any)
-          .select(`id, ${displayField}`)
+        const { data: records } = await (supabase as any)
+          .from("custom_table_records")
+          .select("id, data")
+          .eq("table_id", toTable)
           .in("id", ids)
           .is("deleted_at", null);
 
         if (records) {
-          for (const r of records) {
+          for (const r of (records as { id: string; data: Record<string, unknown> }[])) {
             resolved.push({
               toId: r.id,
-              label: String(r[displayField] ?? `[${toTable}]`),
+              label: String(r.data?.[displayField] ?? `[record]`),
             });
           }
         }

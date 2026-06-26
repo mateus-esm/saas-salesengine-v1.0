@@ -31,6 +31,10 @@ function saveLayout(storageKey: string, layout: PersistedLayout) {
  * When `prev` is null (no persisted order), falls back to `columnKeys`
  * (the full ordered list of column keys) so the result is always a valid
  * full-length array with no undefined entries.
+ *
+ * NOTE: `fromIndex` and `toIndex` must be absolute indices into the full order
+ * array (i.e. already translated from visible-list indices when hidden columns
+ * exist). Use `translateVisibleToAbsolute` before calling this function.
  */
 export function resolveReorder(
   prev: string[] | null,
@@ -43,6 +47,29 @@ export function resolveReorder(
   const [moved] = list.splice(fromIndex, 1);
   list.splice(toIndex, 0, moved);
   return list;
+}
+
+/**
+ * Translate a visible-list index to an absolute index in the full order array
+ * (which includes hidden columns). Exported for unit tests.
+ *
+ * Example: fullOrder = ['a','b','c','d'], hidden = {'b'}, visibleIndex = 1
+ *   → visible list is ['a','c','d']; index 1 is 'c'; absolute index is 2.
+ */
+export function translateVisibleToAbsolute(
+  fullOrder: string[],
+  hidden: Set<string>,
+  visibleIndex: number,
+): number {
+  let count = 0;
+  for (let i = 0; i < fullOrder.length; i++) {
+    if (!hidden.has(fullOrder[i])) {
+      if (count === visibleIndex) return i;
+      count++;
+    }
+  }
+  // Fallback: clamp to last position (prevents out-of-bounds splices).
+  return Math.max(0, fullOrder.length - 1);
 }
 
 export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
@@ -62,6 +89,12 @@ export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
   const [hidden, setHidden] = useState<Set<string>>(
     () => new Set(persisted?.hidden ?? []),
   );
+
+  // Ref to hidden so reorderColumn can translate visible→absolute indices
+  // without stale closure issues (same pattern as columnsRef).
+  // Must be declared after the hidden state to satisfy TS block-scoping.
+  const hiddenRef = useRef<Set<string>>(hidden);
+  hiddenRef.current = hidden;
 
   useEffect(() => {
     if (storageKey === "_noop_") return;
@@ -108,9 +141,15 @@ export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
   }, []);
 
   const reorderColumn = useCallback((fromIndex: number, toIndex: number) => {
-    setOrder((prev) =>
-      resolveReorder(prev, columnsRef.current.map((c) => c.key), fromIndex, toIndex),
-    );
+    setOrder((prev) => {
+      const colKeys = columnsRef.current.map((c) => c.key);
+      // Translate visible-list indices to absolute indices in the full order
+      // (which includes hidden columns) before splicing.
+      const fullOrder = prev ?? colKeys;
+      const absFrom = translateVisibleToAbsolute(fullOrder, hiddenRef.current, fromIndex);
+      const absTo = translateVisibleToAbsolute(fullOrder, hiddenRef.current, toIndex);
+      return resolveReorder(prev, colKeys, absFrom, absTo);
+    });
   }, []);
 
   const resetLayout = useCallback(() => {

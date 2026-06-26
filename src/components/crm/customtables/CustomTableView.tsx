@@ -76,6 +76,9 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         def.relation = {
           table: col.relationConfig.targetTableSlug,
           displayField: col.relationConfig.displayField,
+          // targetTableId enables the picker and resolver to query
+          // custom_table_records instead of a non-existent physical table.
+          targetTableId: col.relationConfig.targetTableId,
         };
       }
       return def;
@@ -104,29 +107,36 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
     const record = records.find((r) => r.id === m.rowId);
     if (!record) return;
 
-    // Relation columns write to custom_table_links bridge, not JSONB data
+    // Relation columns write to custom_table_links bridge, not JSONB data.
+    // custom_table_links uses soft-delete (deleted_at) matching opportunity_links pattern.
     if (m.column.kind === "relation") {
       const linkVal = m.value as { toId?: string; action?: string } | null;
       if (!linkVal?.toId) return;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
+      // to_table stores the target custom table UUID so the resolver can query
+      // custom_table_records with `table_id = to_table`.
+      const toTable = m.column.relation?.targetTableId ?? m.column.relation?.table ?? "";
       if (linkVal.action === "remove") {
+        // Soft-delete: matches the opportunity_links write pattern.
         await sb
           .from("custom_table_links")
-          .delete()
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("equipe_id", profile?.equipe_id)
           .eq("from_table", table.slug)
           .eq("from_id", m.rowId)
           .eq("relation_key", m.column.key)
-          .eq("to_id", linkVal.toId)
-          .execute();
+          .eq("to_id", linkVal.toId);
       } else {
+        // supabase-js v2: await the builder directly; .execute() does not exist.
         await sb.from("custom_table_links").insert({
+          equipe_id: profile?.equipe_id,
           from_table: table.slug,
           from_id: m.rowId,
-          relation_key: m.column.key,
+          to_table: toTable,
           to_id: linkVal.toId,
-          equipe_id: profile?.equipe_id,
-        }).execute();
+          relation_key: m.column.key,
+        });
       }
       return;
     }
@@ -153,6 +163,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
       column.relationConfig = {
         targetTable: target.name,
         targetTableSlug: target.slug,
+        targetTableId: target.id,
         displayField: newColDisplayField || "name",
       };
     }

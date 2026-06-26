@@ -128,7 +128,7 @@ export function PipelineAgentView({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor={`agent-prompt-${pipeline.id}`}>
-                    Prompt de Sistema
+                    Instruções para o agente
                   </Label>
                   <Textarea
                     id={`agent-prompt-${pipeline.id}`}

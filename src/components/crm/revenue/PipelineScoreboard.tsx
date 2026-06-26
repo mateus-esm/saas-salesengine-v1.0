@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   BarChart3,
   ChevronDown,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useForecast } from "@/hooks/useForecast";
+import { useForecast, computeRunRate } from "@/hooks/useForecast";
 import { usePipelines } from "@/hooks/usePipelines";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -98,9 +98,43 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
   const gapRevenue = Math.max(0, goal_revenue - won_revenue);
   const gapLabel = gapRevenue > 0 ? formatBRL(gapRevenue) : `${gapDeals} negócios`;
 
-  // Projected: pace-based
+  // Current attainment (used for progress bar only)
   const pctWon = goal_deals > 0 ? (won / goal_deals) * 100 : 0;
-  const projectedLabel = `${Math.min(Math.round(pctWon), 100)}%`;
+
+  // Pace-based projection: run-rate extrapolation of deals and revenue.
+  // Formula: (won / goal) * (total_days / elapsed_days) * 100
+  // Only meaningful when sufficient_data is true (goal is set, data exists).
+  const now = new Date();
+  const elapsed = period === "month"
+    ? now.getDate()
+    : (() => {
+        const qm = Math.floor(now.getMonth() / 3) * 3;
+        return (
+          Math.floor(
+            (now.getTime() - new Date(now.getFullYear(), qm, 1).getTime()) / 86400000,
+          ) + 1
+        );
+      })();
+  const total = period === "month"
+    ? new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    : (() => {
+        const qm = Math.floor(now.getMonth() / 3) * 3;
+        let d = 0;
+        for (let i = 0; i < 3; i++) d += new Date(now.getFullYear(), qm + i + 1, 0).getDate();
+        return d;
+      })();
+
+  // Deals run-rate projection
+  const runRatePct = data.sufficient_data ? computeRunRate(won, goal_deals, elapsed, total) : null;
+  const projectedLabel = runRatePct !== null ? `${Math.min(runRatePct, 999)}%` : "—";
+
+  // Revenue run-rate projection
+  const revenueRunRatePct =
+    data.sufficient_data && goal_revenue > 0
+      ? computeRunRate(won_revenue, goal_revenue, elapsed, total)
+      : null;
+  const revenueProjectedLabel =
+    revenueRunRatePct !== null ? `${Math.min(revenueRunRatePct, 999)}%` : "—";
 
   // Pace indicator
   const paceColor =
@@ -125,48 +159,43 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
     stripParts.push(`${data.meetings_needed} reuniões`);
   }
 
-  // Top-line metrics for the grid
+  // Top-line metrics for the grid (pace field removed — was never rendered)
   const topMetrics = [
     {
       key: "deals",
       label: "Negócios",
       target: String(goal_deals),
       current: String(won),
-      projected: data.goal_deals > 0 ? `${Math.round((won / goal_deals) * 100)}%` : "\u2014",
+      // Pace-based run-rate projection; distinct from current attainment (pctWon)
+      projected: runRatePct !== null ? `${Math.min(runRatePct, 999)}%` : "—",
       gap: gapDeals > 0 ? String(gapDeals) : "0",
-      pace: data.goal_deals > 0 ? `${Math.round((won / goal_deals) * 100)}%` : "\u2014",
       icon: <Target className="h-3.5 w-3.5 text-emerald-500" />,
     },
     {
       key: "revenue",
       label: "Faturamento",
-      target: goal_revenue > 0 ? formatBRL(goal_revenue) : "\u2014",
-      current: goal_revenue > 0 ? formatBRL(won_revenue) : "\u2014",
-      projected: projectedLabel,
+      target: goal_revenue > 0 ? formatBRL(goal_revenue) : "—",
+      current: goal_revenue > 0 ? formatBRL(won_revenue) : "—",
+      projected: revenueProjectedLabel,
       gap: gapRevenue > 0 ? formatBRL(gapRevenue) : "R$ 0",
-      pace: goal_revenue > 0 && goal_deals > 0
-        ? formatBRL(Math.round((won_revenue / goal_deals) * goal_deals))
-        : "\u2014",
       icon: <TrendingUp className="h-3.5 w-3.5 text-blue-500" />,
     },
     {
       key: "win_rate",
       label: "Conversão",
-      target: "\u2014",
-      current: data.win_rate !== null ? `${data.win_rate}%` : "\u2014",
-      projected: "\u2014",
-      gap: "\u2014",
-      pace: "\u2014",
+      target: "—",
+      current: data.win_rate !== null ? `${data.win_rate}%` : "—",
+      projected: "—",
+      gap: "—",
       icon: <Target className="h-3.5 w-3.5 text-purple-500" />,
     },
     {
       key: "velocity",
       label: "Velocidade",
-      target: "\u2014",
-      current: data.avg_velocity_days !== null ? `${data.avg_velocity_days} dias` : "\u2014",
-      projected: "\u2014",
-      gap: "\u2014",
-      pace: "\u2014",
+      target: "—",
+      current: data.avg_velocity_days !== null ? `${data.avg_velocity_days} dias` : "—",
+      projected: "—",
+      gap: "—",
       icon: <Clock className="h-3.5 w-3.5 text-amber-500" />,
     },
   ];
@@ -198,7 +227,7 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
             </div>
             <div className="space-y-0.5">
               <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Projetado</div>
-              <div className={`text-sm font-semibold font-mono ${pctWon >= 100 ? "text-emerald-600" : ""}`}>
+              <div className={`text-sm font-semibold font-mono ${runRatePct !== null && runRatePct >= 100 ? "text-emerald-600" : ""}`}>
                 {projectedLabel}
               </div>
             </div>

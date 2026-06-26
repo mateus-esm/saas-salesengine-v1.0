@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveReorder } from "../useColumnLayout";
+import { resolveReorder, translateVisibleToAbsolute } from "../useColumnLayout";
 
 /**
  * Tests for the `resolveReorder` pure helper that backs `reorderColumn` in
@@ -59,5 +59,78 @@ describe("resolveReorder — prev has persisted order (subsequent reorder)", () 
     const after2 = resolveReorder(after1, columns, 2, 0);
     expect(after2).toEqual(["phone", "name", "email"]);
     expect(after2).toHaveLength(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// translateVisibleToAbsolute — pure index-translation helper
+// ---------------------------------------------------------------------------
+
+describe("translateVisibleToAbsolute", () => {
+  it("returns identity when no columns are hidden", () => {
+    // fullOrder = ['a','b','c'], hidden = {}
+    // visible list = ['a','b','c']; visible index 1 → absolute index 1
+    expect(translateVisibleToAbsolute(["a", "b", "c"], new Set(), 0)).toBe(0);
+    expect(translateVisibleToAbsolute(["a", "b", "c"], new Set(), 1)).toBe(1);
+    expect(translateVisibleToAbsolute(["a", "b", "c"], new Set(), 2)).toBe(2);
+  });
+
+  it("translates correctly when a hidden column precedes the visible item", () => {
+    // fullOrder = ['a','b','c','d'], 'b' is hidden
+    // visible list = ['a','c','d']
+    // visible index 0 → 'a' → absolute 0
+    // visible index 1 → 'c' → absolute 2 (b is skipped)
+    // visible index 2 → 'd' → absolute 3
+    const full = ["a", "b", "c", "d"];
+    const hidden = new Set(["b"]);
+    expect(translateVisibleToAbsolute(full, hidden, 0)).toBe(0);
+    expect(translateVisibleToAbsolute(full, hidden, 1)).toBe(2);
+    expect(translateVisibleToAbsolute(full, hidden, 2)).toBe(3);
+  });
+
+  it("handles multiple hidden columns", () => {
+    // fullOrder = ['a','b','c','d','e'], 'b' and 'd' hidden
+    // visible list = ['a','c','e']
+    const full = ["a", "b", "c", "d", "e"];
+    const hidden = new Set(["b", "d"]);
+    expect(translateVisibleToAbsolute(full, hidden, 0)).toBe(0);
+    expect(translateVisibleToAbsolute(full, hidden, 1)).toBe(2);
+    expect(translateVisibleToAbsolute(full, hidden, 2)).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integrated: reorder + hidden column — the bug case from the brief
+// ---------------------------------------------------------------------------
+
+describe("resolveReorder with translated indices (hidden column before drop position)", () => {
+  it("moves 'd' (visible index 2) before 'a' (visible index 0) with 'b' hidden", () => {
+    // fullOrder = ['a','b','c','d'], 'b' hidden
+    // visible list = ['a','c','d']
+    // User drags visible index 2 ('d') to visible index 0 ('a').
+    // Expected full result: ['d','a','b','c']
+    const fullOrder = ["a", "b", "c", "d"];
+    const hidden = new Set(["b"]);
+    const absFrom = translateVisibleToAbsolute(fullOrder, hidden, 2); // 'd' → 3
+    const absTo = translateVisibleToAbsolute(fullOrder, hidden, 0);   // 'a' → 0
+    expect(absFrom).toBe(3);
+    expect(absTo).toBe(0);
+    const result = resolveReorder(fullOrder, fullOrder, absFrom, absTo);
+    expect(result).toEqual(["d", "a", "b", "c"]);
+  });
+
+  it("moves 'c' (visible index 1) to after 'd' (visible index 2) with 'b' hidden", () => {
+    // fullOrder = ['a','b','c','d'], 'b' hidden
+    // visible list = ['a','c','d']
+    // User drags visible index 1 ('c') to visible index 2 ('d').
+    // Expected full result: ['a','b','d','c']
+    const fullOrder = ["a", "b", "c", "d"];
+    const hidden = new Set(["b"]);
+    const absFrom = translateVisibleToAbsolute(fullOrder, hidden, 1); // 'c' → 2
+    const absTo = translateVisibleToAbsolute(fullOrder, hidden, 2);   // 'd' → 3
+    expect(absFrom).toBe(2);
+    expect(absTo).toBe(3);
+    const result = resolveReorder(fullOrder, fullOrder, absFrom, absTo);
+    expect(result).toEqual(["a", "b", "d", "c"]);
   });
 });

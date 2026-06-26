@@ -44,14 +44,38 @@ export function RelationPicker({
   const rel = column.relation;
   const table = rel?.table;
   const displayField = rel?.displayField;
+  // targetTableId is set for virtual custom-table targets; undefined for physical tables.
+  const targetTableId = rel?.targetTableId;
 
   const { data: results = [], isLoading } = useQuery({
-    queryKey: ["relation-picker", table, search, equipeId],
+    queryKey: ["relation-picker", table, targetTableId, search, equipeId],
     queryFn: async () => {
-      if (!table || !displayField || !equipeId) return [];
+      if (!displayField || !equipeId) return [];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
+
+      if (targetTableId) {
+        // Virtual custom table: rows live in custom_table_records keyed by table_id.
+        // Display value is read from data[displayField] (JSONB).
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const { data } = await sb
+          .from("custom_table_records")
+          .select("id, data")
+          .eq("table_id", targetTableId)
+          .is("deleted_at", null)
+          .limit(50);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const all = ((data ?? []) as any[]).map((r: any) => ({
+          id: r.id as string,
+          label: String(r.data?.[displayField] ?? ""),
+        }));
+        const q = search.trim().toLowerCase();
+        return q ? all.filter((item) => item.label.toLowerCase().includes(q)) : all;
+      }
+
+      // Physical table (e.g. "companies"): query directly by equipe_id.
+      if (!table) return [];
 
       let query = sb
         .from(table)
@@ -73,7 +97,7 @@ export function RelationPicker({
         label: String(r[displayField] ?? ""),
       }));
     },
-    enabled: open && !!table && !!displayField && !!equipeId,
+    enabled: open && !!displayField && !!equipeId && (!!targetTableId || !!table),
   });
 
   return (

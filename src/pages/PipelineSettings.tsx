@@ -289,8 +289,6 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const [camposOpen, setCamposOpen] = useState(false);
   const [geralOpen, setGeralOpen] = useState(false);
 
-  const stagesCount = 0; // will be rendered by StagesEditor internally
-
   const dirty =
     name !== pipeline.name ||
     (description || "") !== (pipeline.description || "") ||

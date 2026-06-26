@@ -15,6 +15,8 @@ export interface CustomTableColumn {
   relationConfig?: {
     targetTable: string;
     targetTableSlug: string;
+    /** UUID of the target custom table (used to query custom_table_records). */
+    targetTableId?: string;
     displayField: string;
   };
 }
