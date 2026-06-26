@@ -63,12 +63,14 @@ Goal: no full-page reloads; preserve in-progress input and unsaved edits across 
 > items below were consciously deferred out of 6.9. See
 > `sprint_6.9_solo-copilot_evolve_v1.md`.
 
-- [ ] **Excel-style tables** (founder pts 6, 13; folds in 6.8-W4/W5): column
-      **drag-reorder** + **hide** + **inline cell edit** + **filter/sort** across
-      **Leads**, **Base de Contatos** (`DatabaseView.tsx`), and **Custom Tables**.
-      Include the **live-linked relation column** (target-table picker → resolves
-      live via RelationPicker/RelationChip/useRelationResolver). Goal: feels like a
-      Supabase/Excel grid — copy, don't reinvent.
+- [x] **Excel-style tables** (founder pts 6, 13; folds in 6.8-W4/W5) — **done in
+      Sprint 6.9.1 W6/W7** (`1bb8959`, `627e456`, `cd95fd5`): per-surface layout
+      persistence (drag-reorder + hide + width via `useColumnLayout`/`surfaceKey`),
+      `GridToolbar` on Base de Contatos + Custom Tables, inline cell edit, and the
+      **live-linked relation column** rebuilt for the virtual `custom_table_records`
+      model. ⚠️ Relation column still needs **live (authenticated app) E2E
+      verification** — code matches the proven `opportunity_links` pattern but no
+      live DB run was performed.
 - [ ] **Telemetry humanization + agent latency** (founder pt 3): streaming responses
       / progress indicators for perceived latency; further humanize agent telemetry
       output beyond the 6.8 pass.

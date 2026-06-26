@@ -193,3 +193,95 @@ took **three review cycles** (2 reviewer passes + manual) to reach the bar:
 - Profiles query in the scoreboard is unscoped (`profiles` select-all, relies on
   RLS) — fine, but tighten to equipe if RLS ever loosens.
 - The hollow-typecheck backlog (§5) — see `todo.md`.
+
+---
+
+# Sprint 6.9.1 — Handoff
+
+> **Sprint:** Solo Copilot Evolve — Premium Fix Cycle
+> (`sprint_6.9.1_solo-copilot_evolve_v1.md`)
+> **Status:** Code-complete on branch
+> `engineer/sprint6.9.1/wave4/per-pipeline-copilot` (NOT yet merged to `main`).
+> **Verification:** `npm run build` green · `npm test` 27/27 green ·
+> `tsc -p tsconfig.app.json` touched-file errors = **0** (only the known
+> pre-existing backlog of 15 errors across 7 untouched files remains;
+> `useRelationResolver` went 7→6).
+
+## 1. What this sprint was
+
+A correction pass against the original founder objectives after a visual review:
+pipeline setup, predictability scoreboard, per-pipeline Copilot, Excel-style
+tables, and kanban card craft were "working" but not yet premium. Contract:
+a wave is done when a non-technical user gets it, not when it merely compiles.
+
+## 2. Delivered — 8 build waves + final-review remediation
+
+- **W1/W2** (`56f9b5a`) — guided `PipelineSettings` sections + readable vertical
+  `StagesEditor` cards (cadence visible).
+- **W3** (`23902a1`, hardened in `cd95fd5`) — `RevenueGoalsForm` headline-target
+  flow + owner split; `PipelineScoreboard` game-placar (Meta/Atual/Projetado/Gap/
+  Ritmo + next-action), kanban-only. "Projetado" is now a real pace run-rate
+  (`computeRunRate`, unit-tested), not current attainment.
+- **W4** (`a9a8fbf`) — pipeline `Copilot` sub-tab now hosts the full
+  `PipelineAgentView` (training/mode/automations/logs/approvals/config-shortcut);
+  scoreboard excluded from this tab.
+- **W5** (`e16591b`) — `AgentRulesPanel` plain-language Quando/Então rules +
+  starter presets + pre-save validation + readable collapsed summaries.
+- **W6** (`4ef0080` props → **`1bb8959`+`627e456` wired this cycle**) — shared
+  `SpreadsheetGrid` now has REAL per-surface layout persistence via
+  `useColumnLayout`+`surfaceKey` (order/hide/width), column drag-reorder, a
+  "Colunas" hide/show menu, and `GridToolbar` on Base de Contatos + Custom
+  Tables. Base de Contatos and Custom Tables never show Lead Score
+  (`showLeadScore` defaults false; only the opportunity grid opts in).
+- **W7** (`ceb4703` → **reworked in `cd95fd5`**) — custom-table relation column.
+  The first pass was non-functional (assumed physical tables, used a non-existent
+  `.execute()`); it was rebuilt for the **virtual** model: `RelationPicker` reads
+  `custom_table_records WHERE table_id = target`, the write awaits the builder and
+  records `to_table`, and resolution reads the linked record's `data` label.
+- **W8** (`ceb4703`) — `OpportunityCard` overflow/clipping fixes (`overflow-hidden`,
+  score hidden when null). **Visual proof still outstanding — see §4.**
+
+## 3. End-of-sprint review — found & FIXED (this handoff's work)
+
+A whole-branch review (`c44f21c..627e456`, capable-model reviewer + manual) found
+the prior "all waves complete" ledger was partly hollow:
+
+- **CRITICAL — W7 relation column dead end-to-end.** Picker queried a non-existent
+  physical table, the write called `.execute()` (not in supabase-js v2), and the
+  resolver grouped by an unwritten `to_table`. Rebuilt against
+  `custom_table_records` (`cd95fd5`).
+- **IMPORTANT — W6 reorder corrupted order when a column was hidden** (visible
+  index vs. absolute order-array index). Fixed with `translateVisibleToAbsolute`
+  (unit-tested) (`cd95fd5`). A separate first-reorder bug (base order seeded from
+  `[]`) was fixed earlier in `627e456`.
+- **IMPORTANT — W3 "Projetado" mislabeled** (showed current %, not a projection).
+  Now pace-based (`cd95fd5`).
+- **MINOR** — dead scoreboard `pace` fields, "Prompt de Sistema" label under the
+  "Treinamento" accordion, dead `stagesCount`. Cleaned.
+
+## 4. NOT done — requires the founder's authenticated app session
+
+Per the sprint's explicit non-negotiable *"do not claim a visual fix without a
+screenshot at the problem viewport,"* these gates are **outstanding** because they
+need a running, logged-in Supabase session (credentials not available to the
+engineer):
+
+- **W8 kanban after-screenshot** at the founder viewport (`Captura ...132721`).
+- **W9 before/after screenshot set** (pipeline setup, goals, scoreboard, Copilot,
+  Base de Contatos, Custom Table relation, kanban card).
+- **W7 live E2E**: confirm picking a target custom table, linking a row, and the
+  chip resolving live against `custom_table_records`. The code matches the proven
+  `opportunity_links` pattern, but no live DB run was performed.
+
+## 5. Deploy / DB state
+
+- **Frontend-only.** No new migrations. Relation links reuse the existing
+  `custom_table_links` table (verify its columns match before relying on
+  cross-table relations in production).
+- **Caveat (carried from 6.9):** root `tsc --noEmit` is hollow — always use
+  `tsc -p tsconfig.app.json`. Touched files are clean; the pre-existing backlog
+  (15 errors / 7 files: `useRelationResolver`, `mockChatData`, `OpportunityKanban`,
+  `CopilotCockpit`, `useSubtasks`, `usePipelineStagesV2`, `usePipelines`) is
+  unchanged and logged in `todo.md`.
+- **Branch not merged.** Merge to `main` after the §4 visual/live gates pass.
+- Commits this cycle: `a9a8fbf` → `cd95fd5`.
