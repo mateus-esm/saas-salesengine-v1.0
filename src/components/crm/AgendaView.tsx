@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar, Clock, Plus, X } from "lucide-react";
@@ -22,6 +22,23 @@ function roundHour(d: Date, offset: number) {
   r.setHours(r.getHours() + offset);
   return r;
 }
+
+function getEventStyle(startsAt: string, endsAt: string) {
+  const start = parseISO(startsAt);
+  const end = parseISO(endsAt);
+  const startMinutes = start.getHours() * 60 + start.getMinutes();
+  const endMinutes = end.getHours() * 60 + end.getMinutes();
+  const totalMinutes = 24 * 60;
+  const top = (startMinutes / totalMinutes) * 100;
+  const height = Math.max(((endMinutes - startMinutes) / totalMinutes) * 100, 1.5);
+  return { top: `${top}%`, height: `${height}%` };
+}
+
+const typeColors: Record<string, string> = {
+  meeting: "#3b82f6",
+  compromisso: "#10b981",
+  block: "#f59e0b",
+};
 
 type ViewMode = "day" | "week" | "month";
 
@@ -333,25 +350,168 @@ export function AgendaView() {
             )}
           </div>
         ) : (
-          <div className="divide-y divide-border/30">
-            {days.map((day) => {
-              const dayEvents = events.filter((e) => isSameDay(parseISO(e.starts_at), day));
-              if (dayEvents.length === 0) return null;
-              return (
-                <div key={day.toISOString()} className="px-4 py-3">
-                  <h3 className="text-xs font-semibold text-muted-foreground mb-2">
-                    {format(day, "EEEE, dd/MM", { locale: ptBR })}
-                  </h3>
-                  <div className="space-y-1">
-                    {dayEvents.map((ev) => renderEventRow(ev))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <WeekTimeGrid
+            days={days}
+            events={events}
+            openDialogWithPrefill={(startsAt, endsAt) => {
+              setStartsAt(startsAt);
+              setEndsAt(endsAt);
+              setTitle("");
+              setType("meeting");
+              setNotes("");
+              setDialogOpen(true);
+            }}
+          />
         )}
       </ScrollArea>
     </div>
   );
 }
 
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const HOUR_HEIGHT = 48;
+
+interface WeekTimeGridProps {
+  days: Date[];
+  events: import("@/hooks/useAgendaEvents").AgendaEvent[];
+  openDialogWithPrefill: (startsAt: string, endsAt: string) => void;
+}
+
+function formatDatetimeLocal(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
+function WeekTimeGrid({ days, events, openDialogWithPrefill }: WeekTimeGridProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const today = new Date();
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const viewport = scrollRef.current.closest("[data-radix-scroll-area-viewport]");
+      if (viewport) {
+        viewport.scrollTop = 6 * HOUR_HEIGHT;
+      } else {
+        scrollRef.current.scrollTop = 6 * HOUR_HEIGHT;
+      }
+    }
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header row — 7 day-of-week labels with date numbers */}
+      <div className="flex border-b border-border sticky top-0 bg-background z-20 shrink-0">
+        <div className="w-14 shrink-0" />
+        {days.map((day) => {
+          const dayNumber = format(day, "d");
+          const dayLabel = format(day, "EEE", { locale: ptBR });
+          const isToday = isSameDay(day, today);
+          return (
+            <div
+              key={day.toISOString()}
+              className="flex-1 text-center py-2 text-xs font-medium border-l border-border"
+            >
+              <span className="text-muted-foreground">{dayLabel}</span>
+              <span
+                className={cn(
+                  "ml-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs",
+                  isToday && "bg-primary text-primary-foreground",
+                )}
+              >
+                {dayNumber}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Scrollable body */}
+      <div ref={scrollRef} className="flex-1 overflow-auto">
+        <div className="flex" style={{ minHeight: `${HOURS.length * HOUR_HEIGHT}px` }}>
+          {/* Hour gutter */}
+          <div className="w-14 shrink-0 relative">
+            {HOURS.map((h) => (
+              <div
+                key={h}
+                className="absolute right-0 border-t border-border/30"
+                style={{ top: `${(h / 24) * 100}%`, height: `${(1 / 24) * 100}%`, width: "100%" }}
+              >
+                <span className="absolute -top-2.5 right-2 text-[10px] text-muted-foreground">
+                  {String(h).padStart(2, "0")}:00
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Day columns */}
+          {days.map((day) => {
+            const isToday = isSameDay(day, today);
+            const dayEvents = events.filter((e) => isSameDay(parseISO(e.starts_at), day));
+
+            return (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "flex-1 relative border-l border-border",
+                  isToday && "bg-muted/30",
+                )}
+                onClick={(e) => {
+                  // Calculate which hour was clicked based on click position within the column
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const y = e.clientY - rect.top;
+                  const totalHeight = rect.height;
+                  const hourFraction = (y / totalHeight) * 24;
+                  const hour = Math.min(Math.max(Math.floor(hourFraction), 0), 23);
+
+                  const start = new Date(day);
+                  start.setHours(hour, 0, 0, 0);
+                  const end = new Date(start);
+                  end.setHours(hour + 1, 0, 0, 0);
+
+                  openDialogWithPrefill(
+                    formatDatetimeLocal(start),
+                    formatDatetimeLocal(end),
+                  );
+                }}
+              >
+                {/* Hour grid lines */}
+                {HOURS.map((h) => (
+                  <div
+                    key={h}
+                    className="absolute left-0 right-0 border-t border-border/20"
+                    style={{ top: `${(h / 24) * 100}%`, height: `${(1 / 24) * 100}%` }}
+                  />
+                ))}
+
+                {/* Events */}
+                {dayEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    className="absolute left-0.5 right-0.5 z-10 rounded-sm px-1 py-0.5 overflow-hidden cursor-pointer hover:opacity-90 transition-opacity group"
+                    style={{
+                      ...getEventStyle(ev.starts_at, ev.ends_at),
+                      backgroundColor: typeColors[ev.type] ?? "#3b82f6",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    title={ev.title}
+                  >
+                    <div className="text-[11px] font-medium leading-tight truncate text-white">
+                      {ev.title}
+                    </div>
+                    <div className="text-[10px] leading-tight opacity-80 text-white">
+                      {format(parseISO(ev.starts_at), "HH:mm")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
