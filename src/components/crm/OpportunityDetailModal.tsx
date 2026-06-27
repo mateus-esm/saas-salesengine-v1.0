@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import * as copilot from "@/services/copilot";
-import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote, Clock } from "lucide-react";
+import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -54,6 +54,8 @@ import type {
   PipelineStageV2,
 } from "@/types/pipelines";
 import { useOpportunities } from "@/hooks/useOpportunities";
+import { useAgendaEvents } from "@/hooks/useAgendaEvents";
+import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -134,6 +136,20 @@ export const OpportunityDetailModal = ({
   const { prevId, nextId, canPrev, canNext, indexLabel } = useSiblingNavigation(
     siblings ?? [],
     opportunity?.id ?? null,
+  );
+
+  // Sprint 6.10 T2 — Agenda do card: fetch all team events, filter by lead_id client-side.
+  const { events, isLoading: agendaLoading } = useAgendaEvents();
+  const cardEvents = useMemo(
+    () => events.filter((e) => e.lead_id && e.lead_id === opportunity?.lead_id),
+    [events, opportunity?.lead_id],
+  );
+
+  // Sprint 6.10 T2 — Decisões do Copilot: external API may be unconfigured; handle gracefully.
+  const decisionsQuery = useCopilotDecisions({ pipelineId: opportunity?.pipeline_id });
+  const cardDecisions = useMemo(
+    () => (decisionsQuery.data ?? []).filter((d) => d.opportunity_id === opportunity?.id),
+    [decisionsQuery.data, opportunity?.id],
   );
 
   if (!opportunity) return null;
@@ -388,10 +404,27 @@ export const OpportunityDetailModal = ({
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-2 pb-2">
-                    <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
-                      <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
-                      <span>Em breve</span>
-                    </div>
+                    {agendaLoading ? (
+                      <p className="text-xs text-muted-foreground py-2">Carregando…</p>
+                    ) : cardEvents.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-2">Sem agendamentos.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {cardEvents.map((e) => (
+                          <div key={e.id} className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/70">{e.title}</span>
+                            <span className="ml-1">
+                              {new Date(e.starts_at).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
 
@@ -405,10 +438,29 @@ export const OpportunityDetailModal = ({
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-2 pb-2">
-                    <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
-                      <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
-                      <span>Em breve</span>
-                    </div>
+                    {decisionsQuery.isLoading ? (
+                      <p className="text-xs text-muted-foreground py-2">Carregando…</p>
+                    ) : decisionsQuery.isError || cardDecisions.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-2">Sem decisões recentes.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {cardDecisions.map((d) => (
+                          <div key={d.id} className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/70">
+                              {d.decision_type ?? d.field ?? "Decisão"}
+                            </span>
+                            <span className="ml-1">
+                              {new Date(d.created_at).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CollapsibleContent>
                 </Collapsible>
               </div>
