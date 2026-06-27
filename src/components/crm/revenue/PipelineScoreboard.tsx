@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useForecast, computeRunRate } from "@/hooks/useForecast";
 import { usePipelines } from "@/hooks/usePipelines";
+import { useAuth } from "@/contexts/AuthContext";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface PipelineScoreboardProps {
@@ -37,17 +38,24 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
   const storageKey = `scoreboard_open_${pipelineId}`;
   const [open, setOpen] = useState(() => localStorage.getItem(storageKey) !== "false");
   const { pipelines, updatePipeline } = usePipelines();
+  const { profile } = useAuth();
   const pipeline = pipelines.find((p) => p.id === pipelineId);
   const [hiddenMetrics, setHiddenMetrics] = useState<Set<string>>(() => getHiddenMetrics(pipeline));
   const { data, isLoading } = useForecast(pipelineId);
 
+  const equipeId = profile?.equipe_id;
+
   const { data: profiles = [] } = useQuery({
-    queryKey: ["profiles"],
+    queryKey: ["profiles", equipeId],
     queryFn: async () => {
       const sb = supabase as any;
-      const { data } = await sb.from("profiles").select("id, name");
+      const { data } = await sb
+        .from("profiles")
+        .select("id, name")
+        .eq("equipe_id", equipeId);
       return (data ?? []) as { id: string; name: string }[];
     },
+    enabled: !!equipeId,
     staleTime: 60_000,
   });
 
@@ -325,6 +333,15 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
                   const current = ownerPlacar ? ownerPlacar.won : 0;
                   const pct = og.target_deals > 0 ? Math.min(Math.round((current / og.target_deals) * 100), 100) : 0;
                   const ownerGap = Math.max(0, og.target_deals - current);
+                  const ownerRunRate = data.sufficient_data && og.target_deals > 0
+                    ? computeRunRate(current, og.target_deals, elapsed, total)
+                    : null;
+                  const ownerRunRateLabel = ownerRunRate !== null ? `${Math.min(ownerRunRate, 999)}%` : "\u2014";
+                  const ownerPaceColor =
+                    ownerRunRate === null ? "text-muted-foreground"
+                    : ownerRunRate >= 100 ? "text-emerald-500"
+                    : ownerRunRate >= 50 ? "text-amber-500"
+                    : "text-destructive";
                   return (
                     <div key={og.owner_id} className="flex items-center gap-2 text-xs">
                       <span className="w-28 truncate font-medium">{ownerName(og.owner_id)}</span>
@@ -344,6 +361,9 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
                       </span>
                       <span className={`w-12 text-right font-mono tabular-nums ${ownerGap > 0 ? "text-destructive" : "text-emerald-600"}`}>
                         {ownerGap > 0 ? `-${ownerGap}` : "0"}
+                      </span>
+                      <span className={`w-14 text-right font-mono tabular-nums ${ownerPaceColor}`} title={ownerRunRate !== null ? `Projeção: ${ownerRunRate}% do ritmo` : ""}>
+                        {ownerRunRateLabel}
                       </span>
                       {og.target_revenue > 0 && (
                         <span className="hidden lg:block w-20 text-right font-mono text-muted-foreground tabular-nums">

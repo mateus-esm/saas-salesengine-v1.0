@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Target, Users, Settings, BarChart3, TrendingUp } from "lucide-react";
 import { OwnerGoal } from "@/types/pipelines";
 import { useDraftAutosave } from "@/hooks/useDraftAutosave";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface RevenueGoalsFormProps {
   pipelineId: string;
@@ -40,6 +41,7 @@ const EMPTY_DRAFT: RevenueGoalsDraft = {
 };
 
 export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const draftKey = `revenue_goals_${pipelineId}`;
 
@@ -83,14 +85,20 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
     }
   }, [config, hasDraft, setState]);
 
+  const equipeId = profile?.equipe_id;
+
   // Team members
   const { data: members = [] } = useQuery({
-    queryKey: ["team_members_for_goals"],
+    queryKey: ["team_members_for_goals", equipeId],
     queryFn: async () => {
       const sb = supabase as any;
-      const { data } = await sb.from("profiles").select("id, name");
+      const { data } = await sb
+        .from("profiles")
+        .select("id, name")
+        .eq("equipe_id", equipeId);
       return (data ?? []) as { id: string; name: string | null }[];
     },
+    enabled: !!equipeId,
   });
 
   // Conversion rates for preview + overrides
