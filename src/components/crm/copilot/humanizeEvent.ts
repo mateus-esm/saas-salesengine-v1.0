@@ -13,7 +13,7 @@
 
 /** Regex that matches a full UUID v4 (hex groups 8-4-4-4-12). */
 const UUID_RE =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 /**
  * Strip full UUIDs from a string, replacing them with a short reference

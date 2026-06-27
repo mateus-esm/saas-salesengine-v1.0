@@ -40,6 +40,8 @@ interface HudQueueItem {
   tone: HudTone;
   /** Optional timestamp string (pt-BR formatted). */
   timeLabel?: string;
+  /** Event sequence number, used as stable React key. */
+  seq: number;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ function groupedItems(events: HudEvent[]): (HudQueueItem | null)[] {
     }
 
     const item = itemFor(ev);
+    item.seq = ev.seq;
     item.timeLabel = formatEventTime(ev);
     result.push(item);
     prevRunId = ev.run_id;
@@ -101,6 +104,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     case "action_start": {
       const a = activityFor(ev);
       return {
+        seq: ev.seq,
         title: a.title,
         detail: a.description,
         meta: a.verb,
@@ -111,12 +115,14 @@ function itemFor(ev: HudEvent): HudQueueItem {
       const a = activityFor(ev);
       return ev.payload?.ok
         ? {
+            seq: ev.seq,
             title: a.title,
             detail: a.result,
             meta: "Concluído",
             tone: "ok",
           }
         : {
+            seq: ev.seq,
             title: a.title,
             detail: String(ev.payload?.error ?? "A ação falhou."),
             meta: "Erro",
@@ -126,6 +132,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     case "awaiting_confirmation": {
       const a = activityFor(ev);
       return {
+        seq: ev.seq,
         title: "Aguardando aprovação",
         detail: a.title,
         meta: a.verb,
@@ -134,6 +141,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     }
     case "halted":
       return {
+        seq: ev.seq,
         title: "Execução interrompida",
         detail: String(
           ev.payload?.reason ?? ev.payload?.error ?? "Sem créditos disponíveis.",
@@ -150,6 +158,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
         ? `Sincronizando pipeline — ${countInfo} oportunidades`
         : "Sincronizando pipeline";
       return {
+        seq: ev.seq,
         title: "Sincronizando pipeline",
         detail,
         meta: countInfo || "pipeline",
@@ -159,6 +168,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     case "done": {
       const status = String(ev.payload?.status ?? "concluído");
       return {
+        seq: ev.seq,
         title: "Sincronização concluída",
         detail: status,
         meta: "done",
@@ -167,6 +177,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     }
     default:
       return {
+        seq: ev.seq,
         title: String(ev.kind),
         detail: "Evento recebido do Copilot.",
         meta: String(ev.seq),
@@ -293,7 +304,7 @@ export function TelemetryHUD({
 
               return (
                 <div
-                  key={`${i}`}
+                  key={`ev-${item.seq}`}
                   className={cn(
                     "mb-2 rounded-md border p-3 text-sm",
                     toneClass[item.tone],
