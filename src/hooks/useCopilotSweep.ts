@@ -37,7 +37,6 @@ export function useCopilotSweep(persistKey?: string) {
     state: restoredState,
     hasPersisted: hadPersisted,
     updateState: persistUpdate,
-    clear: persistClear,
   } = useSyncJobPersistence(persistKey);
 
   const [events, setEvents] = useState<HudEvent[]>(() => {

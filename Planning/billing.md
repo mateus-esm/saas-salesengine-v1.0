@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-06-27 | 6.10 | W1 State Persistence Foundation (hook + 3 forms) | pro/deepseek-v4-flash | L | R$ 20 |
 | 2026-06-19 | 6.6 | T3 Copilot Cockpit sections (Setup/Treinamento/Aprovações/Logs) | Junior | L | R$ 20 |
 | 2026-06-19 | 6.6 | T4 Sprint 6.5 browser smoke + handoff | Junior | M | R$ 12 |
 | 2026-06-19 | 6.5 | T8 Base de Contatos spreadsheet columns (create/edit/resize/delete) | Codex / GPT-5 | L | R$ 20 |

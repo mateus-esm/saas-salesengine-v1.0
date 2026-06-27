@@ -68,13 +68,11 @@ function defaultState(): SyncJobState {
 // Hook
 // ---------------------------------------------------------------------------
 
-const LOADED_SENTINEL = Symbol("not-yet-loaded");
-
 /**
  * useSyncJobPersistence — persists sync job state to localStorage so
  * copilot sync/sweep state survives navigation and page reload.
  *
- * @param key  Optional storage key (e.g. `sync_sweep_${pipelineId}`).
+ * @param key  Optional storage key (e.g. `sweep_${pipelineId}`).
  *             When omitted the hook is a no-op (empty state, no I/O).
  *
  * On mount, restores previously persisted state if available.
@@ -88,16 +86,17 @@ const LOADED_SENTINEL = Symbol("not-yet-loaded");
 export function useSyncJobPersistence(
   key: string | undefined,
 ) {
-  const [state, setState] = useState<SyncJobState>(() => {
-    if (!key) return defaultState();
-    return loadSyncJob(key) ?? defaultState();
+  // Load once on mount; both `state` and `hasPersisted` initializers
+  // read from this shared value, avoiding a redundant localStorage call.
+  const [initial] = useState(() => {
+    if (!key) return { state: defaultState(), hasPersisted: false } as const;
+    const loaded = loadSyncJob(key);
+    if (loaded) return { state: loaded, hasPersisted: true } as const;
+    return { state: defaultState(), hasPersisted: false } as const;
   });
 
-  // Track whether a persisted value existed on mount — stable across renders.
-  const [hasPersisted, _setHasPersisted] = useState(() => {
-    if (!key) return false;
-    return loadSyncJob(key) !== null;
-  });
+  const [state, setState] = useState<SyncJobState>(initial.state);
+  const [hasPersisted] = useState(initial.hasPersisted);
 
   // Ref to detect first mount: we want to skip the first persist effect
   // since the state was just loaded from localStorage (writing it back
