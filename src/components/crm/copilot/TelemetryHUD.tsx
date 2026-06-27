@@ -1,12 +1,12 @@
 // src/components/crm/copilot/TelemetryHUD.tsx
 //
 // Sprint 6.1 - EPIC D - D4: live cognition HUD.
-// Sprint 6.3 - Epic 1: converted from blocking Dialog to non-blocking right
-//   Sheet drawer (modal={false}, no overlay, run persists on close).
-// Sprint 6.5 - T4: compact fast telemetry panel with readable queue cards.
-// Sprint 6.8 - T2.4: secondary detail view; primary indicator is now
-//   CopilotThinkingBadge. Accessible via "Ver detalhes técnicos" in the
-//   badge's popover.
+// Sprint 6.10 W3 - Telemetry Humanization: timestamp formatting (pt-BR
+// locale), run_id grouping, sweep totals.
+//
+// Events are grouped by run_id with visual separators between different runs.
+// Timestamps are formatted in pt-BR local time (e.g. "14:32").
+// Sweep progress events show current/total counters.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Minus, X } from "lucide-react";
@@ -38,6 +38,57 @@ interface HudQueueItem {
   detail: string;
   meta: string;
   tone: HudTone;
+  /** Optional timestamp string (pt-BR formatted). */
+  timeLabel?: string;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Format a timestamp from an event to pt-BR locale time string.
+ * Tries: event.ts, event.payload.created_at, event.payload.ts
+ * Falls back to the event's sequence number if no timestamp is available.
+ */
+function formatEventTime(ev: HudEvent): string {
+  const raw = ev.ts ?? (ev.payload?.created_at as string) ?? (ev.payload?.ts as string);
+  if (raw) {
+    try {
+      const d = new Date(raw);
+      return d.toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      // fall through to seq fallback
+    }
+  }
+  return `#${ev.seq}`;
+}
+
+/**
+ * Build a list of *grouped* items — run_id breakpoints are inserted as
+ * `null` items that the render loop turns into visual separators.
+ */
+function groupedItems(events: HudEvent[]): (HudQueueItem | null)[] {
+  const result: (HudQueueItem | null)[] = [];
+  let prevRunId: string | undefined;
+
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+
+    // Insert a run-group separator when run_id changes (skip before the
+    // very first event).
+    if (i > 0 && ev.run_id && ev.run_id !== prevRunId) {
+      result.push(null); // null == separator sentinel
+    }
+
+    const item = itemFor(ev);
+    item.timeLabel = formatEventTime(ev);
+    result.push(item);
+    prevRunId = ev.run_id;
+  }
+
+  return result;
 }
 
 function activityFor(ev: HudEvent) {
@@ -62,12 +113,12 @@ function itemFor(ev: HudEvent): HudQueueItem {
         ? {
             title: a.title,
             detail: a.result,
-            meta: "Concluido",
+            meta: "Concluído",
             tone: "ok",
           }
         : {
             title: a.title,
-            detail: String(ev.payload?.error ?? "A acao falhou."),
+            detail: String(ev.payload?.error ?? "A ação falhou."),
             meta: "Erro",
             tone: "err",
           };
@@ -75,7 +126,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
     case "awaiting_confirmation": {
       const a = activityFor(ev);
       return {
-        title: "Aguardando aprovacao",
+        title: "Aguardando aprovação",
         detail: a.title,
         meta: a.verb,
         tone: "warn",
@@ -83,25 +134,32 @@ function itemFor(ev: HudEvent): HudQueueItem {
     }
     case "halted":
       return {
-        title: "Execu\u00e7\u00e3o interrompida",
-        detail: String(ev.payload?.reason ?? ev.payload?.error ?? "Sem creditos disponiveis."),
+        title: "Execução interrompida",
+        detail: String(
+          ev.payload?.reason ?? ev.payload?.error ?? "Sem créditos disponíveis.",
+        ),
         meta: "Erro",
         tone: "err",
       };
     case "sweep_progress": {
-      const opp = String(ev.payload?.opportunity_id ?? ev.opportunity_id ?? "");
-      const state = String(ev.payload?.state ?? ev.payload?.status ?? "Em andamento");
+      // Show current/total counts when available
+      const current = String(ev.payload?.current ?? "");
+      const total = String(ev.payload?.total ?? "");
+      const countInfo = current && total ? `${current}/${total}` : "";
+      const detail = countInfo
+        ? `Sincronizando pipeline — ${countInfo} oportunidades`
+        : "Sincronizando pipeline";
       return {
         title: "Sincronizando pipeline",
-        detail: state,
-        meta: opp ? opp.slice(0, 8) : "pipeline",
+        detail,
+        meta: countInfo || "pipeline",
         tone: "muted",
       };
     }
     case "done": {
-      const status = String(ev.payload?.status ?? "concluido");
+      const status = String(ev.payload?.status ?? "concluído");
       return {
-        title: "Sincronizacao concluida",
+        title: "Sincronização concluída",
         detail: status,
         meta: "done",
         tone: "ok",
@@ -142,10 +200,16 @@ export function TelemetryHUD({
 }: TelemetryHUDProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const [minimized, setMinimized] = useState(false);
+
+  const items = useMemo(() => groupedItems(events), [events]);
+
   const lastLine = useMemo(() => {
-    const last = events[events.length - 1];
-    return last ? itemFor(last).title : "Conectando ao Copilot";
-  }, [events]);
+    // Find the last non-separator item
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i] !== null) return items[i]!.title;
+    }
+    return "Conectando ao Copilot";
+  }, [items]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -207,28 +271,57 @@ export function TelemetryHUD({
             {events.length === 0 && (
               <div className="rounded-md border border-border bg-muted/40 p-3">
                 <div className="text-sm font-medium text-foreground">Conectando ao Copilot</div>
-                <div className="mt-1 text-xs text-muted-foreground">Preparando a analise...</div>
+                <div className="mt-1 text-xs text-muted-foreground">Preparando a análise...</div>
               </div>
             )}
-            {events.map((ev, i) => {
-              const item = itemFor(ev);
+            {items.map((item, i) => {
+              // ── Run-group separator ────────────────────────────────
+              if (item === null) {
+                return (
+                  <div
+                    key={`sep-${i}`}
+                    className="mb-2 mt-1 flex items-center gap-2"
+                  >
+                    <hr className="flex-1 border-t border-border/40" />
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                      Nova execução
+                    </span>
+                    <hr className="flex-1 border-t border-border/40" />
+                  </div>
+                );
+              }
+
               return (
                 <div
-                  key={`${ev.seq}-${i}`}
-                  className={cn("mb-2 rounded-md border p-3 text-sm", toneClass[item.tone])}
+                  key={`${i}`}
+                  className={cn(
+                    "mb-2 rounded-md border p-3 text-sm",
+                    toneClass[item.tone],
+                  )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 font-medium leading-snug">{item.title}</div>
-                    <div
-                      className={cn(
-                        "shrink-0 rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                        metaToneClass[item.tone],
+                    <div className="min-w-0 font-medium leading-snug">
+                      {item.title}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {item.timeLabel && (
+                        <span className="text-[10px] tabular-nums text-muted-foreground/60">
+                          {item.timeLabel}
+                        </span>
                       )}
-                    >
-                      {item.meta}
+                      <div
+                        className={cn(
+                          "rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                          metaToneClass[item.tone],
+                        )}
+                      >
+                        {item.meta}
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-1 text-xs leading-relaxed opacity-80">{item.detail}</div>
+                  <div className="mt-1 text-xs leading-relaxed opacity-80">
+                    {item.detail}
+                  </div>
                 </div>
               );
             })}

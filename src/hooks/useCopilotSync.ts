@@ -15,6 +15,7 @@ export type HudEvent = {
   kind: string;
   seq: number;
   run_id?: string;
+  ts?: string;
   opportunity_id?: string | null;
   payload: Record<string, unknown>;
 };
