@@ -45,12 +45,20 @@ export function CopilotThinkingBadge({
     ? visibleEvents[visibleEvents.length - 1].humanized.text
     : null;
 
+  // Safety net: if events contain a terminal "done" event, treat as completed
+  // regardless of the running flag. This handles restored persisted state
+  // where the running flag may not perfectly reflect completion.
+  const hasDoneEvent = useMemo(
+    () => events.some((e) => e.kind === "done"),
+    [events],
+  );
+
+  const isActive = running && !hasDoneEvent;
+
   // State 1: Not running + no events → render nothing.
-  if (!running && visibleEvents.length === 0) {
+  if (!isActive && visibleEvents.length === 0) {
     return null;
   }
-
-  const isActive = running;
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>

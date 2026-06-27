@@ -1,13 +1,15 @@
 // src/hooks/useCopilotSync.ts
 //
 // Sprint 6.1 · EPIC D · D4 — single-sync SSE consumer for the Telemetry HUD.
+// Sprint 6.10 · W2 — optional persistKey for navigation/reload resilience.
 //
 // The backend GET /api/v1/sync/stream emits `data: {json}\n\n` events as the
 // Workflow runs, ending with a terminal `done`. Native EventSource cannot send
 // the Authorization header, so we read the stream with fetch + ReadableStream.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCopilotToken, requireCopilotUrl } from "@/services/copilot";
+import { useSyncJobPersistence } from "./useSyncJobPersistence";
 
 export type HudEvent = {
   kind: string;
@@ -23,11 +25,44 @@ export interface SyncQuery {
   pipeline_id?: string;
 }
 
-export function useCopilotSync() {
-  const [events, setEvents] = useState<HudEvent[]>([]);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * useCopilotSync — SSE-based single sync consumer.
+ *
+ * @param persistKey  Optional localStorage key. When provided, sync state
+ *                    (events, running, error) is persisted and restored
+ *                    across navigation / page reload.
+ */
+export function useCopilotSync(persistKey?: string) {
+  // Initialise persistence; the hook returns stable references for
+  // updateState / clear and stable values for hasPersisted / state.
+  // We destructure before useState so initializers can read loaded state.
+  const {
+    state: restoredState,
+    hasPersisted: hadPersisted,
+    updateState: persistUpdate,
+  } = useSyncJobPersistence(persistKey);
+
+  const [events, setEvents] = useState<HudEvent[]>(() => {
+    if (hadPersisted && restoredState.events.length > 0) {
+      return restoredState.events;
+    }
+    return [];
+  });
+  const [running, setRunning] = useState(() => {
+    if (hadPersisted) return restoredState.running;
+    return false;
+  });
+  const [error, setError] = useState<string | null>(() => {
+    if (hadPersisted) return restoredState.error;
+    return null;
+  });
   const abortRef = useRef<AbortController | null>(null);
+
+  // Persist state changes to localStorage when persistKey is provided.
+  useEffect(() => {
+    if (!persistKey) return;
+    persistUpdate({ events, running, error });
+  }, [events, running, error, persistKey, persistUpdate]);
 
   const start = useCallback(async (q: SyncQuery) => {
     setEvents([]);
@@ -56,50 +91,60 @@ export function useCopilotSync() {
     } catch (e) {
       if (!controller.signal.aborted) {
         setError(e instanceof Error ? e.message : String(e));
+        setRunning(false);
       }
-      setRunning(false);
     }
   }, []);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
+    abortRef.current = null;
     setRunning(false);
   }, []);
 
   return { events, running, error, start, stop };
 }
 
+// ── fetch-based SSE reader ────────────────────────────────────────────────
+
 async function fetchStream(
   url: string,
-  token: string | undefined,
+  token: string,
   signal: AbortSignal,
-  onEvent: (e: HudEvent) => void,
+  onEvent: (ev: HudEvent) => void,
 ): Promise<void> {
-  const res = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
     signal,
   });
-  if (!res.ok || !res.body) {
-    throw new Error(`Sync stream error ${res.status} ${res.statusText}`);
+
+  if (!response.ok) {
+    throw new Error(`Sync stream returned ${response.status}`);
   }
 
-  const reader = res.body.getReader();
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
   const decoder = new TextDecoder();
   let buffer = "";
 
-  for (;;) {
-    const { value, done } = await reader.read();
+  while (true) {
+    const { done, value } = await reader.read();
     if (done) break;
+
     buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split("\n\n");
-    buffer = chunks.pop() ?? "";
-    for (const chunk of chunks) {
-      const line = chunk.replace(/^data:\s?/, "").trim();
-      if (!line) continue;
-      try {
-        onEvent(JSON.parse(line) as HudEvent);
-      } catch {
-        // ignore malformed frames
+    const lines = buffer.split("\n");
+    // Keep the last incomplete line in the buffer
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const parsed = JSON.parse(line.slice(6)) as HudEvent;
+          onEvent(parsed);
+        } catch {
+          // Malformed JSON — skip
+        }
       }
     }
   }

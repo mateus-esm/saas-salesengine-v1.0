@@ -18,4 +18,10 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // https://vitest.dev/config/
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: [],
+  },
 }));

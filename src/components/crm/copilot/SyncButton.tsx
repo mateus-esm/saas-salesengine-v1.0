@@ -56,8 +56,14 @@ export function SyncButton({
   const enabled = equipe?.is_crm_agent_enabled ?? false;
   const queryClient = useQueryClient();
 
-  const single = useCopilotSync();
-  const sweepHook = useCopilotSweep();
+  // Compute persistKey so sync state survives navigation / reload.
+  // Sweep mode uses pipelineId; single mode uses leadId.
+  const persistKey = mode === "sweep"
+    ? (pipelineId ? `sync_sweep_${pipelineId}` : undefined)
+    : (leadId ? `sync_single_${leadId}` : undefined);
+
+  const single = useCopilotSync(persistKey);
+  const sweepHook = useCopilotSweep(persistKey);
   const [hudOpen, setHudOpen] = useState(false);
 
   const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
