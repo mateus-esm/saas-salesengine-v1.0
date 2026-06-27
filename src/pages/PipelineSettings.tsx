@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+import { DRAFT_PREFIX, loadDraft } from "@/hooks/useDraftAutosave";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
 import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
@@ -289,6 +290,40 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const [camposOpen, setCamposOpen] = useState(false);
   const [geralOpen, setGeralOpen] = useState(false);
 
+  // ── Draft persistence — in-progress edits survive navigation ──
+  const draftKey = `pipeline_editor_${pipeline.id}`;
+  const draftRestored = useRef(false);
+
+  // Restore draft from localStorage on mount (overrides pipeline prop).
+  useEffect(() => {
+    const draft = loadDraft<{
+      name: string;
+      description: string;
+      cadenceDays: string;
+      cardFieldIds: string[];
+    }>(draftKey);
+    if (draft) {
+      setName(draft.name);
+      setDescription(draft.description);
+      setCadenceDays(draft.cadenceDays);
+      setCardFieldIds(draft.cardFieldIds);
+      draftRestored.current = true;
+    }
+  }, [draftKey]);
+
+  // Auto-save to localStorage on any form-field change (debounced 1 s).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          DRAFT_PREFIX + draftKey,
+          JSON.stringify({ name, description, cadenceDays, cardFieldIds }),
+        );
+      } catch { /* localStorage full */ }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [name, description, cadenceDays, cardFieldIds, draftKey]);
+
   const dirty =
     name !== pipeline.name ||
     (description || "") !== (pipeline.description || "") ||
@@ -314,6 +349,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
       card_field_ids: cardFieldIds,
     });
     toast.success("Pipeline salva");
+    try { localStorage.removeItem(DRAFT_PREFIX + draftKey); } catch {}
   };
 
   const SectionChevron = () => (

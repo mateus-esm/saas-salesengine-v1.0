@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,24 +17,36 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Trash2, Target, Users, Settings, BarChart3, TrendingUp } from "lucide-react";
 import { OwnerGoal } from "@/types/pipelines";
+import { useDraftAutosave } from "@/hooks/useDraftAutosave";
 
 interface RevenueGoalsFormProps {
   pipelineId: string;
 }
 
+interface RevenueGoalsDraft {
+  goalDeals: string;
+  goalRevenue: string;
+  period: string;
+  ownerGoals: OwnerGoal[];
+  overrides: Record<string, string>;
+}
+
+const EMPTY_DRAFT: RevenueGoalsDraft = {
+  goalDeals: "",
+  goalRevenue: "",
+  period: "month",
+  ownerGoals: [],
+  overrides: {},
+};
+
 export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
   const queryClient = useQueryClient();
+  const draftKey = `revenue_goals_${pipelineId}`;
 
-  // Step 1 — Headline targets
-  const [goalDeals, setGoalDeals] = useState("");
-  const [goalRevenue, setGoalRevenue] = useState("");
-  const [period, setPeriod] = useState("month");
+  const { value: state, setValue: setState, commit, discard, hasDraft } =
+    useDraftAutosave<RevenueGoalsDraft>(draftKey, EMPTY_DRAFT);
 
-  // Step 2 — Owner split
-  const [ownerGoals, setOwnerGoals] = useState<OwnerGoal[]>([]);
-
-  // Step 3 — Conversion overrides
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const { goalDeals, goalRevenue, period, ownerGoals, overrides } = state;
 
   // Load existing config
   const { data: config } = useQuery({
@@ -46,22 +58,30 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
         .select("revenue_config")
         .eq("id", pipelineId)
         .single();
-      const rc = data?.revenue_config ?? {};
-      setGoalDeals(String(rc.goal_deals ?? ""));
-      setGoalRevenue(String(rc.goal_revenue ?? ""));
-      setPeriod(rc.period ?? "month");
-      setOwnerGoals(rc.owner_goals ?? []);
-      const ov: Record<string, string> = {};
-      if (rc.conversion_overrides) {
-        for (const [k, v] of Object.entries(rc.conversion_overrides)) {
-          ov[k] = String(v);
-        }
-      }
-      setOverrides(ov);
-      return rc;
+      return (data?.revenue_config ?? {}) as Record<string, any>;
     },
     enabled: !!pipelineId,
   });
+
+  // Seed form state from DB config — only when no draft exists (so unsaved
+  // input survives navigation). Runs once on first load.
+  useEffect(() => {
+    if (config && !hasDraft && Object.keys(config).length > 0) {
+      const ov: Record<string, string> = {};
+      if (config.conversion_overrides) {
+        for (const [k, v] of Object.entries(config.conversion_overrides)) {
+          ov[k] = String(v);
+        }
+      }
+      setState({
+        goalDeals: String(config.goal_deals ?? ""),
+        goalRevenue: String(config.goal_revenue ?? ""),
+        period: config.period ?? "month",
+        ownerGoals: config.owner_goals ?? [],
+        overrides: ov,
+      });
+    }
+  }, [config, hasDraft, setState]);
 
   // Team members
   const { data: members = [] } = useQuery({
@@ -87,6 +107,10 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
   const memberName = (id: string): string =>
     members.find((m) => m.id === id)?.name ?? id.slice(0, 8);
 
+  const updateField = (field: keyof RevenueGoalsDraft, value: any) => {
+    setState((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleSave = async () => {
     const sb = supabase as any;
     const existing = config ?? {};
@@ -108,6 +132,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
       .update({ revenue_config: updated })
       .eq("id", pipelineId);
     toast.success("Metas salvas");
+    commit(); // Clear draft after successful save
     queryClient.invalidateQueries({ queryKey: ["forecast", pipelineId] });
   };
 
@@ -135,7 +160,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
               <Input
                 type="number"
                 value={goalRevenue}
-                onChange={(e) => setGoalRevenue(e.target.value)}
+                onChange={(e) => updateField("goalRevenue", e.target.value)}
                 placeholder="0,00"
                 className="h-9"
               />
@@ -150,7 +175,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
               <Input
                 type="number"
                 value={goalDeals}
-                onChange={(e) => setGoalDeals(e.target.value)}
+                onChange={(e) => updateField("goalDeals", e.target.value)}
                 placeholder="Ex.: 20"
                 className="h-9"
               />
@@ -162,7 +187,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
               <label className="text-xs text-muted-foreground font-medium">
                 Período
               </label>
-              <Select value={period} onValueChange={setPeriod}>
+              <Select value={period} onValueChange={(val) => updateField("period", val)}>
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -204,7 +229,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                   onValueChange={(val) => {
                     const updated = [...ownerGoals];
                     updated[idx] = { ...updated[idx], owner_id: val };
-                    setOwnerGoals(updated);
+                    updateField("ownerGoals", updated);
                   }}
                 >
                   <SelectTrigger className="h-8 text-xs flex-1 min-w-0">
@@ -230,7 +255,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                   onChange={(e) => {
                     const updated = [...ownerGoals];
                     updated[idx] = { ...updated[idx], target_deals: parseInt(e.target.value) || 0 };
-                    setOwnerGoals(updated);
+                    updateField("ownerGoals", updated);
                   }}
                   placeholder="Deals"
                   className="h-8 text-xs w-20"
@@ -241,7 +266,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                   onChange={(e) => {
                     const updated = [...ownerGoals];
                     updated[idx] = { ...updated[idx], target_revenue: parseFloat(e.target.value) || 0 };
-                    setOwnerGoals(updated);
+                    updateField("ownerGoals", updated);
                   }}
                   placeholder="R$"
                   className="h-8 text-xs w-24"
@@ -250,7 +275,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 shrink-0"
-                  onClick={() => setOwnerGoals(ownerGoals.filter((_, i) => i !== idx))}
+                  onClick={() => updateField("ownerGoals", ownerGoals.filter((_, i) => i !== idx))}
                 >
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
@@ -261,7 +286,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
             variant="outline"
             size="sm"
             className="text-xs w-full"
-            onClick={() => setOwnerGoals([...ownerGoals, { owner_id: "", target_deals: 0, target_revenue: 0 }])}
+            onClick={() => updateField("ownerGoals", [...ownerGoals, { owner_id: "", target_deals: 0, target_revenue: 0 }])}
           >
             <Plus className="h-3 w-3 mr-1" /> Adicionar vendedor
           </Button>
@@ -308,7 +333,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                       step={0.01}
                       value={overrideVal}
                       onChange={(e) =>
-                        setOverrides({ ...overrides, [r.stage_id]: e.target.value })
+                        updateField("overrides", { ...overrides, [r.stage_id]: e.target.value })
                       }
                       placeholder="Taxa (0–1)"
                       className="h-7 text-xs w-24"

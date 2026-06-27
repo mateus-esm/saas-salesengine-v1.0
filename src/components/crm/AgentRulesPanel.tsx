@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   ChevronDown,
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 
+import { DRAFT_PREFIX, loadDraft } from "@/hooks/useDraftAutosave";
 import { useAgentRules } from "@/hooks/useAgentRules";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -837,8 +838,49 @@ export const AgentRulesPanel = ({
   const [hints, setHints] = useState("");
   const [dirty, setDirty] = useState(false);
 
-  // Seed local state from DB on load / refetch.
+  // ── Draft persistence — in-progress edits survive navigation ──
+  const draftKey = `agent_rules_${pipelineId}`;
+  const restoredDraft = useRef(false);
+
+  // Restore draft from localStorage on mount (overrides initial state).
   useEffect(() => {
+    const draft = loadDraft<{
+      autoCreate: boolean;
+      autoAdvance: boolean;
+      autoExtract: boolean;
+      cooldown: number;
+      triggers: AgentRuleTrigger[];
+      hints: string;
+    }>(draftKey);
+    if (draft) {
+      setAutoCreate(draft.autoCreate);
+      setAutoAdvance(draft.autoAdvance);
+      setAutoExtract(draft.autoExtract);
+      setCooldown(draft.cooldown);
+      setTriggers(draft.triggers);
+      setHints(draft.hints);
+      setDirty(true);
+      restoredDraft.current = true;
+    }
+  }, [draftKey]);
+
+  // Auto-save to localStorage on any state change (debounced 1 s).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          DRAFT_PREFIX + draftKey,
+          JSON.stringify({ autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints }),
+        );
+      } catch { /* localStorage full */ }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints, draftKey]);
+
+  // Seed local state from DB on load / refetch.
+  // Skips seeding when a draft was restored, so unsaved edits survive navigation.
+  useEffect(() => {
+    if (restoredDraft.current) return;
     if (!rules) {
       setAutoCreate(false);
       setAutoAdvance(true);
@@ -880,6 +922,11 @@ export const AgentRulesPanel = ({
       cooldown_minutes: cooldown,
       triggers,
       extraction_hints: hints || null,
+    }, {
+      onSuccess: () => {
+        try { localStorage.removeItem(DRAFT_PREFIX + draftKey); } catch {}
+        setDirty(false);
+      },
     });
   };
 
