@@ -21,11 +21,11 @@ export const useSubtasks = (parentTaskId: string | null, leadId?: string | null)
     queryKey: key,
     enabled: !!parentTaskId,
     queryFn: async (): Promise<Task[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("tasks")
         .select("*")
         .eq("parent_task_id", parentTaskId as string)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true }) as { data: Task[] | null; error: { message: string } | null };
       if (error) throw error;
       return (data as Task[]) || [];
     },

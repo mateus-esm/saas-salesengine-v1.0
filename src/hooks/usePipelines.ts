@@ -43,6 +43,7 @@ const normalizePipeline = (row: PipelineRow): Pipeline => ({
     : [],
   card_field_ids: Array.isArray(row.card_field_ids) ? row.card_field_ids : [],
   revenue_config: row.revenue_config ?? {},
+  icp_weights: (row as any).icp_weights ?? [],
   is_archived: !!row.is_archived,
   created_at: row.created_at,
   updated_at: row.updated_at,

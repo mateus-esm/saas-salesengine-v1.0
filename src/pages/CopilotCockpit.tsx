@@ -151,10 +151,7 @@ const CopilotCockpit = () => {
         <PipelineAgentView
           pipeline={pipeline}
           agent={
-            agent ?? {
-              scope: "pipeline",
-              pipeline_id: pipeline.id,
-            }
+            { ...agent, scope: "pipeline" as const, pipeline_id: pipeline.id }
           }
           onBack={() => setSelected(null)}
           onSave={makeSaveHandler("pipeline", pipeline.id)}

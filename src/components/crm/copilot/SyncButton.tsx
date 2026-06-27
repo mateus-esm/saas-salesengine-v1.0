@@ -64,6 +64,10 @@ export function SyncButton({
   );
   const [hudOpen, setHudOpen] = useState(false);
 
+  const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
+  const running = mode === "sweep" ? sweepHook.running : single.running;
+  const error = mode === "sweep" ? sweepHook.error : single.error;
+
   // ── Auto-open TelemetryHUD after 1s of running ──────────────────────
   const autoOpenedRef = useRef(false);
   const prevRunningRef = useRef(false);
@@ -85,10 +89,6 @@ export function SyncButton({
     }, 1000);
     return () => clearTimeout(timer);
   }, [running, hudOpen]);
-
-  const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
-  const running = mode === "sweep" ? sweepHook.running : single.running;
-  const error = mode === "sweep" ? sweepHook.error : single.error;
 
   // Invalidate the live data the run may have changed, once it's done.
   // hasToasted ensures the completion toast fires exactly once per run.

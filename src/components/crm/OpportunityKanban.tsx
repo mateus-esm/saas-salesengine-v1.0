@@ -200,8 +200,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     for (const o of localOpps) {
       // Sprint 6.8 T3.3 — attach combined lead score and breakdown for badge rendering
       const s = leadScores[o.lead_id];
-      (o as Record<string, unknown>)._lead_score = s?.leadScore ?? null;
-      (o as Record<string, unknown>)._lead_breakdown = s
+      (o as unknown as Record<string, unknown>)._lead_score = s?.leadScore ?? null;
+      (o as unknown as Record<string, unknown>)._lead_breakdown = s
         ? { icp: s.icpScore, velocity: s.velocity }
         : undefined;
       if (map[o.stage_id]) map[o.stage_id].push(o);

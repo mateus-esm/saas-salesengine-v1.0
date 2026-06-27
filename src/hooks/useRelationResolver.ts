@@ -52,7 +52,7 @@ export function useRelationResolver(
 
         if (!edges || edges.length === 0 || !targetTable) return [];
 
-        const linkedIds = (edges as { linked_id: string }[]).map((e) => e.linked_id);
+        const linkedIds = (edges as unknown as { linked_id: string }[]).map((e) => e.linked_id);
 
         const { data: records } = await supabase
           .from(targetTable as any)
@@ -61,7 +61,7 @@ export function useRelationResolver(
           .is("deleted_at", null);
 
         if (records) {
-          return (records as { id: string; [k: string]: unknown }[]).map((r) => ({
+          return (records as unknown as { id: string; [k: string]: unknown }[]).map((r) => ({
             toId: r.id,
             label: String(r[displayField] ?? `[${targetTable}]`),
           }));
@@ -83,7 +83,8 @@ export function useRelationResolver(
 
       // Group to_ids by target table for batched queries.
       const tableGroups: Record<string, string[]> = {};
-      for (const edge of edges) {
+      const typedEdges = edges as unknown as { to_table: string; to_id: string }[];
+      for (const edge of typedEdges) {
         if (!tableGroups[edge.to_table]) tableGroups[edge.to_table] = [];
         tableGroups[edge.to_table].push(edge.to_id);
       }

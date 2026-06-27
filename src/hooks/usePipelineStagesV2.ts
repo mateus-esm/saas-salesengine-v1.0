@@ -49,6 +49,9 @@ const normalize = (row: StageRow): PipelineStageV2 => ({
   description: row.description ?? undefined,
   created_at: row.created_at,
   deleted_at: row.deleted_at ?? null,
+  cycle_days: (row as any).cycle_days ?? null,
+  cycle_target_stage_id: (row as any).cycle_target_stage_id ?? null,
+  cycle_webhook_url: (row as any).cycle_webhook_url ?? null,
 });
 
 /**
