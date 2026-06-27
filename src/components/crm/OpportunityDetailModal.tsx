@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import * as copilot from "@/services/copilot";
-import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote } from "lucide-react";
+import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote, Clock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -388,9 +388,10 @@ export const OpportunityDetailModal = ({
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-2 pb-2">
-                    <p className="text-[11px] text-muted-foreground italic py-2">
-                      Agenda em breve
-                    </p>
+                    <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
+                      <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
+                      <span>Em breve</span>
+                    </div>
                   </CollapsibleContent>
                 </Collapsible>
 
@@ -404,9 +405,10 @@ export const OpportunityDetailModal = ({
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-2 pb-2">
-                    <p className="text-[11px] text-muted-foreground italic py-2">
-                      Decisões do agente em breve
-                    </p>
+                    <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
+                      <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
+                      <span>Em breve</span>
+                    </div>
                   </CollapsibleContent>
                 </Collapsible>
               </div>

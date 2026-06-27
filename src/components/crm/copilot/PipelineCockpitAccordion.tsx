@@ -1,4 +1,5 @@
 import { usePipelines } from "@/hooks/usePipelines";
+import { Clock } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -17,27 +18,30 @@ const PIPELINE_BOXES = [
     id: "prompt",
     label: "Prompt & Base de Conhecimento",
     render: () => (
-      <p className="text-xs text-muted-foreground p-2">
-        Configuração do agente vendas (em breve)
-      </p>
+      <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
+        <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
+        <span>Em breve</span>
+      </div>
     ),
   },
   {
     id: "automations",
     label: "Automações",
     render: () => (
-      <p className="text-xs text-muted-foreground p-2">
-        Regras de automação (em breve)
-      </p>
+      <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
+        <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
+        <span>Em breve</span>
+      </div>
     ),
   },
   {
     id: "logs",
     label: "Logs Locais",
     render: () => (
-      <p className="text-xs text-muted-foreground p-2">
-        Histórico de eventos (em breve)
-      </p>
+      <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/50 p-4 text-sm text-muted-foreground">
+        <Clock className="h-5 w-5 shrink-0 text-muted-foreground/60" />
+        <span>Em breve</span>
+      </div>
     ),
   },
 ];

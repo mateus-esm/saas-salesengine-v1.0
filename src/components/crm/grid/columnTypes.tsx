@@ -37,7 +37,7 @@ export const COLUMN_TYPES: Record<ColumnKind, ColumnTypeHandler> = {
 
   number: {
     kind: "number",
-    menuLabel: "Numero",
+    menuLabel: "Número",
     implemented: true,
     format: (value, _col) => {
       if (value == null) return "";
@@ -53,7 +53,7 @@ export const COLUMN_TYPES: Record<ColumnKind, ColumnTypeHandler> = {
 
   select: {
     kind: "select",
-    menuLabel: "Selecao",
+    menuLabel: "Seleção",
     implemented: true,
     format: (value, col) => selectLabel(value, col),
     parse: (raw, _col) => raw,

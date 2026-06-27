@@ -219,12 +219,12 @@ export function AgendaView() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="title">Titulo</Label>
+                  <Label htmlFor="title">Título</Label>
                   <Input
                     id="title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Titulo do evento"
+                    placeholder="Título do evento"
                     required
                   />
                 </div>
@@ -235,7 +235,7 @@ export function AgendaView() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="meeting">Reuniao</SelectItem>
+                      <SelectItem value="meeting">Reunião</SelectItem>
                       <SelectItem value="compromisso">Compromisso</SelectItem>
                       <SelectItem value="block">Bloqueio</SelectItem>
                     </SelectContent>
@@ -243,7 +243,7 @@ export function AgendaView() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="starts_at">Inicio</Label>
+                    <Label htmlFor="starts_at">Início</Label>
                     <Input
                       id="starts_at"
                       type="datetime-local"
@@ -264,12 +264,12 @@ export function AgendaView() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Observacoes</Label>
+                  <Label htmlFor="notes">Observações</Label>
                   <Textarea
                     id="notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Observacoes (opcional)"
+                    placeholder="Observações (opcional)"
                     rows={3}
                   />
                 </div>
