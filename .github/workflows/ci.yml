@@ -31,6 +31,8 @@ jobs:
           node-version: "20"
       - name: Install deps
         run: npm ci
+      - name: Typecheck (tsc -b — real type gate)
+        run: npx tsc -b
       - name: Build (the real FE gate — tsc passing != vite build passing)
         run: npm run build
 
