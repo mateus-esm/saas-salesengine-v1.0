@@ -66,9 +66,9 @@ export function useCopilotSync(persistKey?: string) {
   }, [events, running, error, persistKey, persistUpdate]);
 
   const start = useCallback(async (q: SyncQuery) => {
+    setRunning(true);
     setEvents([]);
     setError(null);
-    setRunning(true);
 
     const token = await getCopilotToken();
     const params = new URLSearchParams({ lead_id: q.lead_id });

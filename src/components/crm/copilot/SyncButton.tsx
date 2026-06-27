@@ -64,6 +64,28 @@ export function SyncButton({
   );
   const [hudOpen, setHudOpen] = useState(false);
 
+  // ── Auto-open TelemetryHUD after 1s of running ──────────────────────
+  const autoOpenedRef = useRef(false);
+  const prevRunningRef = useRef(false);
+
+  // Detect start of a new run and reset auto-open flag.
+  useEffect(() => {
+    if (running && !prevRunningRef.current) {
+      autoOpenedRef.current = false;
+    }
+    prevRunningRef.current = running;
+  }, [running]);
+
+  // After 1s of continuous running, auto-open the HUD.
+  useEffect(() => {
+    if (!running || autoOpenedRef.current || hudOpen) return;
+    const timer = setTimeout(() => {
+      setHudOpen(true);
+      autoOpenedRef.current = true;
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [running, hudOpen]);
+
   const events: HudEvent[] = mode === "sweep" ? sweepHook.events : single.events;
   const running = mode === "sweep" ? sweepHook.running : single.running;
   const error = mode === "sweep" ? sweepHook.error : single.error;

@@ -70,10 +70,10 @@ export function useCopilotSweep(persistKey?: string) {
   }, [events, running, total, runId, error, persistKey, persistUpdate]);
 
   const start = useCallback(async (pipelineId: string) => {
+    setRunning(true);
     setEvents([]);
     setError(null);
     setTotal(null);
-    setRunning(true);
     try {
       // The server runs the sweep to completion and returns {run_id,total}.
       // We subscribe to its events BEFORE awaiting so we don't miss early rows.
