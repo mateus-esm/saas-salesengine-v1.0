@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-import { DRAFT_PREFIX, loadDraft } from "@/hooks/useDraftAutosave";
+import { useDraftAutosave } from "@/hooks/useDraftAutosave";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
 import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
@@ -258,6 +258,13 @@ export default PipelineSettings;
 
 // ─────────────────────────────────────────────────────────────────────
 
+interface PipelineEditorDraft {
+  name: string;
+  description: string;
+  cadenceDays: string;
+  cardFieldIds: string[];
+}
+
 interface PipelineEditorProps {
   pipeline: Pipeline;
   onSave: (patch: {
@@ -270,13 +277,7 @@ interface PipelineEditorProps {
 }
 
 const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
-  const [name, setName] = useState(pipeline.name);
-  const [description, setDescription] = useState(pipeline.description || "");
-  const [cadenceDays, setCadenceDays] = useState(
-    pipeline.cadence_days ? String(pipeline.cadence_days) : "",
-  );
   const [schema, setSchema] = useState<CustomFieldSchema[]>(pipeline.custom_fields_schema);
-  const [cardFieldIds, setCardFieldIds] = useState<string[]>(pipeline.card_field_ids);
 
   const { defaultPipelineId, setDefault } = useDefaultPipeline();
   const isDefault = defaultPipelineId === pipeline.id;
@@ -292,37 +293,15 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
 
   // ── Draft persistence — in-progress edits survive navigation ──
   const draftKey = `pipeline_editor_${pipeline.id}`;
-  const draftRestored = useRef(false);
-
-  // Restore draft from localStorage on mount (overrides pipeline prop).
-  useEffect(() => {
-    const draft = loadDraft<{
-      name: string;
-      description: string;
-      cadenceDays: string;
-      cardFieldIds: string[];
-    }>(draftKey);
-    if (draft) {
-      setName(draft.name);
-      setDescription(draft.description);
-      setCadenceDays(draft.cadenceDays);
-      setCardFieldIds(draft.cardFieldIds);
-      draftRestored.current = true;
-    }
-  }, [draftKey]);
-
-  // Auto-save to localStorage on any form-field change (debounced 1 s).
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          DRAFT_PREFIX + draftKey,
-          JSON.stringify({ name, description, cadenceDays, cardFieldIds }),
-        );
-      } catch { /* localStorage full */ }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [name, description, cadenceDays, cardFieldIds, draftKey]);
+  const { value, setValue, commit } = useDraftAutosave<PipelineEditorDraft>(draftKey, {
+    name: pipeline.name,
+    description: pipeline.description || "",
+    cadenceDays: pipeline.cadence_days ? String(pipeline.cadence_days) : "",
+    cardFieldIds: pipeline.card_field_ids,
+  });
+  const { name, description, cadenceDays, cardFieldIds } = value;
+  const updateField = (k: keyof PipelineEditorDraft, v: PipelineEditorDraft[keyof PipelineEditorDraft]) =>
+    setValue((prev) => ({ ...prev, [k]: v }));
 
   const dirty =
     name !== pipeline.name ||
@@ -349,7 +328,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
       card_field_ids: cardFieldIds,
     });
     toast.success("Pipeline salva");
-    try { localStorage.removeItem(DRAFT_PREFIX + draftKey); } catch {}
+    commit();
   };
 
   const SectionChevron = () => (
@@ -427,13 +406,13 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
             <CardContent className="space-y-4">
               <div>
                 <Label>Nome</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Vendas Solar" />
+                <Input value={name} onChange={(e) => updateField("name", e.target.value)} placeholder="Ex.: Vendas Solar" />
               </div>
               <div>
                 <Label>Descrição</Label>
                 <Textarea
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(e) => updateField("description", e.target.value)}
                   rows={3}
                   placeholder="Para que serve esta pipeline? Ex.: Leads qualificados de energia solar residencial."
                 />
@@ -585,7 +564,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                 <CardFieldsPicker
                   schema={schema}
                   cardFieldIds={cardFieldIds}
-                  onChange={setCardFieldIds}
+                  onChange={(ids) => updateField("cardFieldIds", ids)}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Escolha quais campos aparecem nos cards do Kanban para acesso rápido.
@@ -625,7 +604,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                   step={1}
                   inputMode="numeric"
                   value={cadenceDays}
-                  onChange={(e) => setCadenceDays(e.target.value)}
+                  onChange={(e) => updateField("cadenceDays", e.target.value)}
                   placeholder="Ex.: 2"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -639,7 +618,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                   cardFieldIds={cardFieldIds}
                   onChange={({ schema: s, cardFieldIds: c }) => {
                     setSchema(s);
-                    setCardFieldIds(c);
+                    updateField("cardFieldIds", c);
                   }}
                 />
                 <p className="mt-2 text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bot,
   ChevronDown,
@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 
-import { DRAFT_PREFIX, loadDraft } from "@/hooks/useDraftAutosave";
+import { useDraftAutosave } from "@/hooks/useDraftAutosave";
 import { useAgentRules } from "@/hooks/useAgentRules";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -798,6 +798,26 @@ const RuleCard = ({
   );
 };
 
+// ─── Draft shape ─────────────────────────────────────────────────────────
+
+interface AgentRulesDraft {
+  autoCreate: boolean;
+  autoAdvance: boolean;
+  autoExtract: boolean;
+  cooldown: number;
+  triggers: AgentRuleTrigger[];
+  hints: string;
+}
+
+const INITIAL_DRAFT: AgentRulesDraft = {
+  autoCreate: false,
+  autoAdvance: true,
+  autoExtract: true,
+  cooldown: 3,
+  triggers: [],
+  hints: "",
+};
+
 // ─── Main Panel ──────────────────────────────────────────────────────────
 
 interface AgentRulesPanelProps {
@@ -829,85 +849,35 @@ export const AgentRulesPanel = ({
     return p?.custom_fields_schema ?? [];
   }, [pipelines, pipelineId]);
 
-  // ── Local state (mirrors DB, dirty-tracked) ──
-  const [autoCreate, setAutoCreate] = useState(false);
-  const [autoAdvance, setAutoAdvance] = useState(true);
-  const [autoExtract, setAutoExtract] = useState(true);
-  const [cooldown, setCooldown] = useState(3);
-  const [triggers, setTriggers] = useState<AgentRuleTrigger[]>([]);
-  const [hints, setHints] = useState("");
-  const [dirty, setDirty] = useState(false);
-
   // ── Draft persistence — in-progress edits survive navigation ──
   const draftKey = `agent_rules_${pipelineId}`;
-  const restoredDraft = useRef(false);
+  const { value, setValue, commit, hasDraft } = useDraftAutosave<AgentRulesDraft>(draftKey, INITIAL_DRAFT);
+  const { autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints } = value;
+  const [dirty, setDirty] = useState(() => hasDraft);
 
-  // Restore draft from localStorage on mount (overrides initial state).
-  useEffect(() => {
-    const draft = loadDraft<{
-      autoCreate: boolean;
-      autoAdvance: boolean;
-      autoExtract: boolean;
-      cooldown: number;
-      triggers: AgentRuleTrigger[];
-      hints: string;
-    }>(draftKey);
-    if (draft) {
-      setAutoCreate(draft.autoCreate);
-      setAutoAdvance(draft.autoAdvance);
-      setAutoExtract(draft.autoExtract);
-      setCooldown(draft.cooldown);
-      setTriggers(draft.triggers);
-      setHints(draft.hints);
-      setDirty(true);
-      restoredDraft.current = true;
-    }
-  }, [draftKey]);
-
-  // Auto-save to localStorage on any state change (debounced 1 s).
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          DRAFT_PREFIX + draftKey,
-          JSON.stringify({ autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints }),
-        );
-      } catch { /* localStorage full */ }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints, draftKey]);
+  const updateField = (k: keyof AgentRulesDraft, v: AgentRulesDraft[keyof AgentRulesDraft]) => {
+    setValue((prev) => ({ ...prev, [k]: v }));
+    setDirty(true);
+  };
 
   // Seed local state from DB on load / refetch.
-  // Skips seeding when a draft was restored, so unsaved edits survive navigation.
+  // Skips seeding when a draft exists, so unsaved edits survive navigation.
   useEffect(() => {
-    if (restoredDraft.current) return;
+    if (hasDraft) return;
     if (!rules) {
-      setAutoCreate(false);
-      setAutoAdvance(true);
-      setAutoExtract(true);
-      setCooldown(3);
-      setTriggers([]);
-      setHints("");
+      setValue(INITIAL_DRAFT);
     } else {
-      setAutoCreate(rules.auto_create_opportunity);
-      setAutoAdvance(rules.auto_advance_stages);
-      setAutoExtract(rules.auto_extract_custom_fields);
-      setCooldown(rules.cooldown_minutes);
-      setTriggers(rules.triggers);
-      setHints(rules.extraction_hints ?? "");
+      setValue({
+        autoCreate: rules.auto_create_opportunity,
+        autoAdvance: rules.auto_advance_stages,
+        autoExtract: rules.auto_extract_custom_fields,
+        cooldown: rules.cooldown_minutes,
+        triggers: rules.triggers,
+        hints: rules.extraction_hints ?? "",
+      });
     }
     setDirty(false);
-  }, [rules]);
-
-  // Dirty tracker — wraps each setter.
-  const mark = useCallback(
-    <T,>(setter: React.Dispatch<React.SetStateAction<T>>) =>
-      (val: React.SetStateAction<T>) => {
-        setter(val);
-        setDirty(true);
-      },
-    [],
-  );
+  }, [rules, hasDraft, setValue]);
 
   const handleSave = () => {
     const errors = validateRules(triggers, stageList, customFields);
@@ -924,24 +894,24 @@ export const AgentRulesPanel = ({
       extraction_hints: hints || null,
     }, {
       onSuccess: () => {
-        try { localStorage.removeItem(DRAFT_PREFIX + draftKey); } catch {}
+        commit();
         setDirty(false);
       },
     });
   };
 
   const addRule = () => {
-    setTriggers((prev) => [...prev, newRule()]);
+    setValue((prev) => ({ ...prev, triggers: [...prev.triggers, newRule()] }));
     setDirty(true);
   };
 
   const updateRule = (idx: number, r: AgentRuleTrigger) => {
-    setTriggers((prev) => prev.map((item, i) => (i === idx ? r : item)));
+    setValue((prev) => ({ ...prev, triggers: prev.triggers.map((item, i) => (i === idx ? r : item)) }));
     setDirty(true);
   };
 
   const removeRule = (idx: number) => {
-    setTriggers((prev) => prev.filter((_, i) => i !== idx));
+    setValue((prev) => ({ ...prev, triggers: prev.triggers.filter((_, i) => i !== idx) }));
     setDirty(true);
   };
 
@@ -1013,7 +983,7 @@ export const AgentRulesPanel = ({
               </div>
               <Switch
                 checked={autoCreate}
-                onCheckedChange={mark(setAutoCreate)}
+                onCheckedChange={(v) => updateField("autoCreate", v)}
               />
             </div>
 
@@ -1026,7 +996,7 @@ export const AgentRulesPanel = ({
               </div>
               <Switch
                 checked={autoAdvance}
-                onCheckedChange={mark(setAutoAdvance)}
+                onCheckedChange={(v) => updateField("autoAdvance", v)}
               />
             </div>
 
@@ -1039,7 +1009,7 @@ export const AgentRulesPanel = ({
               </div>
               <Switch
                 checked={autoExtract}
-                onCheckedChange={mark(setAutoExtract)}
+                onCheckedChange={(v) => updateField("autoExtract", v)}
               />
             </div>
 
@@ -1055,10 +1025,7 @@ export const AgentRulesPanel = ({
                 min={1}
                 max={30}
                 step={1}
-                onValueChange={([v]) => {
-                  setCooldown(v);
-                  setDirty(true);
-                }}
+                onValueChange={([v]) => updateField("cooldown", v)}
               />
             </div>
           </div>
@@ -1076,7 +1043,7 @@ export const AgentRulesPanel = ({
                   key={p.label}
                   type="button"
                   onClick={() => {
-                    setTriggers((prev) => [...prev, p.build()]);
+                    setValue((prev) => ({ ...prev, triggers: [...prev.triggers, p.build()] }));
                     setDirty(true);
                   }}
                   className="text-left p-3 rounded-md border border-border/60 hover:border-primary/40 hover:bg-muted/30 transition-colors"
@@ -1143,10 +1110,7 @@ export const AgentRulesPanel = ({
           <Textarea
             placeholder="Ex: Extrair kWp das contas de luz. Capturar tipo de telhado quando mencionado. Se o lead mencionar concorrentes, adicionar tag 'competitive'."
             value={hints}
-            onChange={(e) => {
-              setHints(e.target.value);
-              setDirty(true);
-            }}
+            onChange={(e) => updateField("hints", e.target.value)}
             rows={4}
             className="resize-none"
             maxLength={2000}
