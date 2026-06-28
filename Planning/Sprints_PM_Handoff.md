@@ -287,3 +287,76 @@ session:
   unchanged and logged in `todo.md`.
 - **Merged to `main`** (fast-forward) and pushed on 2026-06-26.
 - Commits this cycle: `a9a8fbf` → `bb45202` (+ this doc update).
+
+---
+
+## Sprint 6.10 — W7 Relation Column Re-audit (code-level)
+
+**Verdict: Correct — no defect found. The custom-table relation column's write/read/resolve path is internally consistent and follows the proven `opportunity_links` shape, with intentional adaptations for the virtual-table model.**
+
+### Audit checklist
+
+#### Write path
+
+**File:** `src/components/crm/customtables/CustomTableView.tsx:112–141`
+
+When a user picks a record via `RelationPicker`, `InlineCell` fires `onCommit({ toId, label })`, routed to `handleCellCommit`. The insert (line 132) is:
+
+```
+await sb.from("custom_table_links").insert({
+  equipe_id, from_table: table.slug, from_id: m.rowId,
+  to_table: toTable,   // = col.relation.targetTableId (custom table UUID)
+  to_id: linkVal.toId,
+  relation_key: m.column.key,
+});
+```
+
+- `toTable` is resolved as `m.column.relation?.targetTableId ?? m.column.relation?.table ?? ""` (line 119). For virtual custom-table targets `targetTableId` (the UUID) is always set by the column editor UI, so `to_table` stores the UUID of the target custom table.
+- **`await` is present** — no `.execute()` call anywhere in the path. The original 6.9.1 bug (non-awaited builder) is resolved. ✓
+- Soft-delete (remove path, line 121–129) also uses `await` and matches the `opportunity_links` soft-delete shape. ✓
+
+**Files consulted:** `CustomTableView.tsx`, `InlineCell.tsx:181–185`, `RelationPicker.tsx:58–74`.
+
+#### Read / resolve path
+
+**File:** `src/hooks/useRelationResolver.ts:72–115`
+
+For `linkTable === "custom_table_links"` (the non-`opportunity_links` branch):
+
+1. Queries `custom_table_links` selecting `"to_id, to_table"` filtered by `from_table`, `from_id`, `relation_key`, `equipe_id`, `deleted_at IS NULL` (lines 73–81).
+2. Groups `to_id`s by `to_table` (line 85–89).
+3. For each target-table group, queries `custom_table_records` with `.eq("table_id", toTable).in("id", ids)` selecting `"id, data"`, then reads `data[displayField]` as the label (lines 97–113).
+
+**Task-1 `as unknown as` casts verification:**
+- Line 86: `edges as unknown as { to_table: string; to_id: string }[]` — the `.select("to_id, to_table")` at line 75 selects exactly these two columns. Cast is correct. ✓
+- Line 106: `records as { id: string; data: Record<string, unknown> }[]` — the `.select("id, data")` at line 99 selects exactly these two columns. Cast is correct. ✓
+
+#### Write ↔ Read consistency
+
+| Dimension | Write (`CustomTableView`) | Read (`useRelationResolver`) | Match? |
+|---|---|---|---|
+| Link table | `custom_table_links` | `custom_table_links` | ✓ |
+| Source scope | `from_table = table.slug` | `.eq("from_table", context.fromTable)` where `fromTable = table.slug` (passed at `CustomTableView.tsx:339`) | ✓ |
+| Source record | `from_id = m.rowId` | `.eq("from_id", rowId)` | ✓ |
+| Column discriminator | `relation_key = m.column.key` | `.eq("relation_key", column.key)` | ✓ |
+| Target pointer | `to_table = targetTableId` (UUID), `to_id = linkVal.toId` | groups by `to_table`, queries `custom_table_records.eq("table_id", toTable).in("id", ids)` | ✓ |
+| Soft-delete | `deleted_at` field | `.is("deleted_at", null)` | ✓ |
+| Tenant scope | `equipe_id` on insert | `.eq("equipe_id", context.equipeId)` | ✓ |
+
+No write/read column mismatch found.
+
+#### vs `opportunity_links`
+
+`opportunity_links` schema: `opportunity_id`, `linked_type`, `linked_id`, `equipe_id`, soft-delete. The proven write in `OpportunityTable.tsx:438–444` directly awaits `supabase.from("opportunity_links").insert(...)` (no `.execute()`). Resolve in `useRelationResolver.ts:44–69` queries `opportunity_links` for `linked_id`, then fetches from the physical target table.
+
+The custom-table path follows the same structural pattern: await direct insert into a bridge table → filter by composite key on read → batch-fetch display labels. Differences are intentional and correct:
+- Uses `(from_table, from_id, relation_key)` instead of `(opportunity_id, linked_type)` — more generic, supports N relation columns per table.
+- Resolves via `custom_table_records` (JSONB virtual model) instead of physical tables — correct, since all custom table rows live in `custom_table_records`.
+
+**One design note (not an active defect):** If a relation column were misconfigured with a physical table target and no `targetTableId`, the resolver would incorrectly query `custom_table_records`. However, the column editor UI in `CustomTableView.tsx:295–301` only allows selecting other custom tables (from `otherTables`), so this misconfiguration cannot be reached via normal UI flow.
+
+### Conclusion
+
+All four checklist items pass. No `.execute()` calls. Casts match selected columns. Write and read columns are fully consistent. The pattern mirrors `opportunity_links` with intentional, correct adaptations.
+
+**Verified code-level only — NOT live/authenticated E2E verified. Live E2E (pick target table → link a record → chip resolves against `custom_table_records`) remains a documented fast-follow.**
