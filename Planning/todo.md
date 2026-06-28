@@ -71,36 +71,61 @@ Goal: no full-page reloads; preserve in-progress input and unsaved edits across 
       model. ⚠️ Relation column still needs **live (authenticated app) E2E
       verification** — code matches the proven `opportunity_links` pattern but no
       live DB run was performed.
-- [ ] **Telemetry humanization + agent latency** (founder pt 3): streaming responses
-      / progress indicators for perceived latency; further humanize agent telemetry
-      output beyond the 6.8 pass.
-- [ ] **Sync persistence across navigation** (founder pts 2, 10, 12): keep the sync
-      badge/job visible after navigating away and back (CRM sweep + per-card sync).
-      Overlaps the "State persistence" architectural item above — treat as one
-      architectural pass, not a bolt-on.
-- [ ] **Agenda week grid** (founder pt 16): Google-Calendar-style time-grid week
-      view (day-by-day columns with hour rows), beyond the existing Dia/Semana/Mês
-      from 6.8. Copy Google's layout.
+- [x] **Telemetry humanization** (founder pt 3a) — **done in Sprint 6.10 W3**
+      (`e865906`, `46cf399`): `humanizeEvent` (PT-BR action text, UUIDs stripped,
+      local times, grouped per run). **Perceived latency** done in **W4**
+      (`37cad91`): optimistic running + auto-open TelemetryHUD. ⏳ **Real
+      (wall-clock) agent latency still open** — python-agent profiling / caching /
+      model choice was out of scope for 6.10 (perceived-latency only). See below.
+- [x] **Sync persistence across navigation** (founder pts 2, 10, 12) — **done in
+      Sprint 6.10 W2** (`4525802`, `f17f225`) via `useSyncJobPersistence`
+      (localStorage-backed; badge restores from the persisted job on mount,
+      survives navigate-away + reload). State-persistence anchor was **W1**
+      (`9d9f3b3`, `useDraftAutosave`) — full-page-reload input loss addressed.
+- [x] **Agenda week grid** (founder pt 16) — **done in Sprint 6.10 W5**
+      (`e2f777b`): Google-Calendar time-grid week (day columns × hour rows,
+      events positioned by time, "now" indicator). ⚠️ Minor: multi-day /
+      cross-midnight events not handled (Review-1 M4 — see fast-follow below).
 
 ## Tech debt surfaced during Sprint 6.9 review (do soon)
 > Found while reviewing 6.9. Not feature work — guardrails + cleanup.
 
-- [ ] **Wire the REAL typecheck into CI/verification** *(important — silent gate)*.
-      Root `tsconfig.json` is `files: []` + references-only, so `tsc --noEmit`
-      typechecks **nothing** (always exit 0). Every "tsc clean" claim so far has been
-      hollow. Use `tsc -b` (or `tsc -p tsconfig.app.json`) in the build/CI gate. This
-      is how the `useQueryClient` runtime-crash regression in `RevenueGoalsForm.tsx`
-      slipped past "build green."
-- [ ] **Burn down the pre-existing type-error backlog** that the real typecheck
-      exposes (none block the Vite/SWC build, but they erode the safety net):
-      `useRelationResolver.ts` (Supabase query result casts), `mockChatData.ts`
-      (`completed` not on `Task`), `usePipelines.ts` (`icp_weights` missing on
-      normalized row), `usePipelineStagesV2.ts` (cycle_* fields), `OpportunityTable.tsx`
-      (`ColumnKind` / link-unlink union), `AgentRulesPanel.tsx` + `CustomFieldsEditor.tsx`
-      (missing `ciclo` / `file` keys in `Record<…>`), `useSubtasks.ts` (excessively
-      deep instantiation).
-- [ ] **Per-owner predictability depth**: rep-level activity targets + projection-vs-pace
-      (today per-owner is deals/revenue goals only; the run-rate/funnel math is
-      pipeline-level).
-- [ ] **Scoreboard `profiles` query is unscoped** (`select id,name` with no equipe
-      filter; relies on RLS). Tighten to the equipe if RLS ever loosens.
+- [x] **Wire the REAL typecheck into CI/verification** — **done in Sprint 6.10 W6**
+      (`ead0ff5`): `.github/workflows/ci.yml` runs `npx tsc -b` before build; a
+      `"typecheck": "tsc -b"` script was added in **Fixes-1 T1** (`6dd3df5`). The
+      hollow `tsc --noEmit` path is no longer the gate.
+- [x] **Burn down the pre-existing type-error backlog** — **done in Fixes-1 T1**
+      (`6dd3df5`): all 14 errors cleared (`tsc -b` exits 0). Included a real
+      **`SyncButton` TDZ runtime crash** that the green build had hidden (now
+      caught by a TDD render test). `mockChatData.ts` had already been removed in
+      W8 cleanup.
+- [x] **Scoreboard `profiles` query scoping** + **per-owner run-rate** — **done in
+      Sprint 6.10 W7** (`111f6ed`): profiles query equipe-scoped; per-owner
+      run-rate added. (Deeper rep-level activity targets / projection-vs-pace
+      remain partial — see fast-follow.)
+
+## Sprint 6.10 fast-follow (deferred out of 6.10 / Fixes 1 — by design)
+> Sprint 6.10 closed the deferred founder points + the silent-gate tech debt.
+> These remain open; see `sprint_6.10_solo-copilot_evolve_v1.md` (Review 1 + Fixes 1).
+
+- [ ] **W7 relation column LIVE E2E** *(authenticated app required)*: pick a target
+      custom table → link a record → confirm the chip resolves live against
+      `custom_table_records`. The Fixes-1 T5 **code-level re-audit** verdict is
+      "Correct, matches `opportunity_links`" (see `Sprints_PM_Handoff.md` §Sprint
+      6.10 W7 re-audit), but **no live DB run was performed**.
+- [ ] **Real (wall-clock) agent latency**: python-agent profiling / response
+      caching / model choice. 6.10 W4 delivered **perceived** latency only
+      (streaming/optimistic/HUD), not backend speed.
+- [ ] **Per-owner predictability depth**: rep-level activity targets +
+      projection-vs-pace (per-owner is still deals/revenue + run-rate; full
+      funnel math is pipeline-level). Review-1 W7-2: verify per-owner
+      `computeRunRate` doesn't reuse pipeline-scope `elapsed`/`total`.
+- [ ] **Review-1 Minors** (non-blocking polish): M1 `humanizeEvent` exposes
+      internal `move_stage` label; M2 `CopilotThinkingBadge` done/running race;
+      M3 SyncButton 1s auto-open timer not cancelled on fast toggle; M4 Agenda
+      week grid multi-day / cross-midnight events; M5 Agenda UTC↔local DST
+      round-trip; `useDraftAutosave.isDirty` is `JSON.stringify` field-order
+      sensitive.
+- [ ] **Vitest worker-pool timeout** (env/infra): default parallelism times out
+      workers in this environment; tests must run with `--no-file-parallelism`.
+      Investigate (jsdom env setup ~80s/file) or pin the flag in the test script.

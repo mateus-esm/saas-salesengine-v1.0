@@ -290,6 +290,106 @@ session:
 
 ---
 
+# Sprint 6.10 — Handoff
+
+> **Sprint:** Solo Copilot Evolve v1 — The Close-Out
+> (`sprint_6.10_solo-copilot_evolve_v1.md`) — the **final sub-sprint of Sprint 6**.
+> **Closed:** 2026-06-28 **Branch:** `claude/sprint6.10/W1/state-persistence`
+> (not yet merged to `main` at time of writing — see §5).
+> **Verification (final tree):** `tsc -b` (the REAL gate) exits **0** ·
+> `vitest` **70/70** · `vite build` green.
+> ⚠️ Run vitest with `--no-file-parallelism` in this environment — the default
+> worker pool times out (infra, not test failures).
+
+## 1. What this sprint was
+
+The close-out pass for Sprint 6: take the remaining deferred founder points and
+tech-debt and finish them so the CRM + Solo-Copilot vision is whole and Sprint 6
+ends clean. Scope (founder, 2026-06-27): **full close-out**, with **state
+persistence as the anchor wave**, **perceived-latency only** (no python-agent
+work), and the waived 6.9.1 relation gate satisfied by a **code-level re-audit**
+(live E2E stays a fast-follow). Same contract as 6.8–6.9.1: a wave is done when a
+non-technical user gets it and it is proven, not when it merely builds green.
+
+## 2. Delivered — 8 build waves
+
+W1 state-persistence draft-autosave (`useDraftAutosave`, wired into the heavy
+forms) · W2 sync persistence across navigation (`useSyncJobPersistence`; badge
+restores from persisted job on mount) · W3 telemetry humanization (`humanizeEvent`,
+PT-BR, UUIDs stripped, local times, grouped) · W4 perceived latency (optimistic
+running + auto-open TelemetryHUD) · W5 Agenda Google-Calendar week time-grid ·
+W6 real typecheck (`tsc -b`) added to the CI gate · W7 equipe-scoped profiles
+query + per-owner run-rate · W8 cleanup (dead code, PT-BR accents, em-breve card
+rails). Commits `9d9f3b3`…`c6a13f9`.
+
+## 3. Review 1 + Fixes 1 — found & FIXED (this cycle)
+
+Review 1 (Deepseek PM review, appended to the sprint plan) + a Claude cross-check
+found the "8 waves complete" ledger was partly hollow — **4 Criticals** and
+3 Importants. All were fixed in the **Fixes 1** cycle via subagent-driven
+development (implementer + per-task review + re-review). Commits `6dd3df5`…
+`b4b6988`:
+
+- **T1 (Criticals C1 + an elevation):** the W6 gate was red — `tsc -b` exited 2
+  with 14 type errors and there was **no `typecheck` script**. Burned all 14
+  (across `SyncButton`, `OpportunityKanban`, `usePipelines`, `usePipelineStagesV2`,
+  `useRelationResolver`, `useSubtasks`, `CopilotCockpit`) and added
+  `"typecheck": "tsc -b"`. **Elevation:** the two `SyncButton` `running` errors
+  Review 1 filed as type-debt were actually a **`const` TDZ → `ReferenceError` on
+  every render of `SyncButton`** (W4's auto-open-HUD code) — a real runtime crash
+  the green build hid. Fixed by reordering the derived consts above the effects,
+  proven with a TDD render test.
+- **T2 (Critical C4):** the two "em breve" card rails were wired to real data —
+  Agenda do card → `useAgendaEvents` (filtered by `lead_id`), Decisões do Copilot
+  → `useCopilotDecisions` (filtered by `opportunity_id`), with graceful loading/
+  empty/error states (an unconfigured Copilot API shows "Sem decisões recentes.",
+  never crashes). No "Em breve" string remains.
+- **T3 (Important I1 + 2 review-found Criticals):** unified `PipelineEditor`,
+  `AgentRulesPanel`, and `RevenueGoalsForm` onto `useDraftAutosave` (dropped the
+  ad-hoc refs/localStorage). The task review then caught a **regression the
+  refactor introduced** — `commit()` reset the form to `initial` before the async
+  save landed, so after saving PipelineEditor reverted to pre-edit values and
+  AgentRulesPanel blanked its rules. Fixed by adding `clearPersisted()` (clears
+  the draft, leaves on-screen values) and using it on save in all three forms;
+  re-reviewed clean.
+- **T4 (Important I2 — adjudicated):** Review 1's "sweep Realtime subscription
+  leak on unmount" was a **false positive** — `useCopilotSweep`'s `[runId]` effect
+  already returns a `removeChannel` cleanup that React runs on unmount. The **real**
+  (minor) leak was in `useCopilotSync`: the SSE fetch stream's `AbortController`
+  was never aborted on unmount. Added an unmount cleanup that aborts it.
+- **T5 (Critical C3):** produced the contracted **W7 relation re-audit** (the
+  `## Sprint 6.10 — W7 Relation Column Re-audit` section below) — verdict
+  **Correct**, code-level only.
+
+Importants I3 (handoff + todo not updated) is closed by this document + the
+`todo.md` update. Review 1's Minors (M1–M5 + a few Claude/W1 notes) are carried in
+`todo.md` as fast-follow.
+
+## 4. Outstanding / fast-follow (NOT done — by design)
+
+- **W7 live E2E** of the relation column (authenticated app: pick target table →
+  link a record → chip resolves against `custom_table_records`). The re-audit
+  below confirms the code is correct, but no live DB run was performed — carried
+  to `todo.md`.
+- **Real agent (wall-clock) latency** — W4 was perceived-latency only;
+  python-agent profiling/caching/model choice was explicitly out of scope.
+- **Review 1 Minors** (M1 internal `move_stage` label, M2 badge race, M3 fast-
+  toggle timer, M4 multi-day events in week grid, M5 DST round-trip, isDirty
+  field-order, per-owner run-rate scope) — `todo.md`.
+
+## 5. Deploy / DB state
+
+- **Frontend-only.** No migrations, no edge functions, no python-agent changes
+  this sprint — **nothing to `supabase db push` or `functions deploy`.** W2 sync
+  persistence chose a **localStorage-backed** approach (`useSyncJobPersistence`),
+  so the "may need a migration" flag from the plan resolved to **no migration**.
+- **The typecheck gate is now real:** `.github/workflows/ci.yml` runs `npx tsc -b`
+  before the build, and `npm run typecheck` exists. The hollow `tsc --noEmit`
+  path is no longer the gate. The pre-existing backlog is **burned to 0**.
+- **Not yet merged to `main`** — the branch is green (tsc 0, 70/70, build) and
+  Review-1 Criticals are cleared; awaiting the final whole-branch review +
+  founder merge decision.
+
 ## Sprint 6.10 — W7 Relation Column Re-audit (code-level)
 
 **Verdict: Correct — no defect found. The custom-table relation column's write/read/resolve path is internally consistent and follows the proven `opportunity_links` shape, with intentional adaptations for the virtual-table model.**
