@@ -44,7 +44,7 @@ export const useWebhookConfigs = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as WebhookConfig[];
+      return (data || []) as unknown as WebhookConfig[];
     },
     enabled: !!equipeId,
   });
@@ -53,7 +53,8 @@ export const useWebhookConfigs = () => {
     mutationFn: async (configData: CreateWebhookData) => {
       if (!equipeId) throw new Error("No equipe_id");
       
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from("webhook_configs")
         .insert({
           equipe_id: equipeId,
@@ -83,7 +84,8 @@ export const useWebhookConfigs = () => {
 
   const updateConfig = useMutation({
     mutationFn: async ({ id, ...updateData }: UpdateWebhookData) => {
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from("webhook_configs")
         .update(updateData)
         .eq("id", id)
