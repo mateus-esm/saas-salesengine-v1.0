@@ -65,6 +65,14 @@ export function useCopilotSync(persistKey?: string) {
     persistUpdate({ events, running, error });
   }, [events, running, error, persistKey, persistUpdate]);
 
+  // Abort any in-flight stream when the component using this hook unmounts.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
+
   const start = useCallback(async (q: SyncQuery) => {
     setRunning(true);
     setEvents([]);
