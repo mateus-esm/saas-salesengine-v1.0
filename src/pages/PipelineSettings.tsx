@@ -293,7 +293,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
 
   // ── Draft persistence — in-progress edits survive navigation ──
   const draftKey = `pipeline_editor_${pipeline.id}`;
-  const { value, setValue, commit } = useDraftAutosave<PipelineEditorDraft>(draftKey, {
+  const { value, setValue, clearPersisted } = useDraftAutosave<PipelineEditorDraft>(draftKey, {
     name: pipeline.name,
     description: pipeline.description || "",
     cadenceDays: pipeline.cadence_days ? String(pipeline.cadence_days) : "",
@@ -328,7 +328,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
       card_field_ids: cardFieldIds,
     });
     toast.success("Pipeline salva");
-    commit();
+    clearPersisted();
   };
 
   const SectionChevron = () => (

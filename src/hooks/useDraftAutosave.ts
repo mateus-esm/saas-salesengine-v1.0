@@ -79,5 +79,15 @@ export function useDraftAutosave<T>(key: string, initial: T) {
     setValue(initialRef.current);
   }, [key]);
 
-  return { value, setValue, commit, discard, hasDraft, isDirty } as const;
+  /**
+   * Clear ONLY the persisted localStorage draft, leaving in-memory `value`
+   * untouched. Use after a successful save when the on-screen values already
+   * reflect what was saved — avoids resetting the form to `initial` before the
+   * async save result / refetch lands.
+   */
+  const clearPersisted = useCallback(() => {
+    clearDraft(key);
+  }, [key]);
+
+  return { value, setValue, commit, discard, clearPersisted, hasDraft, isDirty } as const;
 }

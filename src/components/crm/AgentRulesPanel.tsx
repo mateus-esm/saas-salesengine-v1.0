@@ -851,7 +851,7 @@ export const AgentRulesPanel = ({
 
   // ── Draft persistence — in-progress edits survive navigation ──
   const draftKey = `agent_rules_${pipelineId}`;
-  const { value, setValue, commit, hasDraft } = useDraftAutosave<AgentRulesDraft>(draftKey, INITIAL_DRAFT);
+  const { value, setValue, clearPersisted, hasDraft } = useDraftAutosave<AgentRulesDraft>(draftKey, INITIAL_DRAFT);
   const { autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints } = value;
   const [dirty, setDirty] = useState(() => hasDraft);
 
@@ -894,7 +894,7 @@ export const AgentRulesPanel = ({
       extraction_hints: hints || null,
     }, {
       onSuccess: () => {
-        commit();
+        clearPersisted();
         setDirty(false);
       },
     });

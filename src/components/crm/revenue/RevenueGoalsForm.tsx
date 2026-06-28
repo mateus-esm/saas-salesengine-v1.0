@@ -45,7 +45,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
   const queryClient = useQueryClient();
   const draftKey = `revenue_goals_${pipelineId}`;
 
-  const { value: state, setValue: setState, commit, discard, hasDraft } =
+  const { value: state, setValue: setState, clearPersisted, discard, hasDraft } =
     useDraftAutosave<RevenueGoalsDraft>(draftKey, EMPTY_DRAFT);
 
   const { goalDeals, goalRevenue, period, ownerGoals, overrides } = state;
@@ -140,7 +140,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
       .update({ revenue_config: updated })
       .eq("id", pipelineId);
     toast.success("Metas salvas");
-    commit(); // Clear draft after successful save
+    clearPersisted(); // Clear persisted draft; keep on-screen values
     queryClient.invalidateQueries({ queryKey: ["forecast", pipelineId] });
   };
 
