@@ -177,6 +177,36 @@ export function InlineCell({
       );
     }
 
+    if (column.kind === "boolean") {
+      const displayVal = value === true || value === "true" || value === "Sim" ? "Sim" : "Não";
+      return (
+        <Select
+          value={displayVal}
+          onValueChange={(newValue) => {
+            committedRef.current = true;
+            const parsed = newValue === "Sim";
+            if (parsed !== value) {
+              onCommit(parsed);
+            }
+            setIsEditing(false);
+          }}
+          onOpenChange={(open) => {
+            if (!open && !committedRef.current) {
+              setIsEditing(false);
+            }
+          }}
+        >
+          <SelectTrigger className="h-8 w-full text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Sim">Sim</SelectItem>
+            <SelectItem value="Não">Não</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+    }
+
     // Relation kind → chips + picker
     if (column.kind === "relation") {
       const handlePick = (toId: string, label: string) => {

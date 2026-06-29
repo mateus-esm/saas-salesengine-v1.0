@@ -1,5 +1,5 @@
 export type ColumnKind =
-  | "text" | "number" | "select" | "date" | "relation"
+  | "text" | "number" | "select" | "date" | "relation" | "boolean"
   | "formula" | "rollup" | "conditional"; // v2 slots — registered, not implemented
 
 export type JsonbField =

@@ -45,6 +45,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const [newColType, setNewColType] = useState<CustomTableColumn["type"]>("text");
   const [newColTargetTable, setNewColTargetTable] = useState("");
   const [newColDisplayField, setNewColDisplayField] = useState("");
+  const [newColOptions, setNewColOptions] = useState("");
 
   // Fetch other custom tables for relation target picker
   const { data: otherTables = [] } = useQuery({
@@ -72,6 +73,12 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         jsonbField: "data",
         editable: true,
       };
+      if (col.type === "select" && col.options) {
+        def.options = col.options.map((opt) => ({
+          value: opt,
+          label: opt,
+        }));
+      }
       if (col.type === "relation" && col.relationConfig) {
         def.relation = {
           table: col.relationConfig.targetTableSlug,
@@ -157,6 +164,13 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
       label: newColLabel.trim() || key,
       type: newColType,
     };
+    if (newColType === "select") {
+      const opts = newColOptions
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean);
+      column.options = opts;
+    }
     if (newColType === "relation") {
       const target = otherTables.find((t) => t.id === newColTargetTable);
       if (!target) return;
@@ -176,6 +190,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
     setNewColType("text");
     setNewColTargetTable("");
     setNewColDisplayField("");
+    setNewColOptions("");
   };
 
   const handleRemoveColumn = async (key: string) => {
@@ -186,7 +201,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   };
 
   const handleAddRow = async () => {
-    await createRecord.mutateAsync({ table_id: table.id, data: {} });
+    await createRecord.mutateAsync({});
   };
 
   // No mass actions for now
@@ -287,6 +302,19 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
                       <SelectItem value="relation">Relação</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {/* Select options config (conditional) */}
+                  {newColType === "select" && (
+                    <div className="space-y-1">
+                      <Label className="text-[10px] text-muted-foreground font-medium">Opções (separadas por vírgula)</Label>
+                      <Input
+                        value={newColOptions}
+                        onChange={(e) => setNewColOptions(e.target.value)}
+                        placeholder="Opção 1, Opção 2, Opção 3"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
 
                   {/* Relation config (conditional) */}
                   {newColType === "relation" && (

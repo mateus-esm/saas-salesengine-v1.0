@@ -76,6 +76,19 @@ export const COLUMN_TYPES: Record<ColumnKind, ColumnTypeHandler> = {
     },
   },
 
+  boolean: {
+    kind: "boolean",
+    menuLabel: "Sim/Não",
+    implemented: true,
+    format: (value, _col) =>
+      value === true || value === "true" || value === "Sim"
+        ? "Sim"
+        : value === false || value === "false" || value === "Não"
+          ? "Não"
+          : "",
+    parse: (raw, _col) => raw === "true" || raw === "Sim",
+  },
+
   relation: {
     kind: "relation",
     menuLabel: "Relacionamento",
