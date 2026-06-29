@@ -98,8 +98,40 @@ function activityFor(ev: HudEvent) {
   return formatCopilotActivity(ev.payload?.action ?? ev.payload);
 }
 
+function humanizeVerb(verb: string): string {
+  switch (verb) {
+    case "set_field":
+    case "set_contact_field":
+      return "Campo";
+    case "move_stage":
+      return "Etapa";
+    case "add_note":
+      return "Nota";
+    case "add_touchpoint":
+      return "Touchpoint";
+    case "create_task":
+      return "Tarefa";
+    default:
+      return verb;
+  }
+}
+
+function stripUuids(text: string): string {
+  if (!text) return text;
+  return text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, (match) => `#${match.slice(0, 4)}`);
+}
+
 /** Map a structured event to a readable queue item. */
 function itemFor(ev: HudEvent): HudQueueItem {
+  const item = _itemFor(ev);
+  return {
+    ...item,
+    title: stripUuids(item.title),
+    detail: stripUuids(item.detail),
+  };
+}
+
+function _itemFor(ev: HudEvent): HudQueueItem {
   switch (ev.kind) {
     case "action_start": {
       const a = activityFor(ev);
@@ -107,7 +139,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
         seq: ev.seq,
         title: a.title,
         detail: a.description,
-        meta: a.verb,
+        meta: humanizeVerb(a.verb),
         tone: "info",
       };
     }
@@ -135,7 +167,7 @@ function itemFor(ev: HudEvent): HudQueueItem {
         seq: ev.seq,
         title: "Aguardando aprovação",
         detail: a.title,
-        meta: a.verb,
+        meta: humanizeVerb(a.verb),
         tone: "warn",
       };
     }
@@ -167,11 +199,14 @@ function itemFor(ev: HudEvent): HudQueueItem {
     }
     case "done": {
       const status = String(ev.payload?.status ?? "concluído");
+      const friendlyStatus = status === "done executed" || status === "done" || status === "success" || status === "concluído"
+        ? "Sincronização concluída com sucesso"
+        : status;
       return {
         seq: ev.seq,
         title: "Sincronização concluída",
-        detail: status,
-        meta: "done",
+        detail: friendlyStatus,
+        meta: "Concluído",
         tone: "ok",
       };
     }

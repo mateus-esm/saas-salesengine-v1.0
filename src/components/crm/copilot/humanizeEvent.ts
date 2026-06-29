@@ -24,7 +24,7 @@ const UUID_RE =
  *   "123e4567-e89b-12d3-a456-426614174000"  →  "#123e"
  */
 function stripUuid(text: string): string {
-  return text.replace(UUID_RE, (match) => `#${match.slice(0, 4)}`);
+  return text.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, (match) => `#${match.slice(0, 4)}`);
 }
 
 /**

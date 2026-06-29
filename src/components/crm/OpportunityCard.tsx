@@ -231,7 +231,7 @@ export const OpportunityCard = ({
       {leadScore !== null && leadScore !== undefined && (
         <div className="flex items-center gap-1">
           <LeadScoreBadge score={leadScore} breakdown={leadScoreBreakdown} />
-          <span className="text-[10px] text-muted-foreground">Score</span>
+          <span className="text-[10px] text-muted-foreground">Lead Score</span>
         </div>
       )}
 
