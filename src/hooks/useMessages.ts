@@ -138,22 +138,8 @@ export const useMessages = (
         setLoading(false);
       }
 
-      // Silent background sync from provider (GPT Maker)
-      if (gptMakerChatId) {
-        setIsSyncing(true);
-        try {
-          await supabase.functions.invoke('sync-chat-history', {
-            body: {
-              conversation_id: conversationId,
-              chat_id: gptMakerChatId,
-            },
-          });
-        } catch (e) {
-          console.error('Erro no sync silencioso:', e);
-        } finally {
-          setIsSyncing(false);
-        }
-      }
+      // Silent background sync removed from useEffect to prevent stoppage on chat load.
+      // Sync is now triggered manually or via cron.
     };
 
     initChat();
@@ -220,7 +206,37 @@ export const useMessages = (
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, gptMakerChatId]);
+  }, [conversationId]);
 
-  return { messages, loading, isSyncing, addOptimisticMessage };
+  const syncHistory = async () => {
+    if (!conversationId || !gptMakerChatId) return;
+    setIsSyncing(true);
+    try {
+      await supabase.functions.invoke('sync-chat-history', {
+        body: {
+          conversation_id: conversationId,
+          chat_id: gptMakerChatId,
+        },
+      });
+
+      // Reload messages from DB after sync
+      const { data, error } = await sb
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId);
+
+      if (!error && data) {
+        const sorted = sortMessages(data as Message[]);
+        messagesCache.set(conversationId, sorted);
+        setMessages(sorted);
+      }
+    } catch (e) {
+      console.error('Erro ao sincronizar histórico:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return { messages, loading, isSyncing, addOptimisticMessage, syncHistory };
 };
+

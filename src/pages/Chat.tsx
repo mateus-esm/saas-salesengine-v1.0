@@ -93,10 +93,17 @@ const Chat = () => {
     };
   }, [searchParams, conversations, loadingConversations, leads, queryClient, setSearchParams]);
 
-  const { messages, loading: loadingMessages, addOptimisticMessage } = useMessages(
+  const {
+    messages,
+    loading: loadingMessages,
+    addOptimisticMessage,
+    syncHistory,
+    isSyncing: isSyncingHistory,
+  } = useMessages(
     selectedConversationId || undefined,
     selectedConversation?.gpt_maker_chat_id
   );
+
 
   // Tasks still scoped to the underlying lead (CRM-level, not per-conversation)
   const { tasks, createTask, toggleTask, updateTask, deleteTask } = useTasks(selectedConversation?.lead_id ?? null);
@@ -459,6 +466,8 @@ const Chat = () => {
                   }
                   onBack={() => setShowInbox(true)}
                   onOpenLeadDetails={() => setShowLeadModal(true)}
+                  onSyncHistory={syncHistory}
+                  isSyncingHistory={isSyncingHistory}
                 />
               </div>
               <div className="flex items-center gap-1 mr-2">

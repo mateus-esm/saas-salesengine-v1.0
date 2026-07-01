@@ -14,6 +14,7 @@ import {
   Archive,
   ArchiveRestore,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import {
   Popover,
@@ -41,9 +42,23 @@ interface ConversationHeaderProps {
   onOpenLeadDetails?: () => void;
   /** Epic 1: change the conversation lifecycle status */
   onStatusChange?: (status: ConversationStatus) => void;
+  onSyncHistory?: () => Promise<void>;
+  isSyncingHistory?: boolean;
 }
 
-export function ConversationHeader({ session, teamMembers = [], onToggleHandoff, onUpdateCRM, onAssignResponsible, onBack, onOpenLeadDetails, onStatusChange }: ConversationHeaderProps) {
+export function ConversationHeader({
+  session,
+  teamMembers = [],
+  onToggleHandoff,
+  onUpdateCRM,
+  onAssignResponsible,
+  onBack,
+  onOpenLeadDetails,
+  onStatusChange,
+  onSyncHistory,
+  isSyncingHistory = false,
+}: ConversationHeaderProps) {
+
   const initials = session.customerName
     .split(" ")
     .map((n) => n[0])
@@ -149,6 +164,21 @@ export function ConversationHeader({ session, teamMembers = [], onToggleHandoff,
             borderImage: "linear-gradient(180deg, hsla(14,100%,56%,0.25), hsla(48,91%,53%,0.14)) 1",
           }}
         >
+
+          {/* Sync Chat History Button */}
+          {onSyncHistory && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSyncHistory}
+              disabled={isSyncingHistory}
+              className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2"
+              title="Sincronizar histórico com GPT Maker"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", isSyncingHistory && "animate-spin")} />
+              <span className="hidden lg:inline">{isSyncingHistory ? "Sincronizando..." : "Sincronizar"}</span>
+            </Button>
+          )}
 
           {/* Responsible Assignment */}
           {onAssignResponsible && (
