@@ -384,17 +384,25 @@ serve(async (req) => {
         if (!deleteRes.ok) {
           const errText = await deleteRes.text();
           console.error("Whatsmiau delete error:", deleteRes.status, errText);
-          await supabase
-            .from("wpp_instances")
-            .update({ status: "error" })
-            .eq("id", instance.id);
-          return new Response(
-            JSON.stringify({ error: `Solo API error: ${deleteRes.status}` }),
-            {
-              status: 502,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            },
-          );
+
+          if (deleteRes.status === 404) {
+            // Instance already gone server-side — skip status='error', delete DB row
+            console.warn(
+              `Instance ${instance.instance_name} not found on whatsmiau (404), deleting DB row anyway`,
+            );
+          } else {
+            await supabase
+              .from("wpp_instances")
+              .update({ status: "error" })
+              .eq("id", instance.id);
+            return new Response(
+              JSON.stringify({ error: `Solo API error: ${deleteRes.status}` }),
+              {
+                status: 502,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
+            );
+          }
         }
 
         // Delete row
