@@ -51,7 +51,109 @@ serve(async (req) => {
     const workspaceId = equipe.workspace_id;
     const agentId = equipe.gpt_maker_agent_id;
 
-    // GET /v2/workspace/{workspaceId}/channels?agentId={agentId}
+    // --- POST: dispatch by action ---
+    if (req.method === 'POST') {
+      const body = await req.json();
+      const { action } = body;
+
+      if (action === 'create') {
+        const { name, type } = body;
+        if (!name || !type) {
+          return new Response(
+            JSON.stringify({ message: 'name and type are required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const createUrl = `${AI_ENGINE_BASE}/agent/${agentId}/create-channel`;
+        const createRes = await fetch(createUrl, {
+          method: 'POST',
+          headers: engineHeaders,
+          body: JSON.stringify({ name, type }),
+        });
+
+        if (!createRes.ok) {
+          const errBody = await createRes.json().catch(() => ({}));
+          const message = errBody?.error || `GPT Maker API error: ${createRes.status}`;
+          return new Response(
+            JSON.stringify({ message }),
+            { status: createRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const channel = await createRes.json();
+        return new Response(JSON.stringify({ id: channel.id, name: channel.name, type: channel.type }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'remove') {
+        const { channel_id } = body;
+        if (!channel_id) {
+          return new Response(
+            JSON.stringify({ message: 'channel_id is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const removeUrl = `${AI_ENGINE_BASE}/channel/${channel_id}`;
+        const removeRes = await fetch(removeUrl, {
+          method: 'DELETE',
+          headers: engineHeaders,
+        });
+
+        if (!removeRes.ok) {
+          const errBody = await removeRes.json().catch(() => ({}));
+          const message = errBody?.error || `GPT Maker API error: ${removeRes.status}`;
+          return new Response(
+            JSON.stringify({ message }),
+            { status: removeRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (action === 'qr') {
+        const { channel_id } = body;
+        if (!channel_id) {
+          return new Response(
+            JSON.stringify({ message: 'channel_id is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const qrUrl = `${AI_ENGINE_BASE}/channel/${channel_id}/qr-code`;
+        const qrRes = await fetch(qrUrl, { headers: engineHeaders });
+
+        if (!qrRes.ok) {
+          const errBody = await qrRes.json().catch(() => ({}));
+          const message = errBody?.error || `GPT Maker API error: ${qrRes.status}`;
+          return new Response(
+            JSON.stringify({ message }),
+            { status: qrRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const qrData = await qrRes.json();
+        const result = {
+          qr_value: qrData.value || null,
+          connected: qrData.connected || false,
+        };
+        return new Response(JSON.stringify(result), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ message: `Unknown action: ${action}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // --- GET: list channels (existing behavior, unchanged) ---
     const apiUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/channels?agentId=${agentId}&page=1&pageSize=50`;
     const res = await fetch(apiUrl, { headers: engineHeaders });
 
@@ -83,7 +185,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ message: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
