@@ -32,6 +32,9 @@ verify_jwt = false
 [functions.manage-agent-training]
 verify_jwt = false
 
+[functions.manage-solo-instances]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 64321           # Mudamos de 54321 para 64321
