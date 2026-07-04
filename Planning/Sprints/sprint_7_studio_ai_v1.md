@@ -277,7 +277,9 @@ Ledger:  [x] W0.1 · [x] W0.2 (push pendente de aprovação do founder) · [x] W
 
 - ✅ **1. Migration aplicada** (`supabase db push` via access token; `wpp_instances` live em produção) + `types.ts` regenerado.
 - ✅ **2. Secrets setados** via CLI: `WHATSMIAU_API_KEY`, `WHATSMIAU_WEBHOOK_TOKEN`, `SOLO_INSTANCE_MONTHLY_PRICE=100`. Credenciais também em `.env` local (gitignored).
-- 🔴 **3. PENDENTE — único bloqueio restante:** `WHATSMIAU_BASE_URL` (IP real ou domínio HTTPS da VPS — o handoff veio com placeholder `IP_DA_SUA_VPS`). Sem ele: live validation do reference doc + testes reais de T1/T2 ficam bloqueados. Ao receber: `supabase secrets set WHATSMIAU_BASE_URL=...` + atualizar `.env`.
+- ✅ **3. RESOLVIDO 2026-07-04:** `WHATSMIAU_BASE_URL=http://72.61.219.156:8081` recebido, setado como secret + `.env`. Live validation executada (resultados no reference doc): lifecycle completo validado em produção, estado novo `qr-code` descoberto e mapeado. Instâncias de produção (`solobusiness`, `soloventures-salesengine-admin`) intocadas.
+- 🟡 **4. HTTPS pendente (aceito interinamente):** apikey trafega em HTTP puro para o IP — expor via domínio TLS no Dokploy quando possível.
+- 🟡 **5. Push para origin pendente:** merges estão locais; `git push` dispara o deploy.yml (deploya as functions novas em produção). Founder autoriza o push → deploy automático.
 - ⚠️ **Segurança (Marco 0):** o access token do Supabase foi colado em chat — adicionar à lista de rotação de chaves pós-sprint.
 
 <details><summary>Checklist original (arquivado)</summary>
@@ -322,8 +324,8 @@ Engenheiro: ao concluir, tique sua task abaixo, adicione a linha no `Planning/Wo
 - [x] W0.1 · Spike API reference — PM/Claude ✅ 2026-07-04
 - [x] W0.2 · Migration + secrets — PM/Claude ✅ 2026-07-04 (migration criada; push + secrets = ação founder acima)
 - [x] W0.3 · Infra checklist — PM/Claude + founder ✅ 2026-07-04 (checklist entregue no handoff)
-- [ ] T1 · manage-solo-instances (L) — 🔁 bounce: fix delete-404 (PM review 2026-07-04)
-- [ ] T2 · solo-wpp-webhook (L) — 🔁 bounce: fix dedup false-positives (PM review 2026-07-04)
+- [x] T1 · manage-solo-instances (L) ✅ merged 2026-07-04 (fix delete-404 verificado + PM fixup: estado `qr-code`→`awaiting_qr`, achado da live validation)
+- [x] T2 · solo-wpp-webhook (L) ✅ merged 2026-07-04 (fix dedup verificado + PM fixups: guard de placeholder `[Midia recebida]` no textMatch — álbuns de fotos — e estado `qr-code`)
 - [x] T3 · manage-agent-channels CRUD (M) ✅ merged 2026-07-04 — ⚠️ interface real do QR: `{ qr_value, connected }` (string, não base64) — T9 consome isso
 - [x] T4 · Intenções verify+fix (M) ✅ merged 2026-07-04 (mapIntentionBody backward-compat + PUT path corrigido)
 - [ ] T5 · send-chat-message routing (XL)

@@ -235,15 +235,19 @@ CRUD em `/v2/agent/{agentId}/intentions` (GET/POST) e `/v2/agent/{agentId}/inten
 | QR GPT Maker é string; QR whatsmiau é data URI | T8 `<img src>` direto; T9 precisa render de QR string |
 | Rota de logout divergente do handoff | T1: POST REST com fallback DELETE evo |
 
-## 🔴 Live Validation Pending (requer credenciais — founder + PM)
+## ✅ Live Validation — Executada 2026-07-04 (PM, VPS `72.61.219.156:8081`)
 
-Bloqueado por: **IP/domínio real da VPS + apikey do whatsmiau** (handoff veio com placeholders) e acesso ao `GPT_MAKER_TOKEN`.
+- [x] `fetchInstances` → servidor = código-fonte atual (rotas do swagger `/swagger/doc.json` batem 1:1 com o repo). Shape confirmado: `ownerJid` presente (ex: `5585...@s.whatsapp.net`). 2 instâncias de produção existentes: `solobusiness`, `soloventures-salesengine-admin` (**não tocar**).
+- [x] Create `se-spike-test` com webhook inline → **aceito em 1 chamada**; `GET /v1/webhook/find` ecoa a config (url, headers, events) ✓
+- [x] Logout: **ambas as rotas retornam 200** (`POST /v1/instance/{id}/logout` E `DELETE /v1/instance/logout/{id}`) — primary+fallback do T1 válidos ✓
+- [x] Connect → QR: `{"message":"If instance restart...","base64":"data:image/png;base64,iVBOR..."}` — **data URI PNG confirmado** (2.4KB) ✓
+- [x] 🆕 **ACHADO: `connectionState` retorna `state: "qr-code"`** enquanto aguarda pareamento (não estava no mapeamento derivado do código). Mapeado para `awaiting_qr` em T1 (status) e T2 (connection.update) via PM fixup. Estados confirmados: `open` | `close` | `connecting` | `qr-code`.
+- [x] Delete `se-spike-test` → `{"message":"instance deleted"}` ✓
+- [x] ⚠️ Body do n8n do founder (`{"number","textMessage":{"text"}}`) é formato legado — o servidor atual espera **`{"number","text"}`** (swagger + source). T5 usa o shape deste doc §1.3.
 
-- [ ] `GET {BASE}/v1/instance/fetchInstances` → confirma versão do servidor + shape real
-- [ ] Criar instância `se-spike-test` com webhook inline → confirmar aceitação do bloco `webhook`
-- [ ] Rota de logout: testar `POST /v1/instance/se-spike-test/logout` vs `DELETE /v1/instance/logout/se-spike-test`
-- [ ] Conectar + escanear QR real → capturar sequência de `connection.update` (connecting→open)
-- [ ] `sendText` real → confirmar `key.id`; receber mensagem → capturar `messages.upsert` verbatim (colar aqui)
-- [ ] Mensagem enviada via Solo num número TAMBÉM em coexistence → verificar eco no `gpt-maker-webhook` (base do AC4)
-- [ ] GPT Maker: capturar erro de janela fechada (status + body) → refinar match do T5
-- [ ] Deletar `se-spike-test`
+### 🔴 Ainda pendente (exige QR scan real / GPT_MAKER_TOKEN — fazer no início da Wave 2/T12)
+
+- [ ] Escanear QR real → capturar sequência `connection.update` (qr-code→connecting?→open) + `messages.upsert` verbatim de mensagem recebida
+- [ ] `sendText` real → confirmar `key.id` no response (requer número de destino de teste)
+- [ ] Eco de coexistence: mensagem via Solo em número também no GPT Maker → verificar dedup no `gpt-maker-webhook` (AC4)
+- [ ] GPT Maker: capturar erro exato de janela fechada (status + body) → refinar match do T5 (até lá: fallback em qualquer non-2xx)
