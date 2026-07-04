@@ -261,7 +261,11 @@ async function handleConnectionUpdate(
       newStatus = 'awaiting_qr'
       break
     default:
-      newStatus = state // pass through unknown states
+      console.log('[solo-wpp] Estado de conexao desconhecido, ignorando:', state)
+      return new Response(JSON.stringify({ ignored: true, reason: 'unknown_connection_state' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      })
   }
 
   const updates: Record<string, unknown> = {
@@ -560,7 +564,7 @@ async function handleMessagesUpsert(
   // ── 4g. Message dedup ──
   let skipInsert = false
 
-  // Dedup 1: by provider_message_id
+  // Dedup 1: by provider_message_id (exact match, any sender type)
   if (providerMessageId) {
     const { data: existingByProviderId } = await supabase
       .from('messages')
@@ -576,7 +580,11 @@ async function handleMessagesUpsert(
     }
   }
 
-  // Dedup 2: by content + 60s window (for agent messages, also dedup against our own outbound)
+  // Dedup 2: time-window near-duplicate / outbound echo detection
+  // Mirror gpt-maker-webhook dedup semantics (lines 500-543): media-type matching
+  // is ONLY used in the outbound echo fingerprint (existing.sender_id !== null
+  // + same media_type + <=30s). Bare mediaTypeMatch is removed because it drops
+  // real messages (e.g. two different photos within 60s).
   if (!skipInsert) {
     const DEDUP_WINDOW_MS = senderType === 'agent' ? 300_000 : 60_000
     const cutoff = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString()
@@ -603,19 +611,22 @@ async function handleMessagesUpsert(
           ? existingContent === incomingContent
           : existingContent === ''
 
-        const mediaTypeMatch = mediaType && existing.media_type
-          ? existing.media_type === mediaType
-          : false
-
-        // Outbound echo fingerprint: agent message with sender_id NOT NULL within 30s
-        const outboundEcho =
+        // Outbound media echo fingerprint: agent sent media and an existing
+        // outbound record (sender_id !== null) has same media_type within 30s.
+        // URLs may differ between send+webhook (not re-hosted in solo), but
+        // the signature — outbound, recent, same type — is sufficient.
+        const existingAgeMs = Date.now() - new Date(existing.created_at || 0).getTime()
+        const outboundMediaEcho =
           senderType === 'agent' &&
+          !!mediaType &&
           existing.sender_type === 'agent' &&
           existing.sender_id !== null &&
-          (Date.now() - new Date(existing.created_at || 0).getTime()) <= 30_000
+          !!existing.media_type &&
+          existing.media_type === mediaType &&
+          existingAgeMs <= 30_000
 
-        if (textMatch || mediaTypeMatch || outboundEcho) {
-          console.log('[solo-wpp] Dedup hit:', existing.id, { textMatch, mediaTypeMatch, outboundEcho })
+        if (textMatch || outboundMediaEcho) {
+          console.log('[solo-wpp] Dedup hit:', existing.id, { textMatch, outboundMediaEcho })
           skipInsert = true
           break
         }
