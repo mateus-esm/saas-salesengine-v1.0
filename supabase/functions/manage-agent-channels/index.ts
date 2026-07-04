@@ -60,7 +60,7 @@ serve(async (req) => {
         const { name, type } = body;
         if (!name || !type) {
           return new Response(
-            JSON.stringify({ error: 'name and type are required' }),
+            JSON.stringify({ message: 'name and type are required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -76,13 +76,13 @@ serve(async (req) => {
           const errBody = await createRes.json().catch(() => ({}));
           const message = errBody?.error || `GPT Maker API error: ${createRes.status}`;
           return new Response(
-            JSON.stringify({ error: message }),
+            JSON.stringify({ message }),
             { status: createRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        const result = await createRes.json();
-        return new Response(JSON.stringify(result), {
+        const channel = await createRes.json();
+        return new Response(JSON.stringify({ id: channel.id, name: channel.name, type: channel.type }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -91,7 +91,7 @@ serve(async (req) => {
         const { channel_id } = body;
         if (!channel_id) {
           return new Response(
-            JSON.stringify({ error: 'channel_id is required' }),
+            JSON.stringify({ message: 'channel_id is required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -106,7 +106,7 @@ serve(async (req) => {
           const errBody = await removeRes.json().catch(() => ({}));
           const message = errBody?.error || `GPT Maker API error: ${removeRes.status}`;
           return new Response(
-            JSON.stringify({ error: message }),
+            JSON.stringify({ message }),
             { status: removeRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -120,7 +120,7 @@ serve(async (req) => {
         const { channel_id } = body;
         if (!channel_id) {
           return new Response(
-            JSON.stringify({ error: 'channel_id is required' }),
+            JSON.stringify({ message: 'channel_id is required' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -132,7 +132,7 @@ serve(async (req) => {
           const errBody = await qrRes.json().catch(() => ({}));
           const message = errBody?.error || `GPT Maker API error: ${qrRes.status}`;
           return new Response(
-            JSON.stringify({ error: message }),
+            JSON.stringify({ message }),
             { status: qrRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -148,7 +148,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ error: `Unknown action: ${action}` }),
+        JSON.stringify({ message: `Unknown action: ${action}` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -185,7 +185,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ message: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
