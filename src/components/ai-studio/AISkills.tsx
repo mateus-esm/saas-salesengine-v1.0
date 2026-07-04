@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Zap, Plus, Loader2, Webhook, Edit3, Trash2 } from "lucide-react";
+import { Zap, Plus, Loader2, Webhook, Edit3, Trash2, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,18 +10,18 @@ import { Accordion } from "@/components/ui/accordion";
 
 interface Intention {
   id: string;
-  name: string;
-  description?: string;
-  triggers: string[];
-  webhook?: {
-    url: string;
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
-    headers?: Record<string, string>;
-    body?: string;
-  };
-  persistVariables?: boolean;
-  responseType?: string;
-  fixedResponse?: string;
+  description: string;
+  details?: string;
+  type: 'WEBHOOK' | 'INSTRUCTIONS';
+  httpMethod?: string;
+  url?: string;
+  instructions?: string;
+  headers?: { name: string; value: string }[];
+  fields?: any[];
+  params?: any[];
+  variables?: { valueExpression: string; defaultFieldKey: string }[];
+  autoGenerateParams?: boolean;
+  autoGenerateBody?: boolean;
 }
 
 export function AISkills() {
@@ -138,35 +138,30 @@ export function AISkills() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <Zap className="w-4 h-4 text-primary shrink-0" />
-                      <h4 className="font-semibold text-sm text-foreground truncate">{intention.name}</h4>
+                      <h4 className="font-semibold text-sm text-foreground truncate">{intention.description}</h4>
+                      <Badge variant={intention.type === 'WEBHOOK' ? 'default' : 'secondary'} className="font-mono text-[10px] px-1.5 py-0">
+                        {intention.type}
+                      </Badge>
                     </div>
-                    {intention.description && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{intention.description}</p>
-                    )}
-                    {(intention.triggers || []).length > 0 && (
-                       <div className="flex gap-1.5 mt-2 flex-wrap">
-                        {intention.triggers.slice(0, 3).map(t => (
-                           <Badge key={t} variant="secondary" className="font-mono text-[10px] px-1.5 py-0 truncate max-w-[150px]">
-                             {t}
-                           </Badge>
-                        ))}
-                        {intention.triggers.length > 3 && (
-                           <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0 text-muted-foreground">
-                             +{intention.triggers.length - 3} mais
-                           </Badge>
-                        )}
-                       </div>
+                    {intention.details && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{intention.details}</p>
                     )}
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
-                    {intention.webhook?.url && (
+                    {intention.type === 'WEBHOOK' && intention.url && (
                        <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
                          <Webhook className="w-3 h-3 text-primary" />
-                         <span>{intention.webhook.method}</span>
+                         <span>{intention.httpMethod || 'POST'}</span>
                        </div>
                     )}
-                    
+                    {intention.type === 'INSTRUCTIONS' && intention.instructions && (
+                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                         <Code className="w-3 h-3 text-primary" />
+                         <span>Instrução</span>
+                       </div>
+                    )}
+
                     <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                         <Edit3 className="w-4 h-4" />
