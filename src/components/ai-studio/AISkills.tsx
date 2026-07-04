@@ -59,13 +59,13 @@ export function AISkills() {
           body: { intentionId: editingIntention.id, ...formData },
         });
         if (error) throw error;
-        toast({ title: 'Sincronizado!', description: `Intenção "${formData.name}" atualizada.` });
+        toast({ title: 'Sincronizado!', description: `Intenção "${formData.description}" atualizada.` });
       } else {
         const { error } = await supabase.functions.invoke('manage-agent-intentions?action=create', {
           body: formData,
         });
         if (error) throw error;
-        toast({ title: 'Sincronizado!', description: `Intenção "${formData.name}" criada.` });
+        toast({ title: 'Sincronizado!', description: `Intenção "${formData.description}" criada.` });
       }
       setWizardOpen(false);
       setEditingIntention(null);

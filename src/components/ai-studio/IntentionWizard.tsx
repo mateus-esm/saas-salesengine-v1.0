@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { X, ChevronRight, ChevronLeft, Zap, Globe, Code, ToggleLeft, Loader2, BookOpen } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Zap, Globe, Code, Loader2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 interface IntentionFormData {
-  name: string;
   description: string;
   details: string;
   type: 'WEBHOOK' | 'INSTRUCTIONS';
@@ -31,7 +29,6 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
   const [headerValue, setHeaderValue] = useState("");
 
   const [form, setForm] = useState<IntentionFormData>({
-    name: initialData?.name || '',
     description: initialData?.description || '',
     details: initialData?.details || '',
     type: initialData?.type || 'WEBHOOK',
@@ -80,7 +77,7 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
               <Zap className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-lg text-card-foreground">{initialData?.name ? 'Editar Intenção' : 'Nova Intenção'}</h2>
+              <h2 className="font-bold text-lg text-card-foreground">{initialData?.description ? 'Editar Intenção' : 'Nova Intenção'}</h2>
               <p className="text-xs text-muted-foreground">Passo {step + 1} de {STEPS.length}: {STEPS[step]}</p>
             </div>
           </div>
@@ -99,16 +96,6 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
           {/* STEP 1: Detalhes */}
           {step === 0 && (
             <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Nome da Intenção</label>
-                <input
-                  className="w-full bg-background border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
-                  placeholder="Ex: Agendar Reunião"
-                  value={form.name}
-                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground">Usado internamente para identificar a intenção na lista.</p>
-              </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Descrição (quando usar)</label>
                 <textarea
@@ -287,7 +274,7 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
             {step > 0 ? 'Voltar' : 'Cancelar'}
           </Button>
           {step < STEPS.length - 1 ? (
-            <Button onClick={() => setStep(step + 1)} className="gap-2" disabled={step === 0 && !form.name.trim()}>
+            <Button onClick={() => setStep(step + 1)} className="gap-2" disabled={step === 0 && !form.description.trim()}>
               Próximo <ChevronRight className="w-4 h-4" />
             </Button>
           ) : (
