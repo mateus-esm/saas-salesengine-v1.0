@@ -260,6 +260,9 @@ async function handleConnectionUpdate(
     case 'connecting':
       newStatus = 'awaiting_qr'
       break
+    case 'qr-code': // live validation 2026-07-04: estado real emitido pela VPS ao aguardar pareamento
+      newStatus = 'awaiting_qr'
+      break
     default:
       console.log('[solo-wpp] Estado de conexao desconhecido, ignorando:', state)
       return new Response(JSON.stringify({ ignored: true, reason: 'unknown_connection_state' }), {
@@ -607,9 +610,14 @@ async function handleMessagesUpsert(
     if (recentMsgs && recentMsgs.length > 0) {
       for (const existing of recentMsgs) {
         const existingContent = (existing.content || '').trim().toLowerCase()
-        const textMatch = incomingContent
+        // PM fixup (merge gate): mídia sem caption vira placeholder '[Midia recebida]',
+        // então duas fotos diferentes teriam conteúdo idêntico — nunca text-match
+        // em placeholder (álbuns de fotos chegariam pela metade). Dedup de mídia
+        // fica por provider_message_id (Dedup 1) + outboundMediaEcho.
+        const isMediaPlaceholder = hasMedia && !messageContent
+        const textMatch = !isMediaPlaceholder && (incomingContent
           ? existingContent === incomingContent
-          : existingContent === ''
+          : existingContent === '')
 
         // Outbound media echo fingerprint: agent sent media and an existing
         // outbound record (sender_id !== null) has same media_type within 30s.
