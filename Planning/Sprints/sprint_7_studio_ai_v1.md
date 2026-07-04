@@ -328,9 +328,9 @@ Engenheiro: ao concluir, tique sua task abaixo, adicione a linha no `Planning/Wo
 - [x] T2 · solo-wpp-webhook (L) ✅ merged 2026-07-04 (fix dedup verificado + PM fixups: guard de placeholder `[Midia recebida]` no textMatch — álbuns de fotos — e estado `qr-code`)
 - [x] T3 · manage-agent-channels CRUD (M) ✅ merged 2026-07-04 — ⚠️ interface real do QR: `{ qr_value, connected }` (string, não base64) — T9 consome isso
 - [x] T4 · Intenções verify+fix (M) ✅ merged 2026-07-04 (mapIntentionBody backward-compat + PUT path corrigido)
-- [ ] T5 · send-chat-message routing (XL)
-- [ ] T6 · sync-instance-billing (L)
-- [ ] T7 · Health cron (M)
+- [x] T5 · send-chat-message routing (XL) ✅ merged 2026-07-04 (3 rotas + reverse fallback + `GPT_MAKER_WINDOW_CLOSED_REGEX=null` com TODO T12)
+- [x] T6 · sync-instance-billing (L) ✅ merged 2026-07-04 (reconciler idempotente; auth JWT-própria-equipe + service-role)
+- [x] T7 · Health cron (M) ✅ merged 2026-07-04 (connectionState side-effect-free; pg_cron comentado — PM ativa ao fim da Wave 4; deploy.yml lines de T6/T7 adicionadas pelo PM no merge)
 - [ ] T8 · ChannelsPage Solo UI (M)
 - [ ] T9 · Create-channel dialog (M)
 - [ ] T10 · Inbox filtro + janela (M)

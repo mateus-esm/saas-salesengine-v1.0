@@ -30,3 +30,5 @@ jobs:
       - run: supabase functions deploy manage-agent-training
       - run: supabase functions deploy manage-solo-instances
       - run: supabase functions deploy solo-wpp-webhook --no-verify-jwt
+      - run: supabase functions deploy sync-instance-billing
+      - run: supabase functions deploy solo-health-check --no-verify-jwt

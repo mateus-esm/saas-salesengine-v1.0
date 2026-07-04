@@ -28,6 +28,10 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | 2026-07-04 | 7 | T1 manage-solo-instances lifecycle (create/connect/status/logout/delete) | Claude SDD / implementer | L | R$ 20 |
 | 2026-07-04 | 7 | T2 solo-wpp-webhook ingest (connection+messages, dedup, opportunity+AI parity) | Claude SDD / implementer | L | R$ 20 |
 | 2026-07-04 | 7 | W1-gate PM review + live validation VPS + fixups (qr-code state, placeholder dedup) | Claude / Fable 5 | M | R$ 12 |
+| 2026-07-04 | 7 | T5 send-chat-message 3-route solo routing + solo-sender | Claude SDD / implementer | XL | R$ 28 |
+| 2026-07-04 | 7 | T6 sync-instance-billing Asaas reconciler | Claude SDD / implementer | L | R$ 20 |
+| 2026-07-04 | 7 | T7 solo-health-check cron + pg_cron migration | Claude SDD / implementer | M | R$ 12 |
+| 2026-07-04 | 7 | W2-gate PM review + merges + deploy.yml fix | Claude / Fable 5 | S | R$ 5 |
 | 2026-06-27 | 6.10 | W1 State Persistence Foundation (hook + 3 forms) | pro/deepseek-v4-flash | L | R$ 20 |
 | 2026-06-19 | 6.6 | T3 Copilot Cockpit sections (Setup/Treinamento/Aprovações/Logs) | Junior | L | R$ 20 |
 | 2026-06-19 | 6.6 | T4 Sprint 6.5 browser smoke + handoff | Junior | M | R$ 12 |
