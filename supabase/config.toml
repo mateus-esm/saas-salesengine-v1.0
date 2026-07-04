@@ -35,6 +35,9 @@ verify_jwt = false
 [functions.manage-solo-instances]
 verify_jwt = false
 
+[functions.solo-wpp-webhook]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 64321           # Mudamos de 54321 para 64321
