@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendViaSolo } from '../_shared/solo-sender.ts'
-import { normalizePhone } from '../_shared/phone.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -144,6 +143,7 @@ serve(async (req) => {
         equipeId: equipeId!,
         instanceName: connectedInstance!.instance_name,
         phone: soloPhone!,
+        content,
         mediaUrl: media_url,
         mediaType: media_type,
       })
