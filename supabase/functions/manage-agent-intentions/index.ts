@@ -8,6 +8,76 @@ const corsHeaders = {
 
 const GPT_MAKER_BASE = 'https://api.gptmaker.ai/v2';
 
+/**
+ * Map incoming request body (old + new field names) to GPT Maker API v2 shape.
+ *
+ * Old fields (backwards compat): name*, description, triggers, webhook ({url,method,headers,body}),
+ *   persistVariables, responseType, fixedResponse
+ * New fields: description, details, type, httpMethod, url, autoGenerateParams, autoGenerateBody,
+ *   instructions, fields[], headers[] ({name,value}), params[], variables[]
+ *
+ * * `name` is accepted but NOT sent to the API (not in GPT Maker shape).
+ */
+function mapIntentionBody(body: Record<string, unknown>): Record<string, unknown> {
+  const mapped: Record<string, unknown> = {};
+
+  // --- Direct pass-through ---
+  mapped.description = (body.description as string) || '';
+
+  if (body.details !== undefined) {
+    mapped.details = body.details as string;
+  }
+
+  // --- Type (WEBHOOK | INSTRUCTIONS) ---
+  if (body.type === 'WEBHOOK' || body.type === 'INSTRUCTIONS') {
+    mapped.type = body.type;
+  } else if ((body as any).webhook?.url) {
+    mapped.type = 'WEBHOOK';
+  } else {
+    mapped.type = 'INSTRUCTIONS';
+  }
+
+  // --- URL & HTTP method ---
+  const wh = (body as any).webhook;
+  if (body.url) {
+    mapped.url = body.url as string;
+  } else if (wh?.url) {
+    mapped.url = wh.url as string;
+  }
+
+  if (body.httpMethod) {
+    mapped.httpMethod = body.httpMethod as string;
+  } else if (wh?.method) {
+    mapped.httpMethod = wh.method as string;
+  }
+
+  // --- Instructions (for INSTRUCTIONS type) ---
+  if (body.instructions !== undefined) {
+    mapped.instructions = body.instructions as string;
+  }
+
+  // --- Headers: new array format or old Record format ---
+  if (Array.isArray(body.headers)) {
+    mapped.headers = body.headers;
+  } else if (wh?.headers) {
+    mapped.headers = Object.entries(wh.headers as Record<string, string>).map(([name, value]) => ({
+      name,
+      value,
+    }));
+  }
+
+  // --- Boolean toggles ---
+  mapped.autoGenerateParams = body.autoGenerateParams ?? false;
+  mapped.autoGenerateBody = body.autoGenerateBody ?? false;
+
+  // --- Array passthrough fields ---
+  if (Array.isArray(body.fields)) mapped.fields = body.fields;
+  if (Array.isArray(body.params)) mapped.params = body.params;
+  if (Array.isArray(body.variables)) mapped.variables = body.variables;
+
+  return mapped;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -74,18 +144,11 @@ serve(async (req) => {
 
     // CREATE intention
     if (action === 'create') {
+      const apiBody = mapIntentionBody(body);
       const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}/intentions`, {
         method: 'POST',
         headers: gptHeaders,
-        body: JSON.stringify({
-          name: body.name,
-          description: body.description || '',
-          triggers: body.triggers || [],
-          webhook: body.webhook || null,
-          persistVariables: body.persistVariables || false,
-          responseType: body.responseType || 'ai_interpretation',
-          fixedResponse: body.fixedResponse || '',
-        }),
+        body: JSON.stringify(apiBody),
       });
 
       if (!res.ok) {
@@ -104,18 +167,11 @@ serve(async (req) => {
     if (action === 'update') {
       if (!body.intentionId) throw new Error('intentionId required');
 
-      const res = await fetch(`${GPT_MAKER_BASE}/intention/${body.intentionId}`, {
+      const apiBody = mapIntentionBody(body);
+      const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}/intentions/${body.intentionId}`, {
         method: 'PUT',
         headers: gptHeaders,
-        body: JSON.stringify({
-          name: body.name,
-          description: body.description,
-          triggers: body.triggers,
-          webhook: body.webhook,
-          persistVariables: body.persistVariables,
-          responseType: body.responseType,
-          fixedResponse: body.fixedResponse,
-        }),
+        body: JSON.stringify(apiBody),
       });
 
       if (!res.ok) {
@@ -134,7 +190,7 @@ serve(async (req) => {
     if (action === 'delete') {
       if (!body.intentionId) throw new Error('intentionId required');
 
-      const res = await fetch(`${GPT_MAKER_BASE}/intention/${body.intentionId}`, {
+      const res = await fetch(`${GPT_MAKER_BASE}/agent/${agentId}/intentions/${body.intentionId}`, {
         method: 'DELETE',
         headers: gptHeaders,
       });
