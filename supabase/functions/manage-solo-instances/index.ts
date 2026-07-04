@@ -271,6 +271,10 @@ serve(async (req) => {
         if (!statusRes.ok) {
           const errText = await statusRes.text();
           console.error("Whatsmiau status error:", statusRes.status, errText);
+          await supabase
+            .from("wpp_instances")
+            .update({ status: "error" })
+            .eq("id", instance.id);
           return new Response(
             JSON.stringify({ error: `Solo API error: ${statusRes.status}` }),
             {
@@ -289,7 +293,6 @@ serve(async (req) => {
             .update({
               status: "connected",
               connected_at: instance.connected_at || new Date().toISOString(),
-              billing_active: true,
             })
             .eq("id", instance.id);
         } else if (
@@ -337,6 +340,10 @@ serve(async (req) => {
         if (!logoutRes.ok) {
           const errText = await logoutRes.text();
           console.error("Whatsmiau logout error:", logoutRes.status, errText);
+          await supabase
+            .from("wpp_instances")
+            .update({ status: "error" })
+            .eq("id", instance.id);
           return new Response(
             JSON.stringify({ error: `Solo API error: ${logoutRes.status}` }),
             {
@@ -377,6 +384,10 @@ serve(async (req) => {
         if (!deleteRes.ok) {
           const errText = await deleteRes.text();
           console.error("Whatsmiau delete error:", deleteRes.status, errText);
+          await supabase
+            .from("wpp_instances")
+            .update({ status: "error" })
+            .eq("id", instance.id);
           return new Response(
             JSON.stringify({ error: `Solo API error: ${deleteRes.status}` }),
             {
