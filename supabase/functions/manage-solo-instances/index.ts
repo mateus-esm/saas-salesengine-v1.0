@@ -302,6 +302,14 @@ serve(async (req) => {
             .from("wpp_instances")
             .update({ status: "disconnected" })
             .eq("id", instance.id);
+        } else if (
+          // Live validation 2026-07-04: VPS retorna "qr-code" quando aguardando pareamento
+          statusData.state === "qr-code" && instance.status !== "connected"
+        ) {
+          await supabase
+            .from("wpp_instances")
+            .update({ status: "awaiting_qr" })
+            .eq("id", instance.id);
         }
         // "connecting" or other states: leave DB as-is
 
