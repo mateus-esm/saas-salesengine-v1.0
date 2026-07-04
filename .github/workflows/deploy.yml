@@ -28,3 +28,4 @@ jobs:
       - run: supabase functions deploy sync-chat-history
       - run: supabase functions deploy process-automations
       - run: supabase functions deploy manage-agent-training
+      - run: supabase functions deploy manage-solo-instances
