@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CreateChannelDialog } from "@/components/ai-studio/CreateChannelDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,9 @@ function LiveChannelsSection() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchChannels = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
@@ -64,6 +68,29 @@ function LiveChannelsSection() {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
+  const handleDeleteChannel = async (channelId: string) => {
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-agent-channels", {
+        body: { action: "remove", channel_id: channelId },
+      });
+      if (error) throw error;
+      if (data?.message) throw new Error(data.message);
+      toast({ title: "Sucesso", description: "Canal removido." });
+      setDeleteConfirm(null);
+      fetchChannels(true);
+    } catch (err: any) {
+      console.error("delete channel:", err);
+      toast({
+        title: "Erro",
+        description: err.message || "Erro ao remover canal.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-card">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
@@ -78,16 +105,25 @@ function LiveChannelsSection() {
             </p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => fetchChannels(true)}
-          disabled={refreshing}
-          className="h-8 gap-1.5 text-xs text-muted-foreground"
-        >
-          <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
-          Atualizar
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            onClick={() => setCreateDialogOpen(true)}
+            className="h-8 gap-1.5 text-xs"
+          >
+            + Novo canal
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fetchChannels(true)}
+            disabled={refreshing}
+            className="h-8 gap-1.5 text-xs text-muted-foreground"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       <div className="p-4">
@@ -146,6 +182,15 @@ function LiveChannelsSection() {
                         : <XCircle className="w-3 h-3" />}
                       {isActive ? "Ativo" : "Inativo"}
                     </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDeleteConfirm(ch.id)}
+                      disabled={deleting}
+                      className="h-7 px-2 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 </div>
               );
@@ -153,6 +198,38 @@ function LiveChannelsSection() {
           </div>
         )}
       </div>
+
+      {/* Create Channel Dialog */}
+      <CreateChannelDialog
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onSuccess={() => fetchChannels(true)}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirm !== null} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover canal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá o canal do AI Engine.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteConfirm) handleDeleteChannel(deleteConfirm);
+              }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
