@@ -250,23 +250,37 @@ export function InboxSidebar({
           </button>
         </div>
 
-        {/* Channel + Responsible filters */}
-        <div className="grid grid-cols-2 gap-2">
-          <Select value={channelFilter} onValueChange={setChannelFilter}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Canal" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={CHANNEL_ALL}>Todos os canais</SelectItem>
-              <SelectSeparator />
-              {CHANNEL_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Channel filter chips */}
+        <div className="space-y-2">
+          <div className="overflow-x-auto flex gap-1.5 pb-1.5 scrollbar-hide">
+            <button
+              onClick={() => setChannelFilter(CHANNEL_ALL)}
+              className={cn(
+                "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                channelFilter === CHANNEL_ALL
+                  ? "bg-gradient-to-r from-solo-orange to-solo-yellow text-white shadow-md"
+                  : "bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
+              )}
+            >
+              Todos
+            </button>
+            {CHANNEL_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setChannelFilter(opt.value)}
+                className={cn(
+                  "flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+                  channelFilter === opt.value
+                    ? "bg-gradient-to-r from-solo-orange to-solo-yellow text-white shadow-md"
+                    : "bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
 
+          {/* Responsible filter */}
           <Select
             value={responsibleFilter}
             onValueChange={setResponsibleFilter}

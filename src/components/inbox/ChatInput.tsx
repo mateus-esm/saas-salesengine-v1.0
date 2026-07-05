@@ -1,13 +1,19 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Paperclip, Smile, Mic, Send, MicOff, X, Loader2, StopCircle, Trash2 } from "lucide-react";
+import { Paperclip, Smile, Mic, Send, MicOff, X, Loader2, StopCircle, Trash2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import EmojiPicker, { EmojiClickData, Theme } from "emoji-picker-react";
 import { useTheme } from "next-themes";
 
@@ -22,9 +28,11 @@ interface ChatInputProps {
   /** E3: when set, renders the ⚡ Copilot sync next to the composer. */
   leadId?: string;
   pipelineId?: string;
+  /** T10: when set, composer is never blocked by 24h window and shows indicator */
+  hasSoloInstance?: boolean;
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId, hasSoloInstance }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -297,6 +305,20 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
 
         {/* Send / Record buttons */}
             <div className="flex items-center gap-1">
+              {hasSoloInstance && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="text-solo-orange h-5 w-5 flex items-center justify-center">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Envio garantido via Solo API
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               {(message.trim() || pendingFile) ? (
                 <Button
                   size="icon"
