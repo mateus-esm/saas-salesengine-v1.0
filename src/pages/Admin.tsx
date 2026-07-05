@@ -22,6 +22,7 @@ import {
   Building2, Users, Edit, Coins, Shield, Loader2, Plus, Trash2,
   RefreshCw, UserCog, Globe, LayoutGrid, Key, Webhook, Home,
   CreditCard, Bot, ChevronRight, UserMinus, UserPlus, Copy, RefreshCcw,
+  Radio,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -101,6 +102,8 @@ const Admin = () => {
   const [equipes, setEquipes] = useState<Equipe[]>([]);
   const [profiles, setProfiles] = useState<ProfileWithRole[]>([]);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
+  const [wppInstances, setWppInstances] = useState<any[]>([]);
+  const [syncingBillingId, setSyncingBillingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // ── Niche dialog state
@@ -157,11 +160,12 @@ const Admin = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [nichesRes, equipesRes, profilesRes, rolesRes] = await Promise.all([
+      const [nichesRes, equipesRes, profilesRes, rolesRes, wppRes] = await Promise.all([
         supabase.from("niches" as any).select("*").order("nome"),
         supabase.from("equipes").select("*").order("nome"),
         supabase.from("profiles").select("id, user_id, email, nome_completo, equipe_id, cargo").order("email"),
         supabase.from("user_roles").select("*"),
+        supabase.from("wpp_instances").select("*, equipes(id, nome)").order("created_at", { ascending: false }),
       ]);
 
       if (nichesRes.data) setNiches(nichesRes.data as unknown as Niche[]);
@@ -177,6 +181,8 @@ const Admin = () => {
         })) as ProfileWithRole[];
         setProfiles(merged);
       }
+
+      if (wppRes.data) setWppInstances(wppRes.data);
     } catch {
       toast.error("Erro ao carregar dados");
     } finally {
@@ -588,6 +594,29 @@ const Admin = () => {
     }
   };
 
+  // ─── Solo API Instances handlers ──────────────────────────────────────────────
+
+  const handleSyncBilling = async (instance: any) => {
+    setSyncingBillingId(instance.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-instance-billing', {
+        body: { equipe_id: instance.equipe_id },
+      });
+      if (error) throw new Error(error.message || "Erro ao sincronizar billing");
+
+      const result = data as any;
+      if (result.skipped) {
+        toast.success(`Sincronização pulada: ${result.skipped}`);
+      } else {
+        toast.success(`Billing sincronizado com sucesso`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao sincronizar billing");
+    } finally {
+      setSyncingBillingId(null);
+    }
+  };
+
   // ─── Loading ─────────────────────────────────────────────────────────────────
 
   if (loading || loadingRole) {
@@ -628,6 +657,10 @@ const Admin = () => {
           <TabsTrigger value="usuarios" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Usuários ({profiles.length})
+          </TabsTrigger>
+          <TabsTrigger value="solo-instances" className="flex items-center gap-2">
+            <Radio className="h-4 w-4" />
+            Instâncias Solo ({wppInstances.length})
           </TabsTrigger>
         </TabsList>
 
@@ -822,6 +855,89 @@ const Admin = () => {
                   })}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ══════════════════════════════════════════════════════════════════════
+            TAB: INSTÂNCIAS SOLO
+        ══════════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="solo-instances" className="mt-4">
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Instâncias Solo API</CardTitle>
+                <CardDescription>
+                  Gerenciamento de instâncias WhatsApp Solo API por equipe. Painel read-only com sincronização de billing.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {wppInstances.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhuma instância Solo API registrada.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>Nome da Instância</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Telefone</TableHead>
+                      <TableHead>Billing Ativo</TableHead>
+                      <TableHead>Conectada em</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {wppInstances.map((instance: any) => {
+                      const tenantName = instance.equipes?.nome || "-";
+                      const displayName = instance.display_name || instance.instance_name || "-";
+                      const status = instance.status || "desconhecido";
+                      const phone = instance.phone || "-";
+                      const billingActive = instance.billing_active ? "Ativo" : "Inativo";
+                      const connectedAt = instance.connected_at
+                        ? new Date(instance.connected_at).toLocaleDateString("pt-BR")
+                        : "-";
+
+                      return (
+                        <TableRow key={instance.id}>
+                          <TableCell className="font-medium">{tenantName}</TableCell>
+                          <TableCell>{displayName}</TableCell>
+                          <TableCell>
+                            <Badge variant={status === "connected" ? "default" : "secondary"}>
+                              {status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{phone}</TableCell>
+                          <TableCell>
+                            <Badge variant={instance.billing_active ? "default" : "secondary"}>
+                              {billingActive}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{connectedAt}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Sincronizar billing"
+                              onClick={() => handleSyncBilling(instance)}
+                              disabled={syncingBillingId === instance.id}
+                            >
+                              {syncingBillingId === instance.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
