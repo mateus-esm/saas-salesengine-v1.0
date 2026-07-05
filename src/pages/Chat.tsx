@@ -49,9 +49,32 @@ const Chat = () => {
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [showInbox, setShowInbox] = useState(true);
   const [showCRM, setShowCRM] = useState(true);
+  const [hasSoloInstance, setHasSoloInstance] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
+
+  // T10 — Check for connected Solo API instance
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await sb
+          .from('wpp_instances')
+          .select('id,status')
+          .eq('status', 'connected')
+          .limit(1);
+        if (!cancelled) {
+          setHasSoloInstance((data?.length ?? 0) > 0);
+        }
+      } catch (err) {
+        console.error("Erro ao verificar Solo API:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);
@@ -274,7 +297,7 @@ const Chat = () => {
           .eq('id', selectedConversationId);
       }
 
-      const { error } = await supabase.functions.invoke('send-chat-message', {
+      const { error, data } = await supabase.functions.invoke('send-chat-message', {
         body: {
           conversation_id: selectedConversationId,
           lead_id: selectedConversation.lead_id,
@@ -287,6 +310,11 @@ const Chat = () => {
       });
 
       if (error) throw error;
+
+      // T10 — Check delivery status
+      if (data && typeof data === 'object' && 'delivered' in data && data.delivered === false) {
+        toast.warning("Mensagem salva, mas não entregue — verifique os canais conectados.");
+      }
     } catch (err) {
       console.error("Erro ao enviar:", err);
       toast.error("Erro ao enviar mensagem");
@@ -572,6 +600,7 @@ const Chat = () => {
               placeholder="Digite sua mensagem..."
               disabled={loadingMessages}
               leadId={selectedConversation?.lead_id ?? undefined}
+              hasSoloInstance={hasSoloInstance}
             />
           </>
         ) : (
