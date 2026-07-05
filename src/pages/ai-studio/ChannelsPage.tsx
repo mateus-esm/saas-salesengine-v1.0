@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MessageSquare, Instagram, Globe, Plug, CheckCircle2,
   XCircle, Loader2, RefreshCw, QrCode, Wifi, WifiOff, AlertCircle, Phone, Trash2,
@@ -188,6 +188,8 @@ function SoloAPISection() {
   const [monthlyPrice, setMonthlyPrice] = useState(100);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [qrExpired, setQrExpired] = useState(false);
+  const pollingStartRef = useRef<number | null>(null);
 
   // Fetch instances from database on mount
   const fetchInstances = useCallback(async () => {
@@ -206,10 +208,25 @@ function SoloAPISection() {
 
   useEffect(() => { fetchInstances(); }, [fetchInstances]);
 
-  // Polling for connection status
+  // Polling for connection status (max 2 min / 120 sec)
   useEffect(() => {
-    if (!pollingInstanceId) return;
+    if (!pollingInstanceId) {
+      pollingStartRef.current = null;
+      setQrExpired(false);
+      return;
+    }
+
+    pollingStartRef.current = Date.now();
+    const maxWaitTime = 120000; // 2 minutes in ms
+
     const interval = setInterval(async () => {
+      const elapsed = Date.now() - (pollingStartRef.current ?? Date.now());
+      if (elapsed > maxWaitTime) {
+        setQrExpired(true);
+        setPollingInstanceId(null);
+        return;
+      }
+
       try {
         const { data, error } = await supabase.functions.invoke("manage-solo-instances", {
           body: { action: "status", instance_id: pollingInstanceId },
@@ -222,6 +239,7 @@ function SoloAPISection() {
             setPollingInstanceId(null);
             setQrData(null);
             setInstanceName("");
+            setQrExpired(false);
             toast({ title: "Sucesso", description: `Instância ${response.instance.display_name} conectada!` });
             fetchInstances();
           } else {
@@ -289,6 +307,7 @@ function SoloAPISection() {
       if (response.qr_base64) {
         setQrData({ base64: response.qr_base64, instanceId });
         setPollingInstanceId(instanceId);
+        setQrExpired(false);
       }
     } catch (err: any) {
       console.error("reconnect:", err);
@@ -404,16 +423,39 @@ function SoloAPISection() {
                   <QrCode className="w-3.5 h-3.5" />
                   QR Code — {instanceName}
                 </div>
-                <div className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border text-yellow-700 bg-yellow-500/8 border-yellow-200/60">
-                  <Wifi className="w-3 h-3" />
-                  Aguardando scan
+                <div className={cn(
+                  "flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border",
+                  qrExpired
+                    ? "text-red-700 bg-red-500/8 border-red-200/60"
+                    : "text-yellow-700 bg-yellow-500/8 border-yellow-200/60"
+                )}>
+                  {qrExpired ? <AlertCircle className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
+                  {qrExpired ? "QR expirado" : "Aguardando scan"}
                 </div>
               </div>
               <div className="flex items-center justify-center bg-background p-4" style={{ minHeight: 220 }}>
-                <img src={qrData.base64} alt="QR Code" className="w-48 h-48 object-contain" />
+                {qrExpired ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <AlertCircle className="w-12 h-12 text-red-500/40" />
+                    <p className="text-xs font-mono text-muted-foreground text-center">
+                      O QR expirou. Gere um novo para reconectar.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleReconnect(qrData.instanceId)}
+                      disabled={actionLoading === qrData.instanceId}
+                      className="gap-1.5"
+                    >
+                      {actionLoading === qrData.instanceId ? <Loader2 className="w-3 h-3 animate-spin" /> : <QrCode className="w-3 h-3" />}
+                      Gerar novo QR
+                    </Button>
+                  </div>
+                ) : (
+                  <img src={qrData.base64} alt="QR Code" className="w-48 h-48 object-contain" />
+                )}
               </div>
               <div className="px-4 py-2 bg-muted/30 border-t border-border text-[10px] text-muted-foreground text-center">
-                Escaneie com seu telefone (expira em ~2 min)
+                {qrExpired ? "Clique em 'Gerar novo QR' para tentar novamente" : "Escaneie com seu telefone (expira em ~2 min)"}
               </div>
             </div>
           )}
