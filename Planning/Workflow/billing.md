@@ -32,6 +32,11 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | 2026-07-04 | 7 | T6 sync-instance-billing Asaas reconciler | Claude SDD / implementer | L | R$ 20 |
 | 2026-07-04 | 7 | T7 solo-health-check cron + pg_cron migration | Claude SDD / implementer | M | R$ 12 |
 | 2026-07-04 | 7 | W2-gate PM review + merges + deploy.yml fix | Claude / Fable 5 | S | R$ 5 |
+| 2026-07-05 | 7 | T8 ChannelsPage Solo API UI real | Claude SDD / Haiku 4.5 | M | R$ 12 |
+| 2026-07-05 | 7 | T9 CreateChannelDialog 7 tipos + QR | Claude SDD / Haiku 4.5 | M | R$ 12 |
+| 2026-07-05 | 7 | T10 Inbox chips de canal + janela Solo | Claude SDD / Haiku 4.5 | M | R$ 12 |
+| 2026-07-05 | 7 | T11 Admin instâncias Solo + billing sync | Claude SDD / Haiku 4.5 | S | R$ 5 |
+| 2026-07-05 | 7 | W3-gate PM review + merges + conflito/BOM/dep fixes | Claude / Fable 5 | M | R$ 12 |
 | 2026-06-27 | 6.10 | W1 State Persistence Foundation (hook + 3 forms) | pro/deepseek-v4-flash | L | R$ 20 |
 | 2026-06-19 | 6.6 | T3 Copilot Cockpit sections (Setup/Treinamento/Aprovações/Logs) | Junior | L | R$ 20 |
 | 2026-06-19 | 6.6 | T4 Sprint 6.5 browser smoke + handoff | Junior | M | R$ 12 |
