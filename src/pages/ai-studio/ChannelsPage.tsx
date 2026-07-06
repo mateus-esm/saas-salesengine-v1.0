@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MessageSquare, Instagram, Globe, Plug, CheckCircle2,
   XCircle, Loader2, RefreshCw, QrCode, Wifi, WifiOff, AlertCircle, Phone, Trash2,
+  Send, Store,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,11 @@ import { cn } from "@/lib/utils";
 const CHANNEL_TYPE_CONFIG: Record<string, { icon: React.ComponentType<{className?:string}>; label: string; color: string }> = {
   WHATSAPP: { icon: MessageSquare, label: "WhatsApp", color: "text-emerald-600 bg-emerald-500/10 border-emerald-200/60" },
   INSTAGRAM: { icon: Instagram, label: "Instagram", color: "text-pink-600 bg-pink-500/10 border-pink-200/60" },
+  CLOUD_API: { icon: MessageSquare, label: "WhatsApp Cloud API", color: "text-sky-700 bg-sky-500/10 border-sky-200/60" },
+  TELEGRAM: { icon: Send, label: "Telegram", color: "text-cyan-700 bg-cyan-500/10 border-cyan-200/60" },
   WIDGET: { icon: Globe, label: "Widget Web", color: "text-blue-600 bg-blue-500/10 border-blue-200/60" },
+  MESSENGER: { icon: MessageSquare, label: "Messenger", color: "text-indigo-700 bg-indigo-500/10 border-indigo-200/60" },
+  MERCADO_LIVRE: { icon: Store, label: "Mercado Livre", color: "text-yellow-700 bg-yellow-500/10 border-yellow-200/60" },
   WEB: { icon: Globe, label: "Web", color: "text-blue-600 bg-blue-500/10 border-blue-200/60" },
 };
 
@@ -136,7 +141,7 @@ function LiveChannelsSection() {
             <MessageSquare className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">Nenhum canal encontrado.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Conecte um canal no painel do AI Engine ou via Solo API abaixo.
+              Crie um canal em Novo canal ou conecte uma instancia Solo API abaixo.
             </p>
           </div>
         ) : (
@@ -254,6 +259,8 @@ interface ManageSoloResponse {
   error?: string;
 }
 
+const DEFAULT_SOLO_MONTHLY_PRICE = 100;
+
 function SoloAPISection() {
   const { toast } = useToast();
   const [instanceName, setInstanceName] = useState("");
@@ -262,11 +269,17 @@ function SoloAPISection() {
   const [creating, setCreating] = useState(false);
   const [qrData, setQrData] = useState<{ base64: string; instanceId: string } | null>(null);
   const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
-  const [monthlyPrice, setMonthlyPrice] = useState(100);
+  const [monthlyPrice, setMonthlyPrice] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [qrExpired, setQrExpired] = useState(false);
   const pollingStartRef = useRef<number | null>(null);
+
+  const readMonthlyPrice = useCallback((response?: ManageSoloResponse | null) => {
+    if (typeof response?.monthly_price === "number") {
+      setMonthlyPrice(response.monthly_price);
+    }
+  }, []);
 
   // Fetch instances from database on mount
   const fetchInstances = useCallback(async () => {
@@ -274,14 +287,21 @@ function SoloAPISection() {
     try {
       const { data, error } = await supabase.from("wpp_instances").select("*").order("created_at");
       if (error) throw error;
-      setInstances(data as WppInstance[] || []);
+      const rows = data as WppInstance[] || [];
+      setInstances(rows);
+      if (rows[0]) {
+        const priceRes = await supabase.functions.invoke("manage-solo-instances", {
+          body: { action: "status", instance_id: rows[0].id },
+        });
+        if (!priceRes.error) readMonthlyPrice(priceRes.data as ManageSoloResponse);
+      }
     } catch (err) {
       console.error("instances fetch:", err);
       toast({ title: "Erro", description: "Não foi possível carregar as instâncias.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [readMonthlyPrice, toast]);
 
   useEffect(() => { fetchInstances(); }, [fetchInstances]);
 
@@ -289,7 +309,6 @@ function SoloAPISection() {
   useEffect(() => {
     if (!pollingInstanceId) {
       pollingStartRef.current = null;
-      setQrExpired(false);
       return;
     }
 
@@ -310,9 +329,9 @@ function SoloAPISection() {
         });
         if (error) throw error;
         const response = data as ManageSoloResponse;
+        readMonthlyPrice(response);
         if (response.instance) {
-          setMonthlyPrice(response.monthly_price ?? 100);
-          if (response.instance.status === "connected") {
+          if (response.connected || response.instance.status === "connected") {
             setPollingInstanceId(null);
             setQrData(null);
             setInstanceName("");
@@ -324,13 +343,20 @@ function SoloAPISection() {
               prev.map((inst) => (inst.id === pollingInstanceId ? response.instance! : inst))
             );
           }
+        } else if (response.connected) {
+          setPollingInstanceId(null);
+          setQrData(null);
+          setInstanceName("");
+          setQrExpired(false);
+          toast({ title: "Sucesso", description: "Instância conectada!" });
+          fetchInstances();
         }
       } catch (err) {
         console.error("status poll:", err);
       }
     }, 5000); // 5s interval
     return () => clearInterval(interval);
-  }, [pollingInstanceId, fetchInstances, toast]);
+  }, [pollingInstanceId, fetchInstances, readMonthlyPrice, toast]);
 
   const handleCreateAndConnect = async () => {
     if (!instanceName.trim()) return;
@@ -343,7 +369,7 @@ function SoloAPISection() {
       if (createRes.error) throw new Error(createRes.error.message);
       const createData = createRes.data as ManageSoloResponse;
       if (createData.error) throw new Error(createData.error);
-      setMonthlyPrice(createData.monthly_price ?? 100);
+      readMonthlyPrice(createData);
 
       // Step 2: Connect to get QR
       const connectRes = await supabase.functions.invoke("manage-solo-instances", {
@@ -352,9 +378,16 @@ function SoloAPISection() {
       if (connectRes.error) throw new Error(connectRes.error.message);
       const connectData = connectRes.data as ManageSoloResponse;
       if (connectData.error) throw new Error(connectData.error);
-      setMonthlyPrice(connectData.monthly_price ?? 100);
+      readMonthlyPrice(connectData);
 
-      if (connectData.qr_base64) {
+      if (connectData.connected || connectData.instance?.status === "connected") {
+        setQrData(null);
+        setPollingInstanceId(null);
+        setQrExpired(false);
+        setInstanceName("");
+        toast({ title: "Sucesso", description: "Instância conectada!" });
+        fetchInstances();
+      } else if (connectData.qr_base64) {
         setQrData({ base64: connectData.qr_base64, instanceId: createData.instance!.id });
         setPollingInstanceId(createData.instance!.id);
         setInstances((prev) => [...prev, connectData.instance!]);
@@ -380,11 +413,20 @@ function SoloAPISection() {
       if (error) throw error;
       const response = data as ManageSoloResponse;
       if (response.error) throw new Error(response.error);
-      setMonthlyPrice(response.monthly_price ?? 100);
-      if (response.qr_base64) {
+      readMonthlyPrice(response);
+      if (response.connected || response.instance?.status === "connected") {
+        setQrData(null);
+        setPollingInstanceId(null);
+        setQrExpired(false);
+        toast({ title: "Sucesso", description: "Instância conectada!" });
+        fetchInstances();
+      } else if (response.qr_base64) {
         setQrData({ base64: response.qr_base64, instanceId });
         setPollingInstanceId(instanceId);
         setQrExpired(false);
+        if (response.instance) {
+          setInstances((prev) => prev.map((inst) => (inst.id === instanceId ? response.instance! : inst)));
+        }
       }
     } catch (err: any) {
       console.error("reconnect:", err);
@@ -403,7 +445,7 @@ function SoloAPISection() {
       if (error) throw error;
       const response = data as ManageSoloResponse;
       if (response.error) throw new Error(response.error);
-      setMonthlyPrice(response.monthly_price ?? 100);
+      readMonthlyPrice(response);
       toast({ title: "Sucesso", description: "Instância desconectada." });
       fetchInstances();
     } catch (err: any) {
@@ -423,7 +465,7 @@ function SoloAPISection() {
       if (error) throw error;
       const response = data as ManageSoloResponse;
       if (response.error) throw new Error(response.error);
-      setMonthlyPrice(response.monthly_price ?? 100);
+      readMonthlyPrice(response);
       toast({ title: "Sucesso", description: "Instância deletada." });
       setDeleteConfirm(null);
       fetchInstances();
@@ -460,7 +502,7 @@ function SoloAPISection() {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Conexão Direta (Solo API)</h3>
             <p className="text-xs text-muted-foreground">
-              +R$ {monthlyPrice}/mês por instância conectada
+              +R$ {monthlyPrice ?? DEFAULT_SOLO_MONTHLY_PRICE}/mês por instância conectada
             </p>
           </div>
         </div>
@@ -575,7 +617,7 @@ function SoloAPISection() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      {inst.status === "disconnected" && (
+                      {(inst.status === "disconnected" || inst.status === "awaiting_qr") && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -584,7 +626,7 @@ function SoloAPISection() {
                           className="h-7 text-xs gap-1"
                         >
                           {actionLoading === inst.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />}
-                          Reconectar
+                          {inst.status === "awaiting_qr" ? "Gerar QR" : "Reconectar"}
                         </Button>
                       )}
                       {inst.status === "connected" && (
@@ -623,7 +665,7 @@ function SoloAPISection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Deletar instância?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação removerá a instância e a cobrança mensal de R$ {monthlyPrice} será cancelada.
+              Esta ação removerá a instância e a cobrança mensal de R$ {monthlyPrice ?? DEFAULT_SOLO_MONTHLY_PRICE} será cancelada.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

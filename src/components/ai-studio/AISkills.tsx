@@ -72,7 +72,7 @@ export function AISkills() {
       fetchIntentions(); // Refresh list to get real ID
     } catch (err) {
       console.error('Error saving intention:', err);
-      toast({ title: 'Erro', description: 'Falha ao salvar no AI Engine.', variant: 'destructive' });
+      toast({ title: 'Erro', description: 'Falha ao salvar a intenção.', variant: 'destructive' });
     }
   };
 
@@ -102,7 +102,7 @@ export function AISkills() {
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground">Skills & Intenções</h2>
+        <h2 className="text-2xl font-bold text-foreground">Habilidades e Intenções</h2>
         <p className="text-sm text-muted-foreground mt-1">Configure gatilhos na conversa para disparar webhooks ou ações no sistema.</p>
       </div>
 

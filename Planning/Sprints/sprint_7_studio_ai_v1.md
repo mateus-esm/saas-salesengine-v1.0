@@ -22,16 +22,16 @@
 
 ### ✅ Definition of Done / Acceptance Criteria (contract)
 
-- [ ] **AC1 — Instância Solo end-to-end:** usuário cria instância na ChannelsPage → QR aparece em <10s → escaneia → status vira "Conectado" sem reload manual (refresh button ok) → aparece na lista com telefone.
-- [ ] **AC2 — Inbound Solo:** mensagem recebida no número Solo (sem GPT Maker no mesmo número) cria lead + conversation + message no inbox, com canal `whatsapp`.
-- [ ] **AC3 — Outbound routing:** (a) conversa solo-native envia pela Solo API; (b) envio para lead sem `gpt_maker_chat_id` com instância conectada sai pela Solo API; (c) falha de janela no GPT Maker faz retry automático pela Solo API e a mensagem chega.
-- [ ] **AC4 — Sem duplicatas:** número conectado em coexistence + Solo simultaneamente não gera mensagens duplicadas no inbox (eco do GPT Maker deduplicado).
-- [ ] **AC5 — Canais GPT Maker:** criar canal de qualquer tipo pela UI; canal WHATSAPP mostra QR do GPT Maker; canal criado aparece na lista com status; remover canal funciona.
-- [ ] **AC6 — Billing:** conectar instância → valor da assinatura Asaas do tenant sobe R$`SOLO_INSTANCE_MONTHLY_PRICE`; deletar instância → valor desce; Admin vê instâncias por tenant.
-- [ ] **AC7 — Health:** derrubar a instância (logout pelo celular) reflete "Desconectado — reconectar" em ≤5 min (webhook ou cron).
-- [ ] **AC8 — Inbox:** filtro por canal (todos/whatsapp/instagram/telegram/web/messenger) e badge de janela: composer nunca bloqueado quando tenant tem instância Solo conectada.
-- [ ] **AC9 — Intenções:** CRUD de intenções funcional na SkillsPage contra a API real (list/create/update/delete), com campos, headers e variables.
-- [ ] **AC10 — Zero regressão:** fluxo atual GPT Maker-only (tenant sem Solo) continua idêntico; `npm run build` limpo.
+- [ ] **AC1 — Instância Solo end-to-end:** usuário cria instância na ChannelsPage → QR aparece em <10s → escaneia → status vira "Conectado" sem reload manual (refresh button ok) → aparece na lista com telefone. T12: pendente de QR scan real.
+- [ ] **AC2 — Inbound Solo:** mensagem recebida no número Solo (sem GPT Maker no mesmo número) cria lead + conversation + message no inbox, com canal `whatsapp`. T12: pendente de mensagem real no número escaneado.
+- [ ] **AC3 — Outbound routing:** (a) conversa solo-native envia pela Solo API; (b) envio para lead sem `gpt_maker_chat_id` com instância conectada sai pela Solo API; (c) falha de janela no GPT Maker faz retry automático pela Solo API e a mensagem chega. T12: code gate passou; live sends e erro de janela ainda pendentes.
+- [ ] **AC4 — Sem duplicatas:** número conectado em coexistence + Solo simultaneamente não gera mensagens duplicadas no inbox (eco do GPT Maker deduplicado). T12: pendente de teste de coexistence real.
+- [x] **AC5 — Canais GPT Maker:** criar canal de qualquer tipo pela UI; canal WHATSAPP mostra QR do GPT Maker; canal criado aparece na lista com status; remover canal funciona. T12: code gate/T3-T9 evidence completo.
+- [ ] **AC6 — Billing:** conectar instância → valor da assinatura Asaas do tenant sobe R$`SOLO_INSTANCE_MONTHLY_PRICE`; deletar instância → valor desce; Admin vê instâncias por tenant. T12: code gate passou; verificação Asaas live pendente.
+- [ ] **AC7 — Health:** derrubar a instância (logout pelo celular) reflete "Desconectado — reconectar" em ≤5 min (webhook ou cron). T12: code gate passou; pg_cron segue pendente de ativação operator-only.
+- [x] **AC8 — Inbox:** filtro por canal (todos/whatsapp/instagram/telegram/web/messenger) e badge de janela: composer nunca bloqueado quando tenant tem instância Solo conectada. T12: code gate passou; live smoke recomendado após deploy.
+- [x] **AC9 — Intenções:** CRUD de intenções funcional na SkillsPage contra a API real (list/create/update/delete), com campos, headers e variables. T12: T4 API evidence + UI preservation fix completo.
+- [x] **AC10 — Zero regressão:** fluxo atual GPT Maker-only (tenant sem Solo) continua idêntico; `npm run build` limpo. T12: build/typecheck/lint/Deno gate passou.
 
 ---
 
@@ -335,4 +335,4 @@ Engenheiro: ao concluir, tique sua task abaixo, adicione a linha no `Planning/Wo
 - [x] T9 · Create-channel dialog (M) ✅ merged 2026-07-05 (7 tipos + QR + remove; PM corrigiu versão do react-qr-code e conflito de worktree stale)
 - [x] T10 · Inbox filtro + janela (M) ✅ merged 2026-07-05 (chips de canal; indicador Solo; toast delivered:false)
 - [x] T11 · Admin instances (S) ✅ merged 2026-07-05 (tab Instâncias Solo + botão sincronizar billing)
-- [ ] T12 · Hardening + E2E (M)
+- [ ] T12 · Hardening + E2E (M) — code hardening gate + `sprint_7_e2e_results.md` complete 2026-07-06; live QR/GPT Maker/Asaas/pg_cron/push items still require founder/operator action

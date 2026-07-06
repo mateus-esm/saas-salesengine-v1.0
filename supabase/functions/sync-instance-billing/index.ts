@@ -8,6 +8,14 @@ const corsHeaders = {
 
 const ASAAS_API_URL = 'https://api.asaas.com/v3';
 
+type AppRole = 'user' | 'admin' | 'owner' | 'super_admin';
+
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('Authorization') || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -24,13 +32,15 @@ serve(async (req) => {
 
     // --- Auth: determine if service-role or user JWT ---
     const authHeader = req.headers.get('Authorization') || '';
+    const bearerToken = getBearerToken(req);
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 
-    const isServiceRole = authHeader.includes(supabaseServiceRoleKey);
+    const isServiceRole = !!supabaseServiceRoleKey && bearerToken === supabaseServiceRoleKey;
 
     let authedEquipeId: string | null = null;
+    let isSuperAdmin = false;
 
     if (!isServiceRole) {
       // User JWT path
@@ -45,17 +55,33 @@ serve(async (req) => {
         throw new Error('Unauthorized');
       }
 
-      const { data: profile, error: profileError } = await supabaseClient
+      const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      const { data: profile, error: profileError } = await adminClient
         .from('profiles')
-        .select('equipe_id')
+        .select('equipe_id, role')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError || !profile) {
         throw new Error('Profile not found');
       }
 
       authedEquipeId = profile.equipe_id;
+      isSuperAdmin = profile.role === 'super_admin';
+
+      if (!isSuperAdmin) {
+        const { data: roles, error: rolesError } = await adminClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id);
+
+        if (rolesError) throw rolesError;
+        const roleSet = new Set((roles ?? []).map((r) => r.role as AppRole));
+        isSuperAdmin = roleSet.has('super_admin');
+      }
     }
 
     // --- Parse body ---
@@ -65,7 +91,7 @@ serve(async (req) => {
     }
 
     // --- Auth check ---
-    if (!isServiceRole && authedEquipeId !== equipe_id) {
+    if (!isServiceRole && !isSuperAdmin && authedEquipeId !== equipe_id) {
       return new Response(
         JSON.stringify({ error: 'Forbidden: you can only reconcile your own team' }),
         {
@@ -78,8 +104,8 @@ serve(async (req) => {
     // --- Build DB client ---
     const dbClient = createClient(
       supabaseUrl,
-      isServiceRole ? supabaseServiceRoleKey : supabaseAnonKey,
-      isServiceRole ? {} : { global: { headers: { Authorization: authHeader } } }
+      supabaseServiceRoleKey,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
     // --- 1. Load equipes row ---

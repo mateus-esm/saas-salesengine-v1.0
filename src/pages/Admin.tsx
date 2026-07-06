@@ -610,6 +610,7 @@ const Admin = () => {
       } else {
         toast.success(`Billing sincronizado com sucesso`);
       }
+      await fetchData();
     } catch (err: any) {
       toast.error(err.message || "Erro ao sincronizar billing");
     } finally {
@@ -1086,7 +1087,7 @@ const Admin = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="gpt_maker">GPT Maker</SelectItem>
+                          <SelectItem value="gpt_maker">AI Engine</SelectItem>
                           <SelectItem value="openai" disabled>OpenAI (em breve)</SelectItem>
                         </SelectContent>
                       </Select>

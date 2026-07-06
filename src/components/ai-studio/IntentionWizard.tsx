@@ -1,15 +1,39 @@
 import { useState } from "react";
-import { X, ChevronRight, ChevronLeft, Zap, Globe, Code, Loader2, BookOpen } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Zap, Globe, Loader2, BookOpen, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+type IntentionType = 'WEBHOOK' | 'INSTRUCTIONS';
+type FieldType = 'STRING' | 'URL' | 'DATE_TIME' | 'DATE' | 'NUMBER' | 'BOOLEAN';
+
+interface KeyValueRow {
+  name: string;
+  value: string;
+}
+
+interface IntentionField {
+  name: string;
+  jsonName: string;
+  description: string;
+  type: FieldType;
+  required: boolean;
+}
+
+interface IntentionVariable {
+  valueExpression: string;
+  defaultFieldKey: string;
+}
 
 interface IntentionFormData {
   description: string;
   details: string;
-  type: 'WEBHOOK' | 'INSTRUCTIONS';
+  type: IntentionType;
   httpMethod: string;
   url: string;
   instructions: string;
-  headers: { name: string; value: string }[];
+  headers: KeyValueRow[];
+  params: KeyValueRow[];
+  fields: IntentionField[];
+  variables: IntentionVariable[];
   autoGenerateParams: boolean;
   autoGenerateBody: boolean;
 }
@@ -22,11 +46,36 @@ interface IntentionWizardProps {
 
 const STEPS = ['Detalhes', 'Ação', 'Configurações'];
 
+const FIELD_TYPES: FieldType[] = ['STRING', 'URL', 'DATE_TIME', 'DATE', 'NUMBER', 'BOOLEAN'];
+const DEFAULT_FIELD_KEYS = [
+  'chat_id',
+  'contact_name',
+  'contact_phone',
+  'contact_email',
+  'contact_gender',
+  'contact_birthday',
+  'contact_job_title',
+  'contact_org_name',
+  'contact_org_state',
+  'contact_org_city',
+];
+
+const emptyKeyValueRow = (): KeyValueRow => ({ name: '', value: '' });
+const emptyField = (): IntentionField => ({
+  name: '',
+  jsonName: '',
+  description: '',
+  type: 'STRING',
+  required: false,
+});
+const emptyVariable = (): IntentionVariable => ({
+  valueExpression: '',
+  defaultFieldKey: 'contact_phone',
+});
+
 export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizardProps) {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [headerName, setHeaderName] = useState("");
-  const [headerValue, setHeaderValue] = useState("");
 
   const [form, setForm] = useState<IntentionFormData>({
     description: initialData?.description || '',
@@ -36,19 +85,22 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
     url: initialData?.url || '',
     instructions: initialData?.instructions || '',
     headers: initialData?.headers || [],
+    params: initialData?.params || [],
+    fields: initialData?.fields || [],
+    variables: initialData?.variables || [],
     autoGenerateParams: initialData?.autoGenerateParams ?? false,
     autoGenerateBody: initialData?.autoGenerateBody ?? false,
   });
 
   const addHeader = () => {
-    if (headerName.trim()) {
-      setForm(prev => ({
-        ...prev,
-        headers: [...prev.headers, { name: headerName.trim(), value: headerValue }],
-      }));
-      setHeaderName("");
-      setHeaderValue("");
-    }
+    setForm(prev => ({ ...prev, headers: [...prev.headers, emptyKeyValueRow()] }));
+  };
+
+  const updateHeader = (index: number, patch: Partial<KeyValueRow>) => {
+    setForm(prev => ({
+      ...prev,
+      headers: prev.headers.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }));
   };
 
   const removeHeader = (index: number) => {
@@ -58,10 +110,93 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
     }));
   };
 
+  const addParam = () => {
+    setForm(prev => ({ ...prev, params: [...prev.params, emptyKeyValueRow()] }));
+  };
+
+  const updateParam = (index: number, patch: Partial<KeyValueRow>) => {
+    setForm(prev => ({
+      ...prev,
+      params: prev.params.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const removeParam = (index: number) => {
+    setForm(prev => ({
+      ...prev,
+      params: prev.params.filter((_, i) => i !== index),
+    }));
+  };
+
+  const addField = () => {
+    setForm(prev => ({ ...prev, fields: [...prev.fields, emptyField()] }));
+  };
+
+  const updateField = (index: number, patch: Partial<IntentionField>) => {
+    setForm(prev => ({
+      ...prev,
+      fields: prev.fields.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const removeField = (index: number) => {
+    setForm(prev => ({
+      ...prev,
+      fields: prev.fields.filter((_, i) => i !== index),
+    }));
+  };
+
+  const addVariable = () => {
+    setForm(prev => ({ ...prev, variables: [...prev.variables, emptyVariable()] }));
+  };
+
+  const updateVariable = (index: number, patch: Partial<IntentionVariable>) => {
+    setForm(prev => ({
+      ...prev,
+      variables: prev.variables.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }));
+  };
+
+  const removeVariable = (index: number) => {
+    setForm(prev => ({
+      ...prev,
+      variables: prev.variables.filter((_, i) => i !== index),
+    }));
+  };
+
+  const pruneKeyValueRows = (rows: KeyValueRow[]) => {
+    return rows.filter(row => row.name.trim()).map(row => ({ ...row, name: row.name.trim() }));
+  };
+
+  const pruneFields = (fields: IntentionField[]) => {
+    return fields.filter(field => field.name.trim() || field.jsonName.trim()).map(field => ({
+      ...field,
+      name: field.name.trim(),
+      jsonName: field.jsonName.trim(),
+      description: field.description.trim(),
+    }));
+  };
+
+  const pruneVariables = (variables: IntentionVariable[]) => {
+    return variables
+      .filter(variable => variable.valueExpression.trim() || variable.defaultFieldKey.trim())
+      .map(variable => ({
+        ...variable,
+        valueExpression: variable.valueExpression.trim(),
+        defaultFieldKey: variable.defaultFieldKey.trim(),
+      }));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave({
+        ...form,
+        headers: pruneKeyValueRows(form.headers),
+        params: pruneKeyValueRows(form.params),
+        fields: pruneFields(form.fields),
+        variables: pruneVariables(form.variables),
+      });
     } finally {
       setSaving(false);
     }
@@ -176,29 +311,32 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground">Headers</label>
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
-                        placeholder="x-api-key"
-                        value={headerName}
-                        onChange={(e) => setHeaderName(e.target.value)}
-                      />
-                      <input
-                        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
-                        placeholder="seu-token"
-                        value={headerValue}
-                        onChange={(e) => setHeaderValue(e.target.value)}
-                      />
-                      <Button variant="outline" size="sm" onClick={addHeader}>+</Button>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm font-medium text-foreground">Cabeçalhos</label>
+                      <Button variant="outline" size="sm" onClick={addHeader} className="gap-1.5">
+                        <Plus className="w-3.5 h-3.5" />
+                        Adicionar
+                      </Button>
                     </div>
                     {form.headers.length > 0 && (
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         {form.headers.map((h, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs font-mono bg-muted/50 px-3 py-2 rounded-lg">
-                            <span className="text-foreground font-semibold">{h.name}:</span>
-                            <span className="text-muted-foreground flex-1">{h.value}</span>
-                            <button onClick={() => removeHeader(i)} className="text-red-500 hover:text-red-700"><X className="w-3 h-3" /></button>
+                          <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                            <input
+                              className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                              placeholder="x-api-key"
+                              value={h.name}
+                              onChange={(e) => updateHeader(i, { name: e.target.value })}
+                            />
+                            <input
+                              className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                              placeholder="valor"
+                              value={h.value}
+                              onChange={(e) => updateHeader(i, { value: e.target.value })}
+                            />
+                            <Button variant="ghost" size="icon" onClick={() => removeHeader(i)} className="h-9 w-9 text-muted-foreground hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </Button>
                           </div>
                         ))}
                       </div>
@@ -232,7 +370,7 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-background">
                     <div>
-                      <p className="text-sm font-medium text-foreground">Auto-generate Params</p>
+                      <p className="text-sm font-medium text-foreground">Gerar parâmetros automaticamente</p>
                       <p className="text-xs text-muted-foreground">Gerar automaticamente os parâmetros da requisição a partir do contexto.</p>
                     </div>
                     <button
@@ -245,7 +383,7 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
 
                   <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-background">
                     <div>
-                      <p className="text-sm font-medium text-foreground">Auto-generate Body</p>
+                      <p className="text-sm font-medium text-foreground">Gerar corpo automaticamente</p>
                       <p className="text-xs text-muted-foreground">Gerar automaticamente o corpo da requisição a partir do contexto.</p>
                     </div>
                     <button
@@ -255,6 +393,147 @@ export function IntentionWizard({ initialData, onSave, onClose }: IntentionWizar
                       <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${form.autoGenerateBody ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
+                </div>
+
+                <div className="border-t border-border pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Parâmetros</h3>
+                      <p className="text-xs text-muted-foreground">Pares chave/valor enviados na requisição.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={addParam} className="gap-1.5">
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar
+                    </Button>
+                  </div>
+                  {form.params.length > 0 && (
+                    <div className="space-y-2">
+                      {form.params.map((param, i) => (
+                        <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                          <input
+                            className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                            placeholder="source"
+                            value={param.name}
+                            onChange={(e) => updateParam(i, { name: e.target.value })}
+                          />
+                          <input
+                            className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                            placeholder="crm"
+                            value={param.value}
+                            onChange={(e) => updateParam(i, { value: e.target.value })}
+                          />
+                          <Button variant="ghost" size="icon" onClick={() => removeParam(i)} className="h-9 w-9 text-muted-foreground hover:text-red-500">
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Campos do corpo</h3>
+                      <p className="text-xs text-muted-foreground">Schema dos dados que o agente deve coletar antes de enviar.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={addField} className="gap-1.5">
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar
+                    </Button>
+                  </div>
+                  {form.fields.length > 0 && (
+                    <div className="space-y-3">
+                      {form.fields.map((field, i) => (
+                        <div key={i} className="space-y-2 border border-border rounded-xl p-3 bg-background">
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                            <input
+                              className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                              placeholder="Nome visível"
+                              value={field.name}
+                              onChange={(e) => updateField(i, { name: e.target.value })}
+                            />
+                            <input
+                              className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                              placeholder="jsonName"
+                              value={field.jsonName}
+                              onChange={(e) => updateField(i, { jsonName: e.target.value })}
+                            />
+                            <Button variant="ghost" size="icon" onClick={() => removeField(i)} className="h-9 w-9 text-muted-foreground hover:text-red-500">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <textarea
+                            className="w-full min-h-[64px] bg-background border border-border rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                            placeholder="Descrição do dado que deve ser coletado"
+                            value={field.description}
+                            onChange={(e) => updateField(i, { description: e.target.value })}
+                          />
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-center">
+                            <select
+                              className="bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                              value={field.type}
+                              onChange={(e) => updateField(i, { type: e.target.value as FieldType })}
+                            >
+                              {FIELD_TYPES.map(type => (
+                                <option key={type} value={type}>{type}</option>
+                              ))}
+                            </select>
+                            <label className="flex items-center gap-2 text-sm text-foreground px-1">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(e) => updateField(i, { required: e.target.checked })}
+                              />
+                              Obrigatório
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border pt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Variáveis</h3>
+                      <p className="text-xs text-muted-foreground">Valores do contexto da conversa enviados junto com a intenção.</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={addVariable} className="gap-1.5">
+                      <Plus className="w-3.5 h-3.5" />
+                      Adicionar
+                    </Button>
+                  </div>
+                  {form.variables.length > 0 && (
+                    <div className="space-y-2">
+                      {form.variables.map((variable, i) => (
+                        <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_220px_auto] gap-2 items-center">
+                          <input
+                            className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                            placeholder="{{contact_phone}}"
+                            value={variable.valueExpression}
+                            onChange={(e) => updateVariable(i, { valueExpression: e.target.value })}
+                          />
+                          <select
+                            className="min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+                            value={variable.defaultFieldKey}
+                            onChange={(e) => updateVariable(i, { defaultFieldKey: e.target.value })}
+                          >
+                            {!DEFAULT_FIELD_KEYS.includes(variable.defaultFieldKey) && variable.defaultFieldKey && (
+                              <option value={variable.defaultFieldKey}>{variable.defaultFieldKey}</option>
+                            )}
+                            {DEFAULT_FIELD_KEYS.map(key => (
+                              <option key={key} value={key}>{key}</option>
+                            ))}
+                          </select>
+                          <Button variant="ghost" size="icon" onClick={() => removeVariable(i)} className="h-9 w-9 text-muted-foreground hover:text-red-500">
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-border pt-4">

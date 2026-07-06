@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendViaSolo } from '../_shared/solo-sender.ts'
 
 const corsHeaders = {
@@ -7,69 +7,239 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+class HttpError extends Error {
+  status: number
+
+  constructor(message: string, status = 400) {
+    super(message)
+    this.status = status
+  }
+}
+
+type ProfileContext = {
+  id: string
+  user_id: string
+  equipe_id: string
+}
+
+type DeliveryMessage = Record<string, any>
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status,
+  })
+}
+
+function bearerFrom(req: Request): string {
+  const authHeader = req.headers.get('Authorization') || ''
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  if (!match?.[1]) throw new HttpError('Unauthorized', 401)
+  return match[1].trim()
+}
+
+async function getCallerProfile(req: Request): Promise<ProfileContext> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+  if (!supabaseUrl || !anonKey) throw new Error('Supabase auth env vars not configured')
+
+  const authHeader = req.headers.get('Authorization') || ''
+  const authClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  })
+
+  const { data: { user }, error: authError } = await authClient.auth.getUser()
+  if (authError || !user) throw new HttpError('Unauthorized', 401)
+
+  const { data: profile, error: profileError } = await authClient
+    .from('profiles')
+    .select('id, user_id, equipe_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (profileError || !profile?.equipe_id) {
+    throw new HttpError('Profile not found', 403)
+  }
+
+  return profile as ProfileContext
+}
+
+async function loadAuthorizedContext(
+  supabase: SupabaseClient,
+  caller: ProfileContext,
+  body: Record<string, any>,
+) {
+  let resolvedConversationId: string | null = body.conversation_id || null
+  let resolvedLeadId: string | null = body.lead_id || null
+  let resolvedChatId: string | null = body.chat_id || null
+  let resolvedSoloInstanceId: string | null = null
+
+  let conversation: Record<string, any> | null = null
+
+  if (resolvedConversationId) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status')
+      .eq('id', resolvedConversationId)
+      .maybeSingle()
+    if (error) throw error
+    if (!data) throw new HttpError('Conversation not found', 404)
+    conversation = data
+  } else if (resolvedLeadId) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status')
+      .eq('lead_id', resolvedLeadId)
+      .neq('status', 'deleted')
+      .order('last_message_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    conversation = data ?? null
+  } else if (resolvedChatId) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status')
+      .eq('gpt_maker_chat_id', resolvedChatId)
+      .neq('status', 'deleted')
+      .maybeSingle()
+    if (error) throw error
+    conversation = data ?? null
+  }
+
+  if (conversation) {
+    if (conversation.status === 'deleted') {
+      throw new HttpError('Conversation not found', 404)
+    }
+    if (resolvedLeadId && resolvedLeadId !== conversation.lead_id) {
+      throw new HttpError('Conversation does not match lead', 400)
+    }
+    if (
+      resolvedChatId &&
+      conversation.gpt_maker_chat_id &&
+      resolvedChatId !== conversation.gpt_maker_chat_id
+    ) {
+      throw new HttpError('Conversation does not match chat', 400)
+    }
+    resolvedConversationId = conversation.id
+    resolvedLeadId = conversation.lead_id
+    resolvedChatId = conversation.gpt_maker_chat_id || null
+    resolvedSoloInstanceId = conversation.solo_instance_id || null
+  } else if (resolvedLeadId) {
+    resolvedChatId = null
+  }
+
+  if (!resolvedLeadId) {
+    throw new HttpError('lead_id or conversation_id is required', 400)
+  }
+
+  const { data: lead, error: leadError } = await supabase
+    .from('leads')
+    .select('id, phone, equipe_id')
+    .eq('id', resolvedLeadId)
+    .maybeSingle()
+  if (leadError) throw leadError
+  if (!lead) throw new HttpError('Lead not found', 404)
+  if (lead.equipe_id !== caller.equipe_id) {
+    throw new HttpError('Forbidden', 403)
+  }
+
+  return {
+    resolvedConversationId,
+    resolvedLeadId,
+    resolvedChatId,
+    resolvedSoloInstanceId,
+    leadPhone: lead.phone as string | null,
+    equipeId: lead.equipe_id as string,
+  }
+}
+
+function normalizePhone(phone: string | null): string | null {
+  const digits = phone?.replace(/\D/g, '') || ''
+  return digits.length >= 8 ? digits : null
+}
+
+async function getPinnedInstance(
+  supabase: SupabaseClient,
+  equipeId: string,
+  instanceId: string,
+): Promise<{ id: string; instance_name: string; status: string } | null> {
+  const { data, error } = await supabase
+    .from('wpp_instances')
+    .select('id, instance_name, status')
+    .eq('id', instanceId)
+    .eq('equipe_id', equipeId)
+    .maybeSingle()
+  if (error) throw error
+  return data ?? null
+}
+
+async function getConnectedFallbackInstance(
+  supabase: SupabaseClient,
+  equipeId: string,
+): Promise<{ id: string; instance_name: string } | null> {
+  const { data, error } = await supabase
+    .from('wpp_instances')
+    .select('id, instance_name')
+    .eq('equipe_id', equipeId)
+    .eq('status', 'connected')
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data ?? null
+}
+
+function markUndelivered(msg: DeliveryMessage, reason: string) {
+  return { ...msg, delivered: false, reason }
+}
+
+async function updateMessageProvider(
+  supabase: SupabaseClient,
+  msg: DeliveryMessage,
+  patch: Record<string, unknown>,
+) {
+  await supabase.from('messages').update(patch).eq('id', msg.id)
+  Object.assign(msg, patch)
+}
+
 serve(async (req) => {
-  // Tratamento de CORS
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
+    bearerFrom(req)
+    const caller = await getCallerProfile(req)
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { autoRefreshToken: false, persistSession: false } },
     )
 
-    // Recebe dados do Frontend
-    const { content, chat_id, lead_id, conversation_id, action, media_url, media_type, sender_id } = await req.json()
+    const body = await req.json()
+    const { content, action, media_url, media_type } = body
     const token = Deno.env.get('GPT_MAKER_TOKEN')
 
-    // CENÁRIO 1: Botão Manual de Parar/Retomar Robô (Caso queira usar)
-    if (action === 'take_control' || action === 'stop_control') {
-      const endpoint = action === 'take_control' ? 'start-human' : 'stop-human'
-      const url = `https://api.gptmaker.ai/v2/chat/${chat_id}/${endpoint}`
+    const context = await loadAuthorizedContext(supabase, caller, body)
+    const {
+      resolvedConversationId,
+      resolvedLeadId,
+      resolvedChatId,
+      resolvedSoloInstanceId,
+      leadPhone,
+      equipeId,
+    } = context
 
-      await fetch(url, {
+    if (action === 'take_control' || action === 'stop_control') {
+      if (!resolvedChatId) throw new HttpError('chat_id is required', 400)
+      const endpoint = action === 'take_control' ? 'start-human' : 'stop-human'
+      const response = await fetch(`https://api.gptmaker.ai/v2/chat/${resolvedChatId}/${endpoint}`, {
         method: 'PUT',
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       })
 
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return jsonResponse({ success: response.ok })
     }
 
-    // Epic 1: resolve conversation context. Prefer explicit conversation_id;
-    // fall back to most-recent active conversation for the lead.
-    let resolvedConversationId: string | null = conversation_id || null
-    let resolvedLeadId: string | null = lead_id || null
-    let resolvedChatId: string | null = chat_id || null
-    let resolvedSoloInstanceId: string | null = null
-
-    if (resolvedConversationId && (!resolvedLeadId || !resolvedChatId)) {
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('id, lead_id, gpt_maker_chat_id, solo_instance_id')
-        .eq('id', resolvedConversationId)
-        .maybeSingle()
-      if (conv) {
-        resolvedLeadId = resolvedLeadId || conv.lead_id
-        resolvedChatId = resolvedChatId || conv.gpt_maker_chat_id
-        resolvedSoloInstanceId = resolvedSoloInstanceId || conv.solo_instance_id
-      }
-    } else if (!resolvedConversationId && resolvedLeadId) {
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('id, gpt_maker_chat_id, solo_instance_id')
-        .eq('lead_id', resolvedLeadId)
-        .neq('status', 'deleted')
-        .order('last_message_at', { ascending: false, nullsFirst: false })
-        .limit(1)
-        .maybeSingle()
-      if (conv) {
-        resolvedConversationId = conv.id
-        resolvedChatId = resolvedChatId || conv.gpt_maker_chat_id
-        resolvedSoloInstanceId = resolvedSoloInstanceId || conv.solo_instance_id
-      }
-    }
-
-    // CENÁRIO 2: Envio de Mensagem (A Mágica do Auto-Handover)
-    // 1º Passo: Salvar no Banco IMEDIATAMENTE (Para a UI ficar rápida)
     const { data: msg, error: dbError } = await supabase
       .from('messages')
       .insert({
@@ -77,16 +247,15 @@ serve(async (req) => {
         conversation_id: resolvedConversationId,
         content,
         sender_type: 'agent',
-        sender_id: sender_id || null,
+        sender_id: caller.id,
         media_url: media_url || null,
-        media_type: media_type || null
+        media_type: media_type || null,
       })
       .select()
       .single()
 
     if (dbError) throw dbError
 
-    // Bump conversation last_message_at
     if (resolvedConversationId) {
       await supabase
         .from('conversations')
@@ -94,217 +263,166 @@ serve(async (req) => {
         .eq('id', resolvedConversationId)
     }
 
-    // ── Solo routing ──
-    // TODO(T12): Capture exact GPT Maker window-closed error signature
-    // For now: any non-2xx from GPT Maker triggers Solo fallback (conservative)
-    const GPT_MAKER_WINDOW_CLOSED_REGEX = null;
+    const soloPhone = normalizePhone(leadPhone)
 
-    // Load lead phone + equipe_id for solo routing
-    let leadPhone: string | null = null
-    let equipeId: string | null = null
-
-    if (resolvedLeadId) {
-      const { data: lead } = await supabase
-        .from('leads')
-        .select('phone, equipe_id')
-        .eq('id', resolvedLeadId)
-        .maybeSingle()
-      if (lead) {
-        leadPhone = lead.phone
-        equipeId = lead.equipe_id
+    if (resolvedSoloInstanceId) {
+      const pinnedInstance = await getPinnedInstance(supabase, equipeId, resolvedSoloInstanceId)
+      if (!pinnedInstance || pinnedInstance.status !== 'connected') {
+        console.log('[SendMsg] route: solo | delivered=false | reason=pinned_solo_unavailable')
+        return jsonResponse(markUndelivered(msg, 'pinned_solo_unavailable'))
       }
-    }
+      if (!soloPhone) {
+        console.log('[SendMsg] route: solo | delivered=false | reason=missing_phone')
+        return jsonResponse(markUndelivered(msg, 'missing_phone'))
+      }
 
-    // Find a connected Solo instance for this team
-    let connectedInstance: { id: string; instance_name: string } | null = null
-    if (equipeId) {
-      const { data: inst } = await supabase
-        .from('wpp_instances')
-        .select('id, instance_name')
-        .eq('equipe_id', equipeId)
-        .eq('status', 'connected')
-        .limit(1)
-        .maybeSingle()
-      connectedInstance = inst ?? null
-    }
-
-    // Normalize phone to digits-only for Solo API
-    const soloPhone = leadPhone ? leadPhone.replace(/\D/g, '') : null
-    const hasSoloInstanceId = !!resolvedSoloInstanceId
-    const hasGptChat = !!resolvedChatId
-    const hasConnected = !!connectedInstance
-    const hasPhone = !!soloPhone && soloPhone.length >= 8
-
-    // ── Rota A: solo-native ──
-    if (hasSoloInstanceId && hasConnected && hasPhone) {
       console.log('[SendMsg] route: solo')
       const soloResult = await sendViaSolo({
         supabase,
-        equipeId: equipeId!,
-        instanceName: connectedInstance!.instance_name,
-        phone: soloPhone!,
+        equipeId,
+        instanceName: pinnedInstance.instance_name,
+        phone: soloPhone,
         content,
         mediaUrl: media_url,
         mediaType: media_type,
       })
-      if (soloResult.ok) {
-        await supabase.from('messages').update({
-          provider: 'solo',
-          provider_message_id: soloResult.providerMessageId,
-        }).eq('id', msg.id)
-        msg.provider = 'solo'
-        msg.provider_message_id = soloResult.providerMessageId
-        return new Response(JSON.stringify(msg), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        })
+
+      if (!soloResult.ok) {
+        console.log('[SendMsg] route: solo | delivered=false | reason=solo_send_failed')
+        return jsonResponse(markUndelivered(msg, 'solo_send_failed'))
       }
-      // Rota A failed — fall through if GPT Maker available
-      console.log('[SendMsg] solo failed:', soloResult.error, '| fallback:', hasGptChat ? 'gptmaker' : 'none')
-      if (!hasGptChat) {
-        console.log('[SendMsg] route: all_routes_failed')
-        return new Response(JSON.stringify({ ...msg, delivered: false, reason: 'all_routes_failed' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        })
-      }
+
+      await updateMessageProvider(supabase, msg, {
+        provider: 'solo',
+        provider_message_id: soloResult.providerMessageId,
+      })
+      return jsonResponse({ ...msg, delivered: true })
     }
 
-    // ── Rota B: default GPT Maker (existing flow) ──
-    if (hasGptChat) {
+    const connectedInstance = await getConnectedFallbackInstance(supabase, equipeId)
+
+    if (resolvedChatId) {
       console.log('[SendMsg] route: gptmaker')
 
-      // 2º Passo: AUTOMATICAMENTE Pausar o Robô (Start Human Mode)
       try {
         await fetch(`https://api.gptmaker.ai/v2/chat/${resolvedChatId}/start-human`, {
           method: 'PUT',
-          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+          headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         })
-        console.log('Robô pausado automaticamente para o chat:', resolvedChatId)
       } catch (err) {
-        console.error('Falha ao pausar robô (mas vamos enviar a mensagem mesmo assim):', err)
+        console.error('[SendMsg] failed to start human mode:', err)
       }
 
-      // 3º Passo: Enviar a mensagem para o WhatsApp do Cliente
-      const body: Record<string, any> = {}
-      if (content) body.message = content
+      const gptBody: Record<string, any> = {}
+      if (content) gptBody.message = content
 
       if (media_url) {
-        // Extrai o nome do arquivo ignorando a hash de timestamp que colocamos antes do "_"
-        const rawFileName = media_url.split('/').pop()?.split('?')[0] || 'documento';
-        const cleanName = decodeURIComponent(rawFileName.includes('_') ? rawFileName.split('_').slice(1).join('_') : rawFileName);
-        const lowerUrl = media_url.toLowerCase();
+        const rawFileName = media_url.split('/').pop()?.split('?')[0] || 'documento'
+        const cleanName = decodeURIComponent(rawFileName.includes('_') ? rawFileName.split('_').slice(1).join('_') : rawFileName)
 
         if (media_type === 'image') {
-          body.image = media_url
-          body.fileName = cleanName
+          gptBody.image = media_url
+          gptBody.fileName = cleanName
         } else if (media_type === 'audio') {
-          // Sempre enviar como campo 'audio' com a URL pública do Supabase Storage.
-          // O GPT Maker recebe a URL, faz download e repassa ao WhatsApp.
-          // O campo correto conforme docs da API: { audio: "<URL>" }
-          // Não usar 'document' pois o WhatsApp não aceita WebM como documento.
-          body.audio = media_url
-          // Nunca enviar 'message' junto com áudio pois a API do WPP recusa caption em voice note.
-          delete body.message
+          gptBody.audio = media_url
+          delete gptBody.message
         } else if (media_type === 'video') {
-          body.video = media_url
-          body.fileName = cleanName
+          gptBody.video = media_url
+          gptBody.fileName = cleanName
         } else {
-          body.document = media_url
-          body.fileName = cleanName
+          gptBody.document = media_url
+          gptBody.fileName = cleanName
         }
       }
-
-      console.log('[SendMsg] Payload para GPT Maker:', JSON.stringify(body))
-      console.log('[SendMsg] chat_id:', chat_id, '| media_type:', media_type, '| media_url:', media_url)
 
       const gptResponse = await fetch(`https://api.gptmaker.ai/v2/chat/${resolvedChatId}/send-message`, {
         method: 'POST',
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(gptBody),
       })
 
       const gptRawText = await gptResponse.text()
-      console.log(`[SendMsg] GPT Maker status: ${gptResponse.status} | body: ${gptRawText}`)
+      console.log(`[SendMsg] GPT Maker status: ${gptResponse.status}`)
 
       if (!gptResponse.ok) {
-        console.error('[SendMsg] ERRO na entrega ao WhatsApp:', gptResponse.status, gptRawText)
-
-        // ── GPT Maker fallback → Solo ──
-        if (hasConnected && hasPhone) {
+        if (connectedInstance && soloPhone) {
           console.log('[SendMsg] route: fallback-solo')
           const soloResult = await sendViaSolo({
             supabase,
-            equipeId: equipeId!,
-            instanceName: connectedInstance!.instance_name,
-            phone: soloPhone!,
+            equipeId,
+            instanceName: connectedInstance.instance_name,
+            phone: soloPhone,
             content,
             mediaUrl: media_url,
             mediaType: media_type,
           })
+
           if (soloResult.ok) {
-            await supabase.from('messages').update({
+            await updateMessageProvider(supabase, msg, {
               provider: 'solo',
               provider_message_id: soloResult.providerMessageId,
-            }).eq('id', msg.id)
-            msg.provider = 'solo'
-            msg.provider_message_id = soloResult.providerMessageId
+            })
+            return jsonResponse({ ...msg, delivered: true })
           }
+
+          console.log('[SendMsg] route: fallback-solo | delivered=false | reason=fallback_solo_failed')
+          return jsonResponse(markUndelivered(msg, 'fallback_solo_failed'))
         }
-      } else {
-        // Captura o messageId do GPT Maker de forma resiliente
-        try {
-          const respData = JSON.parse(gptRawText)
-          if (respData && respData.messageId) {
-             await supabase.from('messages').update({ gpt_message_id: respData.messageId }).eq('id', msg.id)
-             msg.gpt_message_id = respData.messageId // atualizar pra UI
-          }
-        } catch (err) {
-          console.error('[SendMsg] Nao foi possivel extrair messageId do GPT Maker', err)
-        }
+
+        const reason = soloPhone ? 'gpt_failed_no_solo' : 'gpt_failed_missing_phone'
+        console.log(`[SendMsg] route: gptmaker | delivered=false | reason=${reason}`)
+        return jsonResponse(markUndelivered(msg, reason))
       }
-    } else if (hasConnected && hasPhone && hasGptChat === false) {
-      // ── Rota C: outbound-initiated (solo only, no GPT Maker) ──
+
+      try {
+        const respData = JSON.parse(gptRawText)
+        if (respData?.messageId) {
+          await updateMessageProvider(supabase, msg, { gpt_message_id: respData.messageId })
+        }
+      } catch {
+        console.warn('[SendMsg] GPT Maker response did not include parseable JSON')
+      }
+
+      return jsonResponse({ ...msg, delivered: true })
+    }
+
+    if (connectedInstance && soloPhone) {
       console.log('[SendMsg] route: solo (outbound)')
       const soloResult = await sendViaSolo({
         supabase,
-        equipeId: equipeId!,
-        instanceName: connectedInstance!.instance_name,
-        phone: soloPhone!,
+        equipeId,
+        instanceName: connectedInstance.instance_name,
+        phone: soloPhone,
         content,
         mediaUrl: media_url,
         mediaType: media_type,
       })
-      if (soloResult.ok) {
-        // Set solo_instance_id on conversation so future messages use Rota A
-        if (resolvedConversationId) {
-          await supabase.from('conversations').update({
-            solo_instance_id: connectedInstance!.id,
-          }).eq('id', resolvedConversationId)
-        }
-        await supabase.from('messages').update({
-          provider: 'solo',
-          provider_message_id: soloResult.providerMessageId,
-        }).eq('id', msg.id)
-        msg.provider = 'solo'
-        msg.provider_message_id = soloResult.providerMessageId
-      } else {
-        console.log('[SendMsg] solo (outbound) failed:', soloResult.error)
+
+      if (!soloResult.ok) {
+        console.log('[SendMsg] route: solo (outbound) | delivered=false | reason=outbound_solo_failed')
+        return jsonResponse(markUndelivered(msg, 'outbound_solo_failed'))
       }
-    } else {
-      // ── No route available ──
-      console.log('[SendMsg] route: no_route')
+
+      if (resolvedConversationId) {
+        await supabase.from('conversations').update({
+          solo_instance_id: connectedInstance.id,
+        }).eq('id', resolvedConversationId)
+      }
+
+      await updateMessageProvider(supabase, msg, {
+        provider: 'solo',
+        provider_message_id: soloResult.providerMessageId,
+      })
+      return jsonResponse({ ...msg, delivered: true })
     }
 
-    return new Response(JSON.stringify(msg), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
-
+    console.log('[SendMsg] route: no_route | delivered=false | reason=no_delivery_route')
+    return jsonResponse(markUndelivered(msg, 'no_delivery_route'))
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    })
+    const status = error instanceof HttpError ? error.status : 400
+    return jsonResponse(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      status,
+    )
   }
 })

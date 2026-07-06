@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MessageSquare, Phone, Instagram, Send, Globe, Store,
   Loader2, QrCode, CheckCircle2, AlertCircle, RefreshCw,
@@ -88,6 +88,7 @@ export function CreateChannelDialog({ open, onOpenChange, onSuccess }: CreateCha
   const [qrConnected, setQrConnected] = useState(false);
   const [channelId, setChannelId] = useState<string | null>(null);
   const [refreshingQr, setRefreshingQr] = useState(false);
+  const qrConnectedNotifiedRef = useRef(false);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -99,6 +100,7 @@ export function CreateChannelDialog({ open, onOpenChange, onSuccess }: CreateCha
       setQrConnected(false);
       setChannelId(null);
       setRefreshingQr(false);
+      qrConnectedNotifiedRef.current = false;
     }
   }, [open]);
 
@@ -149,7 +151,7 @@ export function CreateChannelDialog({ open, onOpenChange, onSuccess }: CreateCha
     }
   };
 
-  const fetchQr = async (id: string) => {
+  const fetchQr = useCallback(async (id: string, silent = false) => {
     try {
       const { data, error } = await supabase.functions.invoke("manage-agent-channels", {
         body: { action: "qr", channel_id: id },
@@ -158,17 +160,42 @@ export function CreateChannelDialog({ open, onOpenChange, onSuccess }: CreateCha
       if (error) throw new Error(error.message);
       if (data?.message) throw new Error(data.message);
 
-      setQrValue(data?.qr_value || null);
-      setQrConnected(data?.connected || false);
+      const connected = data?.connected === true;
+      setQrConnected(connected);
+      if (data?.qr_value) {
+        setQrValue(data.qr_value);
+      } else if (connected) {
+        setQrValue(null);
+      }
+      if (connected && !qrConnectedNotifiedRef.current) {
+        qrConnectedNotifiedRef.current = true;
+        toast({
+          title: "Sucesso",
+          description: "Canal conectado!",
+        });
+        onSuccess();
+      }
     } catch (err: any) {
       console.error("fetch qr:", err);
-      toast({
-        title: "Erro",
-        description: err.message || "Erro ao buscar QR.",
-        variant: "destructive",
-      });
+      if (!silent) {
+        toast({
+          title: "Erro",
+          description: err.message || "Erro ao buscar QR.",
+          variant: "destructive",
+        });
+      }
     }
-  };
+  }, [onSuccess, toast]);
+
+  useEffect(() => {
+    if (!open || step !== "qr" || !channelId || qrConnected) return;
+
+    const interval = window.setInterval(() => {
+      void fetchQr(channelId, true);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [channelId, fetchQr, open, qrConnected, step]);
 
   const handleRefreshQr = async () => {
     if (!channelId) return;
@@ -178,12 +205,14 @@ export function CreateChannelDialog({ open, onOpenChange, onSuccess }: CreateCha
   };
 
   const handleQrSuccess = () => {
-    toast({
-      title: "Sucesso",
-      description: "Canal conectado!",
-    });
+    if (!qrConnectedNotifiedRef.current) {
+      toast({
+        title: "Sucesso",
+        description: "Canal conectado!",
+      });
+      onSuccess();
+    }
     onOpenChange(false);
-    onSuccess();
   };
 
   const selectedTypeConfig = CHANNEL_TYPES.find(t => t.value === type);
@@ -301,13 +330,17 @@ export function CreateChannelDialog({ open, onOpenChange, onSuccess }: CreateCha
               </div>
 
               {/* QR Display */}
-              {qrValue ? (
+              {qrConnected ? (
+                <div className="flex flex-col items-center justify-center gap-2 p-8 bg-muted/30 rounded-lg border border-border">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+                  <p className="text-sm font-medium text-foreground">Canal conectado</p>
+                </div>
+              ) : qrValue ? (
                 <div className="flex justify-center p-4 bg-muted/30 rounded-lg border border-border">
                   <QRCode
                     value={qrValue}
                     size={200}
                     level="H"
-                    includeMargin={true}
                   />
                 </div>
               ) : (

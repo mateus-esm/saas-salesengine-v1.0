@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
 
 const Chat = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isAdmin } = useRole();
   const currentUserId = user?.id;
   const { teamMembers } = useTeamMembers();
@@ -54,27 +54,43 @@ const Chat = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
-  // T10 — Check for connected Solo API instance
+  const refetchSoloInstanceState = useCallback(async () => {
+    if (!profile?.equipe_id) {
+      setHasSoloInstance(false);
+      return;
+    }
+
+    try {
+      const { data } = await sb
+        .from('wpp_instances')
+        .select('id,status')
+        .eq('equipe_id', profile.equipe_id)
+        .eq('status', 'connected')
+        .limit(1);
+      setHasSoloInstance((data?.length ?? 0) > 0);
+    } catch (err) {
+      console.error("Erro ao verificar Solo API:", err);
+    }
+  }, [profile?.equipe_id]);
+
+  // T10 — Keep Solo API smart-window state fresh while Chat is open.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await sb
-          .from('wpp_instances')
-          .select('id,status')
-          .eq('status', 'connected')
-          .limit(1);
-        if (!cancelled) {
-          setHasSoloInstance((data?.length ?? 0) > 0);
-        }
-      } catch (err) {
-        console.error("Erro ao verificar Solo API:", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
+    void refetchSoloInstanceState();
+
+    const interval = window.setInterval(() => {
+      void refetchSoloInstanceState();
+    }, 60000);
+
+    const onFocus = () => {
+      void refetchSoloInstanceState();
     };
-  }, []);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [refetchSoloInstanceState]);
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);

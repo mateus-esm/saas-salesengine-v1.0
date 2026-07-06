@@ -595,7 +595,7 @@ async function handleMessagesUpsert(
 
     let recentQuery = supabase
       .from('messages')
-      .select('id, content, created_at, media_type, sender_type, sender_id')
+      .select('id, content, created_at, media_type, sender_type, sender_id, provider')
       .eq('lead_id', lead.id)
       .gte('created_at', cutoff)
       .order('created_at', { ascending: false })
@@ -633,8 +633,22 @@ async function handleMessagesUpsert(
           existing.media_type === mediaType &&
           existingAgeMs <= 30_000
 
-        if (textMatch || outboundMediaEcho) {
-          console.log('[solo-wpp] Dedup hit:', existing.id, { textMatch, outboundMediaEcho })
+        const crossProviderInboundMedia =
+          senderType === 'customer' &&
+          hasMedia &&
+          !messageContent &&
+          existing.sender_type === 'customer' &&
+          existing.provider !== 'solo' &&
+          !!existing.media_type &&
+          existing.media_type === mediaType &&
+          existingAgeMs <= 30_000
+
+        if (textMatch || outboundMediaEcho || crossProviderInboundMedia) {
+          console.log('[solo-wpp] Dedup hit:', existing.id, {
+            textMatch,
+            outboundMediaEcho,
+            crossProviderInboundMedia,
+          })
           skipInsert = true
           break
         }

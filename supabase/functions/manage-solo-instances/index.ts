@@ -49,6 +49,26 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function extractPhone(data: Record<string, unknown>): string | null {
+  const nestedInstance = data.instance as Record<string, unknown> | undefined;
+  const candidates = [
+    data.phone,
+    data.wuid,
+    data.ownerJid,
+    nestedInstance?.phone,
+    nestedInstance?.wuid,
+    nestedInstance?.ownerJid,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value !== "string") continue;
+    const digits = value.split("@")[0]?.replace(/\D/g, "") || "";
+    if (digits.length >= 8) return digits;
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -220,10 +240,11 @@ serve(async (req) => {
           // Already connected — sync row
           const updateData: Record<string, unknown> = {
             status: "connected",
-            connected_at: new Date().toISOString(),
             billing_active: true,
+            connected_at: instance.connected_at || new Date().toISOString(),
           };
-          if (connectData.phone) updateData.phone = connectData.phone;
+          const phone = extractPhone(connectData);
+          if (phone) updateData.phone = phone;
 
           await supabase
             .from("wpp_instances")
@@ -288,12 +309,17 @@ serve(async (req) => {
 
         // Map whatsmiau states to our statuses
         if (statusData.state === "open") {
+          const updateData: Record<string, unknown> = {
+            status: "connected",
+            billing_active: true,
+            connected_at: instance.connected_at || new Date().toISOString(),
+          };
+          const phone = extractPhone(statusData);
+          if (phone) updateData.phone = phone;
+
           await supabase
             .from("wpp_instances")
-            .update({
-              status: "connected",
-              connected_at: instance.connected_at || new Date().toISOString(),
-            })
+            .update(updateData)
             .eq("id", instance.id);
         } else if (
           statusData.state === "close" && instance.status === "connected"

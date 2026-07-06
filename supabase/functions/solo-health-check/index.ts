@@ -15,6 +15,27 @@ function whatsmiauHeaders(): HeadersInit {
   };
 }
 
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get("Authorization") || "";
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function isAuthorizedHealthRequest(req: Request): boolean {
+  const bearerToken = getBearerToken(req);
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (serviceRoleKey && bearerToken === serviceRoleKey) return true;
+
+  const cronSecret =
+    Deno.env.get("SOLO_HEALTH_CRON_SECRET") || Deno.env.get("CRON_SECRET") || "";
+  if (!cronSecret) return false;
+
+  return (
+    req.headers.get("x-cron-secret") === cronSecret ||
+    bearerToken === cronSecret
+  );
+}
+
 async function whatsmiauFetch(
   path: string,
   options: RequestInit = {},
@@ -53,12 +74,42 @@ function mapState(state: string): string {
   }
 }
 
+function extractPhone(data: Record<string, unknown>): string | null {
+  const nestedInstance = data.instance as Record<string, unknown> | undefined;
+  const candidates = [
+    data.phone,
+    data.wuid,
+    data.ownerJid,
+    nestedInstance?.phone,
+    nestedInstance?.wuid,
+    nestedInstance?.ownerJid,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value !== "string") continue;
+    const digits = value.split("@")[0]?.replace(/\D/g, "") || "";
+    if (digits.length >= 8) return digits;
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    if (!isAuthorizedHealthRequest(req)) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -67,7 +118,7 @@ serve(async (req) => {
     // 1. Fetch all non-error instances
     const { data: instances, error: fetchError } = await supabase
       .from("wpp_instances")
-      .select("id, instance_name, status, equipe_id")
+      .select("id, instance_name, status, equipe_id, billing_active, connected_at, phone")
       .neq("status", "error");
 
     if (fetchError) throw fetchError;
@@ -85,6 +136,7 @@ serve(async (req) => {
     for (const inst of instances) {
       checked++;
       let newStatus: string;
+      let stateData: Record<string, unknown> | null = null;
 
       try {
         const res = await whatsmiauFetch(
@@ -98,6 +150,7 @@ serve(async (req) => {
           newStatus = "disconnected";
         } else {
           const data = await res.json();
+          stateData = data;
           newStatus = mapState(data.state);
         }
       } catch (err) {
@@ -107,11 +160,30 @@ serve(async (req) => {
         newStatus = "disconnected";
       }
 
-      // Only update if status actually changed
+      const now = new Date().toISOString();
+      const updateData: Record<string, unknown> = { last_health_at: now };
+      let shouldSyncBilling = false;
+
       if (newStatus !== inst.status) {
+        updateData.status = newStatus;
+        shouldSyncBilling = true;
+      }
+
+      if (newStatus === "connected") {
+        updateData.billing_active = true;
+        updateData.connected_at = inst.connected_at || now;
+        const phone = stateData ? extractPhone(stateData) : null;
+        if (phone && phone !== inst.phone) updateData.phone = phone;
+        if (!inst.billing_active) shouldSyncBilling = true;
+      }
+
+      const needsUpdate = Object.keys(updateData).length > 1 ||
+        !("last_health_at" in updateData);
+
+      if (needsUpdate) {
         const { error: updateError } = await supabase
           .from("wpp_instances")
-          .update({ status: newStatus, last_health_at: new Date().toISOString() })
+          .update(updateData)
           .eq("id", inst.id);
 
         if (updateError) {
@@ -119,7 +191,7 @@ serve(async (req) => {
             `[HealthCheck] update error for ${inst.instance_name}: ${updateError}`,
           );
         } else {
-          changedEquipes.add(inst.equipe_id);
+          if (shouldSyncBilling) changedEquipes.add(inst.equipe_id);
         }
       } else {
         // Still refresh last_health_at even if status didn't change

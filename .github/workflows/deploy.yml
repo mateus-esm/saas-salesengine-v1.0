@@ -28,6 +28,8 @@ jobs:
       - run: supabase functions deploy sync-chat-history
       - run: supabase functions deploy process-automations
       - run: supabase functions deploy manage-agent-training
+      - run: supabase functions deploy manage-agent-channels
+      - run: supabase functions deploy manage-agent-intentions
       - run: supabase functions deploy manage-solo-instances
       - run: supabase functions deploy solo-wpp-webhook --no-verify-jwt
       - run: supabase functions deploy sync-instance-billing
