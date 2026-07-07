@@ -211,7 +211,7 @@ Chamada: invocada pelo cron do T7 a cada ciclo para todas as equipes com instân
 #### T7 · Health cron (M)
 
 **Files:** Create `supabase/migrations/2026MMDDHHMMSS_sprint7_health_cron.sql` (pg_cron, padrão de `20260608000600_sprint6_ingest_cron.sql`) · Create `supabase/functions/solo-health-check/index.ts` · Modify `supabase/config.toml`.
-A cada 5 min: para cada `wpp_instances` com status ≠ `error`, chamar whatsmiau `GET /v1/instance/connect/{name}` (sem gerar QR quando conectado — usar shape do reference doc), sincronizar `status`/`last_health_at`, e ao final invocar `sync-instance-billing` para as equipes cujo status mudou. Instância sem resposta → `disconnected`. Aceite = AC7.
+A cada 5 min: para cada `wpp_instances` com status ≠ `error`, chamar whatsmiau `GET /v1/instance/connectionState/{id}` (rota sem efeito colateral; `connect` gera QR quando desconectado), sincronizar `status`/`last_health_at`, e ao final invocar `sync-instance-billing` para as equipes cujo status mudou. Instância sem resposta → `disconnected`. Aceite = AC7.
 
 ---
 
@@ -245,8 +245,56 @@ Tabela: tenant · instância · status · telefone · billing_active · connecte
 
 #### T12 · Hardening + E2E (M — PM + 1 engenheiro)
 
-**Files:** Create `Planning/Sprints/sprint_7_e2e_results.md`; correções pontuais em arquivos já tocados na sprint (com aprovação do PM por arquivo).
+**Files:** Atualizar este arquivo como fonte única de verdade; correções pontuais em arquivos já tocados na sprint (com aprovação do PM por arquivo).
 Roteiro E2E completo (executado com número real): criar instância → QR → conectar → receber inbound (AC2) → responder da inbox (rota solo) → testar fallback de janela num canal coexistence (AC3c) → verificar dedup com número duplo (AC4) → deletar instância → conferir Asaas (AC6) → matar a instância e cronometrar o health (AC7). Registrar resultados por AC no doc; bugs viram fixes imediatos ou issues rotuladas pós-sprint com decisão do PM. Fechamento: DoD checklist ticada no topo deste arquivo.
+
+### T12 Closeout Status (2026-07-06/07)
+
+Este arquivo permanece a fonte unica de verdade da Sprint 7. Nenhum arquivo separado de resultados E2E deve ser mantido para esta sprint.
+
+**Status geral:** code hardening gate passou; E2E live completo ainda depende de acoes humanas/de operador com telefone real, providers e deploy.
+
+**Correcoes de hardening concluidas:**
+- `send-chat-message` exige JWT do chamador, resolve a equipe do usuario e valida ownership de lead/conversa antes de qualquer escrita service-role ou envio a provider.
+- Rotas Solo corrigidas: conversas solo-native usam `solo_instance_id` fixado; fallback/outbound usam qualquer instancia conectada apenas quando nao existe instancia fixada.
+- Respostas de nao entrega retornam `{ delivered:false, reason }` para o inbox avisar em vez de indicar sucesso silencioso.
+- Logs sensiveis de payload/provider outbound foram removidos.
+- `solo-wpp-webhook` ganhou dedup cross-provider para coexistence sem colapsar albuns de midia Solo distintos.
+- `solo-health-check` rejeita chamadas publicas e aceita apenas service-role bearer ou cron secret antes de consultar providers/reconciliar billing.
+- `manage-solo-instances` e `solo-health-check` garantem `billing_active=true` e preservam/definem `connected_at` em todos os caminhos conectados.
+- `sync-instance-billing` permite `super_admin` sincronizar qualquer tenant; usuarios normais seguem limitados a propria equipe.
+- Frontend completou sete tipos de canal, polling/expiracao de QR, respostas connected-without-QR, leitura de preco mensal do backend, empty state, refresh de estado Solo no Chat, label AI Engine no Admin e refetch de billing.
+- AC9 preserva `fields`, `headers`, `params` e `variables` na UI de intencoes.
+- Deploy workflow inclui `manage-agent-channels` e `manage-agent-intentions`.
+- Cron de health ficou como SQL operator-only; nenhuma service-role key foi commitada.
+- ESLint 9 e postura TypeScript atual foram ajustados para o gate local.
+
+**Verificacao local T12:**
+
+| Gate | Resultado |
+| --- | --- |
+| `npm.cmd run typecheck` | Passou, exit 0 |
+| `npm.cmd run lint` | Passou, exit 0; somente warnings pre-existentes de hooks/fast-refresh/unused-disable |
+| `npm.cmd run build` | Passou, exit 0; somente warnings de chunk-size e browserslist |
+| `deno check` nas functions T1/T3/T4/T5/T6/T7 | Passou, exit 0 apos acesso ao cache Deno |
+
+**ACs ainda pendentes de E2E live:**
+- AC1: scan de QR Solo real, confirmando QR em <10s, scan, status conectado e telefone na lista.
+- AC2: mensagem inbound real no numero Solo, com linhas em leads/conversations/messages.
+- AC3: envio solo-native real, envio outbound sem `gpt_maker_chat_id` e fallback GPT Maker window-closed pela Solo API. Enquanto o body exato do erro nao for capturado, o codigo faz fallback em non-2xx do GPT Maker quando ha Solo conectada.
+- AC4: teste de coexistence com o mesmo numero em Solo + AI Engine e verificacao de ausencia de duplicatas.
+- AC6: verificacao Asaas real/sandbox de aumento e reducao do valor da assinatura apos connect/delete.
+- AC7: deploy, ativacao operator-only do `pg_cron` e validacao de health em ate 5 minutos.
+- AC10: smoke test GPT Maker-only depois do push/deploy.
+
+**Acoes humanas/de operador antes de fechar a sprint:**
+- Escanear um QR Solo real e capturar `connection.update` + `messages.upsert`.
+- Enviar `sendText` real e confirmar `key.id`/dedup no inbox.
+- Capturar o body exato do erro GPT Maker de janela fechada e refinar matcher se necessario.
+- Rodar coexistence duplicate test.
+- Validar alteracao de valor da assinatura no Asaas.
+- Ativar o `pg_cron` de health via SQL one-off depois do deploy.
+- Fazer push de `main` quando aprovado; isso dispara deploy de producao.
 
 ---
 
@@ -328,11 +376,11 @@ Engenheiro: ao concluir, tique sua task abaixo, adicione a linha no `Planning/Wo
 - [x] T2 · solo-wpp-webhook (L) ✅ merged 2026-07-04 (fix dedup verificado + PM fixups: guard de placeholder `[Midia recebida]` no textMatch — álbuns de fotos — e estado `qr-code`)
 - [x] T3 · manage-agent-channels CRUD (M) ✅ merged 2026-07-04 — ⚠️ interface real do QR: `{ qr_value, connected }` (string, não base64) — T9 consome isso
 - [x] T4 · Intenções verify+fix (M) ✅ merged 2026-07-04 (mapIntentionBody backward-compat + PUT path corrigido)
-- [x] T5 · send-chat-message routing (XL) ✅ merged 2026-07-04 (3 rotas + reverse fallback + `GPT_MAKER_WINDOW_CLOSED_REGEX=null` com TODO T12)
+- [x] T5 · send-chat-message routing (XL) ✅ merged 2026-07-04 (3 rotas + reverse fallback; `GPT_MAKER_WINDOW_CLOSED_REGEX=null`, fallback atual em non-2xx ate capturar o body live exato)
 - [x] T6 · sync-instance-billing (L) ✅ merged 2026-07-04 (reconciler idempotente; auth JWT-própria-equipe + service-role)
 - [x] T7 · Health cron (M) ✅ merged 2026-07-04 (connectionState side-effect-free; pg_cron comentado — PM ativa ao fim da Wave 4; deploy.yml lines de T6/T7 adicionadas pelo PM no merge)
 - [x] T8 · ChannelsPage Solo UI (M) ✅ merged 2026-07-05 (haiku/worktree; poll via `status` sem regenerar QR)
 - [x] T9 · Create-channel dialog (M) ✅ merged 2026-07-05 (7 tipos + QR + remove; PM corrigiu versão do react-qr-code e conflito de worktree stale)
 - [x] T10 · Inbox filtro + janela (M) ✅ merged 2026-07-05 (chips de canal; indicador Solo; toast delivered:false)
 - [x] T11 · Admin instances (S) ✅ merged 2026-07-05 (tab Instâncias Solo + botão sincronizar billing)
-- [ ] T12 · Hardening + E2E (M) — code hardening gate + `sprint_7_e2e_results.md` complete 2026-07-06; live QR/GPT Maker/Asaas/pg_cron/push items still require founder/operator action
+- [ ] T12 · Hardening + E2E (M) — code hardening gate passed and consolidated neste arquivo; live QR/inbound/outbound/coexistence/GPT Maker window error/Asaas/pg_cron/push evidence still requires founder/operator action
