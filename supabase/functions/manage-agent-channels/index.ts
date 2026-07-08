@@ -48,8 +48,33 @@ serve(async (req) => {
       'Content-Type': 'application/json',
     };
 
-    const workspaceId = equipe.workspace_id;
-    const agentId = equipe.gpt_maker_agent_id;
+    // IDs colados no Admin podem carregar whitespace/newline — sanitizar sempre
+    // (bug real em produção: workspace_id com '\n' quebrava a URL de listagem)
+    const workspaceId = equipe.workspace_id.trim();
+    const agentId = equipe.gpt_maker_agent_id.trim();
+
+    // Garante que o webhook onNewMessage do agente aponta para o nosso
+    // gpt-maker-webhook — sem isso, canal criado pela UI conecta mas nenhuma
+    // mensagem chega ao inbox (tenants novos nunca foram configurados à mão).
+    // Nunca falha a request principal; loga e segue.
+    async function ensureAgentWebhook(): Promise<void> {
+      try {
+        const ourWebhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gpt-maker-webhook`;
+        const getRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/webhooks`, { headers: engineHeaders });
+        if (getRes.ok) {
+          const current = await getRes.json().catch(() => ({}));
+          if (current?.onNewMessage === ourWebhookUrl) return; // já configurado
+        }
+        const putRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/webhooks`, {
+          method: 'PUT',
+          headers: engineHeaders,
+          body: JSON.stringify({ onNewMessage: ourWebhookUrl }),
+        });
+        console.log('[Channels] ensureAgentWebhook:', putRes.status);
+      } catch (err) {
+        console.error('[Channels] ensureAgentWebhook falhou (não-fatal):', err);
+      }
+    }
 
     // --- POST: dispatch by action ---
     if (req.method === 'POST') {
@@ -82,6 +107,10 @@ serve(async (req) => {
         }
 
         const channel = await createRes.json();
+
+        // Canal criado — garantir que as mensagens dele chegarão ao inbox.
+        await ensureAgentWebhook();
+
         return new Response(JSON.stringify({ id: channel.id, name: channel.name, type: channel.type }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

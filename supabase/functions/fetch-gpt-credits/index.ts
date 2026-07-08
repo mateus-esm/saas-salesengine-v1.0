@@ -58,7 +58,8 @@ serve(async (req) => {
     const month = parseInt(url.searchParams.get('month') || String(now.getMonth() + 1));
     const period = url.searchParams.get('period') || 'month'; // 'month' | 'year'
 
-    const agentId = equipe.gpt_maker_agent_id;
+    // IDs colados no Admin podem carregar whitespace/newline — sanitizar sempre
+    const agentId = equipe.gpt_maker_agent_id.trim();
     const planLimit = equipe.limite_creditos || 1000;
     const extraCredits = equipe.creditos_avulsos || 0;
     const totalCredits = planLimit + extraCredits;

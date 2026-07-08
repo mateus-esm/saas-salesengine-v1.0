@@ -112,7 +112,8 @@ serve(async (req) => {
     const gptToken = Deno.env.get('GPT_MAKER_TOKEN');
     if (!gptToken) throw new Error('GPT Maker token not configured');
 
-    const agentId = equipe.gpt_maker_agent_id;
+    // IDs colados no Admin podem carregar whitespace/newline — sanitizar sempre
+    const agentId = equipe.gpt_maker_agent_id.trim();
     const gptHeaders = {
       'Authorization': `Bearer ${gptToken}`,
       'Content-Type': 'application/json',
