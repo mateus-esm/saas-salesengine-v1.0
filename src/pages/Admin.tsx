@@ -304,8 +304,9 @@ const Admin = () => {
         const { error } = await supabase.from("equipes").insert({
           nome: editingEquipe.nome,
           niche: editingEquipe.niche || null,
-          gpt_maker_agent_id: editingEquipe.gpt_maker_agent_id || null,
-          workspace_id: editingEquipe.workspace_id || null,
+          // IDs vêm de copy-paste — trim evita '\n' invisível que quebra as URLs da API
+          gpt_maker_agent_id: editingEquipe.gpt_maker_agent_id?.trim() || null,
+          workspace_id: editingEquipe.workspace_id?.trim() || null,
           home_explanation: editingEquipe.home_explanation || null,
           crm_link: editingEquipe.crm_link || "",
           suporte_link: editingEquipe.suporte_link || "",
@@ -322,8 +323,9 @@ const Admin = () => {
           .update({
             nome: editingEquipe.nome,
             niche: editingEquipe.niche || null,
-            gpt_maker_agent_id: editingEquipe.gpt_maker_agent_id || null,
-            workspace_id: editingEquipe.workspace_id || null,
+            // IDs vêm de copy-paste — trim evita '\n' invisível que quebra as URLs da API
+            gpt_maker_agent_id: editingEquipe.gpt_maker_agent_id?.trim() || null,
+            workspace_id: editingEquipe.workspace_id?.trim() || null,
             home_explanation: editingEquipe.home_explanation || null,
             crm_link: editingEquipe.crm_link || "",
             suporte_link: editingEquipe.suporte_link || "",
