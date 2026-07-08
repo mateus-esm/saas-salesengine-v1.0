@@ -365,6 +365,25 @@ Excelência = spec seguida à risca + evidência real nos testes (curl/logs/rows
 
 ---
 
+## 🔥 Hotfix pós-live-test (PM, 2026-07-07) — commit `7691a60`
+
+Founder testou em produção e reportou 3 falhas. Diagnóstico sistemático (evidência antes de fix):
+
+| Sintoma | Root cause | Fix |
+|---|---|---|
+| Canais GPT Maker não listam/conectam | **Dado corrompido**: `equipes.workspace_id` do tenant do founder ("Be My Guest") tinha `\n` no final (copy-paste no Admin) → URL da API quebrada. Código da sprint estava correto. | `.trim()` na leitura em 5 functions + `.trim()` no save do Admin.tsx. Limpeza do dado no DB: ação founder abaixo (opcional — trim já neutraliza). |
+| Canal criado conecta mas mensagens não chegam ao inbox | **Gap da sprint (T3/T9)**: ninguém configura o webhook `onNewMessage` do agente no GPT Maker — tenants novos nunca receberiam mensagens. | `ensureAgentWebhook()` no create-channel: GET webhooks → PUT `onNewMessage` = nosso `gpt-maker-webhook` se ausente. Não-fatal em erro. |
+| Solo API: QR escaneado mas send/receive não funciona | **Estado inexistente**: `wpp_instances` com 0 rows + nenhuma instância `se-*` na VPS + instâncias antigas sem webhook. A instância testada não existe mais no sistema (deletada ou o QR escaneado era o do canal GPT Maker do T9). Webhook deployado validado: 401 sem token, `instance_not_found` p/ instância desconhecida. | Nenhum bug de código encontrado. Reteste guiado: criar instância pela UI → verificar row `connected` → testar mensagens. |
+| Sync de créditos falha | Não explicado pelos itens acima (usa `gpt_maker_agent_id`, limpo). Suspeitos: `GPT_MAKER_TOKEN` rotacionado sem atualizar secret, ou agent id do tenant inválido. | Diagnóstico pendente: testar Usage num tenant que já funcionava. |
+
+Verificação: `deno check` 5 functions ✅ · `npm run build` ✅ · contratos T8→T1/T9→T3/T10→T5 auditados ✅ (todos consistentes).
+
+### 🔴 Ações do founder para fechar
+1. `! git push origin main` — deploya as functions corrigidas via CI. **Sem isso os fixes não chegam em produção.**
+2. (Higiene, opcional) `UPDATE equipes SET workspace_id = regexp_replace(workspace_id,'\s','','g'), gpt_maker_agent_id = regexp_replace(gpt_maker_agent_id,'\s','','g') WHERE workspace_id ~ '\s' OR gpt_maker_agent_id ~ '\s';` no SQL Editor.
+3. Ativar health cron (T7): rodar o `cron.schedule` comentado em `supabase/migrations/20260705000001_sprint7_health_cron.sql` no SQL Editor.
+4. Reteste na ordem: canais GPT Maker listam → criar canal WHATSAPP + QR + mensagem chega ao inbox → criar instância Solo + QR + row `connected` em `wpp_instances` → mensagem inbound → resposta pela inbox.
+
 ## 📊 Ledger
 
 Engenheiro: ao concluir, tique sua task abaixo, adicione a linha no `Planning/Workflow/billing.md` e poste o bloco de handoff (formato em `Planning/Workflow/agent_workflow.md` §6).
