@@ -22,7 +22,7 @@ Every task in the sprint doc is tagged **S / M / L / XL**. The tier decides whic
 
 ## 📄 THE SPRINT FILE (single source of truth)
 
-Each sprint has **one file** (e.g. `Planning/sprint_5.1_crm_v1_fixes_3.md`) with three zones:
+Each sprint has **one file** (e.g. `Planning/Sprints/sprint_7_studio_ai_v1.md`) with three zones:
 
 1. **🎯 Vision** — written by the **Human**. The EPICs, intent, and a **Definition of Done / Acceptance Criteria** checklist at the bottom. This is the contract.
 2. **🛠️ Implementation Plan** — written by the **PM** in a separate section of the same file. Breaks the vision into tasks/workloads, tags each task's **tier**, assigns an engineer, sets **file ownership**, and lays out the **wave map**.
@@ -65,7 +65,7 @@ Before signalling the PM, verify **all five gates** locally on your branch:
 - [ ] Builds clean (`npm run build` / `tsc` / `uv run pytest` — no new errors).
 - [ ] Only your assigned files changed (`git diff main...HEAD --stat`).
 - [ ] Task ticked `[x]` in the sprint file's implementation plan (committed to your branch).
-- [ ] **One billing row added** to `Planning/billing.md` (date · sprint · task · agent/model · tier) — committed to your branch.
+- [ ] **One billing row added** to `Planning/Workflow/billing.md` (date · sprint · task · agent/model · tier) — committed to your branch.
 - [ ] All changes committed; branch is ahead of `main` by at least 1 commit.
 
 Then post the following **structured handoff block** — nothing less will be accepted:
@@ -87,8 +87,8 @@ Commit:  4e613be Add tenant JWT security context
 Files:   python-agent/app/security.py (created)
          python-agent/app/deps.py (created)
          python-agent/tests/test_security.py (created)
-         Planning/sprint_6_solo-copilot.md ([x] A3)
-         Planning/billing.md (A3 row added)
+         Planning/Sprints/sprint_6_solo-copilot.md ([x] A3)
+         Planning/Workflow/billing.md (A3 row added)
 Tests:   uv run pytest tests/test_security.py → 12 passed, 0 failed
 Ledger:  [x] A3 ticked · billing row 2026-06-08 Sprint 6 A3 M R$12
 ```
@@ -112,7 +112,7 @@ The PM **never checks `main` to verify engineer work** — all work lives on the
    ```
 4. **Verify the three acceptance gates:**
    - ✅ **Files** — only the task's owned files changed; implementation matches the contract in the sprint doc.
-   - ✅ **Billing** — row present in `Planning/billing.md` with the correct tier and agent.
+   - ✅ **Billing** — row present in `Planning/Workflow/billing.md` with the correct tier and agent.
    - ✅ **DoD** — the work satisfies the matching acceptance criteria in the sprint's Definition of Done.
 5. **Merge to `main`** — resolve any ledger/billing conflicts by keeping all rows (each branch adds its own row; the merge result must contain all of them).
 6. **Announce wave completion** to all agents using this format:
