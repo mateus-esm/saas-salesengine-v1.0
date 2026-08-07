@@ -253,6 +253,9 @@ if (import.meta.main) {
         Object.entries(rawHeaders).map(([key, value]) => [key, String(value)]),
       );
       const now = new Date().toISOString();
+      const triggerEvent = body.trigger_event === 'contact_created'
+        ? 'contact_created'
+        : 'lead_created';
       const testLead = {
         id: '00000000-0000-0000-0000-000000000000',
         equipe_id: profile.equipe_id,
@@ -264,11 +267,29 @@ if (import.meta.main) {
         custom_fields: { notification: 'Teste enviado pelo CRM' },
         created_at: now,
       };
+      const testOpportunity = {
+        id: '10000000-0000-0000-0000-000000000000',
+        equipe_id: profile.equipe_id,
+        lead_id: testLead.id,
+        pipeline_id: '20000000-0000-0000-0000-000000000000',
+        stage_id: '30000000-0000-0000-0000-000000000000',
+        value: 5000,
+        currency: 'BRL',
+        status: 'open',
+        created_at: now,
+      };
       const template = body.payload_template as JsonValue;
       const payload = renderPayloadTemplate(template, {
-        event: 'lead_created',
+        event: triggerEvent,
         created_at: now,
         lead: testLead,
+        opportunity: triggerEvent === 'lead_created' ? testOpportunity : null,
+        pipeline: triggerEvent === 'lead_created'
+          ? { id: testOpportunity.pipeline_id, name: 'Pipeline de teste' }
+          : null,
+        stage: triggerEvent === 'lead_created'
+          ? { id: testOpportunity.stage_id, name: 'Novo lead' }
+          : null,
       });
 
       let responseStatus: number | null = null;

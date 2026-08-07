@@ -17,6 +17,12 @@ export const useWebhookLogs = (options: UseWebhookLogsOptions = {}) => {
     queryKey: ["webhook-logs", equipeId, direction, limit],
     queryFn: async () => {
       if (!equipeId) return [];
+
+      // pg_net is asynchronous. Reconcile queued request IDs with the real
+      // destination response before loading the visible delivery history.
+      await supabase.rpc("refresh_webhook_delivery_logs", {
+        p_equipe_id: equipeId,
+      });
       
       let query = supabase
         .from("webhook_logs")
@@ -35,6 +41,7 @@ export const useWebhookLogs = (options: UseWebhookLogsOptions = {}) => {
       return (data || []) as WebhookLog[];
     },
     enabled: !!equipeId,
+    refetchInterval: 10000,
   });
 
   return {
