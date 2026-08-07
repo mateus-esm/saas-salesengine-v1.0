@@ -2527,6 +2527,7 @@ export type Database = {
           id: string
           inbound_function: string | null
           name: string
+          payload_template: Json
           pipeline_id: string | null
           trigger_event: string
           url: string
@@ -2540,6 +2541,7 @@ export type Database = {
           id?: string
           inbound_function?: string | null
           name: string
+          payload_template?: Json
           pipeline_id?: string | null
           trigger_event: string
           url: string
@@ -2553,6 +2555,7 @@ export type Database = {
           id?: string
           inbound_function?: string | null
           name?: string
+          payload_template?: Json
           pipeline_id?: string | null
           trigger_event?: string
           url?: string

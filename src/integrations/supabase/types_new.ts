@@ -722,6 +722,7 @@ export type Database = {
           headers: Json | null
           id: string
           name: string
+          payload_template: Json
           trigger_event: string
           url: string
         }
@@ -732,6 +733,7 @@ export type Database = {
           headers?: Json | null
           id?: string
           name: string
+          payload_template?: Json
           trigger_event: string
           url: string
         }
@@ -742,6 +744,7 @@ export type Database = {
           headers?: Json | null
           id?: string
           name?: string
+          payload_template?: Json
           trigger_event?: string
           url?: string
         }

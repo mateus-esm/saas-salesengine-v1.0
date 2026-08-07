@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
 
 const corsHeaders = {
@@ -88,6 +88,43 @@ export function parseNumericValue(raw: unknown): number | undefined {
   const val = Number(cleaned);
   return isNaN(val) ? undefined : val;
 }
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+function valueAtPath(context: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, key) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return (value as Record<string, unknown>)[key];
+  }, context);
+}
+
+/** Render the same {{dot.path}} syntax used by the database trigger. */
+export function renderPayloadTemplate(template: JsonValue, context: Record<string, unknown>): JsonValue {
+  if (Array.isArray(template)) {
+    return template.map((item) => renderPayloadTemplate(item, context));
+  }
+
+  if (template && typeof template === 'object') {
+    return Object.fromEntries(
+      Object.entries(template).map(([key, value]) => [key, renderPayloadTemplate(value, context)]),
+    );
+  }
+
+  if (typeof template !== 'string') return template;
+
+  const exactMatch = template.match(/^\{\{\s*([A-Za-z0-9_.]+)\s*\}\}$/);
+  if (exactMatch) {
+    const value = valueAtPath(context, exactMatch[1]);
+    return (value === undefined ? null : value) as JsonValue;
+  }
+
+  return template.replace(/\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g, (_match, path: string) => {
+    const value = valueAtPath(context, path);
+    if (value === undefined || value === null) return '';
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  });
+}
+
 function applyFieldMappings(
   payload: InboundPayload,
   mappings: InboundWebhookConfig['field_mappings'],
@@ -112,71 +149,6 @@ function applyFieldMappings(
   }
 
   return { leadData, oppNativeData, oppCustomData };
-}
-
-/** After lead creation, fire configured outbound webhooks and log results. */
-async function dispatchOutboundWebhooks(
-  supabase: SupabaseClient,
-  equipeId: string,
-  leadId: string,
-  opportunityId: string | null,
-  leadData: Record<string, unknown>,
-) {
-  const { data: configs, error } = await supabase
-    .from('webhook_configs')
-    .select('id, url, headers')
-    .eq('equipe_id', equipeId)
-    .eq('trigger_event', 'lead_created')
-    .eq('active', true);
-
-  if (error) {
-    console.error('[crm-webhook] Error fetching outbound webhook configs:', error);
-    return;
-  }
-
-  const payload = {
-    event: 'lead_created',
-    lead_id: leadId,
-    opportunity_id: opportunityId,
-    equipe_id: equipeId,
-    data: leadData,
-    created_at: new Date().toISOString(),
-  };
-
-  for (const config of configs || []) {
-    try {
-      const res = await fetch(config.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config.headers as Record<string, string> || {}),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      await supabase.from('webhook_logs').insert({
-        equipe_id: equipeId,
-        webhook_config_id: config.id,
-        direction: 'outbound',
-        event_type: 'lead_created',
-        payload,
-        response_status: res.status,
-        response_body: await res.text(),
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[crm-webhook] Error dispatching to webhook ${config.id}:`, message);
-
-      await supabase.from('webhook_logs').insert({
-        equipe_id: equipeId,
-        webhook_config_id: config.id,
-        direction: 'outbound',
-        event_type: 'lead_created',
-        payload,
-        error_message: message,
-      });
-    }
-  }
 }
 
 function splitLeadAndOpportunityFields(updates: Partial<LeadPayload>) {
@@ -215,6 +187,141 @@ if (import.meta.main) {
     const pathParts = url.pathname.split('/').filter(Boolean);
     const action = pathParts[pathParts.length - 1] || 'create';
     const body = await req.json();
+
+    // Test outbound webhooks from the Edge Function, not from the browser.
+    // This avoids CORS failures with n8n and keeps response logging in one place.
+    if (body?.operation === 'test_outbound') {
+      const authorization = req.headers.get('authorization');
+      const accessToken = authorization?.replace(/^Bearer\s+/i, '');
+
+      if (!accessToken) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Authentication required' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
+      if (userError || !userData.user) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid authentication token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('equipe_id')
+        .eq('id', userData.user.id)
+        .maybeSingle();
+
+      if (!profile?.equipe_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'User is not assigned to a team' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const { data: testTeam } = await supabase
+        .from('equipes')
+        .select('page_permissions')
+        .eq('id', profile.equipe_id)
+        .maybeSingle();
+
+      if (testTeam?.page_permissions?.webhooks === false) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Webhook feature is disabled for this team.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      let destination: URL;
+      try {
+        destination = new URL(String(body.url || ''));
+        if (!['http:', 'https:'].includes(destination.protocol)) throw new Error('Unsupported protocol');
+      } catch {
+        return new Response(
+          JSON.stringify({ success: false, error: 'A valid HTTP(S) destination URL is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const rawHeaders = body.headers && typeof body.headers === 'object' && !Array.isArray(body.headers)
+        ? body.headers as Record<string, unknown>
+        : {};
+      const outboundHeaders = Object.fromEntries(
+        Object.entries(rawHeaders).map(([key, value]) => [key, String(value)]),
+      );
+      const now = new Date().toISOString();
+      const testLead = {
+        id: '00000000-0000-0000-0000-000000000000',
+        equipe_id: profile.equipe_id,
+        name: 'Lead de teste',
+        email: 'lead.teste@example.com',
+        phone: '5511999999999',
+        source: 'webhook_test',
+        tags: ['teste'],
+        custom_fields: { notification: 'Teste enviado pelo CRM' },
+        created_at: now,
+      };
+      const template = body.payload_template as JsonValue;
+      const payload = renderPayloadTemplate(template, {
+        event: 'lead_created',
+        created_at: now,
+        lead: testLead,
+      });
+
+      let responseStatus: number | null = null;
+      let responseBody: string | null = null;
+      let errorMessage: string | null = null;
+
+      try {
+        const response = await fetch(destination, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...outboundHeaders },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(10000),
+        });
+        responseStatus = response.status;
+        responseBody = (await response.text()).slice(0, 10000);
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : 'Unknown delivery error';
+      }
+
+      let webhookConfigId: string | null = null;
+      if (body.webhook_config_id) {
+        const { data: ownedConfig } = await supabase
+          .from('webhook_configs')
+          .select('id')
+          .eq('id', body.webhook_config_id)
+          .eq('equipe_id', profile.equipe_id)
+          .maybeSingle();
+        webhookConfigId = ownedConfig?.id || null;
+      }
+
+      await supabase.from('webhook_logs').insert({
+        equipe_id: profile.equipe_id,
+        webhook_config_id: webhookConfigId,
+        direction: 'outbound',
+        event_type: 'test',
+        payload,
+        response_status: responseStatus,
+        response_body: responseBody,
+        error_message: errorMessage,
+      });
+
+      const succeeded = !errorMessage && responseStatus !== null && responseStatus >= 200 && responseStatus < 300;
+      return new Response(
+        JSON.stringify({
+          success: succeeded,
+          status: responseStatus,
+          response_body: responseBody,
+          error: errorMessage,
+          payload,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // --- Inbound route (configurable field mappings via webhook_configs) ---
     // Check for /inbound/{config_id} BEFORE secret-based auth.
@@ -386,15 +493,6 @@ if (import.meta.main) {
         descricao: isNewLead ? 'Lead criado via inbound webhook' : 'Lead atualizado via inbound webhook',
         metadata: { config_id: config.id, opportunity_id: opportunityId, is_new: isNewLead },
       });
-
-      // 7. Dispatch outbound webhooks (→ n8n)
-      await dispatchOutboundWebhooks(
-        supabase,
-        config.equipe_id,
-        leadId,
-        opportunityId,
-        { ...leadData, ...oppNativeData, custom_data: oppCustomData },
-      );
 
       return new Response(
         JSON.stringify({

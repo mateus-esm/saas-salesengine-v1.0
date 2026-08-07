@@ -21,12 +21,27 @@ export interface WebhookConfig {
   trigger_event: string;
   active: boolean;
   headers: Record<string, string>;
+  payload_template: Record<string, unknown>;
   created_at: string;
   // --- inbound fields ---
   inbound_function?: string | null;
   pipeline_id?: string | null;
   field_mappings?: FieldMapping[];
 }
+
+export const DEFAULT_LEAD_CREATED_PAYLOAD = {
+  event: "{{event}}",
+  created_at: "{{created_at}}",
+  lead: {
+    id: "{{lead.id}}",
+    name: "{{lead.name}}",
+    email: "{{lead.email}}",
+    phone: "{{lead.phone}}",
+    source: "{{lead.source}}",
+    tags: "{{lead.tags}}",
+    custom_fields: "{{lead.custom_fields}}",
+  },
+};
 
 export type WebhookTriggerEvent =
   | 'lead_created'
