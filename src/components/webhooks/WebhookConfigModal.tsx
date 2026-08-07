@@ -33,6 +33,7 @@ import {
   FieldMappingTargetType,
   LEAD_FIELD_OPTIONS,
   PIPELINE_FIELD_OPTIONS,
+  DEFAULT_LEAD_CREATED_PAYLOAD,
 } from "@/types/webhook";
 import { Loader2, TestTube, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +44,7 @@ interface FormValues {
   url: string;
   trigger_event: string;
   headers: string;
+  payloadTemplate: string;
   active: boolean;
   webhookType: "outbound" | "inbound";
   pipelineId: string;
@@ -77,6 +79,7 @@ export const WebhookConfigModal = ({
       url: "",
       trigger_event: "",
       headers: "{}",
+      payloadTemplate: JSON.stringify(DEFAULT_LEAD_CREATED_PAYLOAD, null, 2),
       active: true,
       webhookType: "outbound",
       pipelineId: "",
@@ -100,6 +103,11 @@ export const WebhookConfigModal = ({
         url: config.url,
         trigger_event: config.trigger_event,
         headers: JSON.stringify(config.headers, null, 2),
+        payloadTemplate: JSON.stringify(
+          config.payload_template || DEFAULT_LEAD_CREATED_PAYLOAD,
+          null,
+          2,
+        ),
         active: config.active,
         webhookType: config.inbound_function === "receive_lead" ? "inbound" : "outbound",
         pipelineId: config.pipeline_id || "",
@@ -111,6 +119,7 @@ export const WebhookConfigModal = ({
         url: "",
         trigger_event: "",
         headers: "{}",
+        payloadTemplate: JSON.stringify(DEFAULT_LEAD_CREATED_PAYLOAD, null, 2),
         active: true,
         webhookType: "outbound",
         pipelineId: "",
@@ -163,6 +172,20 @@ export const WebhookConfigModal = ({
       return;
     }
 
+    let payloadTemplate: Record<string, unknown> = DEFAULT_LEAD_CREATED_PAYLOAD;
+    if (!isInbound) {
+      try {
+        const parsed = JSON.parse(data.payloadTemplate);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("O payload deve ser um objeto JSON");
+        }
+        payloadTemplate = parsed;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Payload JSON inválido");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       const baseData = {
@@ -170,6 +193,7 @@ export const WebhookConfigModal = ({
         url: isInbound ? "" : data.url,
         trigger_event: isInbound ? "lead_created" : data.trigger_event,
         headers,
+        payload_template: payloadTemplate,
         active: data.active,
         inbound_function: isInbound ? "receive_lead" : null,
         pipeline_id: isInbound ? (data.pipelineId || null) : null,
@@ -207,27 +231,37 @@ export const WebhookConfigModal = ({
       return;
     }
 
+    let payloadTemplate: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(watch("payloadTemplate"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("O payload deve ser um objeto JSON");
+      }
+      payloadTemplate = parsed;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Payload JSON inválido");
+      return;
+    }
+
     setIsTesting(true);
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...headers,
+      const { data, error } = await supabase.functions.invoke("crm-webhook", {
+        body: {
+          operation: "test_outbound",
+          webhook_config_id: config?.id || null,
+          url,
+          headers,
+          payload_template: payloadTemplate,
         },
-        body: JSON.stringify({
-          event: "test",
-          timestamp: new Date().toISOString(),
-          data: {
-            message: "Webhook test from SoloAI CRM",
-          },
-        }),
       });
 
-      if (response.ok) {
-        toast.success("Webhook testado com sucesso!");
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`Webhook recebido com sucesso (${data.status})`);
       } else {
-        toast.error(`Erro: ${response.status} ${response.statusText}`);
+        const detail = data?.error || data?.response_body || `HTTP ${data?.status || "sem resposta"}`;
+        toast.error(`Falha no webhook: ${detail}`);
       }
     } catch (error: unknown) {
       toast.error(`Erro ao testar: ${(error as Error).message}`);
@@ -299,7 +333,7 @@ export const WebhookConfigModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Editar Webhook" : "Novo Webhook"}
@@ -467,6 +501,28 @@ export const WebhookConfigModal = ({
                 </Button>
               </div>
             </>
+          )}
+
+          {!isInbound && (
+            <div className="space-y-2">
+              <Label htmlFor="payloadTemplate">Corpo da requisição (JSON) *</Label>
+              <p className="text-sm text-muted-foreground">
+                Monte o JSON enviado ao n8n. Use variáveis como{" "}
+                <code>{"{{lead.name}}"}</code>, <code>{"{{lead.email}}"}</code>,{" "}
+                <code>{"{{lead.phone}}"}</code>, <code>{"{{lead.source}}"}</code>,{" "}
+                <code>{"{{lead.tags}}"}</code>, <code>{"{{lead.custom_fields}}"}</code>,{" "}
+                <code>{"{{event}}"}</code> e <code>{"{{created_at}}"}</code>.
+              </p>
+              <Textarea
+                id="payloadTemplate"
+                {...register("payloadTemplate")}
+                className="font-mono text-sm min-h-64"
+                spellCheck={false}
+              />
+              <p className="text-xs text-muted-foreground">
+                Uma variável usada como valor inteiro preserva o tipo original (objeto, lista, número ou nulo).
+              </p>
+            </div>
           )}
 
           <div className="space-y-2">

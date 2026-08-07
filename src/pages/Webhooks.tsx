@@ -110,6 +110,9 @@ const Webhooks = () => {
     if (log.response_status) {
       return <Badge variant="secondary">{log.response_status}</Badge>;
     }
+    if (log.response_body?.startsWith("Queued by pg_net")) {
+      return <Badge variant="outline">Enfileirado</Badge>;
+    }
     return <Badge variant="outline">Pendente</Badge>;
   };
 

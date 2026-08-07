@@ -2,13 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { WebhookConfig, FieldMapping } from "@/types/webhook";
+import { WebhookConfig, FieldMapping, DEFAULT_LEAD_CREATED_PAYLOAD } from "@/types/webhook";
 
 interface CreateWebhookData {
   name: string;
   url: string;
   trigger_event: string;
   headers?: Record<string, string>;
+  payload_template?: Record<string, unknown>;
   active?: boolean;
   inbound_function?: string | null;
   pipeline_id?: string | null;
@@ -21,6 +22,7 @@ interface UpdateWebhookData {
   url?: string;
   trigger_event?: string;
   headers?: Record<string, string>;
+  payload_template?: Record<string, unknown>;
   active?: boolean;
   inbound_function?: string | null;
   pipeline_id?: string | null;
@@ -62,6 +64,7 @@ export const useWebhookConfigs = () => {
           url: configData.url,
           trigger_event: configData.trigger_event,
           headers: configData.headers || {},
+          payload_template: configData.payload_template || DEFAULT_LEAD_CREATED_PAYLOAD,
           active: configData.active ?? true,
           inbound_function: configData.inbound_function ?? null,
           pipeline_id: configData.pipeline_id ?? null,
