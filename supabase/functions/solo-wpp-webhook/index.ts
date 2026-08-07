@@ -150,10 +150,16 @@ serve(async (req) => {
       })
     }
 
-    // ── 1. Validate x-webhook-token ──
-    const webhookToken = req.headers.get('x-webhook-token')
+    // ── 1. Validate webhook token (header OR ?token= query param) ──
+    // whatsmiau armazena webhook.headers mas o dispatcher (event_emitter.go
+    // doEmit) só envia Content-Type — os headers configurados nunca chegam.
+    // Por isso o token viaja na URL (?token=), configurada pelo
+    // manage-solo-instances. O header segue aceito caso o upstream corrija.
+    const headerToken = req.headers.get('x-webhook-token')
+    const queryToken = new URL(req.url).searchParams.get('token')
+    const providedToken = headerToken || queryToken
     const expectedToken = Deno.env.get('WHATSMIAU_WEBHOOK_TOKEN')
-    if (!webhookToken || !expectedToken || webhookToken !== expectedToken) {
+    if (!providedToken || !expectedToken || providedToken !== expectedToken) {
       console.log('[solo-wpp] Token invalido ou ausente (401)')
       return sendResponse({ error: 'Unauthorized' }, 401)
     }

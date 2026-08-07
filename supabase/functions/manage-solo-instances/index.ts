@@ -156,10 +156,14 @@ serve(async (req) => {
           throw insertError;
         }
 
-        // Call whatsmiau POST /v1/instance/create with inline webhook config
-        const webhookUrl =
-          Deno.env.get("SUPABASE_URL") + "/functions/v1/solo-wpp-webhook";
+        // Call whatsmiau POST /v1/instance/create with inline webhook config.
+        // Token vai na URL (?token=): o dispatcher do whatsmiau não envia os
+        // webhook.headers configurados (só Content-Type), então header-only
+        // resultaria em 401 permanente no solo-wpp-webhook.
         const webhookToken = Deno.env.get("WHATSMIAU_WEBHOOK_TOKEN");
+        const webhookUrl = Deno.env.get("SUPABASE_URL") +
+          "/functions/v1/solo-wpp-webhook?token=" +
+          encodeURIComponent(webhookToken || "");
 
         const createPayload = {
           ID: instanceName,

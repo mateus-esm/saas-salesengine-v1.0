@@ -58,6 +58,53 @@ async function whatsmiauFetch(
   }
 }
 
+/**
+ * Reconcile the instance's webhook config on whatsmiau.
+ *
+ * O dispatcher do whatsmiau ignora webhook.headers no envio, então o token
+ * precisa estar na URL (?token=). Instâncias criadas antes desse fix ficaram
+ * com a URL sem token (todos os eventos davam 401) — este reconciler corrige
+ * o drift a cada tick sem intervenção manual.
+ */
+async function ensureWebhookConfig(
+  instanceName: string,
+  expectedUrl: string,
+  webhookToken: string,
+): Promise<void> {
+  try {
+    const findRes = await whatsmiauFetch(`/v1/webhook/find/${instanceName}`);
+    if (findRes.ok) {
+      const found = await findRes.json();
+      if (found?.webhook?.url === expectedUrl && found?.webhook?.enabled) {
+        return; // config em dia
+      }
+    }
+
+    const setRes = await whatsmiauFetch(`/v1/webhook/set/${instanceName}`, {
+      method: "POST",
+      body: JSON.stringify({
+        webhook: {
+          enabled: true,
+          url: expectedUrl,
+          headers: { "x-webhook-token": webhookToken },
+          base64: false,
+          events: ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
+        },
+      }),
+    });
+
+    if (!setRes.ok) {
+      console.warn(
+        `[HealthCheck] webhook/set ${setRes.status} for ${instanceName}`,
+      );
+    } else {
+      console.log(`[HealthCheck] webhook config reconciled for ${instanceName}`);
+    }
+  } catch (err) {
+    console.warn(`[HealthCheck] webhook reconcile error for ${instanceName}: ${err}`);
+  }
+}
+
 /** Map whatsmiau connectionState to our internal status. */
 function mapState(state: string): string {
   switch (state) {
@@ -133,8 +180,15 @@ serve(async (req) => {
     const changedEquipes = new Set<string>();
     let checked = 0;
 
+    const webhookToken = Deno.env.get("WHATSMIAU_WEBHOOK_TOKEN") || "";
+    const expectedWebhookUrl = Deno.env.get("SUPABASE_URL") +
+      "/functions/v1/solo-wpp-webhook?token=" +
+      encodeURIComponent(webhookToken);
+
     for (const inst of instances) {
       checked++;
+
+      await ensureWebhookConfig(inst.instance_name, expectedWebhookUrl, webhookToken);
       let newStatus: string;
       let stateData: Record<string, unknown> | null = null;
 
