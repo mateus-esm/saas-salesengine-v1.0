@@ -2581,6 +2581,7 @@ export type Database = {
         Row: {
           created_at: string
           direction: string
+          dispatch_token: string | null
           equipe_id: string
           error_message: string | null
           event_type: string
@@ -2594,6 +2595,7 @@ export type Database = {
         Insert: {
           created_at?: string
           direction: string
+          dispatch_token?: string | null
           equipe_id: string
           error_message?: string | null
           event_type: string
@@ -2607,6 +2609,7 @@ export type Database = {
         Update: {
           created_at?: string
           direction?: string
+          dispatch_token?: string | null
           equipe_id?: string
           error_message?: string | null
           event_type?: string
