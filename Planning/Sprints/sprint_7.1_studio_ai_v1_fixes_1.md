@@ -72,12 +72,29 @@ Verificado: `{"checked":2,"changed":[]}`.
 | # | Ação | Por quê | Como |
 |---|---|---|---|
 | 1 | **Aplicar a migration `20260807020000`** | Restaura `creation_source='solo_api'`; sem ela os leads solo entram como `'webhook'` e ficam indistinguíveis dos leads do crm-webhook na análise de origem | `supabase db push` (o guardrail de segurança do agente bloqueia DDL em prod, por isso ficou pendente) |
-| 2 | **Atualizar o repo secret `SUPABASE_ACCESS_TOKEN`** | O deploy do CI falha com `unexpected list functions status 401` desde sempre; **todo deploy até agora foi manual via CLI local**. O token do `.env` local é válido — basta copiá-lo para *Settings → Secrets → Actions* | GitHub UI |
-| 3 | **Criar o edge secret `ASAAS_API_KEY`** | `sync-instance-billing` morre com `ASAAS_API_KEY not configured` → a cobrança de R$100/mês por instância conectada **nunca é lançada**. Provavelmente `asaas-subscribe` e `asaas-buy-credits` também estão inertes — vale checar o billing inteiro | Supabase Dashboard → Edge Functions → Secrets |
-| 4 | **Abrir/mergear o PR** `fix/solo-webhook-token-delivery` | As funções já estão deployadas em prod, mas o código só existe no branch | `gh pr create` |
+| 2 | **Criar o edge secret `ASAAS_API_KEY`** | `sync-instance-billing` morre com `ASAAS_API_KEY not configured` → a cobrança de R$100/mês por instância conectada **nunca é lançada**. Provavelmente `asaas-subscribe` e `asaas-buy-credits` também estão inertes — vale checar o billing inteiro | Supabase Dashboard → Edge Functions → Secrets |
+| 3 | **Mergear o PR** [#4](https://github.com/mateus-esm/saas-salesengine-v1.0/pull/4) `fix/solo-webhook-token-delivery` | As funções já estão deployadas em prod, mas o código só existe no branch | `gh pr merge` |
 
-> ⚠️ **Ordem importa:** a ação 2 antes da 4, senão o merge em `main` dispara um
-> deploy que falha de novo (inofensivo, mas ruidoso).
+### Decisão: deploy de edge functions é manual (2026-08-07)
+
+O workflow `.github/workflows/deploy.yml` foi **removido**. Ele falhava com
+`unexpected list functions status 401` desde sempre (repo secret
+`SUPABASE_ACCESS_TOKEN` inválido) e nunca chegou a deployar nada — na prática
+todo deploy do projeto sempre foi manual via CLI local. Em vez de renovar o
+secret, o founder decidiu assumir o modelo manual e eliminar o ruído de check
+vermelho em cada push.
+
+**Como deployar a partir de agora:**
+
+```bash
+supabase functions deploy <nome-da-funcao> [--no-verify-jwt] --project-ref egxzsivzqlqadoqpgfby
+```
+
+`--no-verify-jwt` para as funções públicas/webhook (ver `supabase/config.toml`,
+que continua sendo a fonte de verdade de quais funções dispensam JWT).
+
+O workflow `ci.yml` (testes: `backend-unit`, `frontend-build`, `backend-evals`)
+**continua ativo** — só o deploy saiu.
 
 ---
 
@@ -98,7 +115,7 @@ O pipeline está provado com payload sintético. Falta o teste com aparelho real
 - [ ] **GPT Maker — erro de janela fechada:** capturar status + body exatos para
       refinar o match da T5 (hoje o fallback dispara em qualquer non-2xx, o que
       é conservador demais).
-- [ ] **Validar o valor no Asaas** depois da ação 3 (line-item de R$100).
+- [ ] **Validar o valor no Asaas** depois da ação 2 (line-item de R$100).
 
 **Gap menor observado:** `wpp_instances.phone` está `null` nas duas instâncias.
 O `connectionState` não devolve `ownerJid`/`wuid`, só o evento
