@@ -108,7 +108,7 @@ const Webhooks = () => {
       return <Badge className="bg-green-600">Sucesso</Badge>;
     }
     if (log.response_status) {
-      return <Badge variant="secondary">{log.response_status}</Badge>;
+      return <Badge variant="destructive">HTTP {log.response_status}</Badge>;
     }
     if (log.response_body?.startsWith("Queued by pg_net")) {
       return <Badge variant="outline">Enfileirado</Badge>;
@@ -402,7 +402,9 @@ const Webhooks = () => {
                               </Badge>
                             )}
                           </TableCell>
-                          <TableCell>{log.event_type}</TableCell>
+                          <TableCell>
+                            {log.event_type === "test" ? "Teste manual" : getEventLabel(log.event_type)}
+                          </TableCell>
                           <TableCell>{getStatusBadge(log)}</TableCell>
                         </TableRow>
                       ))}

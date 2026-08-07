@@ -767,6 +767,7 @@ export type Database = {
           event_type: string
           id: string
           payload: Json
+          request_id: number | null
           response_body: string | null
           response_status: number | null
           webhook_config_id: string | null
@@ -779,6 +780,7 @@ export type Database = {
           event_type: string
           id?: string
           payload?: Json
+          request_id?: number | null
           response_body?: string | null
           response_status?: number | null
           webhook_config_id?: string | null
@@ -791,6 +793,7 @@ export type Database = {
           event_type?: string
           id?: string
           payload?: Json
+          request_id?: number | null
           response_body?: string | null
           response_status?: number | null
           webhook_config_id?: string | null
@@ -832,6 +835,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      refresh_webhook_delivery_logs: {
+        Args: { p_equipe_id: string }
+        Returns: number
       }
       increment_unread_count: { Args: { row_id: string }; Returns: undefined }
     }

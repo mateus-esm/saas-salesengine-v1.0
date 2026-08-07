@@ -251,6 +251,7 @@ export const WebhookConfigModal = ({
           webhook_config_id: config?.id || null,
           url,
           headers,
+          trigger_event: watch("trigger_event") || "lead_created",
           payload_template: payloadTemplate,
         },
       });
@@ -398,6 +399,10 @@ export const WebhookConfigModal = ({
                   {...register("url", { required: !isInbound })}
                   placeholder="https://..."
                 />
+                <p className="text-xs text-muted-foreground">
+                  No n8n, use a URL de produção com <code>/webhook/</code> e deixe o workflow ativo.
+                  A URL <code>/webhook-test/</code> só recebe enquanto o n8n está escutando o teste.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -511,7 +516,9 @@ export const WebhookConfigModal = ({
                 <code>{"{{lead.name}}"}</code>, <code>{"{{lead.email}}"}</code>,{" "}
                 <code>{"{{lead.phone}}"}</code>, <code>{"{{lead.source}}"}</code>,{" "}
                 <code>{"{{lead.tags}}"}</code>, <code>{"{{lead.custom_fields}}"}</code>,{" "}
-                <code>{"{{event}}"}</code> e <code>{"{{created_at}}"}</code>.
+                <code>{"{{opportunity.id}}"}</code>, <code>{"{{pipeline.name}}"}</code>,{" "}
+                <code>{"{{stage.name}}"}</code>, <code>{"{{event}}"}</code> e{" "}
+                <code>{"{{created_at}}"}</code>.
               </p>
               <Textarea
                 id="payloadTemplate"

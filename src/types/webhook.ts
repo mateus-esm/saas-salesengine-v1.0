@@ -10,6 +10,7 @@ export interface WebhookLog {
   response_status: number | null;
   response_body: string | null;
   error_message: string | null;
+  request_id: number | null;
   created_at: string;
 }
 
@@ -41,23 +42,21 @@ export const DEFAULT_LEAD_CREATED_PAYLOAD = {
     tags: "{{lead.tags}}",
     custom_fields: "{{lead.custom_fields}}",
   },
+  opportunity: {
+    id: "{{opportunity.id}}",
+    pipeline_id: "{{opportunity.pipeline_id}}",
+    stage_id: "{{opportunity.stage_id}}",
+    value: "{{opportunity.value}}",
+  },
 };
 
 export type WebhookTriggerEvent =
-  | 'lead_created'
-  | 'lead_updated'
-  | 'stage_changed'
-  | 'meeting_scheduled'
-  | 'meeting_done'
-  | 'no_show';
+  | 'contact_created'
+  | 'lead_created';
 
 export const WEBHOOK_TRIGGER_EVENTS: { value: WebhookTriggerEvent; label: string }[] = [
-  { value: 'lead_created', label: 'Lead Criado' },
-  { value: 'lead_updated', label: 'Lead Atualizado' },
-  { value: 'stage_changed', label: 'Etapa Alterada' },
-  { value: 'meeting_scheduled', label: 'Reunião Agendada' },
-  { value: 'meeting_done', label: 'Reunião Realizada' },
-  { value: 'no_show', label: 'No Show' },
+  { value: 'contact_created', label: 'Novo contato (Base de Contatos)' },
+  { value: 'lead_created', label: 'Novo lead (adicionado ao Pipeline)' },
 ];
 
 // --- Inbound field mapping types ---
