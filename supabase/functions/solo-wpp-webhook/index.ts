@@ -150,10 +150,16 @@ serve(async (req) => {
       })
     }
 
-    // ── 1. Validate x-webhook-token ──
-    const webhookToken = req.headers.get('x-webhook-token')
+    // ── 1. Validate webhook token (header OR ?token= query param) ──
+    // whatsmiau armazena webhook.headers mas o dispatcher (event_emitter.go
+    // doEmit) só envia Content-Type — os headers configurados nunca chegam.
+    // Por isso o token viaja na URL (?token=), configurada pelo
+    // manage-solo-instances. O header segue aceito caso o upstream corrija.
+    const headerToken = req.headers.get('x-webhook-token')
+    const queryToken = new URL(req.url).searchParams.get('token')
+    const providedToken = headerToken || queryToken
     const expectedToken = Deno.env.get('WHATSMIAU_WEBHOOK_TOKEN')
-    if (!webhookToken || !expectedToken || webhookToken !== expectedToken) {
+    if (!providedToken || !expectedToken || providedToken !== expectedToken) {
       console.log('[solo-wpp] Token invalido ou ausente (401)')
       return sendResponse({ error: 'Unauthorized' }, 401)
     }
@@ -412,22 +418,38 @@ async function handleMessagesUpsert(
     console.log('[solo-wpp] Lead nao encontrado, criando novo...')
     const senderName = pushName || (phone ? `Lead ${phone}` : 'Novo Visitante')
 
-    const { data: newLead, error: createError } = await supabase
-      .from('leads')
-      .insert({
-        phone: phone || null,
-        phone_normalized: phoneNorm,
-        name: senderName,
-        equipe_id: equipeId,
-        lead_type: 'lead',
-        creation_source: 'solo_api',
-        source: 'WhatsApp',
-        origem: 'WhatsApp',
-        channel: 'whatsapp',
-        last_message_at: messageDate,
-      })
-      .select('id, phone')
-      .single()
+    const baseLead = {
+      phone: phone || null,
+      phone_normalized: phoneNorm,
+      name: senderName,
+      equipe_id: equipeId,
+      lead_type: 'lead',
+      source: 'WhatsApp',
+      origem: 'WhatsApp',
+      channel: 'whatsapp',
+      last_message_at: messageDate,
+    }
+
+    const insertLead = (creationSource: string) =>
+      supabase
+        .from('leads')
+        .insert({ ...baseLead, creation_source: creationSource })
+        .select('id, phone')
+        .single()
+
+    let { data: newLead, error: createError } = await insertLead('solo_api')
+
+    // 23514: bancos sem a migration 20260807020000 mantêm o CHECK antigo
+    // (manual|ai_agent|webhook|import). Degradar para 'webhook' preserva a
+    // mensagem — a proveniência real vive em conversations.solo_instance_id
+    // e messages.provider='solo'.
+    if (createError && (createError as { code?: string }).code === '23514') {
+      console.warn(
+        '[solo-wpp] CHECK leads_creation_source_check rejeitou solo_api — ' +
+        'aplicar migration 20260807020000. Degradando para creation_source=webhook.'
+      )
+      ;({ data: newLead, error: createError } = await insertLead('webhook'))
+    }
 
     if (createError) {
       const pgCode = (createError as { code?: string }).code

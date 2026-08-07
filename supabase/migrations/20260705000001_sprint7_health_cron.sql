@@ -40,12 +40,17 @@
 --           url     := 'https://<project>.supabase.co/functions/v1/solo-health-check',
 --           headers := jsonb_build_object(
 --                        'Content-Type',  'application/json',
---                        'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+--                        'x-cron-secret', '<SOLO_HEALTH_CRON_SECRET>'
 --                      ),
 --           body    := '{}'::jsonb
 --         );
 --       $$
 --     );
+--
+--   AUTH (atualizado 2026-08-07): usar x-cron-secret com o valor do edge
+--   secret SOLO_HEALTH_CRON_SECRET — não embutir service-role key no
+--   cron.job. A key embutida quebra silenciosamente (401) quando as chaves
+--   do projeto são rotacionadas, como ocorreu com o job original.
 --
 --   Verify registration:
 --
