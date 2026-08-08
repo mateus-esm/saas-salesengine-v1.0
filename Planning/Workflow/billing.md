@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-08-08 | 7.2 | W0 T0 Live API spike + DOCUMENT round-trip | Claude engineer / deepseek-v4-flash | M | R$ 12 |
 | 2026-07-04 | 7 | W0 Spike API reference + migration + infra checklist (PM) | Claude / Fable 5 | L | R$ 20 |
 | 2026-07-04 | 7 | T3 manage-agent-channels CRUD (create/remove/qr) | Claude SDD / implementer | M | R$ 12 |
 | 2026-07-04 | 7 | T4 Intenções mapIntentionBody + IntentionWizard fix | Claude SDD / implementer | M | R$ 12 |
