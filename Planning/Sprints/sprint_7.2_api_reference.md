@@ -37,7 +37,7 @@
 ```json
 {
   "id": "3DF0B5F1…",
-  "avatar": "https://gpt-files.com/file/3DF0B5F1…/3F13648D505203270A95AEDC19671B3F.jpg",
+  "avatar": "https://gpt-files.com/file/3DF0B5F1…/3F13648D….jpg",
   "name": "Solon",
   "status": "ACTIVE",
   "communicationType": "NORMAL",
@@ -100,13 +100,13 @@ PUT accepts any subset of the settings keys; partial updates are OK (the provide
 ```json
 {
   "data": [
-    { "id": "3F5C52D22169509816822AC3025531C4", "name": "Teste", "type": "CLOUD_API", "connected": false,
+    { "id": "3F5C52D2…", "name": "Teste", "type": "CLOUD_API", "connected": false,
       "waitingMessageEnabled": null, "waitingMessageText": null, "createdAt": 1783443431525,
       "subscriptionAt": null, "subscriptionCancelAt": null, "trialExpiredAt": null },
-    { "id": "3E88D75021F6D0146D3FF2AF9A4FB162", "name": "Solon - Wpp Solo Energia", "type": "CLOUD_API", "connected": true, "…": "…" },
-    { "id": "3DF92B6F3982E656CF56CEE8C4E7B69C", "name": "Solo Energia", "type": "INSTAGRAM", "connected": true, "…": "…" },
-    { "id": "3DF17E104487D69BED4C7EF3B2532F51", "name": "calculadora-solo", "type": "WIDGET", "connected": true, "…": "…" },
-    { "id": "3DF0B7EA0A3956F326336AA4C19A70EA", "name": "Solon - MSM Business", "type": "CLOUD_API", "connected": false, "…": "…" }
+    { "id": "3E88D750…", "name": "Solon - Wpp Solo Energia", "type": "CLOUD_API", "connected": true, "…": "…" },
+    { "id": "3DF92B6F…", "name": "Solo Energia", "type": "INSTAGRAM", "connected": true, "…": "…" },
+    { "id": "3DF17E10…", "name": "calculadora-solo", "type": "WIDGET", "connected": true, "…": "…" },
+    { "id": "3DF0B7EA…", "name": "Solon - MSM Business", "type": "CLOUD_API", "connected": false, "…": "…" }
   ],
   "count": 5
 }
@@ -121,17 +121,17 @@ Same 5 channels, richer shape — adds `username`, `agentName`, `agentId`, `agen
 ```json
 {
   "data": [
-    { "name": "Teste", "id": "3F5C52D22169509816822AC3025531C4", "type": "WHATSAPP", "facebookPageId": null,
+    { "name": "Teste", "id": "3F5C52D2…", "type": "WHATSAPP", "facebookPageId": null,
       "tiktokUsername": null, "username": null, "connected": false,
       "agentId": "3DF0B5F1…", "departmentId": null,
-      "agentPicture": "https://gpt-files.com/file/3DF0B5F1…/3F13648D505203270A95AEDC19671B3F.jpg",
+      "agentPicture": "https://gpt-files.com/file/3DF0B5F1…/3F13648D….jpg",
       "departmentName": null, "agentName": "Solon" },
-    { "name": "Solon - Wpp Solo Energia", "id": "3E88D75021F6D0146D3FF2AF9A4FB162", "type": "WHATSAPP",
+    { "name": "Solon - Wpp Solo Energia", "id": "3E88D750…", "type": "WHATSAPP",
       "username": "+55 85 8181-3110", "connected": true, "…": "…" },
-    { "name": "Solo Energia", "id": "3DF92B6F3982E656CF56CEE8C4E7B69C", "type": "INSTAGRAM",
+    { "name": "Solo Energia", "id": "3DF92B6F…", "type": "INSTAGRAM",
       "username": "soloenergiabr", "connected": true, "…": "…" },
-    { "name": "calculadora-solo", "id": "3DF17E104487D69BED4C7EF3B2532F51", "type": "WIDGET", "connected": true, "…": "…" },
-    { "name": "Solon - MSM Business", "id": "3DF0B7EA0A3956F326336AA4C19A70EA", "type": "WHATSAPP", "connected": false, "…": "…" }
+    { "name": "calculadora-solo", "id": "3DF17E10…", "type": "WIDGET", "connected": true, "…": "…" },
+    { "name": "Solon - MSM Business", "id": "3DF0B7EA…", "type": "WHATSAPP", "connected": false, "…": "…" }
   ],
   "count": 5
 }
