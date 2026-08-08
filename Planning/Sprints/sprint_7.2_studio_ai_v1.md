@@ -623,7 +623,11 @@ CREATE POLICY agent_training_docs_delete ON storage.objects
   );
 ```
 
-- [ ] **Step 2: Apply the migration.** `supabase db push --linked --dns-resolver https`. Verify the bucket exists in the Dashboard. (If DNS fails, add `--dns-resolver https`; the founder's system resolver is unreliable.)
+- [ ] **Step 2: Apply the migration.** `supabase db push --linked --dns-resolver https`. Verify the bucket exists in the Dashboard.
+
+  > **Two things to expect (PM, verified 2026-08-08).**
+  > 1. `--dns-resolver https` is **required**, not optional — the machine's system resolver fails to resolve `aws-0-us-west-2.pooler.supabase.com` ("no such host") even though the name resolves fine via 8.8.8.8.
+  > 2. `db push` will also pick up **`20260807020000_leads_creation_source_solo_api.sql`**, which is absent from `supabase_migrations.schema_migrations` even though its constraint is already live in prod (it was applied by hand). Re-applying is **safe** — the file is `DROP CONSTRAINT IF EXISTS` followed by `ADD CONSTRAINT`. Do not "fix" this by editing or deleting that migration; letting it replay is what re-syncs the ledger with reality.
 
 - [ ] **Step 3: Add `action=upload-url`** to the edge function. It returns the namespaced path the client uploads to and the public URL to hand the provider:
 
@@ -719,6 +723,8 @@ if (!supabaseUrl || !supabaseKey) {
 
 - [ ] **Step 3: Verify the guard fires.** `VITE_SUPABASE_URL= npm run build` → build fails with the message naming the variable. Then restore and run `npm run build` → clean.
 - [ ] **Step 4: Confirm the Netlify env vars are actually set.** Check Netlify → Site settings → Environment variables for all three. **If any is missing, that alone explains the "doesn't fetch real data" reports — say so loudly in the handoff.**
+
+  > **If you lack Netlify access, do not block.** Finish steps 1–3 and 5, and put `NETLIFY ENV: UNVERIFIED — founder must check` at the top of your handoff. This is a founder-only credential; the PM will chase it separately.
 - [ ] **Step 5: Commit.** `git commit -m "fix: fail fast when Supabase env vars are missing"`
 
 ---

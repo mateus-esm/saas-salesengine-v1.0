@@ -71,7 +71,7 @@ Verificado: `{"checked":2,"changed":[]}`.
 
 | # | Ação | Por quê | Como |
 |---|---|---|---|
-| 1 | **Aplicar a migration `20260807020000`** | Restaura `creation_source='solo_api'`; sem ela os leads solo entram como `'webhook'` e ficam indistinguíveis dos leads do crm-webhook na análise de origem | `supabase db push` (o guardrail de segurança do agente bloqueia DDL em prod, por isso ficou pendente) |
+| 1 | ~~**Aplicar a migration `20260807020000`**~~ ✅ **FEITO** | O CHECK em prod já aceita `'solo_api'` (verificado 2026-08-08). Leads solo voltam a ser rastreáveis; o fallback para `'webhook'` não dispara mais | Aplicado manualmente pelo founder. ⚠️ **Não ficou registrado em `supabase_migrations.schema_migrations`** — o próximo `supabase db push` vai re-aplicar o arquivo. É seguro (`DROP ... IF EXISTS` + `ADD`) e re-sincroniza o ledger. Não editar nem apagar a migration |
 | 2 | **Criar o edge secret `ASAAS_API_KEY`** | `sync-instance-billing` morre com `ASAAS_API_KEY not configured` → a cobrança de R$100/mês por instância conectada **nunca é lançada**. Provavelmente `asaas-subscribe` e `asaas-buy-credits` também estão inertes — vale checar o billing inteiro | Supabase Dashboard → Edge Functions → Secrets |
 | 3 | **Mergear o PR** [#4](https://github.com/mateus-esm/saas-salesengine-v1.0/pull/4) `fix/solo-webhook-token-delivery` | As funções já estão deployadas em prod, mas o código só existe no branch | `gh pr merge` |
 
