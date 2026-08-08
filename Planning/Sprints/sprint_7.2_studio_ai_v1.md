@@ -211,6 +211,41 @@ git commit -m "docs(sprint7.2): live API reference captured"
 
 ---
 
+## 📦 Wave 0 — Handoff (Verboo-deepseek)
+
+```
+HANDOFF: W0 · T0 Live API spike
+Flag:    Verboo-deepseek  (engineer que executou a T0 nesta wave)
+Branch:  codex/sprint7.2/wave0/api-spike
+Commit:  2cc2d43 docs(sprint7.2): live API reference captured
+Files:   Planning/Sprints/sprint_7.2_api_reference.md (created — GROUND TRUTH das APIs)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T0 ticked + este handoff)
+         Planning/Workflow/billing.md (row T0: 2026-08-08 · 7.2 · W0 T0 · Claude engineer / deepseek-v4-flash · M · R$ 12)
+Verification: 7 endpoints live 200 + DOCUMENT round-trip (POST→list type=DOCUMENT→DELETE /training/{id}) + git show HEAD sem token/id
+Ledger:  [x] T0
+Merge:   PR para main após aprovação do PM; nenhuma dependência de migration/secrets nova (token já em .env gitignored)
+```
+
+### Respostas às 5 perguntas do Step 3 (gate do W1)
+
+1. **Agent object** (`GET /agent/{id}`): **não** contém `splitMessages` nem `prefferModel`. Confirmado ao vivo — só identidade/persona (`name`, `jobName`, `behavior`, etc.).
+2. **`/settings`** (`GET /agent/{id}/settings`): 13 chaves — `prefferModel: "GPT_5_6_SOL"`, `timezone: "America/Fortaleza"`, `enabledHumanTransfer: true`, `enabledReminder: false`, `splitMessages: false`, `enabledEmoji: false`, `limitSubjects: true`, `messageGroupingTime: "TEN_SEC"`, `signMessages: false`, `maxDailyMessages: null`, `maxDailyMessagesLimitAction: null`, `knowledgeByFunction: true`, `resumeTransferHumanAI: false`. **`onLackKnowLedge` não retorna no GET** (documentado na doc do provider, mas ausente ao vivo).
+3. **Channels**: **ambos** os endpoints retornam os canais reais (5). `/workspace/{id}/channels?agentId=` é o mais rico (username, agentName, agentPicture) e é o que o código atual usa. **Discrepância de `type`:** `/agent/{id}/search` reporta `CLOUD_API`, `/workspace/…/channels` reporta `WHATSAPP` para o mesmo canal.
+4. **`credits-spent`**: retorna breakdown por modelo — `{ total, data: [{month, credits, year, model, day}] }`. **Model keys são slugs** (`GPT_5_4`, `GPT_5_6_TERRA`, `GPT_5_6_SOL`) — não são o enum genérico dos docs nem o `MODEL_CATALOG` da T1.
+5. **`trainings`**: shape `{ data: [{id, text, image, audio, video, website, trainingSubPages, trainingInterval, documentUrl, documentName, documentMimetype, type, callbackUrl}], count }`. **Não existe campo title/name** — só `documentName` (para DOCUMENT). List exige filtro `type` (sem ele, default TEXT).
+
+### 🔴 Flags para o PM (W1 deve ler antes de codar)
+
+1. **`prefferModel` ao vivo = `GPT_5_6_SOL` — não existe no `MODEL_CATALOG` da T1 nem no enum dos docs.** T1 precisa reconciliar o catálogo (instrução do próprio plano: "Reconcile with T0").
+2. **`onLackKnowLedge` documentado mas ausente no GET ao vivo** — não exigir no GET; no PUT só repassar se a UI realmente setar.
+3. **`signMessages`/`resumeTransferHumanAI` presentes ao vivo, fora da whitelist planejada da T1** — decidir adicionar (recomendo `signMessages` sim).
+4. **Discrepância de `type` entre endpoints de channels** — T2/T8 devem escolher UMA fonte de verdade.
+5. **`tenant` no response do POST /trainings ≠ `workspace_id`** — não assumir igualdade (relevante para T9).
+6. **DELETE de training é `/training/{id}` (não `/agent/{id}/trainings/{id}` — que dá 404)** — código atual da `manage-agent-training` já está correto.
+7. **Correção ao plano:** o "agent id" citado no Step 1 (`939d7dd8…`) é na verdade o `equipe.id`; o `gpt_maker_agent_id` real da Solo Energia é `3DF0B5F1…`. Usei o real.
+
+---
+
 ## WAVE 1 — edge functions
 
 ### T1 · `manage-agent-settings` → `/settings` + model catalog — **XL** — Claude
