@@ -841,7 +841,7 @@ describe('provider branding', () => {
 
 Tick your task and add one row to `Planning/Workflow/billing.md` on your branch before handing off.
 
-- [ ] T0 · Live API spike · Codex · M
+- [x] T0 · Live API spike · Codex · M
 - [ ] T1 · manage-agent-settings → /settings + catalog · Claude · XL
 - [ ] T2 · manage-agent-channels real fetch · Gemini · M
 - [ ] T3 · fetch-gpt-credits real data · Gemini · M
