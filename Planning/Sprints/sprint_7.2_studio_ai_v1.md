@@ -168,7 +168,9 @@ W3 ── T12 white-label sweep (runs ALONE — touches files owned by W2)
 
 **Interfaces — Produces:** the reference doc every other task reads.
 
-- [ ] **Step 1: Get a token.** Read `GPT_MAKER_TOKEN` from Supabase edge secrets (Dashboard → Edge Functions → Secrets). Do **not** commit it. Export locally: `export GPT_MAKER_TOKEN=...`. Get the agent id: it is `equipes.gpt_maker_agent_id` for *Solo Energia* (`939d7dd8-592c-4fda-946e-3568f2909904`), and `workspace_id` from the same row.
+- [ ] **Step 1: Get a token.** Read `GPT_MAKER_TOKEN` from Supabase edge secrets (Dashboard → Edge Functions → Secrets). Do **not** commit it. Export locally: `export GPT_MAKER_TOKEN=...`. Read `gpt_maker_agent_id` and `workspace_id` from the `equipes` row whose `id` is `939d7dd8-592c-4fda-946e-3568f2909904` (*Solo Energia*).
+
+  > **PM correction (2026-08-08).** An earlier draft of this step presented that UUID as if it were the agent id. It is the **equipe id**; the real `gpt_maker_agent_id` is a 32-char provider id beginning `3DF0B5F1`. Caught by the T0 engineer.
 
 - [ ] **Step 2: Capture each endpoint.** Run each and save the verbatim response:
 
@@ -244,6 +246,38 @@ Merge:   PR para main após aprovação do PM; nenhuma dependência de migration
 6. **DELETE de training é `/training/{id}` (não `/agent/{id}/trainings/{id}` — que dá 404)** — código atual da `manage-agent-training` já está correto.
 7. **Correção ao plano:** o "agent id" citado no Step 1 (`939d7dd8…`) é na verdade o `equipe.id`; o `gpt_maker_agent_id` real da Solo Energia é `3DF0B5F1…`. Usei o real.
 
+### ✅ PM VERDICT — T0 ACCEPTED (Claude, 2026-08-08)
+
+Gates per `agent_workflow.md` §7, verified on branch `codex/sprint7.2/wave0/api-spike` @ `2cc2d43` — not from the handoff text:
+
+| Gate | Result |
+|---|---|
+| Handoff block complete | ✅ (`Tests:` rendered as `Verification:` — acceptable for a spike with no suite) |
+| Files — only owned files | ✅ reference doc + ledger tick + billing row; nothing out of scope |
+| Billing row | ✅ line 25, `7.2 · W0 T0 · M · R$ 12` (ledger is newest-first) |
+| DoD — all 5 Q's answered | ✅ all five, with verbatim payloads |
+| Working tree clean | ✅ |
+| No secret material committed | ✅ scanned for bearer tokens / JWTs — clean |
+
+**Independent PM verification** (the spike could have been fabricated; it wasn't):
+- `equipes.gpt_maker_agent_id` for Solo Energia really does start `3DF0B5F1` — matches the doc, proving a real capture.
+- The "`\n` in `workspace_id`" claim is **true** — exactly 2 of 8 tenants (*Rema Digital*, *Be My Guest*) carry a literal newline. Already defended by the `.trim()` at `manage-agent-channels/index.ts:53`; **T2 must not "fix" it again.**
+
+**Deviations accepted:** ids masked to 12 chars in §5 rather than 8 — necessary to show the tenant/workspace divergence, and not sensitive.
+
+**Two things the spike changed in this plan** (both were real defects in my draft):
+1. **T1 would have rejected the tenant's own model.** Step 6 validated `update-model` against `MODEL_CATALOG`, but the live `prefferModel` is `GPT_5_6_SOL`, which is in no published enum. Now a format check only — the provider is the authority, the catalog is display metadata.
+2. **T4/T9's list call was silently TEXT-only.** `GET /trainings` without `type` returns only TEXT, so uploaded documents were invisible. This is very likely a direct cause of "Knowledge Base doesn't fetch real data".
+
+**Branch-base note:** this branch descends from `fix/solo-webhook-token-delivery`, not `main`, so its diff against `main` also carries the Sprint 7.1 fixes, spec and plan. That is intentional — those commits need to land anyway — but the founder should merge PR #4 first so W1 branches cut cleanly from `main`.
+
+```
+WAVE 0 MERGED · git pull origin main
+Ready:  T0 — Planning/Sprints/sprint_7.2_api_reference.md is GROUND TRUTH; read it before coding
+Next wave opens: W1 — T1 (Claude) · T2 (Gemini) · T3 (Gemini) · T4 (Codex) · T5 (Antigravity)
+Amended by T0 findings: T1 (catalog + validation + whitelist), T2 (endpoint decision), T3 (no slug mapping), T4 (type filter)
+```
+
 ---
 
 ## WAVE 1 — edge functions
@@ -265,10 +299,13 @@ Merge:   PR para main após aprovação do PM; nenhuma dependência de migration
     limitSubjects: boolean; signMessages: boolean;
     messageGroupingTime: 'NO_GROUP'|'FIVE_SEC'|'TEN_SEC'|'THIRD_SEC'|'ONE_MINUTE';
     maxDailyMessages: number | null;
-    maxDailyMessagesLimitAction: 'TEMP_BLOCK_30S'|'TEMP_BLOCK_5M'|'TEMP_BLOCK_10M'|'TEMP_BLOCK_30M'|'TEMP_BLOCK_1H'|'BLOCK'|'TRANSFER';
+    maxDailyMessagesLimitAction: 'TEMP_BLOCK_30S'|'TEMP_BLOCK_5M'|'TEMP_BLOCK_10M'|'TEMP_BLOCK_30M'|'TEMP_BLOCK_1H'|'BLOCK'|'TRANSFER'|null;
     knowledgeByFunction: boolean; onLackKnowLedge: string;
+    resumeTransferHumanAI: boolean;   // live-only, undocumented (T0)
   }
 }
+// prefferModel is a free string, NOT a closed union — the provider runs
+// undocumented slugs (T0 found GPT_5_6_SOL live).
 // GET (action=models) → { models: ModelInfo[] }
 // ModelInfo = { id: string; label: string; vendor: string; creditsPerMessage: number; isNew?: boolean; isBeta?: boolean }
 // Errors (all actions) → { error: string, status: number }
@@ -309,19 +346,35 @@ const MODEL_CATALOG: ModelInfo[] = [
   { id: 'DEEPSEEK_CHAT',         label: 'DeepSeek V3',    vendor: 'Deepseek',  creditsPerMessage: 1 },
   { id: 'SABIA_3',               label: 'Sabiá 3',        vendor: 'Maritaca',  creditsPerMessage: 3 },
   { id: 'SABIA_3_1',             label: 'Sabiá 3.1',      vendor: 'Maritaca',  creditsPerMessage: 3 },
+
+  // ── Live-only slugs (T0 spike, 2026-08-08) ───────────────────────────────
+  // These are what the provider ACTUALLY runs. They appear in the live
+  // /settings response and in credits-spent, but in no published enum.
+  // `GPT_5_6_SOL` is Solo Energia's current prefferModel — omitting it would
+  // make the tenant's own model unselectable.
+  { id: 'GPT_5_6_SOL',           label: 'GPT-5.6 Sol',    vendor: 'OpenAI',    creditsPerMessage: 7, isNew: true },
+  { id: 'GPT_5_6_TERRA',         label: 'GPT-5.6 Terra',  vendor: 'OpenAI',    creditsPerMessage: 5, isNew: true },
+  { id: 'GPT_5_4',               label: 'GPT-5.4',        vendor: 'OpenAI',    creditsPerMessage: 7 },
 ];
 ```
 
-> **Reconcile with T0.** If the spike's `/settings` response shows an enum value missing here, add it. If it shows one here that the API rejects, remove it and note it in the handoff.
+> **⚠️ Reconciled with T0 (2026-08-08).** The live `/settings` returned
+> `prefferModel: "GPT_5_6_SOL"` — absent from the published enum. The three
+> live slugs above were added as a result. **Credit costs for them are
+> estimates**; correct them if the provider publishes real figures.
+> The catalog is *display metadata*, *not* an allowlist — see Step 6.
 
 - [ ] **Step 2: Add the settings whitelist and a URL helper.**
 
 ```ts
+// Reconciled with the T0 live capture. `resumeTransferHumanAI` is returned
+// live but is undocumented; `onLackKnowLedge` is documented but NOT returned
+// live — keep it writable, never require it on read.
 const SETTINGS_KEYS = [
   'prefferModel', 'timezone', 'enabledHumanTransfer', 'enabledReminder',
   'splitMessages', 'enabledEmoji', 'limitSubjects', 'signMessages',
   'messageGroupingTime', 'maxDailyMessages', 'maxDailyMessagesLimitAction',
-  'knowledgeByFunction', 'onLackKnowLedge',
+  'knowledgeByFunction', 'onLackKnowLedge', 'resumeTransferHumanAI',
 ] as const;
 
 // The whole bug in one function: which upstream resource an action targets.
@@ -375,9 +428,15 @@ if (req.method === 'GET' || action === 'get') {
       signMessages: s.signMessages ?? false,
       messageGroupingTime: s.messageGroupingTime ?? 'NO_GROUP',
       maxDailyMessages: s.maxDailyMessages ?? null,
-      maxDailyMessagesLimitAction: s.maxDailyMessagesLimitAction ?? 'TEMP_BLOCK_30S',
+      // T0: live value is null, not a block action. Do not coerce to a
+      // default — null means "no limit configured".
+      maxDailyMessagesLimitAction: s.maxDailyMessagesLimitAction ?? null,
       knowledgeByFunction: s.knowledgeByFunction ?? false,
+      // T0: documented but absent from the live GET. Defaulting to '' is
+      // correct; never assume the provider echoes it back.
       onLackKnowLedge: s.onLackKnowLedge ?? '',
+      // T0: returned live, undocumented. Surfaced so T6 can decide to expose it.
+      resumeTransferHumanAI: s.resumeTransferHumanAI ?? false,
     },
   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
@@ -405,8 +464,12 @@ async function upstreamError(res: Response, label: string): Promise<Response> {
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 } else if (action === 'update-model') {
-  if (!MODEL_CATALOG.some(m => m.id === body.model)) {
-    return new Response(JSON.stringify({ error: `Unknown model: ${body.model}`, status: 400 }),
+  // Do NOT validate against MODEL_CATALOG. T0 proved the provider runs models
+  // that appear in no published enum (GPT_5_6_SOL was the live prefferModel),
+  // so a closed allowlist would reject the tenant's own current model. Reject
+  // only obvious garbage and let the provider be the authority.
+  if (typeof body.model !== 'string' || !/^[A-Z0-9_]{2,50}$/.test(body.model)) {
+    return new Response(JSON.stringify({ error: `Invalid model id: ${body.model}`, status: 400 }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
   updatePayload = { prefferModel: body.model };
@@ -462,13 +525,17 @@ git commit -m "fix(studio-ai): point agent settings at the /settings sub-resourc
 **Interfaces — Consumes:** T0's answer to "which channels endpoint returns real channels".
 **Produces:** `GET` → `{ channels: Array<{ id: string; name: string; type: string; connected: boolean }> }`
 
-- [ ] **Step 1: Read T0's finding.** Open `Planning/Sprints/sprint_7.2_api_reference.md` and find which of the two endpoints returned real channels. Use that one. If **both** work, prefer the agent-scoped `/v2/agent/{agentId}/search` — it needs no `workspace_id`, removing a config dependency.
+- [ ] **Step 1: PM decision from T0 — keep the workspace endpoint.** T0 proved **both** endpoints work and return the same 5 channels, but they disagree on `type`: `/agent/{id}/search` reports `CLOUD_API` where `/workspace/{id}/channels` reports `WHATSAPP` for the *same* channel id. The workspace endpoint is the source of truth for this sprint because it is richer (`username`, `agentName`, `agentPicture`) and is what the current code already uses — switching would change displayed channel types with no user benefit.
 
-- [ ] **Step 2: Replace the list branch.**
+  **So the endpoint does not change.** Your job is the response contract, the error path, and `connected`. `workspace_id` is already `.trim()`ed at line 53 (two tenants have a literal `\n` — verified) — leave that alone.
+
+- [ ] **Step 2: Normalize the list branch to the contract.** Keep the existing URL:
 
 ```ts
 // --- GET: list channels ---
-const apiUrl = `${AI_ENGINE_BASE}/agent/${agentId}/search?page=1&pageSize=50`;
+// Source of truth for channel `type` (see T0 §4.2). Do not switch to
+// /agent/{id}/search — it reports CLOUD_API where this reports WHATSAPP.
+const apiUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/channels?agentId=${agentId}&page=1&pageSize=50`;
 const res = await fetch(apiUrl, { headers: engineHeaders });
 
 if (!res.ok) {
@@ -502,9 +569,9 @@ return new Response(JSON.stringify({ channels: normalized }),
 
 **Interfaces — Produces:** `{ balance: number, total: number, details: Array<{ model: string; credits: number; date: string }> }` — T10 consumes this.
 
-- [ ] **Step 1: Read T0's answers** to questions 4 (does `credits-spent` return a per-model breakdown, and are model keys enum or slug?).
-- [ ] **Step 2: Normalize model keys to the enum.** If the spike shows slugs, map them to enum ids so T10 can join against the catalog from T1. If it shows enums, pass through unchanged. Document which case applied in the handoff.
-- [ ] **Step 3: Return the real balance.** Confirm `GET /v2/workspace/{wsId}/credits` is called and its value is returned as `balance` rather than a hardcoded default. The current UI defaults `totalCredits` to `1000` — the real value must come from the API.
+- [ ] **Step 1: T0's answer to Q4.** `credits-spent` **does** return a per-model breakdown: `{ total, data: [{ month, credits, year, model, day }] }`, one row per model per day. The `model` values are concrete slugs — live data showed `GPT_5_4`, `GPT_5_6_TERRA`, `GPT_5_6_SOL`.
+- [ ] **Step 2: Pass model keys through unchanged — do NOT map them.** The slugs are not the documented enum and no mapping table would be complete; T1's catalog now carries the known ones and T10 falls back to the raw slug for anything else. Inventing a mapping here would silently mislabel spend.
+- [ ] **Step 3: Return the real balance.** `GET /v2/workspace/{wsId}/credits` returns `{ status, credits }` (T0 §6.2 — live value was `{"status":"ACTIVE","credits":324}`). Return `credits` as `balance`. The current UI defaults `totalCredits` to `1000`, a fabricated number — remove it.
 - [ ] **Step 4: Surface upstream errors** as `{ error, status }` with status 502 instead of a generic message, matching T1's shape.
 - [ ] **Step 5: Typecheck, deploy, verify.** Compare the returned balance against the provider dashboard; record both in the handoff.
 - [ ] **Step 6: Commit.** `git commit -m "fix(studio-ai): return real credit balance and usage breakdown"`
@@ -599,12 +666,16 @@ switch (body.type) {
 }
 ```
 
-- [ ] **Step 5: Delete the Storage object when a training is deleted.** In the `delete` branch, after the provider call succeeds, remove the object if the training was a DOCUMENT whose URL points at our bucket. Parse the object path from the URL suffix after `/agent-training-docs/` and call `supabase.storage.from('agent-training-docs').remove([path])`. Without this the bucket grows without bound.
+- [ ] **Step 5: Always pass `type` when listing trainings.** T0 §7 found that `GET /agent/{id}/trainings` **silently defaults to TEXT only** when `type` is omitted — a DOCUMENT training exists but is invisible in an unfiltered list. Any list call must pass `type` explicitly; to show everything, query each of `TEXT`, `WEBSITE`, `VIDEO`, `DOCUMENT` and merge. This is the mechanism behind "Knowledge Base doesn't fetch real data".
 
-- [ ] **Step 6: Typecheck.** `deno check --no-lock manage-agent-training/index.ts` → clean.
-- [ ] **Step 7: Deploy.** `supabase functions deploy manage-agent-training --no-verify-jwt --project-ref egxzsivzqlqadoqpgfby`
-- [ ] **Step 8: End-to-end verify.** Upload a small PDF to the bucket, call `create` with its public URL, confirm the training appears in the provider dashboard, then delete it and confirm both the training and the Storage object are gone. Record this in the handoff.
-- [ ] **Step 9: Commit.** `git commit -m "feat(studio-ai): support document upload for agent training"`
+- [ ] **Step 6: Delete the Storage object when a training is deleted.** In the `delete` branch, after the provider call succeeds, remove the object if the training was a DOCUMENT whose URL points at our bucket. Parse the object path from the URL suffix after `/agent-training-docs/` and call `supabase.storage.from('agent-training-docs').remove([path])`. Without this the bucket grows without bound.
+
+  > T0 confirmed the delete path is `DELETE /v2/training/{id}`. The agent-scoped `/agent/{id}/trainings/{id}` returns **404**, and there is no GET-single. The current code already uses the correct path — verify, don't rewrite.
+
+- [ ] **Step 7: Typecheck.** `deno check --no-lock manage-agent-training/index.ts` → clean.
+- [ ] **Step 8: Deploy.** `supabase functions deploy manage-agent-training --no-verify-jwt --project-ref egxzsivzqlqadoqpgfby`
+- [ ] **Step 9: End-to-end verify.** Upload a small PDF to the bucket, call `create` with its public URL, confirm the training appears in the provider dashboard (list with `type=DOCUMENT`), then delete it and confirm both the training and the Storage object are gone. T0 ran exactly this round-trip successfully, so a failure here means your code, not the provider.
+- [ ] **Step 10: Commit.** `git commit -m "feat(studio-ai): support document upload for agent training"`
 
 ---
 
