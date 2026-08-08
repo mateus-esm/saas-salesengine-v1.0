@@ -145,25 +145,27 @@ Same 5 channels, richer shape — adds `username`, `agentName`, `agentId`, `agen
 
 ## 5. DOCUMENT training round-trip — verified ✅
 
+Run **twice** (both attempts identical results; saved artifacts in the spike notes `/tmp/spike/`: `8_training_post.json`, `12_list_document.json`, `13_delete.json`, `14_list_document_after.json`).
+
 **POST** `{ "type":"DOCUMENT", "documentUrl":"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", "documentName":"teste-spike.pdf", "documentMimetype":"application/pdf" }` → **200**:
 
 ```json
-{ "id": "3F7589…", "tenant": "3DF0B518…" }
+{ "id": "3F758B4…", "tenant": "3DF0B5185BB4…" }
 ```
 
-> The POST response's `tenant` field is a **different id** than the workspace id we use (`3DF0B518…`). Not the workspace id. Worth a note in T9 if the Knowledge UI needs to correlate.
+> **The POST response's `tenant` is a different id than the workspace id we use.** workspace = `3DF0B5185EE8…`, tenant = `3DF0B5185BB4…` — both share the 8-char prefix `3DF0B518` but diverge from the 9th char (`5EE8…` vs `5BB4…`). Verified against the raw response (full ids differ; not the workspace id). Worth a note in T9 if the Knowledge UI needs to correlate.
 
-**List check:** the training appears in the list **only when the list is filtered by `type`**:
+**List check (saved artifact `12_list_document.json`):** the training appears in the list **only when the list is filtered by `type`**:
 
 ```json
 GET /agent/{agentId}/trainings?type=DOCUMENT&page=1&pageSize=50
-{ "data": [ { "id": "3F7589…", "text": null, "image": null, "audio": null, "video": null, "website": null,
+{ "data": [ { "id": "3F758B4…", "text": null, "image": null, "audio": null, "video": null, "website": null,
   "trainingSubPages": "DISABLED", "trainingInterval": "NEVER",
   "documentUrl": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
   "documentName": "teste-spike.pdf", "documentMimetype": "application/pdf", "type": "DOCUMENT", "callbackUrl": null } ], "count": 1 }
 ```
 
-**Cleanup:** `DELETE /v2/training/{trainingId}` → 200 `{ "success": true }`. The agent-scoped path `DELETE /agent/{agentId}/trainings/{id}` returns **404** — the current `manage-agent-training` already uses the correct `/training/{id}` for update/delete. Same for GET-by-id: `/agent/{agentId}/trainings/{id}` → 404 (there is no GET-single; list with `type` filter instead).
+**Cleanup (saved artifacts `13_delete.json`, `14_list_document_after.json`):** `DELETE /v2/training/{trainingId}` → 200 `{ "success": true }`; filtered list after delete → `{ "data": [], "count": 0 }`. The agent-scoped path `DELETE /agent/{agentId}/trainings/{id}` returns **404** — the current `manage-agent-training` already uses the correct `/training/{id}` for update/delete. Same for GET-by-id: `/agent/{agentId}/trainings/{id}` → 404 (there is no GET-single; list with `type` filter instead).
 
 ---
 
@@ -228,6 +230,6 @@ Response shape (all types):
 | 3 | `onLackKnowLedge` documented but absent from live `/settings` GET | T1 | Don't require it on GET; on PUT only forward if the UI actually sets it |
 | 4 | `signMessages` / `resumeTransferHumanAI` live but not in T1 whitelist | T1 | Decide whether to whitelist (recommend `signMessages` yes) |
 | 5 | Channel `type` differs between `/search` (CLOUD_API) and `/workspace/…/channels` (WHATSAPP) | T2, T8 | Pick one endpoint as truth for `type`; workspace endpoint is richer and is what current code lists |
-| 6 | Training POST response `tenant` id ≠ `workspace_id` | T9 | Don't assume tenant == workspace id |
+| 6 | Training POST response `tenant` (`3DF0B5185BB4…`) ≠ `workspace_id` (`3DF0B5185EE8…`) — same 8-char prefix, diverge at char 9 | T9 | Don't assume tenant == workspace id; use 16-char mask when comparing in docs |
 | 7 | Trainings list needs `type` filter; unfiltered defaults to TEXT | T4, T9 | Always pass `type` when listing |
 | 8 | No GET-single for trainings; DELETE/PUT are `/training/{id}` | T4, T9 | Already correct in current code |
