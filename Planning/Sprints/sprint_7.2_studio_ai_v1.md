@@ -146,12 +146,12 @@ W3 ── T12 white-label sweep (runs ALONE — touches files owned by W2)
 | T3 | `fetch-gpt-credits` real data | M | **Verboo** | `supabase/functions/fetch-gpt-credits/index.ts` |
 | T4 | `manage-agent-training` DOCUMENT + Storage | **L** | **Verboo** | `supabase/functions/manage-agent-training/index.ts` · `supabase/migrations/20260808000000_agent_training_docs_bucket.sql` |
 | T5 | Env fail-fast + `netlify.toml` | S | **Verboo** | `src/integrations/supabase/client.ts` · `netlify.toml` |
-| T6 | Settings page full parity | **L** | Claude | `src/pages/ai-studio/SettingsPage.tsx` · `src/components/ai-studio/BehaviorSettings.tsx` |
-| T7 | Model selector fix | M | Gemini | `src/components/ai-studio/ModelSelector.tsx` · `src/services/ai-studio/providers/GPTMakerProvider.ts` |
-| T8 | Channels page + Solo card | **L** | Codex | `src/pages/ai-studio/ChannelsPage.tsx` · `src/components/ai-studio/CreateChannelDialog.tsx` |
-| T9 | Knowledge Base upload UI | M | Antigravity | `src/pages/ai-studio/KnowledgePage.tsx` · `src/components/ai-studio/AIKnowledgeBase.tsx` |
-| T10 | Usage page real data | M | Gemini | `src/pages/ai-studio/UsagePage.tsx` · `src/components/ai-studio/AIUsageDashboard.tsx` |
-| T11 | Billing — instances section | M | Antigravity | `src/pages/Billing.tsx` |
+| T6 | Settings page full parity | **L** | **Verboo** | `src/pages/ai-studio/SettingsPage.tsx` · `src/components/ai-studio/BehaviorSettings.tsx` |
+| T7 | Model selector fix | M | **Verboo** | `src/components/ai-studio/ModelSelector.tsx` · `src/services/ai-studio/providers/GPTMakerProvider.ts` |
+| T8 | Channels page + Solo card | **L** | **Verboo** | `src/pages/ai-studio/ChannelsPage.tsx` · `src/components/ai-studio/CreateChannelDialog.tsx` |
+| T9 | Knowledge Base upload UI | M | **Verboo** | `src/pages/ai-studio/KnowledgePage.tsx` · `src/components/ai-studio/AIKnowledgeBase.tsx` |
+| T10 | Usage page real data | M | **Verboo** | `src/pages/ai-studio/UsagePage.tsx` · `src/components/ai-studio/AIUsageDashboard.tsx` |
+| T11 | Billing — instances section | M | **Verboo** | `src/pages/Billing.tsx` |
 | T12 | White-label sweep + guard | M | Codex | 9 files (see task) — **runs alone** |
 
 > **Ownership rule:** touch only your files. If another file looks wrong, tell the PM — do not fix it.
@@ -929,10 +929,48 @@ Merge:   PR para main após auditoria do PM
 
 ## WAVE 2 — frontend
 
-> **Gate:** the PM merges all of W1 to `main` and announces `WAVE 1 MERGED` before W2 starts. W2 consumes W1's response shapes. `git pull origin main` first.
+> ✅ **GATE PASSED — W1 merged to `main` 2026-08-09 (`7c98d90`). WAVE 2 IS OPEN.**
+> `git pull origin main` before you start.
 
-### T6 · Settings page full parity — **L** — Claude
+### Read this before writing any W2 code
 
+W1 changed things the plan below was written against. Where they differ, **W1's
+as-built behaviour wins** — it was verified against the live API.
+
+1. **The settings response has BOTH shapes.** `manage-agent-settings` returns
+   `{ ...agent, ...settings, agent: {…}, settings: {…} }`. **Migrate to the
+   nested keys** (`data.settings.splitMessages`, `data.agent.behavior`). The flat
+   keys exist only to keep the current pages alive during this wave and are
+   deleted in 7.3 — do not add new readers of them.
+2. **`description` ⇄ `jobDescription`.** The provider's agent object has no
+   `description`; the edge function maps the app-facing `description` onto
+   upstream `jobDescription`. Keep using `description` in the UI.
+3. **`prefferModel`, not `model`.** T7's bug was reading `data.model`. The key is
+   `prefferModel`, and model ids are UPPER_SNAKE enums — render `label` from the
+   catalog, never a transformed id.
+4. **The model catalog comes from the API**, not a local constant:
+   `manage-agent-settings?action=models` → `{ models: ModelInfo[] }` with
+   `{ id, label, vendor, creditsPerMessage, isNew?, isBeta? }`. Expect ids that
+   are in **no published enum** (`GPT_5_6_SOL`); render unknown ids as the raw
+   slug rather than dropping them.
+5. **Credits usage is under `data`, not `details`.** T3 fixed the edge function;
+   the shape T10 receives is `{ balance, total, details }` where `details` rows
+   carry a `model` **slug** — join against the catalog, fall back to the raw slug.
+6. **Trainings must be listed with `type`.** `manage-agent-training?action=list`
+   now fans out over all four types when `type` is omitted. Don't re-add an
+   unfiltered call — the provider silently returns TEXT only.
+
+### Wave conventions (learned the hard way in W1)
+
+- **One branch per task, cut from `main`:** `verboo/sprint7.2/w2/<task>`. In W1,
+  T3 was stacked on T2, which forced merge order and made the diff misleading.
+- **Ledger/billing conflicts are expected** — six parallel tasks means six of
+  them. Resolve by keeping **every** row and **every** tick.
+- **Hand off T6 and T7 first.** They are the two that consume the new settings
+  contract; if it's misread, the PM would rather catch it before four more pages
+  are built on the same misreading.
+
+### T6 · Settings page full parity — **L** — Verboo
 **Files:** Modify `src/pages/ai-studio/SettingsPage.tsx` · `src/components/ai-studio/BehaviorSettings.tsx`
 
 **Interfaces — Consumes:** T1's `{ agent, settings }` shape and `action=update-settings`.
@@ -984,8 +1022,7 @@ const saveSetting = async (key: string, value: unknown) => {
 
 ---
 
-### T7 · Model selector fix — **M** — Gemini
-
+### T7 · Model selector fix — **M** — Verboo
 **Files:** Modify `src/components/ai-studio/ModelSelector.tsx` · `src/services/ai-studio/providers/GPTMakerProvider.ts`
 
 **Interfaces — Consumes:** T1's `action=models` and the `settings.prefferModel` key.
@@ -1012,8 +1049,7 @@ setCurrentModel(settingsRes.data?.settings?.prefferModel ?? "");
 
 ---
 
-### T8 · Channels page + Solo instance card — **L** — Codex
-
+### T8 · Channels page + Solo instance card — **L** — Verboo
 **Files:** Modify `src/pages/ai-studio/ChannelsPage.tsx` · `src/components/ai-studio/CreateChannelDialog.tsx`
 
 **Interfaces — Consumes:** T2's `{ channels: [...] }`.
@@ -1029,8 +1065,7 @@ setCurrentModel(settingsRes.data?.settings?.prefferModel ?? "");
 
 ---
 
-### T9 · Knowledge Base upload UI — **M** — Antigravity
-
+### T9 · Knowledge Base upload UI — **M** — Verboo
 **Files:** Modify `src/pages/ai-studio/KnowledgePage.tsx` · `src/components/ai-studio/AIKnowledgeBase.tsx`
 
 **Interfaces — Consumes:** T4's `action=upload-url` and the extended `action=create`.
@@ -1066,8 +1101,7 @@ await supabase.functions.invoke('manage-agent-training?action=create', {
 
 ---
 
-### T10 · Usage page real data — **M** — Gemini
-
+### T10 · Usage page real data — **M** — Verboo
 **Files:** Modify `src/pages/ai-studio/UsagePage.tsx` · `src/components/ai-studio/AIUsageDashboard.tsx`
 
 **Interfaces — Consumes:** T3's `{ balance, total, details }` and T1's `action=models`.
@@ -1082,8 +1116,7 @@ await supabase.functions.invoke('manage-agent-training?action=create', {
 
 ---
 
-### T11 · Billing — instances section — **M** — Antigravity
-
+### T11 · Billing — instances section — **M** — Verboo
 **Files:** Modify `src/pages/Billing.tsx`
 
 - [ ] **Step 1: Add a "Conexões WhatsApp (Solo API)" section** listing each `wpp_instances` row for the team: display name, status, connection date, and monthly price.
@@ -1157,12 +1190,12 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T3 · fetch-gpt-credits real data · Verboo · M
 - [x] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
 - [x] T5 · Env fail-fast + netlify.toml · Verboo · S
-- [ ] T6 · Settings page full parity · Claude · L
-- [ ] T7 · Model selector fix · Gemini · M
-- [ ] T8 · Channels page + Solo card · Codex · L
-- [ ] T9 · Knowledge Base upload UI · Antigravity · M
-- [ ] T10 · Usage page real data · Gemini · M
-- [ ] T11 · Billing instances section · Antigravity · M
+- [ ] T6 · Settings page full parity · Verboo · L
+- [ ] T7 · Model selector fix · Verboo · M
+- [ ] T8 · Channels page + Solo card · Verboo · L
+- [ ] T9 · Knowledge Base upload UI · Verboo · M
+- [ ] T10 · Usage page real data · Verboo · M
+- [ ] T11 · Billing instances section · Verboo · M
 - [ ] T12 · White-label sweep + guard · Codex · M
 
 ## ⚠️ KNOWN GAPS (carried to 7.3, not forgotten)

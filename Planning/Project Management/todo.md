@@ -99,9 +99,113 @@ Rotate all:
 - [ ] Groq key
 - [ ] Verboo key
 - [ ] `AGENT_INTERNAL_TOKEN`
+- [ ] **Neon `neondb_owner` password** (pasted in chat 2026-08-09). Belongs to a
+      *different* project, not this repo — but it was exposed here, so rotate it
+      in the Neon console. Owner role = full DB access.
 
 Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
 `@`→`%40`).
+
+## 🔴 Sprint 7.2 — FOUNDER ACTIONS (blocking, do these)
+
+> Only the founder has these credentials. Both block real functionality today.
+
+- [ ] **Create the `ASAAS_API_KEY` edge secret** (Supabase Dashboard → Edge
+      Functions → Secrets). `sync-instance-billing` dies on startup with
+      `ASAAS_API_KEY not configured`, so the **R$100/mês per connected instance
+      is never charged**. Every tenant has `subscription_status = null`, so
+      `asaas-subscribe` / `asaas-buy-credits` are probably inert too — worth
+      auditing the whole billing path once the key exists. **Blocks T11.**
+- [ ] **Verify the Netlify env vars** (Site settings → Environment variables):
+      `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_PROJECT_ID`.
+      Flagged `UNVERIFIED` by T5. Until Sprint 7.2 the client silently fell back
+      to `https://placeholder-url.supabase.co` when these were missing — if any
+      is unset, that alone explains a chunk of the "doesn't fetch real data"
+      reports. T5 now makes it fail loudly at boot instead.
+
+## Sprint 7 / 7.1 — live E2E still pending (needs a real phone)
+
+> Solo API inbound was fixed 2026-08-07 (token in the URL + `solo_api` CHECK).
+> Code is in prod; these need a human with a device. See
+> `Planning/Sprints/sprint_7.1_studio_ai_v1_fixes_1.md` §A.2.
+
+- [ ] Re-scan the QR and send a real message — confirm it lands in the chat and
+      `unread` increments. This is the test that failed on 07/08.
+- [ ] Capture the real `connection.update` sequence + a verbatim
+      `messages.upsert` to close out `sprint_7_api_reference.md`.
+- [ ] Coexistence echo: send from a number that is also on the agent provider and
+      confirm the dedup (AC4) doesn't duplicate.
+- [ ] Capture the provider's window-closed error body → refine the T5 fallback
+      match (today it falls back on **any** non-2xx, which is over-broad).
+- [ ] `wpp_instances.phone` is `null` on both instances — `connectionState`
+      doesn't return `ownerJid`, so it should self-fill on the next pairing. If
+      not, backfill from `fetchInstances`.
+
+## Sprint 7.2 — deferred to 7.3 (decided, not forgotten)
+
+> Scope was fix-first + settings parity. These were consciously cut. See
+> `Planning/Sprints/sprint_7.2_studio_ai_v1.md` and the design spec.
+
+### No provider API exists (verified against the live docs 2026-08-08)
+
+- [ ] **Horário de atendimento** — no field on the settings endpoint. Would need
+      enforcing in our own webhook layer before handing off to the agent.
+- [ ] **Moderação de conteúdo** — no field either.
+- [ ] **Google Calendar / scheduling** — the provider's integrations (Eleven
+      Labs, Google Agenda, Plug Chat, E-Vendi) are **dashboard-configured only,
+      no endpoints**. Revisit as a *native* scheduling intention over our own
+      Agenda module rather than depending on their dashboard.
+
+### Capability we own but haven't built
+
+- [ ] **Intentions rebuild** (founder pt 3 + 6) — the provider exposes full CRUD
+      with `fields[]` (typed collect-data), `headers`/`params`/`requestBody`, and
+      `variables[].defaultFieldKey`. `IntentionWizard.tsx` is already 569 lines;
+      the full schema roughly doubles it. Needs its own design pass with mockups
+      — it's a UX problem, not a wiring problem.
+- [ ] **Transfer Rules** — full CRUD API exists, we call none of it.
+- [ ] **Idle Actions** ("ações de inatividade") — same.
+- [ ] **Named training blocks** (founder pt 4) — the provider has **no
+      title/name field** on a training (only `documentName` for DOCUMENT). Needs
+      our own convention, e.g. a `# [Título: ...]` header parsed out of the text.
+- [ ] **i18n / system language** (founder pt 2) — most expensive item on the
+      list, least urgent while every client is in Brazil.
+- [ ] **Niche-generic examples** (founder pt 3) — placeholder copy still uses
+      Solo Energia examples for every tenant.
+- [ ] **Chat channel filter** (founder pt 11) — replace the side roll-bar with a
+      simple list selection like the other filters.
+
+### Tech debt created by Sprint 7.2 (pay this down in 7.3)
+
+- [ ] **Contract contraction — remove the legacy flat keys** from
+      `manage-agent-settings`. The GET response currently returns
+      `{ ...agent, ...settings, agent: {…}, settings: {…} }` because
+      `BehaviorSettings.tsx`, `SettingsPage.tsx` and `UsagePage.tsx` read the
+      flat keys. Once W2 migrates them to the nested shape, delete the flat
+      duplication. **Do not drop it before W2 lands** — it keeps a working
+      editor alive across the wave gap.
+- [ ] **Training bucket is public-read** — `agent-training-docs` is
+      `public: true` because the provider fetches `documentUrl` server-side
+      without auth. Object names carry a random UUID so they're unguessable, but
+      they are **not access-controlled**: anyone with the URL reads that tenant's
+      document, and knowledge-base files can hold pricing and commercial
+      material. Writes/deletes *are* correctly tenant-isolated by RLS. Revisit
+      whether a signed URL with expiry works — depends on whether the provider
+      re-fetches after the initial training.
+- [ ] **`resumeTransferHumanAI`** is returned live but undocumented. Surfaced in
+      the settings contract; decide whether to expose it in the UI.
+- [ ] **Model catalog is hand-maintained.** No list endpoint exists, and the live
+      API runs slugs in no published enum (`GPT_5_6_SOL`, `GPT_5_6_TERRA`,
+      `GPT_5_4`). Credit costs for those three are **estimates**. Re-check when
+      the provider publishes real figures.
+
+### Process notes for the next wave
+
+- [ ] **One branch per task, cut from `main`.** In W1, T3 was stacked on T2, so
+      merging T3 alone would silently have brought T2 with it.
+- [ ] **Expect ledger/billing merge conflicts** — one per parallel task, since
+      every branch ticks its own box and adds its own row. Resolve by keeping
+      **all** rows and **all** ticks (workflow §7.5).
 
 ## State persistence (own refinement sprint — deferred from 6.8)
 
