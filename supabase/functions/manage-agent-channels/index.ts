@@ -182,34 +182,28 @@ serve(async (req) => {
       );
     }
 
-    // --- GET: list channels (existing behavior, unchanged) ---
+    // --- GET: list channels ---
+    // Source of truth for channel `type` (see T0 §4.2). Do not switch to
+    // /agent/{id}/search — it reports CLOUD_API where this reports WHATSAPP.
     const apiUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/channels?agentId=${agentId}&page=1&pageSize=50`;
     const res = await fetch(apiUrl, { headers: engineHeaders });
 
     if (!res.ok) {
-      const err = await res.text();
-      console.error('AI Engine channels error:', err);
-      throw new Error(`AI Engine API error: ${res.status}`);
+      const body = await res.text();
+      console.error('AI Engine channels error:', res.status, body);
+      return new Response(JSON.stringify({ error: body || 'Upstream channels error', status: res.status }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const data = await res.json();
-    const channels = data.data || data || [];
-
-    // Normalize channel shape
-    const normalized = (Array.isArray(channels) ? channels : []).map((ch: any) => ({
-      id: ch.id || ch._id,
-      name: ch.name || 'Canal sem nome',
-      type: ch.type || 'WHATSAPP',
-      status: ch.connected ? 'active' : (ch.status === 'ACTIVE' ? 'active' : 'inactive'),
-      phone: ch.phone || ch.phoneNumber || null,
-      connectedAt: ch.connectedAt || ch.createdAt
-        ? new Date(ch.connectedAt || ch.createdAt).toLocaleDateString('pt-BR')
-        : null,
+    const normalized = (data.data ?? []).map((ch: any) => ({
+      id: ch.id,
+      name: ch.name ?? '',
+      type: ch.type ?? 'UNKNOWN',
+      connected: ch.connected === true,
     }));
-
-    return new Response(JSON.stringify({ data: normalized }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(JSON.stringify({ channels: normalized }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error('Error:', error);

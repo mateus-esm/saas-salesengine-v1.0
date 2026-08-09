@@ -672,6 +672,25 @@ return new Response(JSON.stringify({ channels: normalized }),
 - [ ] **Step 5: Verify.** Call it from the app and confirm the returned channel count and names match the provider dashboard. Record both numbers in the handoff.
 - [ ] **Step 6: Commit.** `git commit -m "fix(studio-ai): fetch real channels from the agent endpoint"`
 
+### ✅ T2 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W1 · T2 manage-agent-channels real fetch
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w1/t2-channels
+Commit:  <committed at Step 6>
+Files:   supabase/functions/manage-agent-channels/index.ts (GET list branch)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T2 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W1 T2 · Verboo / deepseek-v4-flash · M · R$ 20)
+Verification: deno check clean · deployed to prod · live GET 200 — 5 channels
+              (Teste · Solon - Wpp Solo Energia · Solo Energia · calculadora-solo · Solon - MSM Business),
+              names/types/connected match the provider dashboard (T0 §4.2). Test user criado+deletado, 0 resíduos.
+Ledger:  [x] T2
+Merge:   PR para main após auditoria do PM
+```
+
+**Contrato cumprido:** GET → `{ channels: [{ id, name, type, connected }] }` (shape novo, exigido pela T8). Endpoint mantido `/workspace/{wsId}/channels?agentId=` (decisão da PM na T0 §4.2 — `search` reporta `CLOUD_API` onde este reporta `WHATSAPP`). Erro de upstream → `{ error, status }` com 502. `.trim()` do `workspace_id` mantido (não "consertar" de novo — veredito da PM T0). **Nada fora do escopo tocado** (create/remove/qr/webhook inalterados).
+
 ---
 
 ### T3 · `fetch-gpt-credits` real data — **M** — Verboo
@@ -1066,7 +1085,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 
 - [x] T0 · Live API spike · Verboo · M
 - [x] T1 · manage-agent-settings → /settings + catalog · Verboo · XL
-- [ ] T2 · manage-agent-channels real fetch · Verboo · M
+- [x] T2 · manage-agent-channels real fetch · Verboo · M
 - [ ] T3 · fetch-gpt-credits real data · Verboo · M
 - [ ] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
 - [ ] T5 · Env fail-fast + netlify.toml · Verboo · S
