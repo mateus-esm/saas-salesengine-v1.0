@@ -1031,6 +1031,39 @@ const saveSetting = async (key: string, value: unknown) => {
 - [ ] **Step 6: Verify persistence.** Toggle **every** one of the 13 fields, reload the page, confirm each value stuck. Then confirm the same values in the provider dashboard. List all 13 as verified in the handoff.
 - [ ] **Step 7: Commit.** `git commit -m "feat(studio-ai): full agent settings parity"`
 
+### ✅ T6 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W2 · T6 Settings page full parity
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w2/t6-settings
+Commit:  <committed at Step 7>
+Files:   src/pages/ai-studio/SettingsPage.tsx (rewrite — 12 controls, 3 grupos, save 1 campo por vez)
+         src/components/ai-studio/BehaviorSettings.tsx (read path → data.agent.*)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T6 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W2 T6 · Verboo / deepseek-v4-flash · L · R$ 24)
+Verification: npm run build limpo · persistência verificada ao vivo p/ TODOS os 12 controles
+              (toggle → GET → restaura ao baseline; tenant settings intactas após o teste)
+Ledger:  [x] T6
+Merge:   PR para main após auditoria do PM (npm run build é o hard gate)
+```
+
+**Persistência verificada ao vivo — 12/12 controles (toggle → GET → restaura):**
+
+| Controle | Persistiu |
+|---|---|
+| splitMessages · enabledEmoji · signMessages · enabledHumanTransfer · enabledReminder · knowledgeByFunction · limitSubjects (switches) | ✅ todos |
+| messageGroupingTime · timezone (selects) | ✅ |
+| maxDailyMessages | ✅ |
+| maxDailyMessagesLimitAction | ⚠️ **só persiste junto com maxDailyMessages** (ver flag 1) |
+| onLackKnowLedge | ⚠️ provider aceita PUT `{"success":true}` mas NÃO ecoa no GET (flag 2) |
+
+**Flags para o PM:**
+1. **`maxDailyMessagesLimitAction` só persiste quando enviado junto com `maxDailyMessages`.** Sozinho (com limite null) o provider ignora. Como a T6 salva 1 campo por vez, o usuário que setar só a ação não verá ela persistir. **Sugestão para a T9/follow-up:** salvar os dois juntos quando o usuário alterar qualquer um deles (ou documentar que a ação só tem efeito com limite definido).
+2. **`onLackKnowLedge` é write-only no provider** — PUT ok, GET não retorna (T0 já tinha flagado: documentado mas ausente ao vivo). A página mostra o campo, mas ao recarregar ele volta vazio. Provider-side, não é bug nosso.
+3. **Plano diz "13 controles", a tabela lista 12** (5 Conversa + 4 Atendimento + 3 Conhecimento). Implementei os 12 da tabela.
+4. `resumeTransferHumanAI` existe ao vivo mas não está na tabela de controles do PO — não renderizado (fora do escopo; T1 já o expõe no GET se a T7/outra quiser usar).
+
 ---
 
 ### T7 · Model selector fix — **M** — Verboo
@@ -1201,7 +1234,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T3 · fetch-gpt-credits real data · Verboo · M
 - [x] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
 - [x] T5 · Env fail-fast + netlify.toml · Verboo · S
-- [ ] T6 · Settings page full parity · Verboo · L
+- [x] T6 · Settings page full parity · Verboo · L
 - [ ] T7 · Model selector fix · Verboo · M
 - [ ] T8 · Channels page + Solo card · Verboo · L
 - [ ] T9 · Knowledge Base upload UI · Verboo · M

@@ -1,56 +1,88 @@
 import { useState, useEffect, useCallback } from "react";
-import { Save, Loader2, ToggleLeft, ToggleRight, Info, Settings2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, Info, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ── Settings schema ────────────────────────────────────────────────────────────
+// W1 note #1: the edge function returns BOTH shapes, but W2 migrates to the
+// nested keys — data.settings.*. The flat keys die in 7.3; never read them.
+// W1 note #2: `description` in the UI maps to upstream `jobDescription` inside
+// the edge function — the UI keeps using `description`.
+type SettingType = "switch" | "select" | "text";
+
 interface SettingConfig {
   key: string;
-  apiKey: string;              // exact field name in PUT /v2/agent/{id}
   label: string;
-  description: string;
-  type: "boolean" | "number" | "select";
-  options?: string[];
-  unit?: string;
+  type: SettingType;
   group: string;
+  options?: { value: string; label: string }[];
 }
 
+const MESSAGE_GROUPING_OPTIONS = [
+  { value: "NO_GROUP", label: "Sem agrupamento" },
+  { value: "FIVE_SEC", label: "5 segundos" },
+  { value: "TEN_SEC", label: "10 segundos" },
+  { value: "THIRD_SEC", label: "30 segundos" },
+  { value: "ONE_MINUTE", label: "1 minuto" },
+];
+
+const MAX_DAILY_OPTIONS = [
+  { value: "__null__", label: "Sem limite" },
+  { value: "20", label: "20" },
+  { value: "50", label: "50" },
+  { value: "100", label: "100" },
+  { value: "200", label: "200" },
+  { value: "500", label: "500" },
+  { value: "1000", label: "1000" },
+];
+
+const LIMIT_ACTION_OPTIONS = [
+  { value: "TEMP_BLOCK_30S", label: "Bloquear 30s" },
+  { value: "TEMP_BLOCK_5M", label: "Bloquear 5min" },
+  { value: "TEMP_BLOCK_10M", label: "Bloquear 10min" },
+  { value: "TEMP_BLOCK_30M", label: "Bloquear 30min" },
+  { value: "TEMP_BLOCK_1H", label: "Bloquear 1h" },
+  { value: "BLOCK", label: "Bloquear" },
+  { value: "TRANSFER", label: "Transferir para humano" },
+];
+
+// Timezone: keep the live value; the PO uses a fixed set, fall back to the raw
+// value so we never drop a real timezone.
+const TIMEZONES = [
+  "America/Fortaleza",
+  "America/Sao_Paulo",
+  "America/Recife",
+  "America/Manaus",
+  "America/Belem",
+  "America/Brasilia",
+  "America/Rio_Branco",
+];
+
 const SETTINGS: SettingConfig[] = [
-  {
-    key: "splitMessages",
-    apiKey: "splitMessages",
-    label: "Dividir Mensagens",
-    description: "Quebra respostas longas em múltiplas mensagens para simular digitação humana.",
-    type: "boolean",
-    group: "Comportamento de Envio",
-  },
-  {
-    key: "enabledEmoji",
-    apiKey: "enabledEmoji",
-    label: "Emojis Habilitados",
-    description: "Permite que o agente use emojis nas respostas.",
-    type: "boolean",
-    group: "Comportamento de Envio",
-  },
-  {
-    key: "messageGroupingTime",
-    apiKey: "messageGroupingTime",
-    label: "Tempo de Agrupamento (ms)",
-    description: "Janela de tempo em milissegundos para agrupar mensagens consecutivas antes de processar. Null = desabilitado.",
-    type: "number",
-    unit: "ms",
-    group: "Comportamento de Envio",
-  },
-  {
-    key: "knowledgeByFunction",
-    apiKey: "knowledgeByFunction",
-    label: "Knowledge por Function Call",
-    description: "Usa function calling para recuperar conhecimento seletivo em vez de injetar todo o contexto de uma vez. Recomendado para agentes com grande base de conhecimento.",
-    type: "boolean",
-    group: "Motor de Conhecimento",
-  },
+  // ── Conversa ──────────────────────────────────────────────────────────────
+  { key: "splitMessages", label: "Dividir resposta em partes", type: "switch", group: "Conversa" },
+  { key: "enabledEmoji", label: "Usar emojis nas respostas", type: "switch", group: "Conversa" },
+  { key: "signMessages", label: "Assinar nome do agente nas respostas", type: "switch", group: "Conversa" },
+  { key: "messageGroupingTime", label: "Tempo de resposta", type: "select", group: "Conversa", options: MESSAGE_GROUPING_OPTIONS },
+  { key: "timezone", label: "Timezone do agente", type: "select", group: "Conversa", options: TIMEZONES.map((t) => ({ value: t, label: t })) },
+  // ── Atendimento ───────────────────────────────────────────────────────────
+  { key: "enabledHumanTransfer", label: "Transferir para humano", type: "switch", group: "Atendimento" },
+  { key: "enabledReminder", label: "Permitir registrar lembretes", type: "switch", group: "Atendimento" },
+  { key: "maxDailyMessages", label: "Limite de interações por atendimento", type: "select", group: "Atendimento", options: MAX_DAILY_OPTIONS },
+  { key: "maxDailyMessagesLimitAction", label: "Ação ao atingir o limite", type: "select", group: "Atendimento", options: LIMIT_ACTION_OPTIONS },
+  // ── Conhecimento ──────────────────────────────────────────────────────────
+  { key: "knowledgeByFunction", label: "Busca inteligente do treinamento", type: "switch", group: "Conhecimento" },
+  { key: "limitSubjects", label: "Restringir temas permitidos", type: "switch", group: "Conhecimento" },
+  { key: "onLackKnowLedge", label: "Webhook quando faltar conhecimento", type: "text", group: "Conhecimento" },
 ];
 
 const groupSettings = (settings: SettingConfig[]) =>
@@ -59,65 +91,85 @@ const groupSettings = (settings: SettingConfig[]) =>
     return acc;
   }, {});
 
-// ── Component ──────────────────────────────────────────────────────────────────
+// Normalize a stored value into a select string ("__null__" for null).
+const toSelectValue = (v: unknown): string => (v === null || v === undefined ? "__null__" : String(v));
+const fromSelectValue = (v: string): string | null => (v === "__null__" ? null : v);
+
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [values, setValues] = useState<Record<string, any>>({});
-  const [original, setOriginal] = useState<Record<string, any>>({});
+  const [settings, setSettings] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  // Text drafts are local until the user blurs/saves — avoid saving per keystroke.
+  const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
 
   const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase.functions.invoke("manage-agent-settings");
       if (error) throw error;
-      const vals = {
-        splitMessages: data.splitMessages ?? false,
-        enabledEmoji: data.enabledEmoji ?? false,
-        messageGroupingTime: data.messageGroupingTime ?? "",
-        knowledgeByFunction: data.knowledgeByFunction ?? false,
-      };
-      setValues(vals);
-      setOriginal(vals);
+      // Nested shape — W1 note #1. data.settings.* is the contract; the flat
+      // keys are legacy and die in 7.3.
+      setSettings(data?.settings ?? {});
     } catch {
       toast({ title: "Erro", description: "Não foi possível carregar as configurações.", variant: "destructive" });
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
-  const handleSave = async () => {
-    setSaving(true);
+  // Step 3: save ONE field at a time, optimistic update + rollback. Never PUT
+  // the whole object — it would resend stale values for untouched fields.
+  //
+  // Exception (PM correction, T6 flag 1): the provider ignores
+  // `maxDailyMessagesLimitAction` unless `maxDailyMessages` travels with it.
+  // Sent alone it returns success and silently discards the value — the exact
+  // failure mode this sprint exists to remove. So the pair is always sent
+  // together, and the action control is disabled while no limit is set
+  // (the action is meaningless without one).
+  const COUPLED = ["maxDailyMessages", "maxDailyMessagesLimitAction"];
+
+  const saveSetting = async (key: string, value: unknown) => {
+    const prev = settings[key];
+    setSettings((s) => ({ ...s, [key]: value }));
+    setSavingKey(key);
     try {
-      // Only send keys that changed
-      const changed: Record<string, any> = {};
-      for (const key of Object.keys(values)) {
-        if (values[key] !== original[key]) {
-          changed[key] = values[key] === "" ? null : values[key];
-        }
+      const payload: Record<string, unknown> = { [key]: value };
+      if (COUPLED.includes(key)) {
+        const other = COUPLED.find((k) => k !== key)!;
+        payload[other] = key === "maxDailyMessages" && value === null
+          ? null                       // clearing the limit clears the action
+          : settings[other];
       }
-
-      if (Object.keys(changed).length === 0) {
-        toast({ description: "Nenhuma alteração detectada." });
-        return;
-      }
-
       const { error } = await supabase.functions.invoke(
         "manage-agent-settings?action=update-settings",
-        { body: changed }
+        { body: payload }
       );
       if (error) throw error;
-      setOriginal({ ...values });
-      toast({ title: "Sincronizado!", description: "Configurações salvas com sucesso." });
-    } catch {
-      toast({ title: "Erro", description: "Falha ao salvar configurações.", variant: "destructive" });
-    } finally { setSaving(false); }
+      toast({ title: "Salvo!", description: "Configuração atualizada." });
+    } catch (err) {
+      setSettings((s) => ({ ...s, [key]: prev }));
+      toast({
+        title: "Não foi possível salvar",
+        description: String((err as any)?.message ?? err),
+        variant: "destructive",
+      });
+    } finally {
+      setSavingKey(null);
+    }
   };
 
-  const set = (key: string, val: any) => setValues((p) => ({ ...p, [key]: val }));
+  const onSwitch = (key: string, checked: boolean) => saveSetting(key, checked);
+  const onSelect = (key: string, raw: string) => saveSetting(key, fromSelectValue(raw));
+  const onTextBlur = (key: string) => {
+    const draft = textDrafts[key];
+    if (draft === undefined) return;
+    setTextDrafts((d) => { const { [key]: _, ...rest } = d; return rest; });
+    saveSetting(key, draft);
+  };
 
-  const hasChanges = Object.keys(values).some((k) => values[k] !== original[k]);
   const grouped = groupSettings(SETTINGS);
 
   return (
@@ -129,7 +181,7 @@ export default function SettingsPage() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Configurações</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Parâmetros operacionais do agente sincronizados via <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">PUT /v2/agent/:id</code>.
+          Parâmetros operacionais do agente, sincronizados em tempo real com a API.
         </p>
       </div>
 
@@ -139,9 +191,8 @@ export default function SettingsPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {Object.entries(grouped).map(([group, settings]) => (
+          {Object.entries(grouped).map(([group, configs]) => (
             <div key={group} className="border border-border rounded-lg overflow-hidden bg-card">
-              {/* Group header */}
               <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
                 <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-muted-foreground">
@@ -150,93 +201,84 @@ export default function SettingsPage() {
               </div>
 
               <div className="divide-y divide-border/50">
-                {settings.map((cfg) => (
-                  <div key={cfg.key} className="px-5 py-4 flex items-start justify-between gap-6">
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
+                {configs.map((cfg) => {
+                  const value = settings[cfg.key];
+                  // PM correction (T6 flags 1 & 2): two controls need an honest
+                  // explanation instead of silently doing nothing.
+                  const needsLimitFirst =
+                    cfg.key === "maxDailyMessagesLimitAction" &&
+                    (settings.maxDailyMessages === null ||
+                      settings.maxDailyMessages === undefined);
+                  const hint = needsLimitFirst
+                    ? "Defina um limite de interações para esta ação ter efeito."
+                    : cfg.key === "onLackKnowLedge"
+                    ? "O provedor aceita o valor mas não o retorna — o campo volta vazio ao recarregar."
+                    : null;
+                  return (
+                    <div key={cfg.key} className="px-5 py-4 flex items-center justify-between gap-6">
+                      <div className="flex-1 min-w-0 space-y-0.5">
                         <span className="text-sm font-semibold text-foreground">{cfg.label}</span>
-                        <code className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground/80">
-                          {cfg.apiKey}
-                        </code>
-                        {values[cfg.key] !== original[cfg.key] && (
-                          <span className="text-[10px] font-mono text-primary bg-primary/8 border border-primary/20 px-1.5 py-0.5 rounded">
-                            modificado
-                          </span>
+                        {savingKey === cfg.key && (
+                          <span className="ml-2 text-[10px] font-mono text-primary">salvando…</span>
+                        )}
+                        {hint && (
+                          <p className="text-[11px] text-muted-foreground leading-snug">{hint}</p>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{cfg.description}</p>
-                    </div>
 
-                    <div className="shrink-0 flex items-center">
-                      {cfg.type === "boolean" && (
-                        <button
-                          onClick={() => set(cfg.key, !values[cfg.key])}
-                          className="flex items-center gap-1.5 transition-colors group"
-                        >
-                          {values[cfg.key] ? (
-                            <ToggleRight className="w-9 h-9 text-primary" />
-                          ) : (
-                            <ToggleLeft className="w-9 h-9 text-muted-foreground/40 group-hover:text-muted-foreground" />
-                          )}
-                          <span className={cn(
-                            "text-xs font-mono w-6",
-                            values[cfg.key] ? "text-primary font-bold" : "text-muted-foreground"
-                          )}>
-                            {values[cfg.key] ? "ON" : "OFF"}
-                          </span>
-                        </button>
-                      )}
-
-                      {cfg.type === "number" && (
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min={0}
-                            className="w-24 bg-background border border-border rounded-md px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground text-right"
-                            value={values[cfg.key] ?? ""}
-                            placeholder="null"
-                            onChange={(e) => set(cfg.key, e.target.value === "" ? "" : Number(e.target.value))}
+                      <div className="shrink-0">
+                        {cfg.type === "switch" && (
+                          <Switch
+                            checked={Boolean(value)}
+                            onCheckedChange={(checked) => onSwitch(cfg.key, checked)}
+                            disabled={savingKey !== null && savingKey !== cfg.key}
                           />
-                          {cfg.unit && (
-                            <span className="text-xs font-mono text-muted-foreground">{cfg.unit}</span>
-                          )}
-                        </div>
-                      )}
+                        )}
+                        {cfg.type === "select" && (
+                          <Select
+                            value={toSelectValue(value)}
+                            onValueChange={(raw) => onSelect(cfg.key, raw)}
+                            disabled={
+                              needsLimitFirst ||
+                              (savingKey !== null && savingKey !== cfg.key)
+                            }
+                          >
+                            <SelectTrigger className="w-[230px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cfg.options?.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {cfg.type === "text" && (
+                          <Input
+                            className="w-[260px]"
+                            placeholder="https://…"
+                            defaultValue={typeof value === "string" ? value : ""}
+                            onChange={(e) => setTextDrafts((d) => ({ ...d, [cfg.key]: e.target.value }))}
+                            onBlur={() => onTextBlur(cfg.key)}
+                            disabled={savingKey !== null && savingKey !== cfg.key}
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
 
-          {/* API field mapping note */}
+          {/* Step 4: known gaps — keeps the PO's expectation honest */}
           <div className="flex items-start gap-2.5 p-4 rounded-lg border border-border bg-muted/20 text-xs text-muted-foreground">
             <Info className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground/70" />
             <span>
-              Estes campos mapeiam diretamente para o payload do endpoint{" "}
-              <code className="font-mono bg-muted px-1 py-0.5 rounded">PUT /v2/agent/:agentId</code>.
-              Apenas os campos modificados são enviados (patch seletivo).
+              Horário de atendimento e moderação de conteúdo ainda não estão disponíveis.
             </span>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={fetchSettings}
-              disabled={loading}
-              className="text-xs text-muted-foreground"
-            >
-              Descartar alterações
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-              className="gap-2 px-8"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {saving ? "Sincronizando..." : "Salvar Configurações"}
-            </Button>
           </div>
         </div>
       )}
