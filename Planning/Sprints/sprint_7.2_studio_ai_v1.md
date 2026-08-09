@@ -830,6 +830,35 @@ switch (body.type) {
 - [ ] **Step 9: End-to-end verify.** Upload a small PDF to the bucket, call `create` with its public URL, confirm the training appears in the provider dashboard (list with `type=DOCUMENT`), then delete it and confirm both the training and the Storage object are gone. T0 ran exactly this round-trip successfully, so a failure here means your code, not the provider.
 - [ ] **Step 10: Commit.** `git commit -m "feat(studio-ai): support document upload for agent training"`
 
+### ✅ T4 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W1 · T4 manage-agent-training DOCUMENT + Storage
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w1/t4-training
+Commit:  <committed at Step 10>
+Files:   supabase/functions/manage-agent-training/index.ts (upload-url + create-by-type + type-merge list + storage cleanup)
+         supabase/migrations/20260808000000_agent_training_docs_bucket.sql (NEW — bucket public 20MB + 3 RLS policies)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T4 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W1 T4 · Verboo / deepseek-v4-flash · L · R$ 24)
+Verification: deno check clean · migration applied (db push via pooler — direct host não resolve; replayed 1 migration pendente, ok) · deployed --no-verify-jwt
+              E2E ao vivo: upload-url → upload PDF público → create DOCUMENT → list merged acha (TEXT 23 + WEBSITE 1 + DOCUMENT 1 = 25)
+              → delete → storage object 404 (removido) + training fora da lista (count 24). Test user SQL criado+deletado, 0 resíduos.
+Ledger:  [x] T4
+Merge:   PR para main após auditoria do PM
+```
+
+**Contrato cumprido:**
+- `POST action=upload-url` `{fileName, mimeType}` → `{ uploadPath, publicUrl }` — path namespaced `{equipe_id}/{uuid}.{ext}`, bucket público (provider busca o URL server-side).
+- `POST action=create` agora monta o body por tipo (`DOCUMENT`/`WEBSITE`/`VIDEO`/`TEXT`) — não força tudo a TEXT.
+- **List sempre passa `type`** e, sem filtro, consulta os 4 tipos e mescla (T0 §7: sem isso o DOCUMENT fica invisível — a causa provável do "Knowledge Base não busca dados reais").
+- **Delete remove o objeto do Storage** quando o client envia `documentUrl` apontando para o bucket (T9 tem a URL da lista que renderizou; a tabela de cache não tem coluna document_url).
+
+**Deviações/flags (não silenciosas):**
+1. **`db push --linked` não resolve o host direto** (`db.…supabase.co` dá DNS vazio com resolver https). Migração aplicada via pooler: `--db-url postgresql://postgres.…@aws-0-us-west-2.pooler.supabase.com:6543/postgres` com password URL-encoded. Isso reaplicou `20260807020000_leads_creation_source_solo_api.sql` (já aplicado, idempotente) + o novo. **PM pode registrar isso como convenção local** — a T5/T6 não precisam de db push.
+2. **Storage cleanup no delete exige `documentUrl` no body** — sem coluna no cache, não dá para reconstruir server-side. T9 deve mandar `documentUrl` junto no delete (contrato já produzido acima).
+3. `action=update` continua com body antigo (TEXT-only) — fora do escopo da T4; só a T9 decide se vai editar DOCUMENTs (se for, precisa de um follow-up).
+
 ---
 
 ### T5 · Env fail-fast + `netlify.toml` — **S** — Verboo
@@ -1106,7 +1135,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T1 · manage-agent-settings → /settings + catalog · Verboo · XL
 - [x] T2 · manage-agent-channels real fetch · Verboo · M
 - [x] T3 · fetch-gpt-credits real data · Verboo · M
-- [ ] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
+- [x] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
 - [ ] T5 · Env fail-fast + netlify.toml · Verboo · S
 - [ ] T6 · Settings page full parity · Claude · L
 - [ ] T7 · Model selector fix · Gemini · M
