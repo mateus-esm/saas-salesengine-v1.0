@@ -33,7 +33,7 @@ serve(async (req) => {
 
     const { data: equipe } = await supabaseClient
       .from('equipes')
-      .select('gpt_maker_agent_id, limite_creditos, creditos_avulsos')
+      .select('gpt_maker_agent_id, workspace_id')
       .eq('id', profile.equipe_id)
       .single();
 
@@ -60,9 +60,7 @@ serve(async (req) => {
 
     // IDs colados no Admin podem carregar whitespace/newline — sanitizar sempre
     const agentId = equipe.gpt_maker_agent_id.trim();
-    const planLimit = equipe.limite_creditos || 1000;
-    const extraCredits = equipe.creditos_avulsos || 0;
-    const totalCredits = planLimit + extraCredits;
+    const workspaceId = (equipe.workspace_id ?? '').trim();
 
     let allDetails: any[] = [];
     let totalSpent = 0;
@@ -75,7 +73,8 @@ serve(async (req) => {
           const res = await fetch(spentUrl, { headers: engineHeaders });
           if (!res.ok) return [];
           const data = await res.json();
-          return data.details || [];
+          // Live API returns the breakdown under `data`, NOT `details`.
+          return data.data || [];
         } catch {
           return [];
         }
@@ -90,16 +89,20 @@ serve(async (req) => {
       const spentRes = await fetch(spentUrl, { headers: engineHeaders });
 
       if (!spentRes.ok) {
-        const err = await spentRes.text();
-        console.error('AI Engine credits-spent error:', err);
-        throw new Error(`AI Engine API error: ${spentRes.status}`);
+        const body = await spentRes.text();
+        console.error('AI Engine credits-spent error:', spentRes.status, body);
+        return new Response(
+          JSON.stringify({ error: body || 'Upstream credits-spent error', status: spentRes.status }),
+          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       const spentData = await spentRes.json();
       console.log('AI Engine credits-spent:', JSON.stringify(spentData).slice(0, 200));
 
       totalSpent = spentData.total || 0;
-      allDetails = spentData.details || [];
+      // Live API returns the per-model breakdown under `data`, NOT `details`.
+      allDetails = spentData.data || [];
 
       // Cache to DB
       const periodKey = `${year}-${month.toString().padStart(2, '0')}`;
@@ -111,16 +114,47 @@ serve(async (req) => {
       }, { onConflict: 'equipe_id,periodo', ignoreDuplicates: false });
     }
 
-    const creditsBalance = totalCredits - totalSpent;
+    // ── Real balance (T0 §6.2) ───────────────────────────────────────────────
+    // GET /workspace/{wsId}/credits → { status, credits }. credits is the
+    // remaining account balance. No more fabricated planLimit + creditos_avulsos.
+    let balance = 0;
+    if (workspaceId) {
+      const balanceUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/credits`;
+      const balanceRes = await fetch(balanceUrl, { headers: engineHeaders });
+      if (balanceRes.ok) {
+        const balanceData = await balanceRes.json();
+        balance = balanceData.credits ?? 0;
+      } else {
+        const body = await balanceRes.text();
+        console.error('AI Engine workspace credits error:', balanceRes.status, body);
+        // Balance is not fatal — the usage breakdown still works without it.
+      }
+    }
+
+    // Model keys pass through unchanged (T0 §6.1: they are concrete slugs).
+    // Each detail item carries the contract shape for T10 plus the legacy
+    // year/month/day keys the current page still reads (W1→W2 gap).
+    const details = allDetails.map((d: any) => ({
+      model: d.model,
+      credits: d.credits || 0,
+      date: `${d.year}-${String(d.month ?? 1).padStart(2, '0')}-${String(d.day ?? 1).padStart(2, '0')}`,
+      // legacy — the current UsagePage builds the chart from these; T10 migrates
+      year: d.year,
+      month: d.month,
+      day: d.day,
+    }));
 
     return new Response(JSON.stringify({
+      // T10 contract
+      balance,
+      total: totalSpent,
+      details,
+      // legacy aliases so the current page keeps working until T10
       creditsSpent: totalSpent,
-      creditsBalance,
-      totalCredits,
+      creditsBalance: balance,
       period,
       year,
       month: period === 'month' ? month : null,
-      details: allDetails,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {

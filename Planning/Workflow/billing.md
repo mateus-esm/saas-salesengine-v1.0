@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-08-09 | 7.2 | W1 T3 fetch-gpt-credits real data | Verboo / deepseek-v4-flash | M | R$ 20 |
 | 2026-08-09 | 7.2 | W1 T2 manage-agent-channels real fetch | Verboo / deepseek-v4-flash | M | R$ 20 |
 | 2026-08-09 | 7.2 | W1 T1 manage-agent-settings → /settings + catalog | Verboo / deepseek-v4-flash | XL | R$ 40 |
 | 2026-08-08 | 7.2 | W0 T0 Live API spike + DOCUMENT round-trip | Verboo / deepseek-v4-flash | M | R$ 12 |

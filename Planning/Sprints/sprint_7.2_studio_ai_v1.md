@@ -706,6 +706,25 @@ Merge:   PR para main após auditoria do PM
 - [ ] **Step 5: Typecheck, deploy, verify.** Compare the returned balance against the provider dashboard; record both in the handoff.
 - [ ] **Step 6: Commit.** `git commit -m "fix(studio-ai): return real credit balance and usage breakdown"`
 
+### ✅ T3 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W1 · T3 fetch-gpt-credits real data
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w1/t3-credits
+Commit:  <committed at Step 6>
+Files:   supabase/functions/fetch-gpt-credits/index.ts (rewritten)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T3 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W1 T3 · Verboo / deepseek-v4-flash · M · R$ 20)
+Verification: deno check clean · deployed · live month: balance=230 total=1022 details=10 · live year: balance=230 total=13808 details=189.
+              balance bate com o dashboard do provider (créditos reais da workspace, mudou de 324 em 08-08 p/ 230 em 08-09).
+              Test user criado+deletado (SQL direto, sem email — rate limit), 0 resíduos.
+Ledger:  [x] T3
+Merge:   PR para main após auditoria do PM
+```
+
+**Contrato cumprido:** resposta `{ balance, total, details: [{ model, credits, date }] }` para a T10 — com aliases legados (`creditsBalance`, `creditsSpent`, `details[].year/month/day`) para a página atual continuar funcionando no gap W1→W2 (mesmo padrão "expand now, contract later" da T1). **Model slugs passam sem mapeamento** (T0 §6.1). **Balance real** de `/workspace/{wsId}/credits` — o default fabricado `1000` foi removido (Step 3). **Bug extra encontrado:** o código lia `spentData.details`, mas a API ao vivo retorna `spentData.data` — o gráfico da página estava sempre vazio; corrigido (Step 1). Erros de upstream → `{ error, status }` com 502 (Step 4).
+
 ---
 
 ### T4 · `manage-agent-training` DOCUMENT + Storage — **L** — Verboo
@@ -1086,7 +1105,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T0 · Live API spike · Verboo · M
 - [x] T1 · manage-agent-settings → /settings + catalog · Verboo · XL
 - [x] T2 · manage-agent-channels real fetch · Verboo · M
-- [ ] T3 · fetch-gpt-credits real data · Verboo · M
+- [x] T3 · fetch-gpt-credits real data · Verboo · M
 - [ ] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
 - [ ] T5 · Env fail-fast + netlify.toml · Verboo · S
 - [ ] T6 · Settings page full parity · Claude · L
