@@ -18,8 +18,11 @@ export function BehaviorSettings() {
       setLoading(true);
       const { data, error } = await supabase.functions.invoke('manage-agent-settings');
       if (error) throw error;
-      setBehavior(data.behavior || '');
-      setDescription(data.description || '');
+      // W1 note #1: nested shape. data.agent.* is the contract; the flat keys
+      // die in 7.3. W1 note #2: the edge function maps `description` onto
+      // upstream `jobDescription` — the UI keeps using `description`.
+      setBehavior(data?.agent?.behavior || '');
+      setDescription(data?.agent?.description || '');
     } catch (err) {
       console.error('Error loading settings:', err);
       toast({ title: 'Erro', description: 'Não foi possível carregar configurações do agente.', variant: 'destructive' });
