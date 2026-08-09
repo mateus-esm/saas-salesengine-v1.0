@@ -8,6 +8,76 @@ const corsHeaders = {
 
 const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 
+interface ModelInfo {
+  id: string; label: string; vendor: string;
+  creditsPerMessage: number; isNew?: boolean; isBeta?: boolean;
+}
+
+const MODEL_CATALOG: ModelInfo[] = [
+  { id: 'GPT_5',                 label: 'GPT-5',          vendor: 'OpenAI',    creditsPerMessage: 4 },
+  { id: 'GPT_5_MINI',            label: 'GPT-5 Mini',     vendor: 'OpenAI',    creditsPerMessage: 1 },
+  { id: 'GPT_5_MINI_V2',         label: 'GPT-5 Mini v2',  vendor: 'OpenAI',    creditsPerMessage: 1, isNew: true },
+  { id: 'GPT_5_1',               label: 'GPT-5.1',        vendor: 'OpenAI',    creditsPerMessage: 4 },
+  { id: 'GPT_5_2',               label: 'GPT-5.2',        vendor: 'OpenAI',    creditsPerMessage: 5 },
+  { id: 'GPT_4_1',               label: 'GPT-4.1',        vendor: 'OpenAI',    creditsPerMessage: 4 },
+  { id: 'GPT_4_1_MINI',          label: 'GPT-4.1 Mini',   vendor: 'OpenAI',    creditsPerMessage: 1 },
+  { id: 'GPT_4_O',               label: 'GPT-4o',         vendor: 'OpenAI',    creditsPerMessage: 5 },
+  { id: 'GPT_4_O_MINI',          label: 'GPT-4o Mini',    vendor: 'OpenAI',    creditsPerMessage: 1 },
+  { id: 'GPT_4_TURBO',           label: 'GPT-4 Turbo',    vendor: 'OpenAI',    creditsPerMessage: 20 },
+  { id: 'GPT_4',                 label: 'GPT-4',          vendor: 'OpenAI',    creditsPerMessage: 20 },
+  { id: 'OPEN_AI_O1',            label: 'o1',             vendor: 'OpenAI',    creditsPerMessage: 25 },
+  { id: 'OPEN_AI_O3',            label: 'o3',             vendor: 'OpenAI',    creditsPerMessage: 5 },
+  { id: 'OPEN_AI_O3_MINI',       label: 'o3 Mini',        vendor: 'OpenAI',    creditsPerMessage: 3 },
+  { id: 'OPEN_AI_O4',            label: 'o4',             vendor: 'OpenAI',    creditsPerMessage: 5 },
+  { id: 'OPEN_AI_O4_MINI',       label: 'o4 Mini',        vendor: 'OpenAI',    creditsPerMessage: 3 },
+  { id: 'OPEN_AI_O3_MINI_BETA',  label: 'o3 Mini (Beta)', vendor: 'OpenAI',    creditsPerMessage: 3, isBeta: true },
+  { id: 'CLAUDE_4_5_SONNET',     label: 'Claude 4.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10, isNew: true },
+  { id: 'CLAUDE_3_7_SONNET',     label: 'Claude 3.7 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
+  { id: 'CLAUDE_3_5_SONNET',     label: 'Claude 3.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
+  { id: 'CLAUDE_3_5_HAIKU',      label: 'Claude 3.5 Haiku',  vendor: 'Anthropic', creditsPerMessage: 2 },
+  { id: 'DEEPINFRA_LLAMA3_3',    label: 'Llama 3.3',      vendor: 'Meta',      creditsPerMessage: 1 },
+  { id: 'QWEN_2_5_MAX',          label: 'Qwen 2.5 Max',   vendor: 'Alibaba',   creditsPerMessage: 3 },
+  { id: 'DEEPSEEK_CHAT',         label: 'DeepSeek V3',    vendor: 'Deepseek',  creditsPerMessage: 1 },
+  { id: 'SABIA_3',               label: 'Sabiá 3',        vendor: 'Maritaca',  creditsPerMessage: 3 },
+  { id: 'SABIA_3_1',             label: 'Sabiá 3.1',      vendor: 'Maritaca',  creditsPerMessage: 3 },
+
+  // ── Live-only slugs (T0 spike, 2026-08-08) ───────────────────────────────
+  // These are what the provider ACTUALLY runs. They appear in the live
+  // /settings response and in credits-spent, but in no published enum.
+  // `GPT_5_6_SOL` is Solo Energia's current prefferModel — omitting it would
+  // make the tenant's own model unselectable.
+  { id: 'GPT_5_6_SOL',           label: 'GPT-5.6 Sol',    vendor: 'OpenAI',    creditsPerMessage: 7, isNew: true },
+  { id: 'GPT_5_6_TERRA',         label: 'GPT-5.6 Terra',  vendor: 'OpenAI',    creditsPerMessage: 5, isNew: true },
+  { id: 'GPT_5_4',               label: 'GPT-5.4',        vendor: 'OpenAI',    creditsPerMessage: 7 },
+];
+
+// Reconciled with the T0 live capture. `resumeTransferHumanAI` is returned
+// live but is undocumented; `onLackKnowLedge` is documented but NOT returned
+// live — keep it writable, never require it on read.
+const SETTINGS_KEYS = [
+  'prefferModel', 'timezone', 'enabledHumanTransfer', 'enabledReminder',
+  'splitMessages', 'enabledEmoji', 'limitSubjects', 'signMessages',
+  'messageGroupingTime', 'maxDailyMessages', 'maxDailyMessagesLimitAction',
+  'knowledgeByFunction', 'onLackKnowLedge', 'resumeTransferHumanAI',
+] as const;
+
+// The whole bug in one function: which upstream resource an action targets.
+export function upstreamFor(action: string, agentId: string): string {
+  const base = `${AI_ENGINE_BASE}/agent/${agentId}`;
+  return (action === 'update-settings' || action === 'update-model')
+    ? `${base}/settings`
+    : base;
+}
+
+// Surface the provider's body verbatim so a wrong enum is diagnosable.
+async function upstreamError(res: Response, label: string): Promise<Response> {
+  const body = await res.text();
+  console.error(`AI Engine ${label} error ${res.status}: ${body}`);
+  return new Response(JSON.stringify({ error: body || `Upstream ${label} error`, status: res.status }), {
+    status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -33,7 +103,7 @@ serve(async (req) => {
 
     const { data: equipe } = await supabase
       .from('equipes')
-      .select('gpt_maker_agent_id, workspace_id')
+      .select('gpt_maker_agent_id')
       .eq('id', profile.equipe_id)
       .single();
     if (!equipe?.gpt_maker_agent_id) throw new Error('AI Engine Agent ID not configured');
@@ -51,32 +121,70 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'get';
 
-    // GET — return all agent settings
-    if (req.method === 'GET' || action === 'get') {
-      const res = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}`, {
-        headers: engineHeaders,
-      });
-
-      if (!res.ok) {
-        const err = await res.text();
-        console.error('AI Engine get agent error:', err);
-        throw new Error(`AI Engine API error: ${res.status}`);
-      }
-
-      const data = await res.json();
-      return new Response(JSON.stringify({
-        behavior: data.behavior || '',
-        description: data.description || '',
-        prefferModel: data.prefferModel || 'gpt-4o-mini',
-        name: data.name || '',
-        // Operational config fields
-        splitMessages: data.splitMessages ?? false,
-        enabledEmoji: data.enabledEmoji ?? false,
-        messageGroupingTime: data.messageGroupingTime ?? null,
-        knowledgeByFunction: data.knowledgeByFunction ?? false,
-      }), {
+    // Serve the model catalog without any provider call.
+    if (action === 'models') {
+      return new Response(JSON.stringify({ models: MODEL_CATALOG }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // GET — fan out to the agent object and the /settings sub-resource.
+    if (req.method === 'GET' || action === 'get') {
+      const [agentRes, settingsRes] = await Promise.all([
+        fetch(`${AI_ENGINE_BASE}/agent/${agentId}`, { headers: engineHeaders }),
+        fetch(`${AI_ENGINE_BASE}/agent/${agentId}/settings`, { headers: engineHeaders }),
+      ]);
+
+      if (!agentRes.ok)    return upstreamError(agentRes, 'agent');
+      if (!settingsRes.ok) return upstreamError(settingsRes, 'settings');
+
+      const agent = await agentRes.json();
+      const s = await settingsRes.json();
+
+      const agentOut = {
+        name: agent.name ?? '',
+        behavior: agent.behavior ?? '',
+        // T0 + provider docs: the agent object field is `jobDescription`
+        // (PUT /agent/{id} accepts jobDescription, NOT description). The
+        // frozen contract keeps the app-facing key `description`, so map the
+        // real upstream field here — `agent.description` is always undefined.
+        description: agent.jobDescription ?? '',
+      };
+
+      const settingsOut = {
+        prefferModel: s.prefferModel ?? 'GPT_4_O_MINI',
+        timezone: s.timezone ?? 'America/Fortaleza',
+        enabledHumanTransfer: s.enabledHumanTransfer ?? false,
+        enabledReminder: s.enabledReminder ?? false,
+        splitMessages: s.splitMessages ?? false,
+        enabledEmoji: s.enabledEmoji ?? false,
+        limitSubjects: s.limitSubjects ?? false,
+        signMessages: s.signMessages ?? false,
+        messageGroupingTime: s.messageGroupingTime ?? 'NO_GROUP',
+        maxDailyMessages: s.maxDailyMessages ?? null,
+        // T0: live value is null, not a block action. Do not coerce to a
+        // default — null means "no limit configured".
+        maxDailyMessagesLimitAction: s.maxDailyMessagesLimitAction ?? null,
+        knowledgeByFunction: s.knowledgeByFunction ?? false,
+        // T0: documented but absent from the live GET. Defaulting to '' is
+        // correct; never assume the provider echoes it back.
+        onLackKnowLedge: s.onLackKnowLedge ?? '',
+        // T0: returned live, undocumented. Surfaced so T6 can decide to expose it.
+        resumeTransferHumanAI: s.resumeTransferHumanAI ?? false,
+      };
+
+      return new Response(JSON.stringify({
+        // ── Legacy flat keys — DO NOT REMOVE in this sprint.
+        //    BehaviorSettings.tsx:21 reads data.behavior, SettingsPage.tsx:76-79
+        //    reads flat splitMessages/enabledEmoji/messageGroupingTime/
+        //    knowledgeByFunction and UsagePage.tsx:14 reads data.prefferModel.
+        //    Dropping these breaks working features for the entire gap between
+        //    W1 and W2. Removed in a 7.3 cleanup.
+        ...agentOut,
+        ...settingsOut,
+        agent: agentOut,
+        settings: settingsOut,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const body = await req.json();
@@ -85,15 +193,25 @@ serve(async (req) => {
     if (action === 'update-behavior') {
       updatePayload = { behavior: body.behavior };
     } else if (action === 'update-description') {
-      updatePayload = { description: body.description };
-    } else if (action === 'update-model') {
-      updatePayload = { prefferModel: body.model };
+      // Provider expects jobDescription on the agent object (see GET above).
+      // The app-facing key is `description`; map it to the upstream field.
+      updatePayload = { jobDescription: body.description };
     } else if (action === 'update-settings') {
-      // Selective patch — only include provided keys
-      const allowed = ['splitMessages', 'enabledEmoji', 'messageGroupingTime', 'knowledgeByFunction'];
-      for (const key of allowed) {
-        if (key in body) updatePayload[key] = body[key];
+      for (const key of SETTINGS_KEYS) if (key in body) updatePayload[key] = body[key];
+      if (Object.keys(updatePayload).length === 0) {
+        return new Response(JSON.stringify({ error: 'No valid settings keys provided', status: 400 }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+    } else if (action === 'update-model') {
+      // Do NOT validate against MODEL_CATALOG. T0 proved the provider runs models
+      // that appear in no published enum (GPT_5_6_SOL was the live prefferModel),
+      // so a closed allowlist would reject the tenant's own current model. Reject
+      // only obvious garbage and let the provider be the authority.
+      if (typeof body.model !== 'string' || !/^[A-Z0-9_]{2,50}$/.test(body.model)) {
+        return new Response(JSON.stringify({ error: `Invalid model id: ${body.model}`, status: 400 }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      updatePayload = { prefferModel: body.model };
     } else {
       return new Response(JSON.stringify({ error: 'Invalid action' }), {
         status: 400,
@@ -101,19 +219,12 @@ serve(async (req) => {
       });
     }
 
-    const res = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}`, {
-      method: 'PUT',
-      headers: engineHeaders,
-      body: JSON.stringify(updatePayload),
+    const putRes = await fetch(upstreamFor(action, agentId), {
+      method: 'PUT', headers: engineHeaders, body: JSON.stringify(updatePayload),
     });
+    if (!putRes.ok) return upstreamError(putRes, action);
 
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('AI Engine update error:', err);
-      throw new Error(`AI Engine API error: ${res.status}`);
-    }
-
-    const data = await res.json();
+    const data = await putRes.json();
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

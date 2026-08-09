@@ -578,6 +578,39 @@ git add supabase/functions/manage-agent-settings/ Planning/Sprints/sprint_7.2_st
 git commit -m "fix(studio-ai): point agent settings at the /settings sub-resource"
 ```
 
+### ✅ T1 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W1 · T1 manage-agent-settings → /settings + catalog
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w1/t1-settings
+Commit:  <committed at Step 11>
+Files:   supabase/functions/manage-agent-settings/index.ts (rewritten)
+         supabase/functions/manage-agent-settings/upstream.test.ts (new)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T1 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W1 T1 · Verboo / deepseek-v4-flash · XL · R$ 40)
+Verification: deno test 2/2 · deno check clean · deployed to prod · action=get live 200
+              + toggle round-trip (splitMessages true→false) persisted + restored
+Ledger:  [x] T1
+Merge:   PR para main após auditoria do PM (T1 roda sozinho por convenção da wave)
+```
+
+**Audit evidence (live, test user criado + deletado para verificação — sem resíduos):**
+
+| PM audit point | Evidence |
+|---|---|
+| 1. Settings persist | PUT `update-settings` `{splitMessages:true}` → `{"success":true}`; re-GET → `true`; restored `false` → re-GET `false` |
+| 2. Correct upstream resource | `update-settings`/`update-model` → `/agent/{id}/settings` (test `upstreamFor`); `update-behavior`/`update-description` → `/agent/{id}` |
+| 3. Backwards compat | GET 200 with flat `behavior` (2634 chars), `description`, `prefferModel` **plus** nested `agent`/`settings` — BehaviorSettings/SettingsPage/UsagePage keys intact |
+| 4. Model not allowlist | `update-model` `BAD MODEL!!` → 400 `Invalid model id`; `GPT_5_6_SOL` (live) passes format check; catalog has 29 entries incl. `GPT_5_6_SOL`, `GPT_5_6_TERRA`, `GPT_5_4` |
+| 5–8 | n/a (T1 scope) |
+
+**Deviation from plan (flagged, not silent):**
+1. **`description` is `jobDescription` upstream.** The agent object and `PUT /agent/{id}` use `jobDescription`; `agent.description` is always undefined. Contract keeps app-facing key `description`, so GET maps `agent.jobDescription` and `update-description` sends `{ jobDescription }`. Without this the description editor would silently no-op.
+2. **Step-4 sample spread only `...agentOut`**, but the frozen contract prose (line 357-364) requires flat `prefferModel, …settings` too — and `UsagePage.tsx:14` + `SettingsPage.tsx:76-79` read them flat. Implemented the prose (spreads both), which is the PM-amended contract.
+
+**One deviation from the audit table's Step-4 snippet:** same as #2 — the sample was a truncated illustration; the prose contract wins.
+
 ---
 
 ### T2 · `manage-agent-channels` real fetch — **M** — Verboo
@@ -1016,7 +1049,7 @@ describe('provider branding', () => {
 Tick your task and add one row to `Planning/Workflow/billing.md` on your branch before handing off.
 
 - [x] T0 · Live API spike · Verboo · M
-- [ ] T1 · manage-agent-settings → /settings + catalog · Verboo · XL
+- [x] T1 · manage-agent-settings → /settings + catalog · Verboo · XL
 - [ ] T2 · manage-agent-channels real fetch · Verboo · M
 - [ ] T3 · fetch-gpt-credits real data · Verboo · M
 - [ ] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
