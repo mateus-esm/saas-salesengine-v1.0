@@ -327,6 +327,22 @@ the PM does not quietly rewrite a security boundary.
 
 **Files:** Modify `supabase/functions/manage-agent-settings/index.ts` (whole file rewrite)
 
+> ✅ **T1 SHIPPED & MERGED 2026-08-09** (Verboo, `3c07263`). PM audit passed on
+> points 1, 2, 3, 4, 9, 10. **The as-built contract is below plus two accepted
+> corrections — W2 must read these before coding:**
+>
+> 1. **`description` ⇄ upstream `jobDescription`.** The agent object has **no**
+>    `description` field (see T0 §2). The app-facing key stays `description`;
+>    the edge function maps it to `jobDescription` in both directions. Had this
+>    not been caught, the description editor would have been a silent no-op —
+>    the same bug class this task exists to fix.
+> 2. **Flat legacy keys include the settings, not just the agent fields.** The
+>    response is `{ ...agent, ...settings, agent: {…}, settings: {…} }`, because
+>    `SettingsPage.tsx:75-79` reads flat `splitMessages`/`enabledEmoji`/
+>    `messageGroupingTime`/`knowledgeByFunction` and `UsagePage.tsx:14` reads
+>    flat `prefferModel`. **T6/T10 migrate to the nested keys; the flat ones are
+>    dropped in a 7.3 cleanup, not in this sprint.**
+
 > 🔒 **THE CONTRACT BELOW IS FROZEN.** T6, T7 and T10 are written against these
 > exact key names. Do not rename, restructure, or "improve" the response shape.
 > If the live API makes the contract impossible as written, **stop and tell the
