@@ -122,14 +122,30 @@ export default function SettingsPage() {
 
   // Step 3: save ONE field at a time, optimistic update + rollback. Never PUT
   // the whole object — it would resend stale values for untouched fields.
+  //
+  // Exception (PM correction, T6 flag 1): the provider ignores
+  // `maxDailyMessagesLimitAction` unless `maxDailyMessages` travels with it.
+  // Sent alone it returns success and silently discards the value — the exact
+  // failure mode this sprint exists to remove. So the pair is always sent
+  // together, and the action control is disabled while no limit is set
+  // (the action is meaningless without one).
+  const COUPLED = ["maxDailyMessages", "maxDailyMessagesLimitAction"];
+
   const saveSetting = async (key: string, value: unknown) => {
     const prev = settings[key];
     setSettings((s) => ({ ...s, [key]: value }));
     setSavingKey(key);
     try {
+      const payload: Record<string, unknown> = { [key]: value };
+      if (COUPLED.includes(key)) {
+        const other = COUPLED.find((k) => k !== key)!;
+        payload[other] = key === "maxDailyMessages" && value === null
+          ? null                       // clearing the limit clears the action
+          : settings[other];
+      }
       const { error } = await supabase.functions.invoke(
         "manage-agent-settings?action=update-settings",
-        { body: { [key]: value } }
+        { body: payload }
       );
       if (error) throw error;
       toast({ title: "Salvo!", description: "Configuração atualizada." });
@@ -187,12 +203,26 @@ export default function SettingsPage() {
               <div className="divide-y divide-border/50">
                 {configs.map((cfg) => {
                   const value = settings[cfg.key];
+                  // PM correction (T6 flags 1 & 2): two controls need an honest
+                  // explanation instead of silently doing nothing.
+                  const needsLimitFirst =
+                    cfg.key === "maxDailyMessagesLimitAction" &&
+                    (settings.maxDailyMessages === null ||
+                      settings.maxDailyMessages === undefined);
+                  const hint = needsLimitFirst
+                    ? "Defina um limite de interações para esta ação ter efeito."
+                    : cfg.key === "onLackKnowLedge"
+                    ? "O provedor aceita o valor mas não o retorna — o campo volta vazio ao recarregar."
+                    : null;
                   return (
                     <div key={cfg.key} className="px-5 py-4 flex items-center justify-between gap-6">
                       <div className="flex-1 min-w-0 space-y-0.5">
                         <span className="text-sm font-semibold text-foreground">{cfg.label}</span>
                         {savingKey === cfg.key && (
                           <span className="ml-2 text-[10px] font-mono text-primary">salvando…</span>
+                        )}
+                        {hint && (
+                          <p className="text-[11px] text-muted-foreground leading-snug">{hint}</p>
                         )}
                       </div>
 
@@ -208,7 +238,10 @@ export default function SettingsPage() {
                           <Select
                             value={toSelectValue(value)}
                             onValueChange={(raw) => onSelect(cfg.key, raw)}
-                            disabled={savingKey !== null && savingKey !== cfg.key}
+                            disabled={
+                              needsLimitFirst ||
+                              (savingKey !== null && savingKey !== cfg.key)
+                            }
                           >
                             <SelectTrigger className="w-[230px]">
                               <SelectValue />
