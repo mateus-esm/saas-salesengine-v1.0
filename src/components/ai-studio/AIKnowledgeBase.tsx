@@ -37,8 +37,10 @@ export function AIKnowledgeBase() {
       // Fetch settings
       const settingsRes = await supabase.functions.invoke('manage-agent-settings');
       if (!settingsRes.error && settingsRes.data) {
-        setBehavior(settingsRes.data.behavior || '');
-        setDescription(settingsRes.data.description || '');
+        // W1 note #1: nested shape — data.agent.* is the contract; the flat
+        // keys die in 7.3.
+        setBehavior(settingsRes.data?.agent?.behavior || '');
+        setDescription(settingsRes.data?.agent?.description || '');
       }
 
       // Fetch trainings

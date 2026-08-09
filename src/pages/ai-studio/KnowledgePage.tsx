@@ -20,6 +20,9 @@ interface TrainingItem {
   text: string;
   image?: string;
   title?: string;
+  documentUrl?: string;
+  documentName?: string;
+  documentMimetype?: string;
 }
 
 type KnowledgeFolder = "perfil" | "empresa" | "treinamento";
@@ -226,6 +229,39 @@ function TrainingFolder() {
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+  const [docFile, setDocFile] = useState<File | null>(null);
+
+  // T9 Step 4: client-side validation before upload
+  const ACCEPTED_DOC_TYPES = [".pdf", ".doc", ".docx", ".txt", ".csv"];
+  const MAX_DOC_SIZE_MB = 20;
+  const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+
+  const onDocFileChange = (file: File | null) => {
+    if (!file) { setDocFile(null); return; }
+    const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+    if (!ACCEPTED_DOC_TYPES.includes(ext)) {
+      toast({
+        title: "Formato não suportado",
+        description: `Aceitamos ${ACCEPTED_DOC_TYPES.join(", ")} (máx. ${MAX_DOC_SIZE_MB} MB).`,
+        variant: "destructive",
+      });
+      setDocFile(null);
+      if (docFileInputRef.current) docFileInputRef.current.value = "";
+      return;
+    }
+    if (file.size > MAX_DOC_SIZE_BYTES) {
+      toast({
+        title: "Arquivo muito grande",
+        description: `O limite é ${MAX_DOC_SIZE_MB} MB.`,
+        variant: "destructive",
+      });
+      setDocFile(null);
+      if (docFileInputRef.current) docFileInputRef.current.value = "";
+      return;
+    }
+    setDocFile(file);
+  };
 
   const activeTabCfg = TRAINING_TABS.find((t) => t.id === activeTab)!;
 
@@ -258,6 +294,56 @@ function TrainingFolder() {
   };
 
   const handleCreate = async () => {
+    // DOCUMENT tab: file upload (3-step) or a direct URL to a hosted file.
+    if (activeTab === "docs") {
+      if (!newUrl.trim() && !docFile) return;
+      setCreating(true);
+      try {
+        let documentUrl: string;
+        let documentName: string;
+        let documentMimetype: string;
+
+        if (docFile) {
+          setUploadingFile(true);
+          // Step 1: get the namespaced upload path + public URL from the edge fn
+          const { data: signed, error: signErr } = await supabase.functions.invoke(
+            "manage-agent-training?action=upload-url",
+            { body: { fileName: docFile.name, mimeType: docFile.type } }
+          );
+          if (signErr || !signed?.uploadPath) throw signErr ?? new Error("Falha ao obter URL de upload");
+
+          // Step 2: upload the object to the public bucket
+          const { error: upErr } = await supabase.storage
+            .from("agent-training-docs")
+            .upload(signed.uploadPath, docFile, { contentType: docFile.type });
+          if (upErr) throw upErr;
+
+          documentUrl = signed.publicUrl;
+          documentName = docFile.name;
+          documentMimetype = docFile.type || "application/octet-stream";
+          setUploadingFile(false);
+        } else {
+          documentUrl = newUrl.trim();
+          documentName = documentUrl.split("/").pop() || "documento";
+          documentMimetype = "application/pdf";
+        }
+
+        // Step 3: register the training with the provider
+        const { error } = await supabase.functions.invoke("manage-agent-training?action=create", {
+          body: { type: "DOCUMENT", documentUrl, documentName, documentMimetype },
+        });
+        if (error) throw error;
+
+        toast({ title: "Sincronizado!", description: "Documento adicionado ao conhecimento." });
+        setNewUrl(""); setDocFile(null);
+        if (docFileInputRef.current) docFileInputRef.current.value = "";
+        fetchTrainings();
+      } catch {
+        toast({ title: "Erro", description: "Falha ao enviar documento.", variant: "destructive" });
+      } finally { setCreating(false); setUploadingFile(false); }
+      return;
+    }
+
     const content = activeTab === "blocos" ? newText : newUrl;
     if (!content.trim() && !attachFile) return;
 
@@ -304,8 +390,11 @@ function TrainingFolder() {
   };
 
   const handleDelete = async (id: string) => {
+    // T4 flag 3: pass documentUrl so the edge function also removes the
+    // Storage object for DOCUMENT trainings.
+    const training = trainings.find((t) => t.id === id || (t as any)._id === id);
     const { error } = await supabase.functions.invoke("manage-agent-training?action=delete", {
-      body: { trainingId: id },
+      body: { trainingId: id, ...(training?.documentUrl ? { documentUrl: training.documentUrl } : {}) },
     });
     if (error) throw error;
     setTrainings((prev) => prev.filter((t) => t.id !== id && (t as any)._id !== id));
@@ -340,14 +429,55 @@ function TrainingFolder() {
       {/* New item form */}
       <div className="flex items-stretch gap-2">
         {isUrlTab ? (
-          <input
-            type="url"
-            className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground font-mono"
-            placeholder={activeTab === "website" ? "https://seusite.com/pagina" : activeTab === "video" ? "https://youtube.com/watch?v=..." : "https://link-para-arquivo.pdf"}
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-          />
+          activeTab === "docs" ? (
+            <>
+              {/* T9 Step 1: file input + URL field both available for docs */}
+              <input
+                type="url"
+                className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground font-mono"
+                placeholder="https://link-para-arquivo.pdf (ou envie um arquivo)"
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              />
+              <div className="flex flex-col gap-1">
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.csv"
+                  className="hidden"
+                  onChange={(e) => onDocFileChange(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  onClick={() => docFileInputRef.current?.click()}
+                  className={cn(
+                    "p-2 rounded-md border transition-colors",
+                    docFile ? "border-primary bg-primary/8 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                  title="Enviar arquivo (.pdf, .doc, .docx, .txt, .csv — máx. 20 MB)"
+                >
+                  <Upload className="w-4 h-4" />
+                </button>
+                {docFile && (
+                  <button
+                    onClick={() => { setDocFile(null); if (docFileInputRef.current) docFileInputRef.current.value = ""; }}
+                    className="p-2 rounded-md border border-border text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <input
+              type="url"
+              className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground font-mono"
+              placeholder={activeTab === "website" ? "https://seusite.com/pagina" : activeTab === "video" ? "https://youtube.com/watch?v=..." : "https://link-para-arquivo.pdf"}
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+            />
+          )
         ) : (
           <>
             <textarea
@@ -389,21 +519,24 @@ function TrainingFolder() {
         )}
         <Button
           onClick={handleCreate}
-          disabled={creating || uploadingFile || (!newText.trim() && !newUrl.trim() && !attachFile)}
+          disabled={creating || uploadingFile ||
+            (activeTab === "docs"
+              ? (!newUrl.trim() && !docFile)
+              : (!newText.trim() && !newUrl.trim() && !attachFile))}
           size="sm"
           className="self-start mt-0.5 gap-1.5"
         >
           {creating || uploadingFile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          {uploadingFile ? "Upload..." : "Adicionar"}
+          {uploadingFile ? "Enviando..." : "Adicionar"}
         </Button>
       </div>
 
       {/* Attachment preview */}
-      {attachFile && (
+      {(attachFile || docFile) && (
         <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground bg-muted/40 px-3 py-2 rounded-md border border-border">
           <Upload className="w-3.5 h-3.5 text-primary" />
-          <span className="truncate">{attachFile.name}</span>
-          <span className="text-[10px] ml-auto">({(attachFile.size / 1024).toFixed(1)} KB)</span>
+          <span className="truncate">{attachFile?.name ?? docFile?.name}</span>
+          <span className="text-[10px] ml-auto">({((attachFile ?? docFile)!.size / 1024).toFixed(1)} KB)</span>
         </div>
       )}
 
@@ -424,7 +557,7 @@ function TrainingFolder() {
               id={t.id || (t as any)._id}
               type={(t.type || "TEXT").toUpperCase()}
               initialContent={t.text || ""}
-              title={t.title}
+              title={t.title || t.documentName}
               index={trainings.indexOf(t)}
               onSave={handleUpdate}
               onDelete={handleDelete}

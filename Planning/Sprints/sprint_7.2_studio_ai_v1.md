@@ -1165,9 +1165,34 @@ await supabase.functions.invoke('manage-agent-training?action=create', {
 - [ ] **Step 6: Verify.** Upload a real PDF, confirm it appears in the list without reloading and in the provider dashboard. Delete it and confirm it disappears from both.
 - [ ] **Step 7: Commit.** `git commit -m "feat(studio-ai): upload documents to the knowledge base"`
 
----
+### ✅ T9 — Handoff (Verboo-deepseek · 2026-08-09)
 
-### T10 · Usage page real data — **M** — Verboo
+```
+HANDOFF: W2 · T9 Knowledge Base upload UI
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w2/t9-knowledge
+Commit:  <committed at Step 7>
+Files:   src/pages/ai-studio/KnowledgePage.tsx (docs tab: file input + 3-step upload + validação + refetch + delete com documentUrl)
+         src/components/ai-studio/AIKnowledgeBase.tsx (read path → data.agent.*; componente órfão, não renderizado)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T9 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W2 T9 · Verboo / deepseek-v4-flash · M · R$ 12)
+Verification: npx tsc -b clean · npm run build clean · E2E ao vivo: upload-url → storage.upload → create DOCUMENT →
+              list mostra (documentName t9-spike.pdf) → delete com documentUrl → {"success":true} + objeto do Storage 404.
+              Test user SQL criado+deletado, 0 resíduos.
+Ledger:  [x] T9
+Merge:   PR para main após auditoria do PM (gate: npx tsc -b + npm run build)
+```
+
+**Contrato cumprido:**
+1. **File input** na aba Docs aceita `.pdf,.doc,.docx,.txt,.csv` máx. 20 MB — **mantendo o campo URL** (o PO quer ambos).
+2. **3-step upload**: `upload-url` → `storage.from('agent-training-docs').upload(uploadPath, file)` → `create` com `{type:'DOCUMENT', documentUrl, documentName, documentMimetype}`.
+3. **Refetch na success** (`fetchTrainings()`) → o novo documento aparece sem reload manual. Botão mostra "Enviando..." durante o upload.
+4. **Validação client-side**: extensão fora da lista ou >20MB → toast claro nomeando o limite, antes de qualquer chamada.
+5. **Delete** agora envia `documentUrl` (T4 flag 3) quando o item é DOCUMENT → o edge function também remove o objeto do Storage.
+
+**Notas:**
+- `AIKnowledgeBase` é componente **órfão** (não renderizado em lugar nenhum — só `KnowledgePage` está na rota). Atualizei o read path para `data.agent.*` (W1 note #1) por ser arquivo da T9, mas a feature completa (upload) está na página real. Se o PM preferir remover o componente órfão depois, é um follow-up.
+- Título dos cards DOCUMENT usa `documentName` (o `text` é null nesses itens — T0 §7).
 **Files:** Modify `src/pages/ai-studio/UsagePage.tsx` · `src/components/ai-studio/AIUsageDashboard.tsx`
 
 **Interfaces — Consumes:** T3's `{ balance, total, details }` and T1's `action=models`.
@@ -1259,7 +1284,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T6 · Settings page full parity · Verboo · L
 - [x] T7 · Model selector fix · Verboo · M
 - [ ] T8 · Channels page + Solo card · Verboo · L
-- [ ] T9 · Knowledge Base upload UI · Verboo · M
+- [x] T9 · Knowledge Base upload UI · Verboo · M
 - [ ] T10 · Usage page real data · Verboo · M
 - [ ] T11 · Billing instances section · Verboo · M
 - [ ] T12 · White-label sweep + guard · Codex · M
