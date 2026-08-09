@@ -838,6 +838,26 @@ if (!supabaseUrl || !supabaseKey) {
   > **If you lack Netlify access, do not block.** Finish steps 1–3 and 5, and put `NETLIFY ENV: UNVERIFIED — founder must check` at the top of your handoff. This is a founder-only credential; the PM will chase it separately.
 - [ ] **Step 5: Commit.** `git commit -m "fix: fail fast when Supabase env vars are missing"`
 
+### ✅ T5 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W1 · T5 Env fail-fast + netlify.toml
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w1/t5-env-failfast
+Commit:  <committed at Step 5>
+Files:   src/integrations/supabase/client.ts (placeholder fallbacks → throw)
+         netlify.toml (NEW — build config + redirects + env checklist)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T5 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W1 T5 · Verboo / deepseek-v4-flash · S · R$ 10)
+Verification: guarda presente no bundle (throw com nome das variáveis) + build limpo com vars reais (URL inline, sem placeholder)
+Ledger:  [x] T5
+Merge:   PR para main após auditoria do PM
+```
+
+**NETLIFY ENV: UNVERIFIED — founder must check** (sem acesso Netlify: CLI não instalado, sem token no `.env`). Se `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` não estiverem no Netlify → Site settings → Environment variables, **isso sozinho explica os relatos de "não busca dados reais"** e a guarda vai quebrar o app no deploy. `VITE_SUPABASE_PROJECT_ID` também é esperado.
+
+**Nota de comportamento:** a guarda dispara em **runtime** (ao carregar a página), não em `vite build` — o Vite faz bundle sem executar o código do app. Com vars ausentes o bundle inlinha strings vazias e o `throw` derruba o app na abertura (fail-fast de verdade); com vars presentes o URL real é inline e a guarda fica inerte. Verificado nos dois sentidos. **Isso difere levemente do Step 3 do plano ("build fails")** — o efeito desejado (falha ruidosa, sem fallback silencioso) é alcançado; a janela de falha é o runtime, não o build.
+
 ---
 
 ## WAVE 2 — frontend
@@ -1069,7 +1089,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [ ] T2 · manage-agent-channels real fetch · Verboo · M
 - [ ] T3 · fetch-gpt-credits real data · Verboo · M
 - [ ] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
-- [ ] T5 · Env fail-fast + netlify.toml · Verboo · S
+- [x] T5 · Env fail-fast + netlify.toml · Verboo · S
 - [ ] T6 · Settings page full parity · Claude · L
 - [ ] T7 · Model selector fix · Gemini · M
 - [ ] T8 · Channels page + Solo card · Codex · L

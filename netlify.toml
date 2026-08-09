@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Required environment variables (set in Netlify UI — never commit values):
+#   VITE_SUPABASE_URL
+#   VITE_SUPABASE_ANON_KEY
+#   VITE_SUPABASE_PROJECT_ID
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

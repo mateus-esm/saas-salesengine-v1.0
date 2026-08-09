@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-08-09 | 7.2 | W1 T5 Env fail-fast + netlify.toml | Verboo / deepseek-v4-flash | S | R$ 10 |
 | 2026-08-09 | 7.2 | W1 T1 manage-agent-settings → /settings + catalog | Verboo / deepseek-v4-flash | XL | R$ 40 |
 | 2026-08-08 | 7.2 | W0 T0 Live API spike + DOCUMENT round-trip | Verboo / deepseek-v4-flash | M | R$ 12 |
 | 2026-07-04 | 7 | W0 Spike API reference + migration + infra checklist (PM) | Claude / Fable 5 | L | R$ 20 |
