@@ -93,7 +93,12 @@ internal our they are our current agent and channel provider,
 ## ✅ DEFINITION OF DONE
 
 - [ ] Every control in Studio AI reads real provider state and persists real changes (verified by reload + provider dashboard).
-- [ ] All 13 agent-settings fields are exposed and round-trip correctly.
+- [x] All agent-settings fields are exposed and round-trip correctly — **12
+      controls** on the Settings page + `prefferModel` in the model selector
+      (T7). *(The earlier "13 fields" wording conflated the two surfaces;
+      corrected after T6. `resumeTransferHumanAI` exists live but is not in the
+      PO's list, so it is returned by the API layer and deliberately not
+      rendered.)*
 - [ ] Model selector lists the provider's real enum catalog, shows the current model, and saving it sticks.
 - [ ] Knowledge Base ingests an uploaded file (not only a hosted URL) and reflects trainings in real time.
 - [ ] Uso & Analytics and Canais display real data.
@@ -117,7 +122,13 @@ internal our they are our current agent and channel provider,
 - Model ids are the provider's **UPPER_SNAKE enum** (`GPT_4_O_MINI`), never lowercase slugs. Never derive a display name by transforming an id.
 - **No user-visible string may name the provider's brand.** Internal identifiers (`GPTMakerProvider`, `GPT_MAKER_TOKEN`, `gpt_maker_agent_id`) stay unchanged.
 - New edge functions need an entry in `supabase/config.toml`. This sprint adds none — only modifies existing ones.
-- Every edge function must `deno check` clean; every frontend task must `npm run build` clean.
+- Every edge function must `deno check` clean.
+- **Every frontend task must pass `npx tsc -b` AND `npm run build`.** ⚠️ *Gate
+  corrected 2026-08-09 (PM):* `npm run build` alone is **not** a typecheck —
+  Vite uses esbuild, which strips types without checking them. T7 shipped a real
+  `TS2515` error that the build reported as clean. The project already learned
+  this in 6.9/6.10 and added the `typecheck` script; the plan wrongly specified
+  the weaker gate. `npx tsc -b` is the real gate.
 - UI copy is **pt-BR**.
 - Deploys are **manual**: `supabase functions deploy <fn> [--no-verify-jwt] --project-ref egxzsivzqlqadoqpgfby`. There is no CI deploy.
 
