@@ -40,9 +40,7 @@ interface Channel {
   id: string;
   name: string;
   type: string;
-  status: "active" | "inactive" | "connecting";
-  phone?: string | null;
-  connectedAt?: string | null;
+  connected: boolean;
 }
 
 // ── Live Channels ──────────────────────────────────────────────────────────────
@@ -51,6 +49,7 @@ function LiveChannelsSection() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -60,10 +59,13 @@ function LiveChannelsSection() {
     try {
       const { data, error } = await supabase.functions.invoke("manage-agent-channels");
       if (error) throw error;
-      const items: Channel[] = data?.data || data || [];
-      setChannels(Array.isArray(items) ? items : []);
-    } catch (err) {
+      // T2 shape: { channels: [{ id, name, type, connected }] }
+      setChannels(Array.isArray(data?.channels) ? data.channels : []);
+      setFetchError(null);
+    } catch (err: any) {
       console.error("channels fetch:", err);
+      setChannels([]);
+      setFetchError(err?.message || "Erro desconhecido");
       if (!silent) toast({ title: "Erro", description: "Não foi possível carregar os canais.", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -136,20 +138,43 @@ function LiveChannelsSection() {
           <div className="flex justify-center py-12">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
+        ) : fetchError ? (
+          <div className="text-center py-10 border border-destructive/30 border-dashed rounded-lg">
+            <AlertCircle className="w-8 h-8 mx-auto mb-2 text-destructive/60" />
+            <p className="text-sm font-medium text-foreground">Não foi possível carregar os canais</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto break-words">{fetchError}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => fetchChannels(true)}
+              disabled={refreshing}
+              className="mt-3 gap-1.5 text-xs"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", refreshing && "animate-spin")} />
+              Tentar novamente
+            </Button>
+          </div>
         ) : channels.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-border rounded-lg">
             <MessageSquare className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Nenhum canal encontrado.</p>
+            <p className="text-sm text-muted-foreground">Nenhum canal conectado</p>
             <p className="text-xs text-muted-foreground mt-1">
               Crie um canal em Novo canal ou conecte uma instancia Solo API abaixo.
             </p>
+            <Button
+              size="sm"
+              className="mt-4 gap-1.5 text-xs"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              + Novo canal
+            </Button>
           </div>
         ) : (
           <div className="divide-y divide-border/60">
             {channels.map((ch) => {
               const typeCfg = getTypeConfig(ch.type);
               const TypeIcon = typeCfg.icon;
-              const isActive = ch.status === "active";
+              const isActive = ch.connected === true;
 
               return (
                 <div key={ch.id} className="flex items-center justify-between py-3.5 px-1 gap-4">
@@ -163,19 +188,11 @@ function LiveChannelsSection() {
                         <span className="text-[10px] font-mono text-muted-foreground uppercase">
                           {typeCfg.label}
                         </span>
-                        {ch.phone && (
-                          <span className="text-[10px] font-mono text-muted-foreground">{ch.phone}</span>
-                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
-                    {ch.connectedAt && (
-                      <span className="hidden sm:block text-[10px] font-mono text-muted-foreground">
-                        {ch.connectedAt}
-                      </span>
-                    )}
                     <div className={cn(
                       "flex items-center gap-1.5 text-[11px] font-mono px-2 py-1 rounded border",
                       isActive
@@ -248,6 +265,7 @@ interface WppInstance {
   phone: string | null;
   billing_active: boolean;
   connected_at: string | null;
+  monthly_price?: number | null;
 }
 
 interface ManageSoloResponse {
@@ -280,6 +298,21 @@ function SoloAPISection() {
       setMonthlyPrice(response.monthly_price);
     }
   }, []);
+
+  const formatConnectedAt = (iso: string | null) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleString("pt-BR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  const mergeStatusIntoInstances = (instance: WppInstance, monthlyPrice?: number) =>
+    setInstances((prev) =>
+      prev.map((inst) => (inst.id === instance.id ? { ...inst, ...instance, monthly_price: monthlyPrice ?? inst.monthly_price } : inst))
+    );
 
   // Fetch instances from database on mount
   const fetchInstances = useCallback(async () => {
@@ -339,9 +372,7 @@ function SoloAPISection() {
             toast({ title: "Sucesso", description: `Instância ${response.instance.display_name} conectada!` });
             fetchInstances();
           } else {
-            setInstances((prev) =>
-              prev.map((inst) => (inst.id === pollingInstanceId ? response.instance! : inst))
-            );
+            mergeStatusIntoInstances(response.instance, response.monthly_price);
           }
         } else if (response.connected) {
           setPollingInstanceId(null);
@@ -390,7 +421,8 @@ function SoloAPISection() {
       } else if (connectData.qr_base64) {
         setQrData({ base64: connectData.qr_base64, instanceId: createData.instance!.id });
         setPollingInstanceId(createData.instance!.id);
-        setInstances((prev) => [...prev, connectData.instance!]);
+        const withPrice = { ...connectData.instance!, monthly_price: connectData.monthly_price ?? createData.monthly_price };
+        setInstances((prev) => [...prev.filter((i) => i.id !== withPrice.id), withPrice]);
       }
     } catch (err: any) {
       console.error("create/connect:", err);
@@ -425,7 +457,7 @@ function SoloAPISection() {
         setPollingInstanceId(instanceId);
         setQrExpired(false);
         if (response.instance) {
-          setInstances((prev) => prev.map((inst) => (inst.id === instanceId ? response.instance! : inst)));
+          mergeStatusIntoInstances(response.instance, response.monthly_price);
         }
       }
     } catch (err: any) {
@@ -502,7 +534,7 @@ function SoloAPISection() {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Conexão Direta (Solo API)</h3>
             <p className="text-xs text-muted-foreground">
-              +R$ {monthlyPrice ?? DEFAULT_SOLO_MONTHLY_PRICE}/mês por instância conectada
+              Instâncias conectadas direto à API Solo; cada card mostra o valor mensal.
             </p>
           </div>
         </div>
@@ -598,6 +630,8 @@ function SoloAPISection() {
               {instances.map((inst) => {
                 const badge = getStatusBadge(inst.status);
                 const BadgeIcon = badge.icon;
+                const connectedAtLabel = formatConnectedAt(inst.connected_at);
+                const price = inst.monthly_price ?? monthlyPrice ?? DEFAULT_SOLO_MONTHLY_PRICE;
                 return (
                   <div key={inst.id} className="flex items-center justify-between px-4 py-3 border border-border rounded-lg gap-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -607,12 +641,21 @@ function SoloAPISection() {
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-foreground truncate">{inst.display_name}</div>
-                        {inst.phone && (
-                          <div className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground mt-0.5">
-                            <Phone className="w-3 h-3" />
-                            {inst.phone}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground mt-0.5 flex-wrap">
+                          {inst.status === "connected" && connectedAtLabel ? (
+                            <span>Conectado em {connectedAtLabel}</span>
+                          ) : (
+                            <span className="uppercase">{inst.status === "awaiting_qr" ? "Aguardando QR" : inst.status}</span>
+                          )}
+                          <span>·</span>
+                          <span>R$ {price}/mês</span>
+                          {inst.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {inst.phone}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -665,7 +708,7 @@ function SoloAPISection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Deletar instância?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação removerá a instância e a cobrança mensal de R$ {monthlyPrice ?? DEFAULT_SOLO_MONTHLY_PRICE} será cancelada.
+              Esta ação removerá a instância permanentemente do VPS (Docker) e da base de dados, e a cobrança mensal de R$ {monthlyPrice ?? DEFAULT_SOLO_MONTHLY_PRICE} será cancelada. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
