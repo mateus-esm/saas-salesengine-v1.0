@@ -140,12 +140,12 @@ W3 ── T12 white-label sweep (runs ALONE — touches files owned by W2)
 
 | # | Task | Tier | Engineer | Owns (exclusive) |
 |---|---|---|---|---|
-| T0 | Live API spike | M | Codex | `Planning/Sprints/sprint_7.2_api_reference.md` |
-| T1 | `manage-agent-settings` → `/settings` + catalog | **XL** | Claude | `supabase/functions/manage-agent-settings/index.ts` |
-| T2 | `manage-agent-channels` real fetch | M | Gemini | `supabase/functions/manage-agent-channels/index.ts` |
-| T3 | `fetch-gpt-credits` real data | M | Gemini | `supabase/functions/fetch-gpt-credits/index.ts` |
-| T4 | `manage-agent-training` DOCUMENT + Storage | **L** | Codex | `supabase/functions/manage-agent-training/index.ts` · `supabase/migrations/20260808000000_agent_training_docs_bucket.sql` |
-| T5 | Env fail-fast + `netlify.toml` | S | Antigravity | `src/integrations/supabase/client.ts` · `netlify.toml` |
+| T0 | Live API spike | M | Verboo ✅ | `Planning/Sprints/sprint_7.2_api_reference.md` |
+| T1 | `manage-agent-settings` → `/settings` + catalog | **XL** | **Verboo** | `supabase/functions/manage-agent-settings/index.ts` |
+| T2 | `manage-agent-channels` real fetch | M | **Verboo** | `supabase/functions/manage-agent-channels/index.ts` |
+| T3 | `fetch-gpt-credits` real data | M | **Verboo** | `supabase/functions/fetch-gpt-credits/index.ts` |
+| T4 | `manage-agent-training` DOCUMENT + Storage | **L** | **Verboo** | `supabase/functions/manage-agent-training/index.ts` · `supabase/migrations/20260808000000_agent_training_docs_bucket.sql` |
+| T5 | Env fail-fast + `netlify.toml` | S | **Verboo** | `src/integrations/supabase/client.ts` · `netlify.toml` |
 | T6 | Settings page full parity | **L** | Claude | `src/pages/ai-studio/SettingsPage.tsx` · `src/components/ai-studio/BehaviorSettings.tsx` |
 | T7 | Model selector fix | M | Gemini | `src/components/ai-studio/ModelSelector.tsx` · `src/services/ai-studio/providers/GPTMakerProvider.ts` |
 | T8 | Channels page + Solo card | **L** | Codex | `src/pages/ai-studio/ChannelsPage.tsx` · `src/components/ai-studio/CreateChannelDialog.tsx` |
@@ -160,7 +160,7 @@ W3 ── T12 white-label sweep (runs ALONE — touches files owned by W2)
 
 ## WAVE 0
 
-### T0 · Live API spike — **M** — Codex
+### T0 · Live API spike — **M** — Verboo ✅ merged
 
 **Files:** Create `Planning/Sprints/sprint_7.2_api_reference.md`
 
@@ -280,11 +280,58 @@ Amended by T0 findings: T1 (catalog + validation + whitelist), T2 (endpoint deci
 
 ---
 
+## 🎛️ WAVE 1 — DELEGATION & PM AUDIT (founder decision, 2026-08-09)
+
+**All five W1 tasks are delegated to Verboo**, including T1 (XL). The PM does
+not co-develop; the PM audits afterwards and corrects what's wrong.
+
+Because a single engineer owns all five edge functions, two conventions apply
+that would not matter with parallel owners:
+
+1. **One branch per task, not one for the wave.** `verboo/sprint7.2/w1/<task>`.
+   Five tasks on one branch means one rejected task blocks four good ones.
+2. **T1 goes first and is handed off alone**, before T2–T5 start. It is the only
+   task whose output other tasks depend on. If its contract is wrong, finding
+   out after four more tasks are built is the expensive path.
+
+### 🔍 PM audit — the critical points, checked in this order
+
+Run after the W1 handoffs land. Each line is pass/fail with evidence, not opinion.
+
+| # | Critical point | How the PM checks it | Fail =|
+|---|---|---|---|
+| 1 | **Settings actually persist** | `action=get` on the live function returns non-default values matching the provider dashboard; toggle one field, re-GET, value changed | The entire sprint premise is unfixed |
+| 2 | **Correct upstream resource** | `git show <branch>:…/manage-agent-settings/index.ts` — `update-settings` and `update-model` must hit `/agent/{id}/settings`; behavior/description must hit `/agent/{id}` | Silent no-op writes return |
+| 3 | **Backwards compatibility kept** | Response still contains flat `behavior` at top level. Load the live Knowledge page — the behavior editor must still work | Working feature regressed in prod |
+| 4 | **Model validation is not an allowlist** | `update-model` accepts `GPT_5_6_SOL` (the tenant's live model) | Tenant cannot select its own model |
+| 5 | **Trainings listed with `type`** | Every list call passes `type`; a DOCUMENT training is visible after upload | "KB doesn't fetch real data" persists |
+| 6 | **Storage RLS isolates tenants** | Read the policy: writes restricted to `(storage.foldername(name))[1]` matching the caller's `equipe_id` | **Cross-tenant data leak** — most serious failure mode in this sprint |
+| 7 | **Channel endpoint unchanged** | Still `/workspace/{id}/channels`; `workspace_id` still `.trim()`ed | Two tenants with `\n` break; channel types silently change |
+| 8 | **No fabricated numbers** | `fetch-gpt-credits` returns the real balance; the hardcoded `1000` default is gone | Dashboard lies convincingly |
+| 9 | **Errors surface the provider body** | Force a bad enum → response carries the provider's message, not a generic string | Next bug is undiagnosable |
+| 10 | **Secrets & scope** | `git diff main...<branch>` — only owned files; no token material; `deno check` clean | Workflow violation |
+
+**Points 3 and 6 are the two that can do real damage** — one regresses a working
+feature in production, the other leaks data across tenants. If the audit budget
+is short, check those two first.
+
+The PM corrects small deviations directly on the branch and says so in the merge
+note. Anything touching points 3 or 6 goes back to the engineer with a reason —
+the PM does not quietly rewrite a security boundary.
+
+---
+
 ## WAVE 1 — edge functions
 
-### T1 · `manage-agent-settings` → `/settings` + model catalog — **XL** — Claude
+### T1 · `manage-agent-settings` → `/settings` + model catalog — **XL** — Verboo · **do this one first, hand off alone**
 
 **Files:** Modify `supabase/functions/manage-agent-settings/index.ts` (whole file rewrite)
+
+> 🔒 **THE CONTRACT BELOW IS FROZEN.** T6, T7 and T10 are written against these
+> exact key names. Do not rename, restructure, or "improve" the response shape.
+> If the live API makes the contract impossible as written, **stop and tell the
+> PM** — do not invent an alternative and carry on. A silent contract change
+> here breaks three downstream tasks that won't be written for days.
 
 **Interfaces — Produces** (T6 and T7 consume these verbatim):
 
@@ -306,6 +353,15 @@ Amended by T0 findings: T1 (catalog + validation + whitelist), T2 (endpoint deci
 }
 // prefferModel is a free string, NOT a closed union — the provider runs
 // undocumented slugs (T0 found GPT_5_6_SOL live).
+
+// ⚠️ BACKWARDS COMPATIBILITY — REQUIRED (PM, 2026-08-09)
+// The GET response ALSO keeps the old flat keys during this sprint:
+//   { behavior, description, prefferModel, ...settings, agent: {...}, settings: {...} }
+// Reason: BehaviorSettings.tsx:21 reads `data.behavior` today and that editor
+// WORKS. W1 deploys before W2 updates the pages, so a nested-only response
+// would break a working feature for the whole gap between waves.
+// Expand now, contract later: W2/T6 migrates to the nested keys, and the flat
+// keys are deleted in a 7.3 cleanup task — NOT in this sprint.
 // GET (action=models) → { models: ModelInfo[] }
 // ModelInfo = { id: string; label: string; vendor: string; creditsPerMessage: number; isNew?: boolean; isBeta?: boolean }
 // Errors (all actions) → { error: string, status: number }
@@ -411,12 +467,18 @@ if (req.method === 'GET' || action === 'get') {
   const agent = await agentRes.json();
   const s = await settingsRes.json();
 
+  const agentOut = {
+    name: agent.name ?? '',
+    behavior: agent.behavior ?? '',
+    description: agent.description ?? '',
+  };
+
   return new Response(JSON.stringify({
-    agent: {
-      name: agent.name ?? '',
-      behavior: agent.behavior ?? '',
-      description: agent.description ?? '',
-    },
+    // ── Legacy flat keys — DO NOT REMOVE in this sprint. BehaviorSettings.tsx
+    //    still reads data.behavior; dropping these breaks a working editor
+    //    for the entire gap between W1 and W2. Removed in a 7.3 cleanup.
+    ...agentOut,
+    agent: agentOut,
     settings: {
       prefferModel: s.prefferModel ?? 'GPT_4_O_MINI',
       timezone: s.timezone ?? 'America/Fortaleza',
@@ -518,7 +580,7 @@ git commit -m "fix(studio-ai): point agent settings at the /settings sub-resourc
 
 ---
 
-### T2 · `manage-agent-channels` real fetch — **M** — Gemini
+### T2 · `manage-agent-channels` real fetch — **M** — Verboo
 
 **Files:** Modify `supabase/functions/manage-agent-channels/index.ts` (list branch only, ~line 186)
 
@@ -563,7 +625,7 @@ return new Response(JSON.stringify({ channels: normalized }),
 
 ---
 
-### T3 · `fetch-gpt-credits` real data — **M** — Gemini
+### T3 · `fetch-gpt-credits` real data — **M** — Verboo
 
 **Files:** Modify `supabase/functions/fetch-gpt-credits/index.ts`
 
@@ -578,7 +640,7 @@ return new Response(JSON.stringify({ channels: normalized }),
 
 ---
 
-### T4 · `manage-agent-training` DOCUMENT + Storage — **L** — Codex
+### T4 · `manage-agent-training` DOCUMENT + Storage — **L** — Verboo
 
 **Files:**
 - Modify `supabase/functions/manage-agent-training/index.ts`
@@ -683,7 +745,7 @@ switch (body.type) {
 
 ---
 
-### T5 · Env fail-fast + `netlify.toml` — **S** — Antigravity
+### T5 · Env fail-fast + `netlify.toml` — **S** — Verboo
 
 **Files:** Modify `src/integrations/supabase/client.ts:6-7` · Create `netlify.toml`
 
@@ -953,12 +1015,12 @@ describe('provider branding', () => {
 
 Tick your task and add one row to `Planning/Workflow/billing.md` on your branch before handing off.
 
-- [x] T0 · Live API spike · Codex · M
-- [ ] T1 · manage-agent-settings → /settings + catalog · Claude · XL
-- [ ] T2 · manage-agent-channels real fetch · Gemini · M
-- [ ] T3 · fetch-gpt-credits real data · Gemini · M
-- [ ] T4 · manage-agent-training DOCUMENT + Storage · Codex · L
-- [ ] T5 · Env fail-fast + netlify.toml · Antigravity · S
+- [x] T0 · Live API spike · Verboo · M
+- [ ] T1 · manage-agent-settings → /settings + catalog · Verboo · XL
+- [ ] T2 · manage-agent-channels real fetch · Verboo · M
+- [ ] T3 · fetch-gpt-credits real data · Verboo · M
+- [ ] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
+- [ ] T5 · Env fail-fast + netlify.toml · Verboo · S
 - [ ] T6 · Settings page full parity · Claude · L
 - [ ] T7 · Model selector fix · Gemini · M
 - [ ] T8 · Channels page + Solo card · Codex · L
