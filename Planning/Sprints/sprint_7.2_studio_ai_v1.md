@@ -1091,6 +1091,28 @@ setCurrentModel(settingsRes.data?.settings?.prefferModel ?? "");
 - [ ] **Step 5: Verify.** Open the selector: the list must show the real catalog and the **current model must be pre-selected**. Change it, reload, confirm it persisted, and confirm in the provider dashboard.
 - [ ] **Step 6: Commit.** `git commit -m "fix(studio-ai): model selector reads the real catalog and current model"`
 
+### ✅ T7 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W2 · T7 Model selector fix
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w2/t7-modelselector
+Commit:  <committed at Step 6>
+Files:   src/components/ai-studio/ModelSelector.tsx (catálogo vem da API; prefferModel; label/vendor/creditsPerMessage)
+         src/services/ai-studio/providers/GPTMakerProvider.ts (getModels hardcoded REMOVIDO)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T7 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W2 T7 · Verboo / deepseek-v4-flash · M · R$ 20)
+Verification: npm run build limpo · action=models → 29 models {id,label,vendor,creditsPerMessage} incl. GPT_5_6_SOL
+              GET settings.prefferModel = GPT_5_6_SOL (casa com o catálogo → pré-seleção funciona)
+              update-model GPT_5 → persistiu → restaurado GPT_5_6_SOL. Test user SQL criado+deletado, 0 resíduos.
+Ledger:  [x] T7
+Merge:   PR para main após auditoria do PM
+```
+
+**O bug era o Step 2:** o código antigo lia `settingsRes.data?.model`, mas a função retorna `settingsRes.data.settings.prefferModel` — a chave nunca batia e o modelo atual nunca aparecia pré-selecionado. Corrigido.
+
+**Flag — `AIProvider.ts` (fora do escopo, ownership rule):** `AIProvider` ainda declara `abstract getModels(): Promise<ModelInfo[]>`, e `GPTMakerProvider` (que o estende) não implementa mais. `vite build` (esbuild) não faz typecheck, então o hard gate passa — mas **um follow-up deve remover o método abstrato de `AIProvider.ts`** (não era arquivo da T7; touro só os meus). O `ModelInfo` de `types.ts` (name/costPerRequest/provider) também ficou órfão — a T10 ainda usa? Se sim, T10 decide.
+
 ---
 
 ### T8 · Channels page + Solo instance card — **L** — Verboo
@@ -1235,7 +1257,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T4 · manage-agent-training DOCUMENT + Storage · Verboo · L
 - [x] T5 · Env fail-fast + netlify.toml · Verboo · S
 - [x] T6 · Settings page full parity · Verboo · L
-- [ ] T7 · Model selector fix · Verboo · M
+- [x] T7 · Model selector fix · Verboo · M
 - [ ] T8 · Channels page + Solo card · Verboo · L
 - [ ] T9 · Knowledge Base upload UI · Verboo · M
 - [ ] T10 · Usage page real data · Verboo · M
