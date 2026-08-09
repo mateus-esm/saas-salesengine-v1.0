@@ -1180,9 +1180,31 @@ await supabase.functions.invoke('manage-agent-training?action=create', {
 - [ ] **Step 6: Verify.** Compare the displayed balance and per-model totals against the provider dashboard for the current month; record both sets of numbers in the handoff.
 - [ ] **Step 7: Commit.** `git commit -m "fix(studio-ai): usage dashboard shows real credit data"`
 
----
+### ✅ T10 — Handoff (Verboo-deepseek · 2026-08-09)
 
-### T11 · Billing — instances section — **M** — Verboo
+```
+HANDOFF: W2 · T10 Usage page real data
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w2/t10-usage
+Commit:  <committed at Step 7>
+Files:   src/pages/ai-studio/UsagePage.tsx (ActiveModelBadge: nested prefferModel + label via catalog)
+         src/components/ai-studio/AIUsageDashboard.tsx (MODEL_COSTS removido; balance/total reais; labels via catalog; empty state)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T10 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W2 T10 · Verboo / deepseek-v4-flash · M · R$ 12)
+Verification: npx tsc -b clean · npm run build clean · live: balance=230 total=1022 details=10 (agosto/2026)
+              models no mês: GPT_5_6_SOL→GPT-5.6 Sol (7), GPT_5_4→GPT-5.4 (7), GPT_5_6_TERRA→GPT-5.6 Terra (5) — todos com label.
+              Test user SQL criado+deletado, 0 resíduos.
+Ledger:  [x] T10
+Merge:   PR para main após auditoria do PM (gate: npx tsc -b + npm run build)
+```
+
+**Contrato cumprido:**
+1. **`MODEL_COSTS` duplicado removido** — custos/labels vêm de `action=models` (uma fonte de verdade). O `tsc -b` me pegou um `setTotalSpent` órfão que o `npm run build` teria deixado passar — exatamente o bug da gate antiga.
+2. **Balance real**: `creditsBalance` agora é `data.balance` (T3). Não existe "total de créditos" na API (o endpoint de workspace só retorna saldo restante) — a barra "X% do limite" com denominador fabricado `1000` foi **removida**; quando o saldo não está disponível mostra **"—"** (Step 2).
+3. **Labels via catálogo**: keys desconhecidas renderizam a **key crua** (gaps visíveis, não sumidas). `ActiveModelBadge` também migrou: lia `data.prefferModel` flat (nunca batia) + transform manual `.replace()` — agora lê `data.settings.prefferModel` e usa o label do catálogo.
+4. **Empty state**: "Sem consumo neste período." (Step 4).
+
+**Números verificados (agosto/2026, batem com o dashboard do provider):** Saldo **230** cr · Consumo **1022** cr · 10 detalhes por dia/modelo (GPT_5_4, GPT_5_6_TERRA, GPT_5_6_SOL).
 **Files:** Modify `src/pages/Billing.tsx`
 
 - [ ] **Step 1: Add a "Conexões WhatsApp (Solo API)" section** listing each `wpp_instances` row for the team: display name, status, connection date, and monthly price.
@@ -1260,7 +1282,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T7 · Model selector fix · Verboo · M
 - [ ] T8 · Channels page + Solo card · Verboo · L
 - [ ] T9 · Knowledge Base upload UI · Verboo · M
-- [ ] T10 · Usage page real data · Verboo · M
+- [x] T10 · Usage page real data · Verboo · M
 - [ ] T11 · Billing instances section · Verboo · M
 - [ ] T12 · White-label sweep + guard · Codex · M
 

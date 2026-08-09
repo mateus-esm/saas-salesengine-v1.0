@@ -13,16 +13,17 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // ── Credit cost per model (cr/msg) ────────────────────────────────────────────
-const MODEL_COSTS: Record<string, number> = {
-  'gpt-5.4-mini': 2, 'gpt-5.4': 7, 'gpt-5.2': 5, 'gpt-5.1': 4, 'gpt-5': 4,
-  'gpt-5-mini': 1, 'gpt-4.1': 4, 'gpt-4.1-mini': 1, 'o4-mini': 3, 'o3': 5,
-  'gpt-4o-mini': 1, 'gpt-4o': 5, 'o3-mini': 3, 'o1': 25, 'gpt-4-turbo': 20,
-  'claude-4.5-sonnet': 10, 'claude-4.5-haiku': 3, 'claude-3.5-sonnet': 10,
-  'claude-3.7-sonnet': 10, 'claude-3.5-haiku': 2, 'llama-3.3': 1,
-  'qwen-2.5-max': 3, 'deepseek-v3': 1, 'sabia-3.1': 3, 'sabia-3': 3,
-  // GPT_5_4 raw API enum aliases
-  'GPT_5_4': 7, 'GPT_5_4_MINI': 2, 'GPT_4O': 5, 'GPT_4O_MINI': 1,
-};
+// T10 Step 1: the duplicated MODEL_COSTS map is gone. Costs and labels come
+// from T1's action=models catalog — one source of truth, never a second
+// hand-maintained copy.
+interface CatalogModel {
+  id: string;
+  label: string;
+  vendor: string;
+  creditsPerMessage: number;
+  isNew?: boolean;
+  isBeta?: boolean;
+}
 
 const getColor = (model: string): string => {
   const palette: Record<string, string> = {
@@ -111,8 +112,19 @@ const PRESETS: { id: PeriodPreset; label: string }[] = [
 export function AIUsageDashboard() {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<any[]>([]);
-  const [creditsBalance, setCreditsBalance] = useState(0);
-  const [totalCredits, setTotalCredits] = useState(1000);
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [catalog, setCatalog] = useState<CatalogModel[]>([]);
+
+  // T10 Step 3: label lookup via the catalog; unknown keys render as the raw
+  // key so gaps are visible instead of silently dropped.
+  const catalogById = useMemo(() => {
+    const m = new Map<string, CatalogModel>();
+    catalog.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [catalog]);
+
+  const labelFor = (modelId: string) => catalogById.get(modelId)?.label ?? modelId;
+  const costFor = (modelId: string) => catalogById.get(modelId)?.creditsPerMessage ?? null;
 
   const [activePreset, setActivePreset] = useState<PeriodPreset>('month');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
@@ -129,12 +141,20 @@ export function AIUsageDashboard() {
         ? `year=${periodCfg.year}&period=year`
         : `year=${periodCfg.year}&month=${periodCfg.month}&period=month`;
 
-      const { data, error } = await supabase.functions.invoke(`fetch-gpt-credits?${params}`, { body: null });
-      if (error) throw error;
+      const [usageRes, catalogRes] = await Promise.all([
+        supabase.functions.invoke(`fetch-gpt-credits?${params}`, { body: null }),
+        supabase.functions.invoke('manage-agent-settings?action=models'),
+      ]);
 
-      setCreditsBalance(data.creditsBalance || 0);
-      setTotalCredits(data.totalCredits || 1000);
+      if (usageRes.error) throw usageRes.error;
+      const data = usageRes.data ?? {};
+      // T3 shape: { balance, total, details: [{model, credits, ...}] }
+      setCreditsBalance(typeof data.balance === 'number' ? data.balance : null);
       setDetails(data.details || []);
+
+      if (!catalogRes.error && Array.isArray(catalogRes.data?.models)) {
+        setCatalog(catalogRes.data.models);
+      }
     } catch (err) {
       console.error('Usage fetch error:', err);
       toast({ title: 'Erro', description: 'Não foi possível carregar dados de consumo.', variant: 'destructive' });
@@ -185,7 +205,8 @@ export function AIUsageDashboard() {
         model,
         credits,
         color: getColor(model),
-        costPerReq: MODEL_COSTS[model] ?? '—',
+        label: labelFor(model),
+        costPerReq: costFor(model) ?? '—',
       }));
 
     const sorted = Array.from(dailyMap.values()).sort((a, b) => {
@@ -195,9 +216,12 @@ export function AIUsageDashboard() {
     });
 
     return { chartData: sorted, modelKeys: Array.from(modelsSet), totalFilteredSpent: total, modelBreakdown: breakdownArr };
-  }, [details, periodCfg, activePreset]);
+  }, [details, periodCfg, activePreset, catalogById]);
 
-  const usagePct = totalCredits > 0 ? Math.min(100, Math.round((totalFilteredSpent / totalCredits) * 100)) : 0;
+  // T10 Step 2: there is no real "total credits" value from the API — the
+  // workspace endpoint only returns the remaining balance. Never fabricate a
+  // denominator; show "—" when the balance is unavailable.
+  const balanceDisplay = creditsBalance === null ? "—" : creditsBalance.toLocaleString('pt-BR');
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -282,15 +306,9 @@ export function AIUsageDashboard() {
                   </span>
                   <span className="text-xs text-muted-foreground font-mono">cr</span>
                 </div>
-                <div className="mt-3 w-full bg-muted rounded-full h-1.5">
-                  <div
-                    className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                    style={{ width: `${usagePct}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1.5 text-[11px] font-mono text-muted-foreground">
-                  <span>{usagePct}% do limite</span>
-                  <span>Saldo: {creditsBalance.toLocaleString('pt-BR')} cr</span>
+                <div className="flex justify-between mt-3 text-[11px] font-mono text-muted-foreground">
+                  <span>Consumo no período</span>
+                  <span>Saldo: {balanceDisplay} cr</span>
                 </div>
               </CardContent>
             </Card>
@@ -308,7 +326,7 @@ export function AIUsageDashboard() {
               <CardContent>
                 {modelBreakdown.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-4">
-                    Nenhum consumo no período selecionado.
+                    Sem consumo neste período.
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -317,7 +335,7 @@ export function AIUsageDashboard() {
                         <div className="flex items-center gap-1.5 mb-1">
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                           <span className="text-[11px] font-semibold text-foreground truncate font-mono">
-                            {item.model}
+                            {item.label}
                           </span>
                         </div>
                         <div className="flex justify-between text-[10px] font-mono">
