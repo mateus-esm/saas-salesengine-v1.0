@@ -9,11 +9,19 @@ import {
 } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { GPTMakerProvider } from "@/services/ai-studio/providers/GPTMakerProvider";
-import type { ModelInfo } from "@/services/ai-studio/types";
 import { cn } from "@/lib/utils";
 
-const provider = new GPTMakerProvider({ apiKey: "" });
+// T7: the catalog now comes from the edge function (action=models), not from a
+// hardcoded provider list. The API shape is { id, label, vendor,
+// creditsPerMessage, isNew?, isBeta? } — see T1's MODEL_CATALOG.
+interface CatalogModel {
+  id: string;
+  label: string;
+  vendor: string;
+  creditsPerMessage: number;
+  isNew?: boolean;
+  isBeta?: boolean;
+}
 
 const PROVIDER_COLORS: Record<string, string> = {
   OpenAI: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
@@ -25,7 +33,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 };
 
 export function ModelSelector() {
-  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [models, setModels] = useState<CatalogModel[]>([]);
   const [currentModel, setCurrentModel] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,14 +43,15 @@ export function ModelSelector() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [modelList, settingsRes] = await Promise.all([
-        provider.getModels(),
+      const [modelsRes, settingsRes] = await Promise.all([
+        supabase.functions.invoke("manage-agent-settings?action=models"),
         supabase.functions.invoke("manage-agent-settings"),
       ]);
-      setModels(modelList);
-      if (!settingsRes.error && settingsRes.data?.model) {
-        setCurrentModel(settingsRes.data.model);
-      }
+      setModels(modelsRes.data?.models ?? []);
+      // T7 note: the settings key is `prefferModel`, not `model`. The old code
+      // read settingsRes.data?.model, which never matched, so the current model
+      // was never pre-selected.
+      setCurrentModel(settingsRes.data?.settings?.prefferModel ?? "");
     } catch (err) {
       console.error("Error loading models:", err);
     } finally {
@@ -84,10 +93,10 @@ export function ModelSelector() {
 
   const selectedModel = models.find((m) => m.id === currentModel);
 
-  // Group by provider
-  const grouped = models.reduce<Record<string, ModelInfo[]>>((acc, m) => {
-    if (!acc[m.provider]) acc[m.provider] = [];
-    acc[m.provider].push(m);
+  // Group by vendor (the catalog's field; old code used `provider`)
+  const grouped = models.reduce<Record<string, CatalogModel[]>>((acc, m) => {
+    if (!acc[m.vendor]) acc[m.vendor] = [];
+    acc[m.vendor].push(m);
     return acc;
   }, {});
 
@@ -114,10 +123,10 @@ export function ModelSelector() {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col items-start">
                   <span className="font-semibold text-sm text-foreground font-mono">
-                    {selectedModel.name}
+                    {selectedModel.label}
                   </span>
                   <span className="text-xs text-muted-foreground font-mono">
-                    {selectedModel.costPerRequest} cr/msg
+                    {selectedModel.creditsPerMessage} cr/msg
                   </span>
                 </div>
                 {selectedModel.isNew && (
@@ -141,27 +150,25 @@ export function ModelSelector() {
 
         <PopoverContent className="w-[320px] p-0 border border-border" align="start">
           <div className="max-h-[420px] overflow-y-auto">
-            {Object.entries(grouped).map(([providerName, providerModels]) => (
-              <div key={providerName}>
+            {Object.entries(grouped).map(([vendor, vendorModels]) => (
+              <div key={vendor}>
                 <div className="px-3 py-2 border-b border-border/60 bg-muted/30 sticky top-0">
                   <span
                     className={cn(
                       "text-[10px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded border",
-                      PROVIDER_COLORS[providerName] ?? "bg-muted text-muted-foreground border-border"
+                      PROVIDER_COLORS[vendor] ?? "bg-muted text-muted-foreground border-border"
                     )}
                   >
-                    {providerName}
+                    {vendor}
                   </span>
                 </div>
                 <div className="py-1">
-                  {providerModels.map((model) => (
+                  {vendorModels.map((model) => (
                     <button
                       key={model.id}
                       onClick={() => handleSelect(model.id)}
-                      disabled={model.isDeprecated}
                       className={cn(
                         "w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-muted/60 transition-colors",
-                        model.isDeprecated && "opacity-40 cursor-not-allowed",
                         model.id === currentModel && "bg-primary/5"
                       )}
                     >
@@ -173,8 +180,9 @@ export function ModelSelector() {
                         )}
                         <div>
                           <div className="flex items-center gap-1.5">
+                            {/* Render label, never a transformed id */}
                             <span className="text-sm font-medium text-foreground">
-                              {model.name}
+                              {model.label}
                             </span>
                             {model.isNew && (
                               <Sparkles className="w-3 h-3 text-primary" />
@@ -184,11 +192,6 @@ export function ModelSelector() {
                                 BETA
                               </Badge>
                             )}
-                            {model.isDeprecated && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 text-muted-foreground">
-                                DEP.
-                              </Badge>
-                            )}
                           </div>
                           <span className="text-[11px] font-mono text-muted-foreground">
                             {model.id}
@@ -196,7 +199,7 @@ export function ModelSelector() {
                         </div>
                       </div>
                       <span className="text-xs font-mono text-muted-foreground shrink-0">
-                        {model.costPerRequest} cr/msg
+                        {model.creditsPerMessage} cr/msg
                       </span>
                     </button>
                   ))}
