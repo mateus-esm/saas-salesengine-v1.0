@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Zap, TrendingUp, Loader2, RefreshCcw, ExternalLink, MessageCircle, CreditCard, QrCode, Copy, Users } from "lucide-react";
+import { Zap, TrendingUp, Loader2, RefreshCcw, ExternalLink, MessageCircle, CreditCard, QrCode, Copy, Users, MessageSquare, Phone, Calendar, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CreditData {
@@ -27,6 +27,17 @@ interface Plano {
   funcionalidades: string[];
 }
 
+interface SoloInstance {
+  id: string;
+  instance_name: string;
+  display_name: string;
+  status: string;
+  phone: string | null;
+  billing_active: boolean;
+  connected_at: string | null;
+  monthly_price: number | null;
+}
+
 const Billing = () => {
   const [creditData, setCreditData] = useState<CreditData | null>(null);
   const [plano, setPlano] = useState<Plano | null>(null);
@@ -36,6 +47,9 @@ const Billing = () => {
   const [processing, setProcessing] = useState(false);
   const [pixDialogOpen, setPixDialogOpen] = useState(false);
   const [pixData, setPixData] = useState<{ qrCode: string; copyPaste: string } | null>(null);
+  // T11 — Solo API WhatsApp instances section
+  const [soloInstances, setSoloInstances] = useState<SoloInstance[]>([]);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchCredits = useCallback(async () => {
@@ -60,7 +74,7 @@ const Billing = () => {
       if (profile?.equipe_id) {
         const { data: equipe } = await supabase
           .from('equipes')
-          .select('limite_creditos, creditos_avulsos')
+          .select('limite_creditos, creditos_avulsos, subscription_status')
           .eq('id', profile.equipe_id)
           .maybeSingle();
 
@@ -74,6 +88,32 @@ const Billing = () => {
             limite_usuarios: null,
             funcionalidades: ['CRM Kanban', 'Webhook Integration', 'Automações'],
           });
+          setSubscriptionStatus(equipe.subscription_status ?? null);
+        }
+
+        // T11 — fetch the team's Solo API WhatsApp instances for the charges section
+        const { data: instances, error: instErr } = await supabase
+          .from('wpp_instances')
+          .select('id, instance_name, display_name, status, phone, billing_active, connected_at')
+          .eq('equipe_id', profile.equipe_id)
+          .order('created_at', { ascending: true });
+
+        if (!instErr && Array.isArray(instances)) {
+          // The price is not in the DB — it lives in SOLO_INSTANCE_MONTHLY_PRICE
+          // on the edge function. Ask status per instance so the section shows
+          // what the customer is actually charged.
+          const withPrice = await Promise.all(
+            instances.map(async (i) => {
+              const { data: st, error: stErr } = await supabase.functions.invoke('manage-solo-instances', {
+                body: { action: 'status', instance_id: i.id },
+              });
+              return {
+                ...i,
+                monthly_price: !stErr && typeof st?.monthly_price === 'number' ? st.monthly_price : null,
+              };
+            })
+          );
+          setSoloInstances(withPrice);
         }
       }
     } catch (error: any) {
@@ -330,6 +370,92 @@ const Billing = () => {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* T11 — Solo API WhatsApp instances */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  Conexões WhatsApp (Solo API)
+                </CardTitle>
+                <CardDescription>
+                  Instâncias dedicadas conectadas direto à API Solo
+                </CardDescription>
+              </div>
+              <Button onClick={fetchCredits} variant="ghost" size="sm">
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {soloInstances.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">
+                Nenhuma conexão Solo API ativa para esta equipe.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {soloInstances.map((inst) => (
+                  <div key={inst.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2 rounded-md border border-border bg-muted/30">
+                        <Phone className="w-4 h-4 text-foreground/70" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-foreground truncate">{inst.display_name}</div>
+                        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
+                          <Badge variant={inst.status === 'connected' ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0">
+                            {inst.status}
+                          </Badge>
+                          {inst.status === 'connected' && inst.connected_at && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(inst.connected_at).toLocaleString('pt-BR', {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-mono font-bold text-foreground shrink-0">
+                      R$ {inst.monthly_price?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) ?? '—'}
+                      <span className="text-xs text-muted-foreground font-normal">/mês</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* T11 Step 2 — monthly total charged */}
+            <div className="flex items-center justify-between pt-3 border-t border-border">
+              <span className="text-sm font-medium text-foreground">Total mensal (cobrança ativa)</span>
+              <span className="text-lg font-bold font-mono text-foreground">
+                R$ {soloInstances
+                  .filter((i) => i.billing_active && i.monthly_price != null)
+                  .reduce((sum, i) => sum + (i.monthly_price ?? 0), 0)
+                  .toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* T11 Step 3 — billing rule */}
+            <p className="text-xs text-muted-foreground italic">
+              A cobrança começa na primeira conexão e continua enquanto a instância existir. Desconectar não cancela — exclua a instância para encerrar a cobrança.
+            </p>
+
+            {/* T11 Step 4 — known blocker */}
+            {subscriptionStatus == null && (
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-xs text-destructive">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  <span className="font-semibold">Assinatura não configurada.</span>{" "}
+                  A cobrança das instâncias Solo API não é postada até que a integração Asaas esteja configurada para esta equipe.
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
 

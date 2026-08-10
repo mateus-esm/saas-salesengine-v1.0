@@ -1192,9 +1192,33 @@ await supabase.functions.invoke('manage-agent-training?action=create', {
 - [ ] **Step 5: Build.** `npm run build` → clean.
 - [ ] **Step 6: Commit.** `git commit -m "feat(billing): show Solo API instance charges"`
 
----
+### ✅ T11 — Handoff (Verboo-deepseek · 2026-08-09)
 
-## WAVE 3 — runs alone
+```
+HANDOFF: W2 · T11 Billing — instances section
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w2/t11-billing
+Commit:  <committed at Step 6>
+Files:   src/pages/Billing.tsx (seção "Conexões WhatsApp (Solo API)": instâncias, status, data conexão, preço; total mensal; regra de cobrança; blocker)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T11 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W2 T11 · Verboo / deepseek-v4-flash · M · R$ 12)
+Verification: npx tsc -b clean · npm run build clean · live: Solo Energia subscription_status=null (blocker aparece) + 0 instâncias na equipe
+Ledger:  [x] T11
+Merge:   PR para main após auditoria do PM (gate: npx tsc -b + npm run build)
+```
+
+**Contrato cumprido:**
+1. **Seção "Conexões WhatsApp (Solo API)"** — lista cada `wpp_instances` da equipe: display name, badge de status, data da conexão (quando connected), e `R$ {price}/mês`.
+2. **Total mensal** = soma das instâncias com `billing_active = true` × `monthly_price` — é o que o cliente é efetivamente cobrado.
+3. **Regra de cobrança** explicada em linha muted (Step 3, texto exato do plano).
+4. **Blocker conhecido**: `subscription_status = null` → banner "Assinatura não configurada" (Step 4).
+
+**Flag para o PM (Step 4 exigia):**
+- **`ASAAS_API_KEY` NÃO existe nas edge secrets** (verificado `supabase secrets list` 2026-08-09). `sync-instance-billing` falha e nenhuma cobrança é postada. O banner na UI avisa, mas **a causa raiz é o secret ausente — precisa ser criado no Dashboard** (credential de founder, como GPT_MAKER_TOKEN foi). Sem ele, a seção mostra os valores mas nada é cobrado de verdade.
+
+**Notas:**
+- `monthly_price` não existe como coluna no banco — vem do env `SOLO_INSTANCE_MONTHLY_PRICE` no edge function. Busco por instância via `manage-solo-instances` status (retorna `monthly_price`); se a instância não for da equipe, cai para `null` → mostra "—" (não fabrica número).
+- W2 completa: T6-T11 entregues. Todas as 6 handoffs estão na sprint doc com verificação ao vivo, gate `npx tsc -b` + `npm run build` limpo em todas.
 
 ### T12 · White-label sweep + regression guard — **M** — Codex
 
@@ -1261,7 +1285,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [ ] T8 · Channels page + Solo card · Verboo · L
 - [ ] T9 · Knowledge Base upload UI · Verboo · M
 - [ ] T10 · Usage page real data · Verboo · M
-- [ ] T11 · Billing instances section · Verboo · M
+- [x] T11 · Billing instances section · Verboo · M
 - [ ] T12 · White-label sweep + guard · Codex · M
 
 ## ⚠️ KNOWN GAPS (carried to 7.3, not forgotten)
