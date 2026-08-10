@@ -6,25 +6,27 @@ import { supabase } from "@/integrations/supabase/client";
 
 function ActiveModelBadge() {
   const [model, setModel] = useState<string>("");
+  const [modelLabel, setModelLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchModel = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("manage-agent-settings");
-      if (!error && data?.prefferModel) setModel(data.prefferModel);
+      const [settingsRes, catalogRes] = await Promise.all([
+        supabase.functions.invoke("manage-agent-settings"),
+        supabase.functions.invoke("manage-agent-settings?action=models"),
+      ]);
+      // W1 note #1: nested shape — settings.prefferModel, not flat data.prefferModel.
+      const id = settingsRes.data?.settings?.prefferModel;
+      if (id) {
+        setModel(id);
+        // T10 Step 3: label from the catalog; raw key as fallback (gaps visible).
+        const found = catalogRes.data?.models?.find((m: any) => m.id === id);
+        setModelLabel(found?.label ?? id);
+      }
     } catch { /* silent */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchModel(); }, [fetchModel]);
-
-  // Normalize internal enum to display name
-  const displayModel = model
-    .replace('GPT_5_4_MINI', 'gpt-5.4-mini')
-    .replace('GPT_5_4', 'gpt-5.4')
-    .replace('GPT_4O_MINI', 'gpt-4o-mini')
-    .replace('GPT_4O', 'gpt-4o')
-    .replace(/_/g, '-')
-    .toLowerCase();
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border bg-card">
@@ -40,7 +42,7 @@ function ActiveModelBadge() {
         ) : (
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="font-mono font-bold text-base text-foreground tracking-tight">
-              {displayModel || '—'}
+              {modelLabel ?? '—'}
             </span>
             <Sparkles className="w-3.5 h-3.5 text-primary/70" />
           </div>
