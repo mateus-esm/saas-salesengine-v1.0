@@ -23,5 +23,10 @@ export default defineConfig(({ mode }) => ({
     environment: "jsdom",
     globals: true,
     setupFiles: [],
+    // Edge functions are Deno, not Node: their tests import from
+    // https://deno.land/... which vitest cannot resolve. They are run by
+    // `deno test`, so keep them out of the vitest glob — otherwise the whole
+    // suite reports red over a file that was never meant for this runner.
+    exclude: ["**/node_modules/**", "**/dist/**", "supabase/functions/**"],
   },
 }));
