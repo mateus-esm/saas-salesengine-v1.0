@@ -1360,13 +1360,9 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T6 · Settings page full parity · Verboo · L
 - [x] T7 · Model selector fix · Verboo · M
 - [x] T8 · Channels page + Solo card · Verboo · L
-- [ ] T9 · Knowledge Base upload UI · Verboo · M
-- [ ] T8 · Channels page + Solo card · Verboo · L
 - [x] T9 · Knowledge Base upload UI · Verboo · M
-- [ ] T10 · Usage page real data · Verboo · M
-- [x] T11 · Billing instances section · Verboo · M
 - [x] T10 · Usage page real data · Verboo · M
-- [ ] T11 · Billing instances section · Verboo · M
+- [x] T11 · Billing instances section · Verboo · M
 - [ ] T12 · White-label sweep + guard · Codex · M
 
 ## ⚠️ KNOWN GAPS (carried to 7.3, not forgotten)
