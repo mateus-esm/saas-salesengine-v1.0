@@ -1129,6 +1129,36 @@ Merge:   PR para main após auditoria do PM
 - [ ] **Step 7: Verify.** Confirm the channel list matches the provider dashboard, the Solo card shows date + price, and deleting a throwaway instance removes it from both the DB and the VPS (`GET /v1/instance/fetchInstances` no longer lists it). **Never touch `solobusiness` or `soloventures-salesengine-admin`.**
 - [ ] **Step 8: Commit.** `git commit -m "feat(studio-ai): real channels list and richer Solo instance cards"`
 
+### ✅ T8 — Handoff (Verboo-deepseek · 2026-08-09)
+
+```
+HANDOFF: W2 · T8 Channels page + Solo instance card
+Flag:    Verboo-deepseek
+Branch:  verboo/sprint7.2/w2/t8-channels
+Commit:  <committed at Step 8>
+Files:   src/pages/ai-studio/ChannelsPage.tsx (channels shape T2 + empty/error states + Solo card date/price + delete dialog)
+         src/components/ai-studio/CreateChannelDialog.tsx (verificado compatível — sem mudança)
+         Planning/Sprints/sprint_7.2_studio_ai_v1.md (ledger T8 ticked + handoff)
+         Planning/Workflow/billing.md (row: 2026-08-09 · 7.2 · W2 T8 · Verboo / deepseek-v4-flash · L · R$ 20)
+Verification: npm run build limpo · canais = {channels:[5]} batem com dashboard (Teste, Solon - Wpp Solo Energia, Solo Energia, calculadora-solo, Solon - MSM Business)
+              Solo card: connected_at + R$/mês per-instance (100). Delete E2E: criei se-939d7dd8-t8-delete-test → VPS listou →
+              delete via edge fn → {"deleted":true} → DB 0 rows → VPS não lista mais. soloventures-salesengine-admin e se-a43f3b4a-teste NÃO tocados.
+              Test user SQL criado+deletado, 0 resíduos.
+Ledger:  [x] T8
+Merge:   PR para main após auditoria do PM (gate: npx tsc -b + npm run build)
+```
+
+**Contrato cumprido:**
+1. **Channels read path** → `data.channels` com `connected: boolean` (T2 shape). Estado por canal mostrado (conectado/desconectado). `phone`/`connectedAt` antigos removidos do shape (não existem mais).
+2. **Empty state**: "Nenhum canal conectado" + CTA "Novo canal". **Error state**: mensagem + botão "Tentar novamente" (nada de página em branco).
+3. **Solo card — conexão**: `Conectado em {dd/MM/yyyy HH:mm}` quando `status === "connected"`; senão mostra o label do status.
+4. **Solo card — preço**: `R$ {price}/mês` por card (o bloco de prosa único foi removido). Fonte: `manage-solo-instances.monthly_price` (env `SOLO_INSTANCE_MONTHLY_PRICE=100`) — mergeado nos cards via status/connect/create.
+5. **Delete**: diálogo de confirmação agora diz explicitamente que a instância é removida **permanentemente do VPS (Docker) e do banco**, e que a cobrança mensal cessa. O `manage-solo-instances` já chama `DELETE /v1/instance/delete/{name}` — não reimplementado, só verificado ao vivo.
+
+**Notas:**
+- `CreateChannelDialog` não precisou de mudança (create/qr já batem com a T2).
+- Instância Solo existente `se-a43f3b4a-teste` pertence a outra equipe ("Jornada do R1") — não toquei; a verificação de delete foi com throwaway próprio da equipe Solo Energia, criado e removido no teste.
+
 ---
 
 ### T9 · Knowledge Base upload UI — **M** — Verboo
@@ -1282,7 +1312,7 @@ Tick your task and add one row to `Planning/Workflow/billing.md` on your branch 
 - [x] T5 · Env fail-fast + netlify.toml · Verboo · S
 - [x] T6 · Settings page full parity · Verboo · L
 - [x] T7 · Model selector fix · Verboo · M
-- [ ] T8 · Channels page + Solo card · Verboo · L
+- [x] T8 · Channels page + Solo card · Verboo · L
 - [ ] T9 · Knowledge Base upload UI · Verboo · M
 - [ ] T10 · Usage page real data · Verboo · M
 - [x] T11 · Billing instances section · Verboo · M
