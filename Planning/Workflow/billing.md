@@ -24,6 +24,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | _add rows below as tasks complete_ | | | | | |
 | 2026-08-09 | 7.2 | W2 T11 Billing instances section | Verboo / deepseek-v4-flash | M | R$ 12 |
 | 2026-08-09 | 7.2 | W2 T8 Channels page + Solo card | Verboo / deepseek-v4-flash | L | R$ 20 |
+| 2026-08-09 | 7.2 | W2 T9 Knowledge Base upload UI | Verboo / deepseek-v4-flash | M | R$ 12 |
 | 2026-08-09 | 7.2 | W2 T7 Model selector fix | Verboo / deepseek-v4-flash | M | R$ 20 |
 | 2026-08-09 | 7.2 | W2 T6 Settings page full parity | Verboo / deepseek-v4-flash | L | R$ 24 |
 | 2026-08-09 | 7.2 | W1 T5 Env fail-fast + netlify.toml | Verboo / deepseek-v4-flash | S | R$ 10 |
