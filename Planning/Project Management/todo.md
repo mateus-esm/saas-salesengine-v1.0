@@ -199,6 +199,28 @@ Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
       `GPT_5_4`). Credit costs for those three are **estimates**. Re-check when
       the provider publishes real figures.
 
+### Found during the W2/W3 audits (real, still open)
+
+- [ ] **Rename the `gpt-maker-webhook` edge function** — the last user-visible
+      brand leak. T12 neutralized every rendered string, but the Webhooks page
+      still displays `…/functions/v1/gpt-maker-webhook` for the user to copy.
+      Renaming the deployed function would break every webhook already
+      configured upstream by every tenant, so it needs a deliberate migration
+      (deploy under a neutral slug → update tenants → retire the old slug), not
+      a string edit.
+- [ ] **`agent-assets` bucket has no tenant namespacing.** The pre-existing
+      `uploadToStorage` helper in `KnowledgePage.tsx` writes training
+      attachments to `agent-assets` at `training-attachments/{ts}-{random}.ext`
+      — no `equipe_id` in the path and therefore no path-enforced isolation,
+      unlike the `agent-training-docs` bucket T4 built. Align it with the T4
+      pattern.
+- [ ] **Billing tier amounts don't match the tier table.** `billing.md` states
+      S=R$5 · M=R$12 · L=R$20 · XL=R$28, but every Sprint 7.2 row uses
+      S=10 · M=20 · L=24 · XL=40 — roughly double, across 13 rows. The file
+      says the R$ "comes from the table — you don't calculate anything", so
+      either recalibrate the table or correct the rows. **Founder decision.**
+      Until it's resolved, cost-per-engineer totals are not meaningful.
+
 ### Process notes for the next wave
 
 - [ ] **One branch per task, cut from `main`.** In W1, T3 was stacked on T2, so
