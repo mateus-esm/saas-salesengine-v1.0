@@ -106,16 +106,42 @@ Rotate all:
 Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
 `@`→`%40`).
 
-## 🔴 Sprint 7.2 — FOUNDER ACTIONS (blocking, do these)
+## 🔴 SPRINT 7.2 CLOSE-OUT — WHAT IS STILL MISSING
 
-> Only the founder has these credentials. Both block real functionality today.
+> Sprint 7.2 closed 2026-08-10; all 13 tasks merged and deployed. Handoffs for
+> Sprints 7, 7.1 and 7.2 are in `Sprints_PM_Handoff.md`. What follows is
+> everything that is genuinely **not done**.
 
-- [ ] **Create the `ASAAS_API_KEY` edge secret** (Supabase Dashboard → Edge
-      Functions → Secrets). `sync-instance-billing` dies on startup with
-      `ASAAS_API_KEY not configured`, so the **R$100/mês per connected instance
-      is never charged**. Every tenant has `subscription_status = null`, so
-      `asaas-subscribe` / `asaas-buy-credits` are probably inert too — worth
-      auditing the whole billing path once the key exists. **Blocks T11.**
+### The one thing that decides whether the sprint worked
+
+- [ ] **Open Studio AI and look.** Everything is verified at the API layer —
+      settings round-trip live, the model catalog is real, a DOCUMENT training
+      round-trips, RLS was read out of `pg_policies` in prod — but **no human
+      has confirmed it in the running app.** Check, in order:
+      1. **Configurações** — toggle a control, reload, it stuck.
+      2. **Modelo** — the selector shows the *current* model pre-selected and a
+         real catalog; change it, reload, it stuck.
+      3. **Canais** — real channels list (5 expected on Solo Energia).
+      4. **Uso & Analytics** — real balance and per-model breakdown, no
+         fabricated numbers.
+      5. **Knowledge Base** — upload a PDF; it appears without a manual reload.
+      6. **Billing** — the Solo API instances section renders.
+      If any of these is wrong, it is a *new* bug: the API layer is proven.
+
+### Founder actions (only you have these credentials)
+
+- [x] ~~**Create the `ASAAS_API_KEY` edge secret**~~ ✅ **DONE 2026-08-10.**
+      `sync-instance-billing` no longer dies on startup — its error moved past
+      the key check. Billing can post for the first time.
+- [ ] 🔴 **ROTATE the Asaas production key.** It was pasted in plaintext into a
+      chat transcript on 2026-08-10. It is an `aact_prod_` key: anyone with
+      transcript access can charge your customers. Rotate in Asaas, then update
+      the edge secret (`supabase secrets set --env-file …`) and the local `.env`.
+- [ ] **Audit the rest of the billing path now that the key exists.** Every
+      tenant still has `subscription_status = null` and `asaas_subscription_id
+      = null`, so `asaas-subscribe` and `asaas-buy-credits` have likely never
+      run successfully either. The key was the blocker; whether the flows work
+      is untested.
 - [ ] **Verify the Netlify env vars** (Site settings → Environment variables):
       `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_PROJECT_ID`.
       Flagged `UNVERIFIED` by T5. Until Sprint 7.2 the client silently fell back

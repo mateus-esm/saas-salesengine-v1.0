@@ -460,3 +460,166 @@ The custom-table path follows the same structural pattern: await direct insert i
 All four checklist items pass. No `.execute()` calls. Casts match selected columns. Write and read columns are fully consistent. The pattern mirrors `opportunity_links` with intentional, correct adaptations.
 
 **Verified code-level only — NOT live/authenticated E2E verified. Live E2E (pick target table → link a record → chip resolves against `custom_table_records`) remains a documented fast-follow.**
+
+---
+
+# Sprint 7 — Handoff
+
+> **Sprint:** Studio AI v1: Channels & Solo API (`sprint_7_studio_ai_v1.md`)
+> **Closed (code):** 2026-07-09 · **PM:** Claude · **Branches:** merged to `main` across 4 waves
+> **Verification:** code gates green; **live E2E deferred** (needed a real phone — see §4)
+
+---
+
+## 1. What this sprint was
+
+The founder amended the ROADMAP mid-flight: **whatsmiau** (an unofficial WhatsApp API on his own VPS, Evolution-API-compatible, port 8081) was pulled forward from post-v1 to replace the ~R$100/mo Z-API connection inside the agent provider. Branded internally as the **Solo API**.
+
+The agent provider stays the default brain and inbox in v1. The Solo API covers three things it can't: solo-native conversations, outbound-initiated messages (forms/ads leads), and the 24h-window-closed fallback.
+
+**Decisions locked by the founder:** no provider-abstraction refactor in v1 (ship first) · billing = one Asaas subscription line-item per connected instance, reconciler pattern (`SOLO_INSTANCE_MONTHLY_PRICE` ≈ R$100; disconnect keeps billing, only delete stops it) · channel creation supports all 7 provider types · Knowledge Base sync explicitly pushed to a later sprint.
+
+## 2. Delivered — 4 waves, T1–T12
+
+- **W0** — API reference spike (`sprint_7_api_reference.md`) built from the whatsmiau **source code** rather than samples, plus live validation against the VPS; migration `20260705000000` (`wpp_instances` table, `conversations.solo_instance_id`, `messages.provider` + `provider_message_id`).
+- **W1** — `manage-solo-instances` (create/connect/status/logout/delete) · `solo-wpp-webhook` (connection + message ingest, dedup, opportunity + AI parity with the existing pipeline).
+- **W2** — `send-chat-message` 3-route send routing + `_shared/solo-sender.ts` · `sync-instance-billing` Asaas reconciler · `solo-health-check` + pg_cron migration.
+- **W3** — ChannelsPage Solo API UI · CreateChannelDialog (7 channel types + QR) · inbox channel chips + Solo window · admin Solo-instances panel · T12 hardening gate.
+
+## 3. End-of-sprint review — found & FIXED
+
+- **`connectionState` emits an undocumented state `qr-code`** while awaiting pairing (not in the source-derived mapping). Mapped to `awaiting_qr` in both the status action and the webhook.
+- **`sendText` body shape**: the founder's n8n flow used `{number, textMessage:{text}}`; the current server expects `{number, text}`. The legacy shape would have failed silently.
+- Instance-ID sanitization + agent webhook auto-config fixups.
+- Media dedup hardened so Solo photo albums don't collapse into one message.
+
+## 4. Deferred (NOT done)
+
+- **Live E2E** — QR scan with a real device, verbatim `messages.upsert` capture, coexistence echo/dedup, and the provider's window-closed error body. All require a human with a phone. *These became the opening of Sprint 7.1.*
+- pg_cron health tick was committed **inert** by design (no service-role key in a migration).
+
+## 5. Deploy / DB state
+
+- Migrations `20260705000000` + `20260705000001` applied.
+- All 21 edge functions deployed **manually via the local Supabase CLI** — the GitHub Actions deploy failed with `401` because the `SUPABASE_ACCESS_TOKEN` repo secret was invalid.
+- Secrets set: `WHATSMIAU_BASE_URL` / `_API_KEY` / `_WEBHOOK_TOKEN`.
+- VPS: 2 pre-existing production instances (`solobusiness`, `soloventures-salesengine-admin`) — **never to be touched**.
+
+## 6. Known follow-ups outside this sprint
+
+- CI `evals` job red from a pre-existing python-agent failure, unrelated to this sprint.
+- Knowledge Base sync (became Sprint 7.2).
+- Salvy number purchase, mass campaigns — explicitly out of scope.
+
+---
+
+# Sprint 7.1 — Handoff
+
+> **Sprint:** Studio AI v1 Fixes 1 (`sprint_7.1_studio_ai_v1_fixes_1.md`)
+> **Closed:** 2026-08-07 · **PM:** Claude · **Branch:** `fix/solo-webhook-token-delivery` → PR #4 → `main`
+> **Verification:** synthetic E2E against prod, cleaned up afterwards; `deno check` clean
+
+---
+
+## 1. What this sprint was
+
+Not a planned sprint — a **diagnosis**. The founder connected an instance by QR, sent a WhatsApp message, and nothing appeared in the chat. Sprint 7's code was all merged and deployed, so on paper it should have worked.
+
+## 2. Delivered — root cause was two independent bugs
+
+**Bug 1 — the webhook token never arrived (401 on every event).** `manage-solo-instances` configured the instance with `webhook.headers: {x-webhook-token}`. whatsmiau *stores* those headers, but its dispatcher (`lib/whatsmiau/event_emitter.go` → `doEmit`) sends **only** `Content-Type` — configured headers are never transmitted. Every event hit `solo-wpp-webhook` tokenless and was rejected. Prod logs showed dozens of `Token invalido ou ausente (401)` in exactly the founder's test window.
+
+*Fix:* the token travels in the URL (`?token=`); the webhook accepts header **or** query param; `solo-health-check` reconciles webhook config drift on every tick, so instances created before the fix heal themselves.
+
+**Bug 2 — a CHECK constraint blocked lead creation (23514).** Found by synthetic E2E *after* the 401 was cleared — the 401 had been masking it. The webhook inserts `creation_source: 'solo_api'` per the T2 spec, but no migration ever extended `leads_creation_source_check` (`manual|ai_agent|webhook|import`). **Every** message from a new number aborted.
+
+*Fix:* migration `20260807020000` adds `'solo_api'`; the webhook falls back to `'webhook'` on 23514 so a message is never lost while the migration is pending.
+
+**Also fixed:** the pg_cron health tick had a **service-role JWT baked into `cron.job`** that went stale after key rotation — 401 every 5 minutes since inception. Re-authored to use `x-cron-secret` + a new `SOLO_HEALTH_CRON_SECRET` secret.
+
+## 3. End-of-sprint review — found & FIXED
+
+- The GitHub Actions deploy workflow had **never once succeeded** (401 from a stale repo secret). Founder's call: delete `deploy.yml` and keep deploys manual rather than renew it. `ci.yml` stays.
+- Verified the whole ingest path with a synthetic `messages.upsert`: lead + conversation (`solo_instance_id` set) + message (`provider='solo'`) + unread increments. Test rows removed, zero residue.
+
+## 4. Deferred (NOT done)
+
+- Live E2E with a real device (carried from Sprint 7) — still open, now in `todo.md`.
+- `wpp_instances.phone` stays `null` because `connectionState` doesn't return `ownerJid`; expected to self-fill on next pairing.
+
+## 5. Deploy / DB state
+
+- Migration `20260807020000` applied **by hand** by the founder — so it was missing from `supabase_migrations.schema_migrations` until Sprint 7.2's `db push` replayed it (safe: `DROP … IF EXISTS` + `ADD`).
+- `solo-wpp-webhook`, `manage-solo-instances`, `solo-health-check` deployed manually.
+- New secret: `SOLO_HEALTH_CRON_SECRET`. `cron.job sprint7_health_tick` rewritten.
+
+## 6. Known follow-ups outside this sprint
+
+- `ASAAS_API_KEY` absent → `sync-instance-billing` dead → **no instance charge ever posted** (resolved in 7.2 close-out).
+- Local DNS can't resolve the Supabase pooler host; `supabase db push` needs `--dns-resolver https` on this machine.
+
+
+---
+
+# Sprint 7.2 — Handoff
+
+> **Sprint:** Studio AI: Truth & Parity (`sprint_7.2_studio_ai_v1.md`)
+> **Closed:** 2026-08-10 · **PM:** Claude · **Engineer:** Verboo (deepseek-v4-flash) — all 13 tasks
+> **Design spec:** `docs/superpowers/specs/2026-08-08-studio-ai-truth-and-parity-design.md`
+> **Ground truth:** `Planning/Sprints/sprint_7.2_api_reference.md` (live capture)
+> **Verification:** `npx tsc -b` exit 0 · vitest 71/71 · `npm run build` clean · `deno test` 2/2
+
+---
+
+## 1. What this sprint was
+
+The founder's verdict was that Studio AI did not meet expectations. Investigation found the cause was **not** missing UI — every page existed and called real edge functions. The functions were talking to the **wrong upstream resource**.
+
+**Root cause:** `manage-agent-settings` read and wrote `GET/PUT /v2/agent/{id}`. That object carries only `id · name · avatar · status · communicationType · type · jobName · jobDescription · jobSite · behavior`. Every operational setting **and `prefferModel`** live on a separate `/v2/agent/{id}/settings` sub-resource that we had never called. So the settings page rendered defaults and silently discarded every write. **An entire page of the product had never worked.**
+
+Scope chosen by the founder: **fix-first + full settings parity**. Google Calendar was dropped because the provider has no API for it (dashboard-only configuration).
+
+## 2. Delivered — 4 waves, T0–T12
+
+- **W0** — live API spike producing `sprint_7.2_api_reference.md`: 9 endpoints captured against the real agent, plus a DOCUMENT training round-trip run twice with cleanup.
+- **W1** — `manage-agent-settings` repointed at `/settings` with a server-owned model catalog (`?action=models`) · `manage-agent-channels` real fetch · `fetch-gpt-credits` real balance + per-model breakdown · `manage-agent-training` DOCUMENT upload + `agent-training-docs` Storage bucket with tenant-isolating RLS · env fail-fast + committed `netlify.toml`.
+- **W2** — Settings page (12 controls in 3 groups, saved one field at a time with rollback) · model selector reading the real catalog and current model · Channels page + richer Solo instance cards (connection date, monthly price) · Knowledge Base file upload · Usage page on real credit data · Billing instances section.
+- **W3** — white-label sweep plus a `no-provider-branding` regression guard, run alone because it touches files six W2 tasks owned.
+
+## 3. End-of-sprint review — found & FIXED
+
+The spike and the wave audits surfaced **six defects that were not in the original brief**, four of them in the PM's own plan:
+
+1. **The plan would have rejected the tenant's own model.** `update-model` validated against a hardcoded catalog, but the live `prefferModel` is `GPT_5_6_SOL`, which appears in no published enum. Validation is now a format check; the catalog is display metadata, never an allowlist.
+2. **Trainings were being listed TEXT-only.** `GET /trainings` silently defaults to TEXT when `type` is omitted, so an uploaded document was invisible in the list. A direct cause of "Knowledge Base doesn't fetch real data".
+3. **The `credits-spent` breakdown was always empty** — the code read `data.details`, but the live shape is `{ total, data: [...] }`. A second, independent cause of "Uso & Analytics doesn't fetch real data".
+4. **`description` does not exist on the agent object** — the field is `jobDescription`. The plan as written would have made the description editor a silent no-op: the *third* instance of the same bug class this sprint existed to remove.
+5. **The frontend gate was hollow.** `npm run build` uses esbuild and does **not** typecheck; T7 shipped a real `TS2515` that the build reported as clean. The gate is now `npx tsc -b` **and** `npm run build`. The project had already learned this in 6.9/6.10; the plan specified the weaker check anyway.
+6. **`Webhooks.tsx` displayed URLs for a project that is not ours** (`padduteanashekmereof…` instead of `egxzsivzqlqadoqpgfby`), including the `crm-webhook` URL carrying the tenant's secret. Any customer who copied them pointed their webhooks at the wrong project and their inbound leads went nowhere — silently breaking the feature shipped in 7.1. All three now derive from `VITE_SUPABASE_URL`.
+
+Also fixed during the audits:
+
+- **Two silent-save failures.** `maxDailyMessagesLimitAction` is discarded by the provider unless `maxDailyMessages` travels in the same PUT (the pair is now always sent together, and the control is disabled with an explanation while no limit is set). `onLackKnowLedge` is write-only upstream — the field now says so rather than appearing to lose input.
+- **`npm test` had gone red** because T1 placed a Deno test inside the vitest glob; `supabase/functions/**` is now excluded and both runners are green.
+- The white-label guard was **verified to actually fail** by injecting a brand string into a real UI file — a guard that cannot detect a violation is worse than none.
+
+## 4. Deferred (NOT done — see `todo.md`)
+
+- **No provider API exists:** business hours · content moderation · Google Calendar.
+- **Capability we own but chose not to build:** Intentions rebuild (needs its own design pass with mockups) · Transfer Rules · Idle Actions · named training blocks · i18n · niche-generic example copy · chat channel-filter restyle.
+- **Tech debt this sprint created:** the flat/nested settings contract duplication must be contracted in 7.3; the training bucket is public-read by design.
+
+## 5. Deploy / DB state
+
+- Migrations `20260807020000` (replayed, which re-synced the migration ledger) and `20260808000000` (`agent-training-docs` bucket) applied. Bucket live with a 20 MB cap; **RLS verified against `pg_policies` in prod**, not merely against the migration file.
+- Edge functions deployed from merged `main` on **2026-08-10 21:21–21:22 UTC**: `manage-agent-settings`, `manage-agent-channels`, `fetch-gpt-credits`, `manage-agent-training`, `sync-instance-billing`, `solo-health-check`, `solo-wpp-webhook`, `manage-solo-instances`.
+- **`ASAAS_API_KEY` set 2026-08-10.** `sync-instance-billing` no longer dies on startup — its error moved past the key check — so instance billing can post for the first time.
+- Frontend deploys via Netlify from `main`. Netlify env vars remain **unverified by a human**.
+
+## 6. Known follow-ups outside this sprint
+
+- **Rotate the Asaas production key** — it was pasted in plaintext into a chat transcript.
+- The `gpt-maker-webhook` function slug is the last user-visible brand leak. Renaming it is a migration (deploy neutral slug → move tenants → retire old), not a string edit, because every tenant has it configured upstream.
+- The `agent-assets` bucket writes training attachments with no `equipe_id` in the path, so it lacks the path-enforced isolation that `agent-training-docs` has.
+- Billing ledger amounts are roughly double the documented tier table across all 13 rows — needs a founder decision before cost-per-engineer means anything.
+- **The sprint's real proof is still untested by a human:** open Studio AI and confirm settings persist, channels list, usage shows real numbers, and an uploaded document appears. Everything is verified at the API layer; nobody has yet confirmed it in the running app.
