@@ -22,6 +22,7 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Date       | Sprint   | Task                          | Agent / Model | Tier | Est. R$ |
 | :--------- | :------- | :---------------------------- | :------------ | :--- | :------ |
 | _add rows below as tasks complete_ | | | | | |
+| 2026-08-09 | 7.2 | W3 T12 White-label sweep + guard | Verboo / deepseek-v4-flash | M | R$ 12 |
 | 2026-08-09 | 7.2 | W2 T11 Billing instances section | Verboo / deepseek-v4-flash | M | R$ 12 |
 | 2026-08-09 | 7.2 | W2 T8 Channels page + Solo card | Verboo / deepseek-v4-flash | L | R$ 20 |
 | 2026-08-09 | 7.2 | W2 T9 Knowledge Base upload UI | Verboo / deepseek-v4-flash | M | R$ 12 |

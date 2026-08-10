@@ -62,18 +62,27 @@ const Webhooks = () => {
     enabled: !!equipe?.id,
   });
 
+  // PM correction (T12 audit): these URLs are shown to the user to copy into
+  // external systems, and they were hardcoded to a project ref that is NOT
+  // ours — anyone who copied them pointed their webhooks at the wrong Supabase
+  // project, so inbound leads went nowhere. Always derive from the runtime env.
+  // No fallback: client.ts throws at boot if VITE_SUPABASE_URL is missing (T5),
+  // so by the time this renders the value is guaranteed present.
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
   // Existing inbound webhook URL (secret-based, kept for backward compatibility)
   const inboundWebhookUrl = equipe?.webhook_secret
-    ? `https://padduteanashekmereof.supabase.co/functions/v1/crm-webhook?secret=${equipe.webhook_secret}`
+    ? `${supabaseUrl}/functions/v1/crm-webhook?secret=${equipe.webhook_secret}`
     : "";
 
-  const gptMakerWebhookUrl = "https://padduteanashekmereof.supabase.co/functions/v1/gpt-maker-webhook";
+  // The function slug keeps the provider name — renaming the deployed edge
+  // function would break every webhook already configured upstream. Recorded
+  // as a known residual in todo.md.
+  const webhookUrl = `${supabaseUrl}/functions/v1/gpt-maker-webhook`;
 
   // Separate inbound configs from outbound configs
   const inboundConfigs = configs.filter((c) => c.inbound_function === "receive_lead");
   const outboundConfigs = configs.filter((c) => !c.inbound_function);
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://padduteanashekmereof.supabase.co";
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -202,20 +211,21 @@ const Webhooks = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Webhook GPT Maker</CardTitle>
+              <CardTitle>Webhook de Integração</CardTitle>
+              {/* T12: neutral title — the provider is an implementation detail. */}
               <CardDescription>
-                URL específica para integração com agentes GPT Maker
+                URL específica para integração com agentes de IA
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Input value={gptMakerWebhookUrl} readOnly className="font-mono text-sm" />
-                <Button variant="outline" onClick={() => copyToClipboard(gptMakerWebhookUrl)}>
+                <Input value={webhookUrl} readOnly className="font-mono text-sm" />
+                <Button variant="outline" onClick={() => copyToClipboard(webhookUrl)}>
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground">
-                Configure este endpoint no seu agente GPT Maker para enviar leads automaticamente.
+                Configure este endpoint no seu agente de IA para enviar leads automaticamente.
               </p>
             </CardContent>
           </Card>

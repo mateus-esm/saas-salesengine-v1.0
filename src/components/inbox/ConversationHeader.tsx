@@ -173,7 +173,7 @@ export function ConversationHeader({
               onClick={onSyncHistory}
               disabled={isSyncingHistory}
               className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2"
-              title="Sincronizar histórico com GPT Maker"
+              title="Sincronizar histórico do agente de IA"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", isSyncingHistory && "animate-spin")} />
               <span className="hidden lg:inline">{isSyncingHistory ? "Sincronizando..." : "Sincronizar"}</span>

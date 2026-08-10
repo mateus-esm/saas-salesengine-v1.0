@@ -1,6 +1,6 @@
 // Sprint 5.5 — Display name normalization for Meta/WhatsApp technical IDs.
 //
-// When a new WhatsApp lead enters via the GPT Maker webhook before the user
+// When a new WhatsApp lead enters via the provider webhook before the user
 // has set a display name, the upstream payload sometimes carries the Meta
 // technical identifier (e.g. "264162450083898@lid") as the contactName. That
 // string then surfaces in every UI that renders the lead, looking broken.
