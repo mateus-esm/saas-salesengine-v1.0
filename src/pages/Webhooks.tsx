@@ -67,7 +67,7 @@ const Webhooks = () => {
     ? `https://padduteanashekmereof.supabase.co/functions/v1/crm-webhook?secret=${equipe.webhook_secret}`
     : "";
 
-  const gptMakerWebhookUrl = "https://padduteanashekmereof.supabase.co/functions/v1/gpt-maker-webhook";
+  const webhookUrl = "https://padduteanashekmereof.supabase.co/functions/v1/gpt-maker-webhook";
 
   // Separate inbound configs from outbound configs
   const inboundConfigs = configs.filter((c) => c.inbound_function === "receive_lead");
@@ -202,20 +202,21 @@ const Webhooks = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Webhook GPT Maker</CardTitle>
+              <CardTitle>Webhook de Integração</CardTitle>
+              {/* T12: neutral title — the provider is an implementation detail. */}
               <CardDescription>
-                URL específica para integração com agentes GPT Maker
+                URL específica para integração com agentes de IA
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                <Input value={gptMakerWebhookUrl} readOnly className="font-mono text-sm" />
-                <Button variant="outline" onClick={() => copyToClipboard(gptMakerWebhookUrl)}>
+                <Input value={webhookUrl} readOnly className="font-mono text-sm" />
+                <Button variant="outline" onClick={() => copyToClipboard(webhookUrl)}>
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground">
-                Configure este endpoint no seu agente GPT Maker para enviar leads automaticamente.
+                Configure este endpoint no seu agente de IA para enviar leads automaticamente.
               </p>
             </CardContent>
           </Card>

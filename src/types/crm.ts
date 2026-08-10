@@ -45,7 +45,7 @@ export interface Lead {
   responsible_id: string | null;
   meeting_date: string | null;
   meeting_notes: string | null;
-  // GPT Maker integration fields
+  // AI provider integration fields
   gpt_maker_chat_id: string | null;
   last_message_at: string | null;
   // v3.0 fields
