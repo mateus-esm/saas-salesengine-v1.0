@@ -106,6 +106,55 @@ Rotate all:
 Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
 `@`→`%40`).
 
+## 🟠 SPRINT 7.3 — CODE DONE, NOT DEPLOYED
+
+> Branch `sprint/7.3-provider-parity`. Spec:
+> `docs/superpowers/specs/2026-08-14-studio-ai-provider-parity-design.md`.
+> Verified: `tsc -b` clean · `vite build` OK · 26 Deno tests · 71 FE tests.
+> **Deploy is manual** — none of this is live until the commands below run.
+
+### 🔴 Deploy these five functions
+
+```bash
+supabase functions deploy manage-agent-channels      --project-ref egxzsivzqlqadoqpgfby
+supabase functions deploy manage-agent-settings      --project-ref egxzsivzqlqadoqpgfby
+supabase functions deploy manage-agent-webhooks      --project-ref egxzsivzqlqadoqpgfby
+supabase functions deploy manage-agent-idle-actions  --project-ref egxzsivzqlqadoqpgfby
+supabase functions deploy manage-agent-transfer-rules --project-ref egxzsivzqlqadoqpgfby
+```
+
+The three new ones keep the default `verify_jwt = true` (they authenticate the
+caller's JWT internally, like `manage-agent-settings`) — no `config.toml` entry
+needed. Frontend deploys via Netlify on merge.
+
+⚠️ `manage-agent-settings` **must** ship together with the frontend: its GET
+response dropped the legacy flat keys. Old JS against the new function is fine
+(nothing reads them), but do not deploy the function and then roll the
+frontend back past 7.2 W2.
+
+### What shipped
+
+- **Canais** — root cause was `manage-agent-channels` branching on
+  `req.method === 'POST'` and then parsing an empty body; `invoke()` defaults to
+  POST, so the listing branch was unreachable. Now dispatches on action.
+- **Knowledge Base** — Perfil and Contexto were write-only and opened blank over
+  real data. Both load on mount. Truncation caps removed from the load path.
+- **Config** — 4 tabs; added `resumeTransferHumanAI`; moved `onLackKnowLedge` to
+  Webhooks (it lives on that resource, which is why it never worked in
+  Settings); new idle-actions and transfer-rules editors.
+- **Models** — + Sonnet 5, + Sonnet 4.6; `OPEN_AI_04` spelling corrected.
+
+### Verify in the running app after deploying
+
+1. **Canais** — 5 channels on Solo Energia, each showing its phone/@handle.
+2. **Knowledge Base** — Perfil opens with Solon's real prompt in *Texto Livre*;
+   Contexto shows the real company description.
+3. **Configurações** — all 4 tabs load; toggle something, reload, it stuck.
+4. **Regras de transferência** — the "cliente irritado" rule appears with
+   *Mateus Sombra* as its target.
+5. **Modelo** — pick Sonnet 5. If the slug is wrong you get an explicit
+   provider error, not silence — report it and the catalog gets corrected.
+
 ## 🔴 SPRINT 7.2 CLOSE-OUT — WHAT IS STILL MISSING
 
 > Sprint 7.2 closed 2026-08-10; all 13 tasks merged and deployed. Handoffs for
@@ -174,9 +223,17 @@ Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
 
 ### No provider API exists (verified against the live docs 2026-08-08)
 
-- [ ] **Horário de atendimento** — no field on the settings endpoint. Would need
-      enforcing in our own webhook layer before handing off to the agent.
-- [ ] **Moderação de conteúdo** — no field either.
+- [ ] **Horário de atendimento** — no field on the settings endpoint and no
+      agent-level route (re-verified 2026-08-14: 8 path variants all 404).
+      Would need enforcing in our own webhook layer before handing off to the
+      agent. **Partial workaround now shipped:** idle actions carry a
+      per-action `workingHours` (`dayWeek` 0–6 × `HH:MM` blocks) — supported by
+      `manage-agent-idle-actions`, though the 7.3 UI only exposes the
+      allow-all-hours toggle. Deferred by founder decision 2026-08-14.
+- [ ] **Moderação de conteúdo** — no field and no route either (4 variants
+      probed 2026-08-14). The provider's docs "Moderation" section is
+      human-takeover (`/chats/start-human`), not content moderation. Deferred
+      by founder decision 2026-08-14.
 - [ ] **Google Calendar / scheduling** — the provider's integrations (Eleven
       Labs, Google Agenda, Plug Chat, E-Vendi) are **dashboard-configured only,
       no endpoints**. Revisit as a *native* scheduling intention over our own
@@ -184,13 +241,17 @@ Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
 
 ### Capability we own but haven't built
 
+- [x] ~~**Transfer Rules**~~ ✅ **DONE Sprint 7.3** — `manage-agent-transfer-rules`
+      (full CRUD) + `TransferRulesTab`, human targets from
+      `/workspace/{id}/team`.
+- [x] ~~**Idle Actions**~~ ✅ **DONE Sprint 7.3** — `manage-agent-idle-actions`
+      + `IdleActionsTab`. Exposed as get/save, not per-item CRUD: the
+      provider's POST replaces the whole configuration.
 - [ ] **Intentions rebuild** (founder pt 3 + 6) — the provider exposes full CRUD
       with `fields[]` (typed collect-data), `headers`/`params`/`requestBody`, and
       `variables[].defaultFieldKey`. `IntentionWizard.tsx` is already 569 lines;
       the full schema roughly doubles it. Needs its own design pass with mockups
       — it's a UX problem, not a wiring problem.
-- [ ] **Transfer Rules** — full CRUD API exists, we call none of it.
-- [ ] **Idle Actions** ("ações de inatividade") — same.
 - [ ] **Named training blocks** (founder pt 4) — the provider has **no
       title/name field** on a training (only `documentName` for DOCUMENT). Needs
       our own convention, e.g. a `# [Título: ...]` header parsed out of the text.
@@ -203,13 +264,11 @@ Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
 
 ### Tech debt created by Sprint 7.2 (pay this down in 7.3)
 
-- [ ] **Contract contraction — remove the legacy flat keys** from
-      `manage-agent-settings`. The GET response currently returns
-      `{ ...agent, ...settings, agent: {…}, settings: {…} }` because
-      `BehaviorSettings.tsx`, `SettingsPage.tsx` and `UsagePage.tsx` read the
-      flat keys. Once W2 migrates them to the nested shape, delete the flat
-      duplication. **Do not drop it before W2 lands** — it keeps a working
-      editor alive across the wave gap.
+- [x] ~~**Contract contraction — remove the legacy flat keys**~~ ✅ **DONE
+      Sprint 7.3.** `manage-agent-settings` GET now returns just
+      `{ agent, settings }`. Verified no consumer reads the flat keys:
+      `UsagePage` and `ModelSelector` were already on the nested shape and
+      `BehaviorSettings.tsx` / `AIKnowledgeBase.tsx` were deleted as dead code.
 - [ ] **Training bucket is public-read** — `agent-training-docs` is
       `public: true` because the provider fetches `documentUrl` server-side
       without auth. Object names carry a random UUID so they're unguessable, but
@@ -220,10 +279,17 @@ Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
       re-fetches after the initial training.
 - [ ] **`resumeTransferHumanAI`** is returned live but undocumented. Surfaced in
       the settings contract; decide whether to expose it in the UI.
-- [ ] **Model catalog is hand-maintained.** No list endpoint exists, and the live
+- [ ] **Model catalog is hand-maintained.** No list endpoint exists (re-verified
+      2026-08-14: `/models`, `/workspace/{id}/models`, `/agent/{id}/models` all
+      404, and the provider's own endpoint index has no such route). The live
       API runs slugs in no published enum (`GPT_5_6_SOL`, `GPT_5_6_TERRA`,
-      `GPT_5_4`). Credit costs for those three are **estimates**. Re-check when
-      the provider publishes real figures.
+      `GPT_5_4`). Credit costs for those three are **estimates**.
+- [ ] 🟡 **Confirm the two new Claude slugs.** Sprint 7.3 added
+      `CLAUDE_5_SONNET` and `CLAUDE_4_6_SONNET` because the founder confirmed
+      Sonnet 5 / Sonnet 4.6 are in the provider's dropdown, but the ids are
+      **derived from the naming pattern, not observed**. Selecting one in the
+      app confirms it (a wrong slug returns the provider's error body verbatim
+      via `upstreamError`). Correct the catalog once observed.
 
 ### Found during the W2/W3 audits (real, still open)
 

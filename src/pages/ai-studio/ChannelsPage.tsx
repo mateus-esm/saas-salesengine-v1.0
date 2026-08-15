@@ -41,6 +41,9 @@ interface Channel {
   name: string;
   type: string;
   connected: boolean;
+  /** Connected phone number / @handle, as shown upstream. Null when unpaired. */
+  username: string | null;
+  departmentName: string | null;
 }
 
 // ── Live Channels ──────────────────────────────────────────────────────────────
@@ -57,9 +60,15 @@ function LiveChannelsSection() {
   const fetchChannels = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("manage-agent-channels");
+      // Explicit GET. `invoke` defaults to POST with an empty body, which used
+      // to hit the function's POST branch and throw on `req.json()` — the whole
+      // reason this list never loaded. The function now dispatches on action,
+      // but stating the method keeps the intent legible at the call site.
+      const { data, error } = await supabase.functions.invoke("manage-agent-channels", {
+        method: "GET",
+      });
       if (error) throw error;
-      // T2 shape: { channels: [{ id, name, type, connected }] }
+      // { channels: [{ id, name, type, connected, username, departmentName }] }
       setChannels(Array.isArray(data?.channels) ? data.channels : []);
       setFetchError(null);
     } catch (err: any) {
@@ -184,10 +193,20 @@ function LiveChannelsSection() {
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-foreground truncate">{ch.name}</div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="text-[10px] font-mono text-muted-foreground uppercase">
                           {typeCfg.label}
                         </span>
+                        {ch.username && (
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            · {ch.username}
+                          </span>
+                        )}
+                        {ch.departmentName && (
+                          <span className="text-[10px] font-mono text-muted-foreground">
+                            · {ch.departmentName}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
