@@ -28,10 +28,25 @@ const MODEL_CATALOG: ModelInfo[] = [
   { id: 'OPEN_AI_O1',            label: 'o1',             vendor: 'OpenAI',    creditsPerMessage: 25 },
   { id: 'OPEN_AI_O3',            label: 'o3',             vendor: 'OpenAI',    creditsPerMessage: 5 },
   { id: 'OPEN_AI_O3_MINI',       label: 'o3 Mini',        vendor: 'OpenAI',    creditsPerMessage: 3 },
-  { id: 'OPEN_AI_O4',            label: 'o4',             vendor: 'OpenAI',    creditsPerMessage: 5 },
+  // ⚠️ Digit-zero, not letter-O. The published enum spells these `OPEN_AI_04`
+  // and `OPEN_AI_03_MINI_BETA`; this file previously used `O4`/`O3`, which the
+  // provider would reject on select. Unlike the model list below — where live
+  // traffic positively contradicts the docs — there is no live evidence for
+  // either spelling here, so the only evidence available wins.
+  { id: 'OPEN_AI_04',            label: 'o4',             vendor: 'OpenAI',    creditsPerMessage: 5 },
   { id: 'OPEN_AI_O4_MINI',       label: 'o4 Mini',        vendor: 'OpenAI',    creditsPerMessage: 3 },
-  { id: 'OPEN_AI_O3_MINI_BETA',  label: 'o3 Mini (Beta)', vendor: 'OpenAI',    creditsPerMessage: 3, isBeta: true },
-  { id: 'CLAUDE_4_5_SONNET',     label: 'Claude 4.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10, isNew: true },
+  { id: 'OPEN_AI_03_MINI_BETA',  label: 'o3 Mini (Beta)', vendor: 'OpenAI',    creditsPerMessage: 3, isBeta: true },
+
+  // ── Anthropic ────────────────────────────────────────────────────────────
+  // Sonnet 5 and Sonnet 4.6 are in the provider's dashboard dropdown (founder,
+  // 2026-08-14) but in no published enum — the docs list only the four below.
+  // Their ids follow the provider's own naming pattern (CLAUDE_<maj>_<min>_SONNET)
+  // and are NOT confirmed against live traffic. If a slug is wrong the provider
+  // rejects the PUT and `upstreamError` surfaces its body verbatim, so it fails
+  // loudly on first select rather than silently. Correct here once observed.
+  { id: 'CLAUDE_5_SONNET',       label: 'Claude Sonnet 5',   vendor: 'Anthropic', creditsPerMessage: 10, isNew: true },
+  { id: 'CLAUDE_4_6_SONNET',     label: 'Claude Sonnet 4.6', vendor: 'Anthropic', creditsPerMessage: 10, isNew: true },
+  { id: 'CLAUDE_4_5_SONNET',     label: 'Claude 4.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
   { id: 'CLAUDE_3_7_SONNET',     label: 'Claude 3.7 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
   { id: 'CLAUDE_3_5_SONNET',     label: 'Claude 3.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
   { id: 'CLAUDE_3_5_HAIKU',      label: 'Claude 3.5 Haiku',  vendor: 'Anthropic', creditsPerMessage: 2 },
