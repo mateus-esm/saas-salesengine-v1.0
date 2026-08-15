@@ -188,15 +188,12 @@ serve(async (req) => {
         resumeTransferHumanAI: s.resumeTransferHumanAI ?? false,
       };
 
+      // Sprint 7.3: the legacy flat duplication (`...agentOut, ...settingsOut`)
+      // is gone. It existed only to keep BehaviorSettings.tsx / SettingsPage.tsx
+      // / UsagePage.tsx alive across the 7.2 wave gap. All three now read the
+      // nested shape (and the first was deleted outright), so the contract is
+      // just { agent, settings }.
       return new Response(JSON.stringify({
-        // ── Legacy flat keys — DO NOT REMOVE in this sprint.
-        //    BehaviorSettings.tsx:21 reads data.behavior, SettingsPage.tsx:76-79
-        //    reads flat splitMessages/enabledEmoji/messageGroupingTime/
-        //    knowledgeByFunction and UsagePage.tsx:14 reads data.prefferModel.
-        //    Dropping these breaks working features for the entire gap between
-        //    W1 and W2. Removed in a 7.3 cleanup.
-        ...agentOut,
-        ...settingsOut,
         agent: agentOut,
         settings: settingsOut,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
