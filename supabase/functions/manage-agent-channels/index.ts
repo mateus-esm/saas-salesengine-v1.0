@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { WEBHOOK_EVENT_DEFAULTS } from "../_shared/agent-webhooks.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +8,25 @@ const corsHeaders = {
 };
 
 const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dispatch on the ACTION, never on the HTTP method.
+//
+// `supabase.functions.invoke(name)` with no options sends POST with an empty
+// body (@supabase/functions-js: `method: method || 'POST'`). The previous code
+// branched on `req.method === 'POST'` and then ran `await req.json()` on that
+// empty body — which throws, so the listing branch below was unreachable from
+// the app and Canais never loaded. Every sibling function (settings, training,
+// intentions) already resolves an action with a default before touching the
+// body; this brings channels in line with that convention.
+//
+// Absent an explicit action, the request is a listing.
+// ─────────────────────────────────────────────────────────────────────────────
+export function resolveAction(req: Request, body: Record<string, unknown>): string {
+  const fromQuery = new URL(req.url).searchParams.get('action');
+  if (fromQuery) return fromQuery;
+  return typeof body.action === 'string' && body.action ? body.action : 'list';
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -57,18 +77,23 @@ serve(async (req) => {
     // gpt-maker-webhook — sem isso, canal criado pela UI conecta mas nenhuma
     // mensagem chega ao inbox (tenants novos nunca foram configurados à mão).
     // Nunca falha a request principal; loga e segue.
+    // Read → merge → PUT the COMPLETE object. The previous version PUT
+    // `{ onNewMessage }` alone; if the provider's PUT replaces rather than
+    // merges, that silently wiped the tenant's other seven events. Sending all
+    // eight makes the question moot, so we never have to rely on undocumented
+    // merge semantics.
     async function ensureAgentWebhook(): Promise<void> {
       try {
         const ourWebhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gpt-maker-webhook`;
         const getRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/webhooks`, { headers: engineHeaders });
-        if (getRes.ok) {
-          const current = await getRes.json().catch(() => ({}));
-          if (current?.onNewMessage === ourWebhookUrl) return; // já configurado
-        }
+        const current = getRes.ok ? await getRes.json().catch(() => ({})) : {};
+        if (current?.onNewMessage === ourWebhookUrl) return; // já configurado
+
+        const merged = { ...WEBHOOK_EVENT_DEFAULTS, ...current, onNewMessage: ourWebhookUrl };
         const putRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/webhooks`, {
           method: 'PUT',
           headers: engineHeaders,
-          body: JSON.stringify({ onNewMessage: ourWebhookUrl }),
+          body: JSON.stringify(merged),
         });
         console.log('[Channels] ensureAgentWebhook:', putRes.status);
       } catch (err) {
@@ -76,10 +101,42 @@ serve(async (req) => {
       }
     }
 
-    // --- POST: dispatch by action ---
-    if (req.method === 'POST') {
-      const body = await req.json();
-      const { action } = body;
+    // Tolerate an absent/!JSON body — a body-less POST is the default shape of
+    // `functions.invoke(name)` and must resolve to a listing, not a parse error.
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const action = resolveAction(req, body);
+
+    // --- Action dispatch ---
+    {
+      // LIST — the default. Source of truth for channel `type` (T0 §4.2): do
+      // not switch to /agent/{id}/search, which reports CLOUD_API where this
+      // reports WHATSAPP for the same channel id.
+      if (action === 'list') {
+        const apiUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/channels?agentId=${agentId}&page=1&pageSize=50`;
+        const res = await fetch(apiUrl, { headers: engineHeaders });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('AI Engine channels error:', res.status, errText);
+          return new Response(JSON.stringify({ error: errText || 'Upstream channels error', status: res.status }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        const data = await res.json();
+        // `username` carries the connected phone number / @handle and
+        // `departmentName` the team — both are shown upstream and were being
+        // discarded here, which is why our list looked thinner than theirs.
+        const normalized = (data.data ?? []).map((ch: any) => ({
+          id: ch.id,
+          name: ch.name ?? '',
+          type: ch.type ?? 'UNKNOWN',
+          connected: ch.connected === true,
+          username: ch.username ?? null,
+          departmentName: ch.departmentName ?? null,
+        }));
+        return new Response(JSON.stringify({ channels: normalized }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
 
       if (action === 'create') {
         const { name, type } = body;
@@ -181,29 +238,6 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // --- GET: list channels ---
-    // Source of truth for channel `type` (see T0 §4.2). Do not switch to
-    // /agent/{id}/search — it reports CLOUD_API where this reports WHATSAPP.
-    const apiUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/channels?agentId=${agentId}&page=1&pageSize=50`;
-    const res = await fetch(apiUrl, { headers: engineHeaders });
-
-    if (!res.ok) {
-      const body = await res.text();
-      console.error('AI Engine channels error:', res.status, body);
-      return new Response(JSON.stringify({ error: body || 'Upstream channels error', status: res.status }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    const data = await res.json();
-    const normalized = (data.data ?? []).map((ch: any) => ({
-      id: ch.id,
-      name: ch.name ?? '',
-      type: ch.type ?? 'UNKNOWN',
-      connected: ch.connected === true,
-    }));
-    return new Response(JSON.stringify({ channels: normalized }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error('Error:', error);

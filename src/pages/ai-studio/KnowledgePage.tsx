@@ -42,15 +42,45 @@ const BEHAVIOR_FIELDS: { key: keyof BehaviorAnswers; label: string; placeholder:
   { key: "escalation", label: "Escalada Humana", placeholder: "Quando transferir para atendente?", multiline: true },
 ];
 
+// Soft cap. Applies to what the user TYPES, never to what we load: the agent's
+// live behavior can legitimately exceed it, and silently truncating a loaded
+// prompt on the next save would destroy production configuration.
+const BEHAVIOR_SOFT_LIMIT = 3000;
+
 function PerfilFolder() {
   const { toast } = useToast();
   const [mode, setMode] = useState<"wizard" | "raw">("wizard");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [rawBehavior, setRawBehavior] = useState("");
   const [answers, setAnswers] = useState<BehaviorAnswers>({
     agentName: "", tone: "", persona: "", goals: "",
     restrictions: "", responseStyle: "", language: "português", escalation: "",
   });
+
+  // Load what the agent actually has. Until 7.3 this panel was write-only — it
+  // opened blank regardless of upstream state, which is what "não sincroniza"
+  // meant. Saving from that blank state overwrote the real prompt.
+  const fetchBehavior = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.functions.invoke("manage-agent-settings", {
+        method: "GET",
+      });
+      if (error) throw error;
+      const behavior: string = data?.agent?.behavior ?? "";
+      setRawBehavior(behavior);
+      // An existing prompt is free-form text; the wizard composes a prompt from
+      // structured answers and cannot decompose one back. Opening in wizard
+      // mode would show empty fields over real content and invite the user to
+      // replace it with a blank prompt, so an existing behavior opens raw.
+      if (behavior.trim()) setMode("raw");
+    } catch {
+      toast({ title: "Erro", description: "Não foi possível carregar o perfil do agente.", variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { fetchBehavior(); }, [fetchBehavior]);
 
   const builtPrompt = buildBehaviorPrompt(answers);
   const activeText = mode === "wizard" ? builtPrompt : rawBehavior;
@@ -65,10 +95,20 @@ function PerfilFolder() {
       });
       if (error) throw error;
       toast({ title: "Sincronizado!", description: "Perfil do agente atualizado." });
+      // Re-read so the panel shows what upstream stored, not what we sent.
+      await fetchBehavior();
     } catch {
       toast({ title: "Erro", description: "Falha ao salvar o perfil.", variant: "destructive" });
     } finally { setSaving(false); }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -89,8 +129,11 @@ function PerfilFolder() {
             </button>
           ))}
         </div>
-        <span className={cn("text-xs font-mono", charCount > 2800 ? "text-destructive font-bold" : "text-muted-foreground")}>
-          {charCount} / 3000
+        <span className={cn(
+          "text-xs font-mono",
+          charCount > BEHAVIOR_SOFT_LIMIT ? "text-destructive font-bold" : "text-muted-foreground"
+        )}>
+          {charCount} / {BEHAVIOR_SOFT_LIMIT}
         </span>
       </div>
 
@@ -125,9 +168,12 @@ function PerfilFolder() {
         <div className="relative">
           <textarea
             className="w-full min-h-[280px] bg-background border border-border rounded-lg p-4 text-sm font-mono resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground leading-relaxed"
-            placeholder="Descreva o comportamento do agente em texto livre (max 3000 chars)..."
+            placeholder="Descreva o comportamento do agente em texto livre..."
             value={rawBehavior}
-            onChange={(e) => setRawBehavior(e.target.value.slice(0, 3000))}
+            // No .slice() here. A loaded prompt longer than the soft limit must
+            // survive an edit-and-save round trip untouched; the counter turns
+            // red as guidance instead of the input silently amputating text.
+            onChange={(e) => setRawBehavior(e.target.value)}
           />
         </div>
       )}
@@ -157,10 +203,31 @@ function PerfilFolder() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Empresa Folder
 // ─────────────────────────────────────────────────────────────────────────────
+// Same rule as the behavior cap: guidance while typing, never applied to a
+// loaded value. `description` maps to upstream `jobDescription`.
+const COMPANY_SOFT_LIMIT = 500;
+
 function EmpresaFolder() {
   const { toast } = useToast();
   const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Was write-only before 7.3 — same defect as PerfilFolder.
+  const fetchDescription = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.functions.invoke("manage-agent-settings", {
+        method: "GET",
+      });
+      if (error) throw error;
+      setDescription(data?.agent?.description ?? "");
+    } catch {
+      toast({ title: "Erro", description: "Não foi possível carregar o contexto da empresa.", variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { fetchDescription(); }, [fetchDescription]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -170,10 +237,19 @@ function EmpresaFolder() {
       });
       if (error) throw error;
       toast({ title: "Sincronizado!", description: "Descrição da empresa atualizada." });
+      await fetchDescription();
     } catch {
       toast({ title: "Erro", description: "Falha ao salvar.", variant: "destructive" });
     } finally { setSaving(false); }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -186,14 +262,14 @@ function EmpresaFolder() {
           className="w-full min-h-[160px] bg-background border border-border rounded-lg p-4 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground leading-relaxed"
           placeholder="Ex: A Solo Energia é um hub de soluções em energia solar. Conectamos pessoas e negócios à liberdade energética..."
           value={description}
-          onChange={(e) => setDescription(e.target.value.slice(0, 500))}
-          maxLength={500}
+          // No slice / maxLength — see COMPANY_SOFT_LIMIT.
+          onChange={(e) => setDescription(e.target.value)}
         />
         <span className={cn(
           "absolute bottom-3 right-3 text-[11px] font-mono bg-background/80 px-1.5 py-0.5 rounded",
-          description.length > 450 ? "text-destructive" : "text-muted-foreground"
+          description.length > COMPANY_SOFT_LIMIT ? "text-destructive" : "text-muted-foreground"
         )}>
-          {description.length}/500
+          {description.length}/{COMPANY_SOFT_LIMIT}
         </span>
       </div>
       <div className="flex justify-end">
