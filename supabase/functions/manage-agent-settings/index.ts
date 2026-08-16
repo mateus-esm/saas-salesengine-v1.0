@@ -158,6 +158,11 @@ serve(async (req) => {
 
       const agentOut = {
         name: agent.name ?? '',
+        // ACTIVE | INACTIVE. Sprint 7.4 W2: this is the closest thing the
+        // provider has to "horário de atendimento" — there is no schedule API,
+        // but the agent can be silenced. Note it is AGENT-wide: inactive means
+        // silent on every channel at once.
+        status: agent.status ?? 'ACTIVE',
         behavior: agent.behavior ?? '',
         // T0 + provider docs: the agent object field is `jobDescription`
         // (PUT /agent/{id} accepts jobDescription, NOT description). The
@@ -224,6 +229,22 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       updatePayload = { prefferModel: body.model };
+    } else if (action === 'set-status') {
+      // Distinct upstream shape: PUT /agent/{id}/active|inactive, no body.
+      // Handled inline because it does not fit the shared PUT-with-payload path.
+      const next = String(body.status ?? '').toUpperCase();
+      if (next !== 'ACTIVE' && next !== 'INACTIVE') {
+        return new Response(JSON.stringify({ error: `Invalid status: ${body.status}`, status: 400 }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const verb = next === 'ACTIVE' ? 'active' : 'inactive';
+      const statusRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/${verb}`, {
+        method: 'PUT', headers: engineHeaders,
+      });
+      if (!statusRes.ok) return upstreamError(statusRes, `set-status-${verb}`);
+      return new Response(JSON.stringify({ success: true, status: next }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     } else {
       return new Response(JSON.stringify({ error: 'Invalid action' }), {
         status: 400,

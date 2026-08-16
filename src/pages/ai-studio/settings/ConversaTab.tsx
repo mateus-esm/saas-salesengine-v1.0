@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Info, Settings2 } from "lucide-react";
+import { Loader2, Info, Settings2, PauseCircle, PlayCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -96,6 +97,7 @@ const COUPLED = ["maxDailyMessages", "maxDailyMessagesLimitAction"];
 export function ConversaTab() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<Record<string, any>>({});
+  const [agentStatus, setAgentStatus] = useState<string>("ACTIVE");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
@@ -107,12 +109,42 @@ export function ConversaTab() {
       });
       if (error) throw error;
       setSettings(data?.settings ?? {});
+      setAgentStatus(data?.agent?.status ?? "ACTIVE");
     } catch {
       toast({ title: "Erro", description: "Não foi possível carregar as configurações.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast]);
+
+  // The provider has no business-hours API, but an agent can be silenced.
+  // Founder chose a manual toggle over a scheduled one (2026-08-15).
+  const toggleAgentStatus = async (active: boolean) => {
+    const next = active ? "ACTIVE" : "INACTIVE";
+    const prev = agentStatus;
+    setAgentStatus(next);
+    setSavingKey("__status__");
+    try {
+      const { error } = await supabase.functions.invoke(
+        "manage-agent-settings?action=set-status",
+        { body: { status: next } }
+      );
+      if (error) throw error;
+      toast({
+        title: active ? "Agente ativado" : "Agente pausado",
+        description: active
+          ? "O agente voltou a responder em todos os canais."
+          : "O agente parou de responder em todos os canais.",
+      });
+    } catch (err) {
+      setAgentStatus(prev);
+      toast({
+        title: "Não foi possível alterar o status",
+        description: String((err as any)?.message ?? err),
+        variant: "destructive",
+      });
+    } finally { setSavingKey(null); }
+  };
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
@@ -158,8 +190,45 @@ export function ConversaTab() {
     );
   }
 
+  const paused = agentStatus !== "ACTIVE";
+
   return (
     <div className="space-y-5">
+      {/* Agent on/off — the closest thing the provider offers to "horário de
+          atendimento". Deliberately at the top: it overrides everything below. */}
+      <div className={cn(
+        "border rounded-lg overflow-hidden",
+        paused ? "border-amber-300/60 bg-amber-500/5" : "border-border bg-card"
+      )}>
+        <div className="px-5 py-4 flex items-center justify-between gap-6">
+          <div className="flex-1 min-w-0 space-y-0.5">
+            <div className="flex items-center gap-2">
+              {paused
+                ? <PauseCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                : <PlayCircle className="w-4 h-4 text-emerald-600 shrink-0" />}
+              <span className="text-sm font-semibold text-foreground">
+                {paused ? "Agente pausado" : "Agente ativo"}
+              </span>
+              {savingKey === "__status__" && (
+                <span className="text-[10px] font-mono text-primary">salvando…</span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              {paused
+                ? "O agente não está respondendo em nenhum canal. As mensagens continuam chegando ao inbox."
+                : "Pause para o agente parar de responder — vale para todos os canais ao mesmo tempo, não é por canal."}
+            </p>
+          </div>
+          <div className="shrink-0">
+            <Switch
+              checked={!paused}
+              onCheckedChange={toggleAgentStatus}
+              disabled={savingKey !== null && savingKey !== "__status__"}
+            />
+          </div>
+        </div>
+      </div>
+
       {Object.entries(grouped).map(([group, configs]) => (
         <div key={group} className="border border-border rounded-lg overflow-hidden bg-card">
           <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
@@ -227,15 +296,26 @@ export function ConversaTab() {
         </div>
       ))}
 
-      {/* Keeps expectations honest — these two have no provider API at all. */}
-      <div className="flex items-start gap-2.5 p-4 rounded-lg border border-border bg-muted/20 text-xs text-muted-foreground">
-        <Info className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground/70" />
-        <span>
-          <strong className="font-semibold text-foreground/80">Horário de atendimento</strong> e{" "}
-          <strong className="font-semibold text-foreground/80">moderação de conteúdo</strong> ainda
-          não estão disponíveis: o provedor não expõe API para eles. Horários por ação podem ser
-          definidos em <em>Ações de inatividade</em>.
-        </span>
+      {/* Says WHY, not just "não disponível" — the reasons are different and
+          both are real constraints, not backlog. */}
+      <div className="space-y-2.5">
+        <div className="flex items-start gap-2.5 p-4 rounded-lg border border-border bg-muted/20 text-xs text-muted-foreground">
+          <Info className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground/70" />
+          <span>
+            <strong className="font-semibold text-foreground/80">Horário de atendimento</strong>{" "}
+            não existe como agenda no provedor. O mais próximo é pausar o agente no botão acima.
+            Horários por ação podem ser definidos em <em>Ações de inatividade</em>.
+          </span>
+        </div>
+        <div className="flex items-start gap-2.5 p-4 rounded-lg border border-border bg-muted/20 text-xs text-muted-foreground">
+          <Info className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground/70" />
+          <span>
+            <strong className="font-semibold text-foreground/80">Moderação de conteúdo</strong>{" "}
+            não é oferecida pelo provedor, e não temos como suprir: recebemos a notificação da
+            mensagem <em>depois</em> que o agente já respondeu, então não há como bloquear uma
+            resposta antes dela sair.
+          </span>
+        </div>
       </div>
     </div>
   );

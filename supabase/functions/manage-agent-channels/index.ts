@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { WEBHOOK_EVENT_DEFAULTS } from "../_shared/agent-webhooks.ts";
+import { pickChannelConfig } from "../_shared/channel-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -231,6 +232,104 @@ serve(async (req) => {
         return new Response(JSON.stringify(result), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+
+      // ── Sprint 7.4 W2 — per-channel detail ──────────────────────────────
+
+      // Behaviour config. The field set varies by channel type; WIDGET returns
+      // an empty object because a widget has no conversational config.
+      if (action === 'config') {
+        const { channel_id } = body;
+        if (!channel_id) {
+          return new Response(JSON.stringify({ message: 'channel_id is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const res = await fetch(`${AI_ENGINE_BASE}/channel/${channel_id}/config`, { headers: engineHeaders });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('[Channels] config error:', res.status, errText);
+          return new Response(JSON.stringify({ message: errText || 'Upstream config error' }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const cfg = await res.json().catch(() => ({}));
+        // A disconnected channel answers `{"error": null}` rather than 404 —
+        // surface that as "no config yet", not as a broken response.
+        const usable = cfg && typeof cfg === 'object' && !('error' in cfg) ? cfg : {};
+        return new Response(JSON.stringify({ config: usable }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      if (action === 'update-config') {
+        const { channel_id } = body;
+        if (!channel_id) {
+          return new Response(JSON.stringify({ message: 'channel_id is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // Allowlisted + partial: the provider accepts only the keys we send, so
+        // we never resend a stale value for a field the user did not touch.
+        const payload = pickChannelConfig(body.config ?? body);
+        if (Object.keys(payload).length === 0) {
+          return new Response(JSON.stringify({ message: 'No valid config keys provided' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const res = await fetch(`${AI_ENGINE_BASE}/channel/${channel_id}/config`, {
+          method: 'PUT', headers: engineHeaders, body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('[Channels] update-config error:', res.status, errText);
+          return new Response(JSON.stringify({ message: errText || 'Upstream config update error' }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // Re-read so the UI renders stored truth rather than the sent payload.
+        const after = await fetch(`${AI_ENGINE_BASE}/channel/${channel_id}/config`, { headers: engineHeaders });
+        const cfg = after.ok ? await after.json().catch(() => ({})) : payload;
+        return new Response(JSON.stringify({ config: cfg }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      // Widget embed snippets — the one channel type a tenant can finish
+      // connecting entirely inside our UI. Note the path is `/widget-links`,
+      // NOT `/widget/links` (that 404s).
+      if (action === 'widget-links') {
+        const { channel_id } = body;
+        if (!channel_id) {
+          return new Response(JSON.stringify({ message: 'channel_id is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const res = await fetch(`${AI_ENGINE_BASE}/channel/${channel_id}/widget-links`, { headers: engineHeaders });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('[Channels] widget-links error:', res.status, errText);
+          return new Response(JSON.stringify({ message: errText || 'Upstream widget-links error' }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const links = await res.json();
+        return new Response(JSON.stringify({ float: links.float ?? null, iframe: links.iframe ?? null }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      if (action === 'rename') {
+        const { channel_id, name } = body;
+        if (!channel_id || !String(name ?? '').trim()) {
+          return new Response(JSON.stringify({ message: 'channel_id and name are required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // PUT /channel/{id} takes { name, agentId }. Always resend agentId —
+        // omitting it on a nullable field risks unlinking the channel from the
+        // agent, which would silently stop its messages reaching the inbox.
+        const res = await fetch(`${AI_ENGINE_BASE}/channel/${channel_id}`, {
+          method: 'PUT', headers: engineHeaders,
+          body: JSON.stringify({ name: String(name).trim(), agentId }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('[Channels] rename error:', res.status, errText);
+          return new Response(JSON.stringify({ message: errText || 'Upstream rename error' }),
+            { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ success: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       return new Response(
