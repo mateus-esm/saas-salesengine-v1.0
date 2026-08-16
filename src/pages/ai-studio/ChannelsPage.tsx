@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateChannelDialog } from "@/components/ai-studio/CreateChannelDialog";
+import { ChannelDetailSheet, type ChannelSummary } from "./channels/ChannelDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -36,15 +37,7 @@ const CHANNEL_TYPE_CONFIG: Record<string, { icon: React.ComponentType<{className
 const getTypeConfig = (type: string) =>
   CHANNEL_TYPE_CONFIG[type?.toUpperCase()] ?? CHANNEL_TYPE_CONFIG.WHATSAPP;
 
-interface Channel {
-  id: string;
-  name: string;
-  type: string;
-  connected: boolean;
-  /** Connected phone number / @handle, as shown upstream. Null when unpaired. */
-  username: string | null;
-  departmentName: string | null;
-}
+type Channel = ChannelSummary;
 
 // ── Live Channels ──────────────────────────────────────────────────────────────
 function LiveChannelsSection() {
@@ -56,6 +49,7 @@ function LiveChannelsSection() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [detailChannel, setDetailChannel] = useState<Channel | null>(null);
 
   const fetchChannels = useCallback(async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
@@ -187,7 +181,12 @@ function LiveChannelsSection() {
 
               return (
                 <div key={ch.id} className="flex items-center justify-between py-3.5 px-1 gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setDetailChannel(ch)}
+                    className="flex items-center gap-3 min-w-0 text-left flex-1 rounded-md
+                               hover:bg-muted/40 -mx-1 px-1 py-1 transition-colors"
+                  >
                     <div className={cn("p-2 rounded-md border shrink-0", typeCfg.color)}>
                       <TypeIcon className="w-4 h-4" />
                     </div>
@@ -209,7 +208,7 @@ function LiveChannelsSection() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="flex items-center gap-3 shrink-0">
                     <div className={cn(
@@ -245,6 +244,13 @@ function LiveChannelsSection() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onSuccess={() => fetchChannels(true)}
+      />
+
+      {/* Per-channel detail: connection, behaviour config, widget install */}
+      <ChannelDetailSheet
+        channel={detailChannel}
+        onOpenChange={(open) => !open && setDetailChannel(null)}
+        onChanged={() => fetchChannels(true)}
       />
 
       {/* Delete Confirmation Dialog */}
