@@ -113,6 +113,9 @@ export function AIUsageDashboard() {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<any[]>([]);
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  // Sprint 7.5 W2: the plan allotment, in billed credits — a real denominator
+  // at last, so the saldo can be shown as "restante / total do plano".
+  const [creditAllowance, setCreditAllowance] = useState<number | null>(null);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
 
   // T10 Step 3: label lookup via the catalog; unknown keys render as the raw
@@ -150,6 +153,7 @@ export function AIUsageDashboard() {
       const data = usageRes.data ?? {};
       // T3 shape: { balance, total, details: [{model, credits, ...}] }
       setCreditsBalance(typeof data.balance === 'number' ? data.balance : null);
+      setCreditAllowance(typeof data.allowance === 'number' ? data.allowance : null);
       setDetails(data.details || []);
 
       if (!catalogRes.error && Array.isArray(catalogRes.data?.models)) {
@@ -218,10 +222,14 @@ export function AIUsageDashboard() {
     return { chartData: sorted, modelKeys: Array.from(modelsSet), totalFilteredSpent: total, modelBreakdown: breakdownArr };
   }, [details, periodCfg, activePreset, catalogById]);
 
-  // T10 Step 2: there is no real "total credits" value from the API — the
-  // workspace endpoint only returns the remaining balance. Never fabricate a
-  // denominator; show "—" when the balance is unavailable.
+  // Sprint 7.5 W2: the balance is now the TENANT's remaining plan credits, not
+  // the reseller's pooled workspace balance (which every tenant shared and any
+  // tenant's spending moved). The allotment gives a genuine denominator — still
+  // never fabricated: when it is missing we show the balance alone.
   const balanceDisplay = creditsBalance === null ? "—" : creditsBalance.toLocaleString('pt-BR');
+  const allowanceDisplay = creditAllowance === null || creditAllowance === 0
+    ? null
+    : creditAllowance.toLocaleString('pt-BR');
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -308,7 +316,9 @@ export function AIUsageDashboard() {
                 </div>
                 <div className="flex justify-between mt-3 text-[11px] font-mono text-muted-foreground">
                   <span>Consumo no período</span>
-                  <span>Saldo: {balanceDisplay} cr</span>
+                  <span>
+                    Saldo: {balanceDisplay}{allowanceDisplay ? ` / ${allowanceDisplay}` : ""} cr
+                  </span>
                 </div>
               </CardContent>
             </Card>

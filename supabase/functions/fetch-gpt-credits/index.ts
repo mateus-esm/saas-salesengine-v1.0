@@ -8,6 +8,9 @@ const corsHeaders = {
 
 const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 
+// Everything the tenant sees is in BILLED credits (provider price x markup).
+import { toBilledCredits, CREDIT_MARKUP } from "../_shared/credit-pricing.ts";
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -33,7 +36,7 @@ serve(async (req) => {
 
     const { data: equipe } = await supabaseClient
       .from('equipes')
-      .select('gpt_maker_agent_id, workspace_id')
+      .select('gpt_maker_agent_id, workspace_id, plano_id, limite_creditos, creditos_avulsos')
       .eq('id', profile.equipe_id)
       .single();
 
@@ -63,7 +66,8 @@ serve(async (req) => {
     const workspaceId = (equipe.workspace_id ?? '').trim();
 
     let allDetails: any[] = [];
-    let totalSpent = 0;
+    // PROVIDER credits as reported upstream; converted to billed below.
+    let totalSpentProvider = 0;
 
     if (period === 'year') {
       // Fetch all 12 months in parallel for yearly view
@@ -82,7 +86,7 @@ serve(async (req) => {
 
       const monthResults = await Promise.all(monthFetches);
       allDetails = monthResults.flat();
-      totalSpent = allDetails.reduce((sum: number, d: any) => sum + (d.credits || 0), 0);
+      totalSpentProvider = allDetails.reduce((sum: number, d: any) => sum + (d.credits || 0), 0);
     } else {
       // Single month fetch
       const spentUrl = `${AI_ENGINE_BASE}/agent/${agentId}/credits-spent?year=${year}&month=${month}`;
@@ -100,7 +104,7 @@ serve(async (req) => {
       const spentData = await spentRes.json();
       console.log('AI Engine credits-spent:', JSON.stringify(spentData).slice(0, 200));
 
-      totalSpent = spentData.total || 0;
+      totalSpentProvider = spentData.total || 0;
       // Live API returns the per-model breakdown under `data`, NOT `details`.
       allDetails = spentData.data || [];
 
@@ -108,35 +112,60 @@ serve(async (req) => {
       const periodKey = `${year}-${month.toString().padStart(2, '0')}`;
       await supabaseClient.from('consumo_creditos').upsert({
         equipe_id: profile.equipe_id,
-        creditos_utilizados: totalSpent,
+        creditos_utilizados: toBilledCredits(totalSpentProvider),
         periodo: periodKey,
         metadata: spentData,
       }, { onConflict: 'equipe_id,periodo', ignoreDuplicates: false });
     }
 
-    // ── Real balance (T0 §6.2) ───────────────────────────────────────────────
-    // GET /workspace/{wsId}/credits → { status, credits }. credits is the
-    // remaining account balance. No more fabricated planLimit + creditos_avulsos.
-    let balance = 0;
-    if (workspaceId) {
-      const balanceUrl = `${AI_ENGINE_BASE}/workspace/${workspaceId}/credits`;
-      const balanceRes = await fetch(balanceUrl, { headers: engineHeaders });
-      if (balanceRes.ok) {
-        const balanceData = await balanceRes.json();
-        balance = balanceData.credits ?? 0;
-      } else {
-        const body = await balanceRes.text();
-        console.error('AI Engine workspace credits error:', balanceRes.status, body);
-        // Balance is not fatal — the usage breakdown still works without it.
+    // ── Balance ──────────────────────────────────────────────────────────────
+    // Sprint 7.5 W2: this used to return GET /workspace/{wsId}/credits, which
+    // is the RESELLER's pooled balance. Seven tenants share workspace
+    // 3DF0B518…, so every one of them saw the same number — another tenant's
+    // spending moved your balance. That is a cross-tenant leak, not a display
+    // bug.
+    //
+    // A tenant's allowance comes from their plan, in BILLED credits:
+    //   equipes.limite_creditos (per-tenant override)
+    //     ?? planos.limite_creditos (their plan's allotment)
+    //   + equipes.creditos_avulsos (top-ups)
+    //   - what this agent consumed in the current period
+    let planAllowance = equipe.limite_creditos ?? null;
+    if (planAllowance === null && equipe.plano_id) {
+      const { data: plano } = await supabaseClient
+        .from('planos')
+        .select('limite_creditos')
+        .eq('id', equipe.plano_id)
+        .single();
+      planAllowance = plano?.limite_creditos ?? 0;
+    }
+    const allowance = (planAllowance ?? 0) + (equipe.creditos_avulsos ?? 0);
+
+    // Always measure the balance against the CURRENT month, even when the user
+    // is looking at a past month or the yearly view — otherwise switching the
+    // filter would appear to change how many credits they have left.
+    let currentMonthSpentProvider = totalSpentProvider;
+    if (period === 'year' || year !== now.getFullYear() || month !== now.getMonth() + 1) {
+      try {
+        const curUrl = `${AI_ENGINE_BASE}/agent/${agentId}/credits-spent`
+          + `?year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
+        const curRes = await fetch(curUrl, { headers: engineHeaders });
+        currentMonthSpentProvider = curRes.ok ? ((await curRes.json()).total || 0) : 0;
+      } catch {
+        currentMonthSpentProvider = 0;
       }
     }
+
+    const balance = Math.max(0, allowance - toBilledCredits(currentMonthSpentProvider));
 
     // Model keys pass through unchanged (T0 §6.1: they are concrete slugs).
     // Each detail item carries the contract shape for T10 plus the legacy
     // year/month/day keys the current page still reads (W1→W2 gap).
     const details = allDetails.map((d: any) => ({
       model: d.model,
-      credits: d.credits || 0,
+      // Billed, like every other credit figure the tenant sees. Leaving these
+      // raw was why the per-model chart disagreed with the model catalog.
+      credits: toBilledCredits(d.credits || 0),
       date: `${d.year}-${String(d.month ?? 1).padStart(2, '0')}-${String(d.day ?? 1).padStart(2, '0')}`,
       // legacy — the current UsagePage builds the chart from these; T10 migrates
       year: d.year,
@@ -144,13 +173,18 @@ serve(async (req) => {
       day: d.day,
     }));
 
+    const totalBilled = toBilledCredits(totalSpentProvider);
+
     return new Response(JSON.stringify({
-      // T10 contract
+      // Every credit figure below is in BILLED credits.
       balance,
-      total: totalSpent,
+      total: totalBilled,
       details,
-      // legacy aliases so the current page keeps working until T10
-      creditsSpent: totalSpent,
+      // Context for the UI: what the allowance is and where it came from.
+      allowance,
+      creditMarkup: CREDIT_MARKUP,
+      // legacy aliases
+      creditsSpent: totalBilled,
       creditsBalance: balance,
       period,
       year,
