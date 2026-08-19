@@ -130,15 +130,21 @@ serve(async (req) => {
     //     ?? planos.limite_creditos (their plan's allotment)
     //   + equipes.creditos_avulsos (top-ups)
     //   - what this agent consumed in the current period
-    let planAllowance = equipe.limite_creditos ?? null;
-    if (planAllowance === null && equipe.plano_id) {
+    // The PLAN is the source of truth — the founder's rule is "the credits
+    // available is based in the account plan". `equipes.limite_creditos` is a
+    // legacy column sitting at 1000 for every tenant, including one on Solo
+    // Scale (3000); letting it win would silently cap that tenant at a third
+    // of what they pay for. It is used only when no plan is linked.
+    let planAllowance: number | null = null;
+    if (equipe.plano_id) {
       const { data: plano } = await supabaseClient
         .from('planos')
         .select('limite_creditos')
         .eq('id', equipe.plano_id)
         .single();
-      planAllowance = plano?.limite_creditos ?? 0;
+      planAllowance = plano?.limite_creditos ?? null;
     }
+    if (planAllowance === null) planAllowance = equipe.limite_creditos ?? 0;
     const allowance = (planAllowance ?? 0) + (equipe.creditos_avulsos ?? 0);
 
     // Always measure the balance against the CURRENT month, even when the user
