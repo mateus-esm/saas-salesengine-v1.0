@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TrainingBlockEditor } from "@/components/ai-studio/TrainingBlockEditor";
 import { buildBehaviorPrompt, type BehaviorAnswers } from "@/components/ai-studio/PromptBuilder";
 import { cn } from "@/lib/utils";
+import { parseTrainingText, buildTrainingText, fallbackBlockLabel, TRAINING_TITLE_MAX } from "@/lib/training-title";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -301,6 +302,7 @@ function TrainingFolder() {
 
   // New block form state
   const [newText, setNewText] = useState("");
+  const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -441,28 +443,37 @@ function TrainingFolder() {
       const { error } = await supabase.functions.invoke("manage-agent-training?action=create", {
         body: {
           type: activeTabCfg.type,
-          text: content || (attachFile?.name ?? ""),
+          // The name travels INSIDE the text — the provider has no title
+          // field. Only blocks (TEXT) are nameable; URL tabs keep raw content.
+          text: activeTab === "blocos"
+            ? buildTrainingText(newTitle, content || (attachFile?.name ?? ""))
+            : (content || (attachFile?.name ?? "")),
           ...(imageUrl && { image: imageUrl }),
         },
       });
       if (error) throw error;
 
       toast({ title: "Sincronizado!", description: "Bloco adicionado com sucesso." });
-      setNewText(""); setNewUrl(""); setAttachFile(null);
+      setNewText(""); setNewTitle(""); setNewUrl(""); setAttachFile(null);
       fetchTrainings();
     } catch {
       toast({ title: "Erro", description: "Falha ao criar bloco.", variant: "destructive" });
     } finally { setCreating(false); }
   };
 
-  const handleUpdate = async (id: string, content: string) => {
+  const handleUpdate = async (id: string, content: string, title: string | null) => {
     const training = trainings.find((t) => t.id === id || (t as any)._id === id);
     const type = training ? (training.type || "TEXT") : "TEXT";
+    // Re-attach the name: the provider stores one opaque `text`, so the name
+    // must be re-encoded on every save or it would be dropped on first edit.
+    const text = (type || "TEXT").toUpperCase() === "TEXT"
+      ? buildTrainingText(title, content)
+      : content;
     const { error } = await supabase.functions.invoke("manage-agent-training?action=update", {
-      body: { trainingId: id, type, text: content },
+      body: { trainingId: id, type, text },
     });
     if (error) throw error;
-    setTrainings((prev) => prev.map((t) => (t.id === id || (t as any)._id === id) ? { ...t, text: content } : t));
+    setTrainings((prev) => prev.map((t) => (t.id === id || (t as any)._id === id) ? { ...t, text } : t));
   };
 
   const handleDelete = async (id: string) => {
@@ -556,13 +567,26 @@ function TrainingFolder() {
           )
         ) : (
           <>
-            <textarea
-              rows={2}
-              className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
-              placeholder="Cole o texto do bloco de treinamento (max 1100 chars)..."
-              value={newText}
-              onChange={(e) => setNewText(e.target.value.slice(0, 1100))}
-            />
+            <div className="flex-1 space-y-2">
+              {/* Personalised block name. Stored inside the text (the provider
+                  has no title field) and parsed back out for display. */}
+              <input
+                type="text"
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm
+                           focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground font-mono"
+                placeholder={`Nome do bloco (ex: ${fallbackBlockLabel(filtered.length)}) — opcional`}
+                value={newTitle}
+                maxLength={TRAINING_TITLE_MAX}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+              <textarea
+                rows={2}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 text-foreground"
+                placeholder="Cole o texto do bloco de treinamento (max 1100 chars)..."
+                value={newText}
+                onChange={(e) => setNewText(e.target.value.slice(0, 1100))}
+              />
+            </div>
             {/* File attachment */}
             <div className="flex flex-col gap-1">
               <input
@@ -632,8 +656,11 @@ function TrainingFolder() {
               key={t.id || (t as any)._id}
               id={t.id || (t as any)._id}
               type={(t.type || "TEXT").toUpperCase()}
-              initialContent={t.text || ""}
-              title={t.title || t.documentName}
+              initialContent={parseTrainingText(t.text).content}
+              title={parseTrainingText(t.text).title
+                ?? t.documentName
+                ?? fallbackBlockLabel(i)}
+              hasCustomTitle={parseTrainingText(t.text).title !== null}
               index={trainings.indexOf(t)}
               onSave={handleUpdate}
               onDelete={handleDelete}

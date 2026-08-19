@@ -8,34 +8,33 @@ const corsHeaders = {
 
 const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 
-interface ModelInfo {
-  id: string; label: string; vendor: string;
-  creditsPerMessage: number; isNew?: boolean; isBeta?: boolean;
-}
+// Credit pricing (provider price + resale markup) lives in one place.
+import type { ModelInfo } from "../_shared/credit-pricing.ts";
+import { toPublicModel } from "../_shared/credit-pricing.ts";
 
 const MODEL_CATALOG: ModelInfo[] = [
-  { id: 'GPT_5',                 label: 'GPT-5',          vendor: 'OpenAI',    creditsPerMessage: 4 },
-  { id: 'GPT_5_MINI',            label: 'GPT-5 Mini',     vendor: 'OpenAI',    creditsPerMessage: 1 },
-  { id: 'GPT_5_MINI_V2',         label: 'GPT-5 Mini v2',  vendor: 'OpenAI',    creditsPerMessage: 1, isNew: true },
-  { id: 'GPT_5_1',               label: 'GPT-5.1',        vendor: 'OpenAI',    creditsPerMessage: 4 },
-  { id: 'GPT_5_2',               label: 'GPT-5.2',        vendor: 'OpenAI',    creditsPerMessage: 5 },
-  { id: 'GPT_4_1',               label: 'GPT-4.1',        vendor: 'OpenAI',    creditsPerMessage: 4 },
-  { id: 'GPT_4_1_MINI',          label: 'GPT-4.1 Mini',   vendor: 'OpenAI',    creditsPerMessage: 1 },
-  { id: 'GPT_4_O',               label: 'GPT-4o',         vendor: 'OpenAI',    creditsPerMessage: 5 },
-  { id: 'GPT_4_O_MINI',          label: 'GPT-4o Mini',    vendor: 'OpenAI',    creditsPerMessage: 1 },
-  { id: 'GPT_4_TURBO',           label: 'GPT-4 Turbo',    vendor: 'OpenAI',    creditsPerMessage: 20 },
-  { id: 'GPT_4',                 label: 'GPT-4',          vendor: 'OpenAI',    creditsPerMessage: 20 },
-  { id: 'OPEN_AI_O1',            label: 'o1',             vendor: 'OpenAI',    creditsPerMessage: 25 },
-  { id: 'OPEN_AI_O3',            label: 'o3',             vendor: 'OpenAI',    creditsPerMessage: 5 },
-  { id: 'OPEN_AI_O3_MINI',       label: 'o3 Mini',        vendor: 'OpenAI',    creditsPerMessage: 3 },
+  { id: 'GPT_5',                 label: 'GPT-5',          vendor: 'OpenAI',    providerCredits: 4 },
+  { id: 'GPT_5_MINI',            label: 'GPT-5 Mini',     vendor: 'OpenAI',    providerCredits: 1 },
+  { id: 'GPT_5_MINI_V2',         label: 'GPT-5 Mini v2',  vendor: 'OpenAI',    providerCredits: 1, isNew: true },
+  { id: 'GPT_5_1',               label: 'GPT-5.1',        vendor: 'OpenAI',    providerCredits: 4 },
+  { id: 'GPT_5_2',               label: 'GPT-5.2',        vendor: 'OpenAI',    providerCredits: 5 },
+  { id: 'GPT_4_1',               label: 'GPT-4.1',        vendor: 'OpenAI',    providerCredits: 4 },
+  { id: 'GPT_4_1_MINI',          label: 'GPT-4.1 Mini',   vendor: 'OpenAI',    providerCredits: 1 },
+  { id: 'GPT_4_O',               label: 'GPT-4o',         vendor: 'OpenAI',    providerCredits: 5 },
+  { id: 'GPT_4_O_MINI',          label: 'GPT-4o Mini',    vendor: 'OpenAI',    providerCredits: 1 },
+  { id: 'GPT_4_TURBO',           label: 'GPT-4 Turbo',    vendor: 'OpenAI',    providerCredits: 20 },
+  { id: 'GPT_4',                 label: 'GPT-4',          vendor: 'OpenAI',    providerCredits: 20 },
+  { id: 'OPEN_AI_O1',            label: 'o1',             vendor: 'OpenAI',    providerCredits: 25 },
+  { id: 'OPEN_AI_O3',            label: 'o3',             vendor: 'OpenAI',    providerCredits: 5 },
+  { id: 'OPEN_AI_O3_MINI',       label: 'o3 Mini',        vendor: 'OpenAI',    providerCredits: 3 },
   // ⚠️ Digit-zero, not letter-O. The published enum spells these `OPEN_AI_04`
   // and `OPEN_AI_03_MINI_BETA`; this file previously used `O4`/`O3`, which the
   // provider would reject on select. Unlike the model list below — where live
   // traffic positively contradicts the docs — there is no live evidence for
   // either spelling here, so the only evidence available wins.
-  { id: 'OPEN_AI_04',            label: 'o4',             vendor: 'OpenAI',    creditsPerMessage: 5 },
-  { id: 'OPEN_AI_O4_MINI',       label: 'o4 Mini',        vendor: 'OpenAI',    creditsPerMessage: 3 },
-  { id: 'OPEN_AI_03_MINI_BETA',  label: 'o3 Mini (Beta)', vendor: 'OpenAI',    creditsPerMessage: 3, isBeta: true },
+  { id: 'OPEN_AI_04',            label: 'o4',             vendor: 'OpenAI',    providerCredits: 5 },
+  { id: 'OPEN_AI_O4_MINI',       label: 'o4 Mini',        vendor: 'OpenAI',    providerCredits: 3 },
+  { id: 'OPEN_AI_03_MINI_BETA',  label: 'o3 Mini (Beta)', vendor: 'OpenAI',    providerCredits: 3, isBeta: true },
 
   // ── Anthropic ────────────────────────────────────────────────────────────
   // Sonnet 5 and Sonnet 4.6 are in the provider's dashboard dropdown (founder,
@@ -44,26 +43,28 @@ const MODEL_CATALOG: ModelInfo[] = [
   // and are NOT confirmed against live traffic. If a slug is wrong the provider
   // rejects the PUT and `upstreamError` surfaces its body verbatim, so it fails
   // loudly on first select rather than silently. Correct here once observed.
-  { id: 'CLAUDE_5_SONNET',       label: 'Claude Sonnet 5',   vendor: 'Anthropic', creditsPerMessage: 10, isNew: true },
-  { id: 'CLAUDE_4_6_SONNET',     label: 'Claude Sonnet 4.6', vendor: 'Anthropic', creditsPerMessage: 10, isNew: true },
-  { id: 'CLAUDE_4_5_SONNET',     label: 'Claude 4.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
-  { id: 'CLAUDE_3_7_SONNET',     label: 'Claude 3.7 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
-  { id: 'CLAUDE_3_5_SONNET',     label: 'Claude 3.5 Sonnet', vendor: 'Anthropic', creditsPerMessage: 10 },
-  { id: 'CLAUDE_3_5_HAIKU',      label: 'Claude 3.5 Haiku',  vendor: 'Anthropic', creditsPerMessage: 2 },
-  { id: 'DEEPINFRA_LLAMA3_3',    label: 'Llama 3.3',      vendor: 'Meta',      creditsPerMessage: 1 },
-  { id: 'QWEN_2_5_MAX',          label: 'Qwen 2.5 Max',   vendor: 'Alibaba',   creditsPerMessage: 3 },
-  { id: 'DEEPSEEK_CHAT',         label: 'DeepSeek V3',    vendor: 'Deepseek',  creditsPerMessage: 1 },
-  { id: 'SABIA_3',               label: 'Sabiá 3',        vendor: 'Maritaca',  creditsPerMessage: 3 },
-  { id: 'SABIA_3_1',             label: 'Sabiá 3.1',      vendor: 'Maritaca',  creditsPerMessage: 3 },
+  { id: 'CLAUDE_5_SONNET',       label: 'Claude Sonnet 5',   vendor: 'Anthropic', providerCredits: 10, isNew: true, unverifiedPrice: true },
+  { id: 'CLAUDE_4_6_SONNET',     label: 'Claude Sonnet 4.6', vendor: 'Anthropic', providerCredits: 10, isNew: true, unverifiedPrice: true },
+  { id: 'CLAUDE_4_5_SONNET',     label: 'Claude 4.5 Sonnet', vendor: 'Anthropic', providerCredits: 10 },
+  { id: 'CLAUDE_3_7_SONNET',     label: 'Claude 3.7 Sonnet', vendor: 'Anthropic', providerCredits: 10 },
+  { id: 'CLAUDE_3_5_SONNET',     label: 'Claude 3.5 Sonnet', vendor: 'Anthropic', providerCredits: 10 },
+  { id: 'CLAUDE_3_5_HAIKU',      label: 'Claude 3.5 Haiku',  vendor: 'Anthropic', providerCredits: 2 },
+  { id: 'DEEPINFRA_LLAMA3_3',    label: 'Llama 3.3',      vendor: 'Meta',      providerCredits: 1 },
+  { id: 'QWEN_2_5_MAX',          label: 'Qwen 2.5 Max',   vendor: 'Alibaba',   providerCredits: 3 },
+  { id: 'DEEPSEEK_CHAT',         label: 'DeepSeek V3',    vendor: 'Deepseek',  providerCredits: 1 },
+  { id: 'SABIA_3',               label: 'Sabiá 3',        vendor: 'Maritaca',  providerCredits: 3 },
+  { id: 'SABIA_3_1',             label: 'Sabiá 3.1',      vendor: 'Maritaca',  providerCredits: 3 },
 
   // ── Live-only slugs (T0 spike, 2026-08-08) ───────────────────────────────
   // These are what the provider ACTUALLY runs. They appear in the live
   // /settings response and in credits-spent, but in no published enum.
   // `GPT_5_6_SOL` is Solo Energia's current prefferModel — omitting it would
   // make the tenant's own model unselectable.
-  { id: 'GPT_5_6_SOL',           label: 'GPT-5.6 Sol',    vendor: 'OpenAI',    creditsPerMessage: 7, isNew: true },
-  { id: 'GPT_5_6_TERRA',         label: 'GPT-5.6 Terra',  vendor: 'OpenAI',    creditsPerMessage: 5, isNew: true },
-  { id: 'GPT_5_4',               label: 'GPT-5.4',        vendor: 'OpenAI',    creditsPerMessage: 7 },
+  // GPT_5_6_SOL: 14 provider credits CONFIRMED by the founder 2026-08-18
+  // (was 7 here — an estimate, and exactly the figure that made the UI wrong).
+  { id: 'GPT_5_6_SOL',           label: 'GPT-5.6 Sol',    vendor: 'OpenAI',    providerCredits: 14, isNew: true },
+  { id: 'GPT_5_6_TERRA',         label: 'GPT-5.6 Terra',  vendor: 'OpenAI',    providerCredits: 5, isNew: true, unverifiedPrice: true },
+  { id: 'GPT_5_4',               label: 'GPT-5.4',        vendor: 'OpenAI',    providerCredits: 7, unverifiedPrice: true },
 ];
 
 // Reconciled with the T0 live capture. `resumeTransferHumanAI` is returned
@@ -138,7 +139,9 @@ serve(async (req) => {
 
     // Serve the model catalog without any provider call.
     if (action === 'models') {
-      return new Response(JSON.stringify({ models: MODEL_CATALOG }), {
+      // Converted to BILLED credits here — the provider's own price never
+      // leaves this function. See _shared/credit-pricing.ts.
+      return new Response(JSON.stringify({ models: MODEL_CATALOG.map(toPublicModel) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

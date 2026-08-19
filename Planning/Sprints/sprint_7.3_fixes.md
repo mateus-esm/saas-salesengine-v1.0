@@ -79,3 +79,17 @@ Mateus Sombra Devolver ao finalizar Não informar quando transferir Instruções
 Adicionar regra de transferência.
 
 ' Understand this options and the routes to be paired.
+
+Wave 2:
+
+- Make an full review if the Studio AI achived the desired outcomes
+- In our business rules we sell the cr for the double of the gptmaker so the
+  price of each model is 2x the price in the gpt maker: ex - gpt 5.6 sol
+  (gptmaker - 14cr in salesengine - 28cr)
+- the consumer of credits in the period and total available the software is
+  fetching all the consume of the workspace, but need to fetch only of this
+  specifc agent or client in the gptmaker, and the credits available is based in
+  the account plan.
+- Also adjust in the knowledge base -> treinamento personalizado -> the blocks i
+  want that i can put an personlized name in the block and we sent it with the
+  block to the gpt maker: ex- bl01 and the name be an personlized field.

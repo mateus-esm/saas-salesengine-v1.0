@@ -3,14 +3,18 @@ import { Save, Loader2, X, Edit2, FileText, Globe, Video, BookOpen, Trash2 } fro
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { TRAINING_TITLE_MAX } from "@/lib/training-title";
 
 interface TrainingBlockEditorProps {
   id: string;
   type: string;
   initialContent: string;
+  /** Parsed block name, or a positional fallback like "BL01". */
   title?: string;
+  /** True when `title` is a real user-given name rather than the fallback. */
+  hasCustomTitle?: boolean;
   index: number;
-  onSave: (id: string, newContent: string) => Promise<void>;
+  onSave: (id: string, newContent: string, title: string | null) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
@@ -21,9 +25,12 @@ const typeConfig: Record<string, { icon: React.ComponentType<{ className?: strin
   DOCUMENT: { icon: BookOpen, color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400' },
 };
 
-export function TrainingBlockEditor({ id, type, initialContent, title, index, onSave, onDelete }: TrainingBlockEditorProps) {
+export function TrainingBlockEditor({ id, type, initialContent, title, hasCustomTitle, index, onSave, onDelete }: TrainingBlockEditorProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(initialContent);
+  // Only a real name is editable text; the positional fallback starts blank so
+  // the user names the block rather than "editing" a label we invented.
+  const [nameDraft, setNameDraft] = useState(hasCustomTitle ? (title ?? "") : "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -36,10 +43,14 @@ export function TrainingBlockEditor({ id, type, initialContent, title, index, on
     setContent(initialContent);
   }, [initialContent]);
 
+  useEffect(() => {
+    setNameDraft(hasCustomTitle ? (title ?? "") : "");
+  }, [title, hasCustomTitle]);
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(id, content);
+      await onSave(id, content, nameDraft.trim() || null);
       setIsEditing(false);
     } finally {
       setSaving(false);
@@ -99,7 +110,22 @@ export function TrainingBlockEditor({ id, type, initialContent, title, index, on
             </div>
           </DialogHeader>
           
-          <div className="relative mt-4">
+          <div className="mt-4 space-y-1.5">
+            <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground">
+              Nome do bloco
+            </label>
+            <input
+              type="text"
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono
+                         focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
+              value={nameDraft}
+              maxLength={TRAINING_TITLE_MAX}
+              placeholder={`ex: ${visualId} — opcional`}
+              onChange={(e) => setNameDraft(e.target.value)}
+            />
+          </div>
+
+          <div className="relative mt-3">
             <textarea
               className="w-full min-h-[200px] bg-background border border-border rounded-lg p-4 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
               value={content}
@@ -116,7 +142,11 @@ export function TrainingBlockEditor({ id, type, initialContent, title, index, on
           </div>
 
           <DialogFooter className="mt-4 sm:justify-end gap-2">
-            <Button variant="outline" onClick={() => { setContent(initialContent); setIsEditing(false); }}>
+            <Button variant="outline" onClick={() => {
+              setContent(initialContent);
+              setNameDraft(hasCustomTitle ? (title ?? "") : "");
+              setIsEditing(false);
+            }}>
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={saving || !content.trim()} className="gap-2">
