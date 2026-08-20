@@ -1136,8 +1136,8 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 |---|---|---|---|---|
 | T1 | Schema billing core | XL | Claude (PM) | [x] |
 | T2 | Schema crédito unificado | XL | Claude (PM) | [x] |
-| T3 | Schema propostas | M | Verboo | [ ] |
-| T4 | Schema notificações | M | Verboo | [ ] |
+| T3 | Schema propostas | M | Claude (PM) | [x] |
+| T4 | Schema notificações | M | Claude (PM) | [x] |
 | T5 | `asaas-webhook` | XL | Codex | [ ] |
 | T6 | Refactor subscribe + buy-credits | L | Codex | [ ] |
 | T7 | `billing-cron` | L | Verboo | [ ] |

@@ -227,3 +227,5 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-06-23 | 6.8 W8 | 8.1+8.2 Agenda day/week views | Verboo Code / deepseek-v4-flash | M | R$ 12 |
 | 2026-08-20 | 8 W0 | T1 Schema billing core | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-08-20 | 8 W0 | T2 Schema crédito unificado | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-08-20 | 8 W0 | T3 Schema propostas | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-08-20 | 8 W0 | T4 Schema notificações | Claude / Opus 5 (PM) | M | R$ 12 |
