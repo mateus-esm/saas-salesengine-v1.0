@@ -1140,7 +1140,7 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T4 | Schema notificações | M | Claude (PM) | [x] |
 | T5 | `asaas-webhook` | XL | Claude (PM) | [x] |
 | T6 | Refactor subscribe + buy-credits | L | Claude (PM) | [x] |
-| T7 | `billing-cron` | L | Verboo | [ ] |
+| T7 | `billing-cron` | L | Claude (PM) | [x] |
 | T8 | `notification-dispatcher` | L | Verboo | [ ] |
 | T9 | `provision-tenant` | L | Codex | [ ] |
 | T10 | Wire `charge_credits` | XL | Codex | [ ] |

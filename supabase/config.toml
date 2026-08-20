@@ -84,3 +84,8 @@ inspector_port = 64325 # Porta de inspeção também movida
 # asaas-access-token header compared against ASAAS_WEBHOOK_TOKEN.
 [functions.asaas-webhook]
 verify_jwt = false
+
+# Sprint 8 T7 — called by pg_cron via net.http_post; authenticated by
+# x-cron-secret against BILLING_CRON_SECRET, never a service-role key.
+[functions.billing-cron]
+verify_jwt = false
