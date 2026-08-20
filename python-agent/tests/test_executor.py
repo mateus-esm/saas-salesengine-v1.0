@@ -204,3 +204,95 @@ async def test_invented_field_dropped_real_field_dispatched(monkeypatch):
     dispatched_field_ids = [call[1] for call in skill_instance.applied]
     assert "ghost" not in dispatched_field_ids
     assert "f_valor" in dispatched_field_ids
+
+
+# ---------------------------------------------------------------------------
+# Sprint 8 T10 — pre-flight credit check.
+#
+# charge_fn already halts mid-plan when the wallet runs dry, which is correct but
+# wasteful: earlier actions have already been applied to the customer's CRM before
+# we discover the plan was unaffordable. check_fn refuses the whole plan up front.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_preflight_refuses_plan_without_touching_the_crm(monkeypatch):
+    charges = []
+    dispatched = []
+
+    class _CountingSkill(_Skill):
+        async def run(self, *a, **k):
+            dispatched.append(1)
+            return await super().run(*a, **k)
+
+    async def charge(**kw):
+        charges.append(kw)
+        return "L"
+
+    async def check(*, equipe_id, estimated):
+        return {"allowed": False, "balance": 0, "deficit": estimated}
+
+    monkeypatch.setattr("app.cascade.executor._skill_for", lambda *a, **k: _CountingSkill())
+    plan = ActionPlan(
+        relevant=True, confidence=0.9, reason="x",
+        actions=[
+            PlannedAction(verb="set_field", args={"field_id": "f1", "value": "v"}),
+            PlannedAction(verb="move_stage", args={"stage_type": "open"}),
+        ],
+    )
+    res = await run_plan(
+        plan, ctx=_ctx(), opportunity={"id": "o1", "pipeline_id": "p1"}, lead={"id": "l1"},
+        rules={}, client=_FakeClient(), charge_fn=charge, check_fn=check,
+    )
+
+    assert res.halted is True and res.halt_reason == "no_credits"
+    assert res.applied_count == 0
+    # The point of the pre-flight: nothing was dispatched and nothing was charged.
+    assert charges == [] and dispatched == []
+
+
+@pytest.mark.asyncio
+async def test_preflight_allows_affordable_plan(monkeypatch):
+    charges = []
+
+    async def charge(**kw):
+        charges.append(kw)
+        return "L"
+
+    async def check(*, equipe_id, estimated):
+        return {"allowed": True, "balance": 500, "deficit": 0}
+
+    monkeypatch.setattr("app.cascade.executor._skill_for", lambda *a, **k: _Skill())
+    plan = ActionPlan(
+        relevant=True, confidence=0.9, reason="x",
+        actions=[PlannedAction(verb="move_stage", args={"stage_type": "open"})],
+    )
+    res = await run_plan(
+        plan, ctx=_ctx(), opportunity={"id": "o1", "pipeline_id": "p1"}, lead={"id": "l1"},
+        rules={}, client=_FakeClient(), charge_fn=charge, check_fn=check,
+    )
+    assert res.halted is False and res.applied_count == 1 and len(charges) == 1
+
+
+@pytest.mark.asyncio
+async def test_preflight_failure_never_blocks_the_plan(monkeypatch):
+    """A broken check must not take the product down. charge_credits is still the
+    authority and refuses an unaffordable action anyway."""
+    charges = []
+
+    async def charge(**kw):
+        charges.append(kw)
+        return "L"
+
+    async def check(*, equipe_id, estimated):
+        raise RuntimeError("rpc exploded")
+
+    monkeypatch.setattr("app.cascade.executor._skill_for", lambda *a, **k: _Skill())
+    plan = ActionPlan(
+        relevant=True, confidence=0.9, reason="x",
+        actions=[PlannedAction(verb="move_stage", args={"stage_type": "open"})],
+    )
+    res = await run_plan(
+        plan, ctx=_ctx(), opportunity={"id": "o1", "pipeline_id": "p1"}, lead={"id": "l1"},
+        rules={}, client=_FakeClient(), charge_fn=charge, check_fn=check,
+    )
+    assert res.halted is False and res.applied_count == 1

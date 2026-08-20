@@ -69,3 +69,29 @@ async def get_balance(client: Any, *, equipe_id: str) -> int:
         return 0
     row = data[0] if isinstance(data, list) else data
     return int(row.get("balance", 0))
+
+
+async def check_credits(client: Any, *, equipe_id: str, estimated: int = 1) -> dict[str, Any]:
+    """Pre-flight: can this tenant afford ``estimated`` credits?
+
+    Reads only — never debits. Returns ``{allowed, balance, deficit}``. Lets a
+    plan be refused before any action touches the customer's CRM, instead of
+    halting halfway once charge_credits runs dry.
+    """
+
+    def _call() -> Any:
+        response = client.rpc(
+            "check_credits",
+            {"p_equipe_id": equipe_id, "p_estimated": estimated},
+        ).execute()
+        error = getattr(response, "error", None)
+        if error:
+            raise RuntimeError(str(error))
+        return getattr(response, "data", None)
+
+    data = await asyncio.to_thread(_call)
+    if not isinstance(data, dict):
+        # Unknown shape: allow rather than block. charge_credits is still the
+        # authority and will refuse an unaffordable action anyway.
+        return {"allowed": True, "balance": 0, "deficit": 0}
+    return data

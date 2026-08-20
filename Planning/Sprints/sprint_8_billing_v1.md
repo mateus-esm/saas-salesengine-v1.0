@@ -55,12 +55,25 @@ Levantamento feito antes do plano. Cada item foi verificado no código.
 | Recargas | `equipes.creditos_avulsos` | coluna int solta |
 | Instâncias WhatsApp | env `SOLO_INSTANCE_MONTHLY_PRICE` (default 100) | não está no banco |
 
-6. **`charge_credits()` tem zero chamadores.** O ledger atômico do Sprint 6.1 foi
-   construído e nunca ligado — `agent_credits_balance` é uma tabela vazia. Grep
-   em `src/` e `supabase/functions/` só encontra a assinatura em `types.ts`.
-7. **Nada bloqueia uma ação por saldo.** O saldo é derivado chamando
-   `credits-spent` do provider a cada carregamento de página. Não existe
-   pré-checagem, logo **não existe como parar** um tenant sem crédito hoje.
+6. ~~**`charge_credits()` tem zero chamadores.**~~ ❌ **CORRIGIDO EM 2026-08-20
+   (T10).** Esta afirmação estava **errada**. O grep original cobriu apenas `src/`
+   e `supabase/functions/` e não olhou o serviço Python. O Copilot **está
+   medido**: `agno_workflow.py:338` passa `charge_fn=_charge_credit` para
+   `executor.run_plan`, que cobra por ação bem-sucedida, usa chave de
+   idempotência determinística e para o plano em `InsufficientCredits`.
+   `python-agent/app/credits.py` e `app/metering.py` existem e têm 11 testes
+   passando. `agent_credits_balance` está vazia porque os tenants ainda não
+   usaram o Copilot, não porque o código não exista.
+7. **A IA do provider (WhatsApp) não pode ser pré-checada.** ⚠️ Descoberta de
+   arquitetura (T10). A geração acontece **no lado do provider**, de forma
+   autônoma, quando o cliente manda mensagem no WhatsApp. `send-chat-message`
+   envia mensagem de um **humano**; `solo-wpp-webhook` só ingere no CRM; nenhum
+   caminho nosso pede geração. Logo **não existe ponto onde interceptar** essa
+   consumação — ela só pode ser medida depois, via `credits-spent` (T11).
+   Consequência honesta: o *soft stop* vale para o **Copilot** (medível e
+   bloqueável) e **não** para o agente de WhatsApp. Parar o agente do provider
+   exigiria escrever `status` no recurso do agente — capacidade **não
+   verificada**; virou spike para 8.1.
 8. **Preço de instância não é dado.** Mudar o preço exige redeploy de função.
 9. **Pagador errado.** `asaas-subscribe` envia `profile.cpf` — o CPF de quem se
    cadastrou. Cliente PJ não tem como assinar; a entidade pagadora é a empresa.
@@ -1143,7 +1156,7 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T7 | `billing-cron` | L | Claude (PM) | [x] |
 | T8 | `notification-dispatcher` | L | Claude (PM) | [x] |
 | T9 | `provision-tenant` | L | Claude (PM) | [x] |
-| T10 | Wire `charge_credits` | XL | Codex | [ ] |
+| T10 | Pre-flight de crédito (escopo corrigido) | L | Claude (PM) | [x] |
 | T11 | Saldo do ledger + conciliação | L | Verboo | [ ] |
 | T12 | Entitlements + fix RLS | L | Codex | [ ] |
 | T13 | Billing UI | XL | Verboo | [ ] |
