@@ -18,8 +18,13 @@ export interface Entitlements {
   isLive: boolean;
   modules: string[];
   seatLimit: number | null;
+  agentLimit: number | null;
   includedCredits: number;
+  includedCreditsWhatsapp: number;
+  includedCreditsCopilot: number;
   instanceLimit: number;
+  builderHours: number;
+  builderRecurrence: string | null;
   currentPeriodEnd: string | null;
   pagePermissions: Record<string, boolean> | null;
 }
@@ -53,8 +58,13 @@ export function useEntitlements() {
         isLive: Boolean(row.is_live),
         modules: (row.modules as string[]) ?? [],
         seatLimit: (row.seat_limit as number) ?? null,
+        agentLimit: (row.agent_limit as number) ?? null,
         includedCredits: Number(row.included_credits ?? 0),
+        includedCreditsWhatsapp: Number(row.included_credits_whatsapp ?? 0),
+        includedCreditsCopilot: Number(row.included_credits_copilot ?? 0),
         instanceLimit: Number(row.instance_limit ?? 0),
+        builderHours: Number(row.builder_hours ?? 0),
+        builderRecurrence: (row.builder_recurrence as string) ?? null,
         currentPeriodEnd: (row.current_period_end as string) ?? null,
         pagePermissions: (row.page_permissions as Record<string, boolean>) ?? null,
       };

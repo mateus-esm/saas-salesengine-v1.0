@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { to: "/billing", label: "Visão geral", icon: LayoutDashboard, description: "Plano, créditos e faturas", end: true },
   { to: "/billing/faturas", label: "Faturas", icon: Receipt, description: "Histórico e pagamento", end: false },
   { to: "/billing/creditos", label: "Créditos", icon: Zap, description: "Saldo e recarga", end: false },
-  { to: "/billing/contrato", label: "Contrato", icon: FileText, description: "Itens e vigência", end: false },
+  { to: "/billing/plano", label: "Plano", icon: FileText, description: "Tiers e adicionais", end: false },
   { to: "/billing/dados", label: "Dados de cobrança", icon: Building2, description: "CPF/CNPJ e endereço", end: false },
 ] as const;
 

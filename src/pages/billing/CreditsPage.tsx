@@ -13,6 +13,8 @@ import {
   formatBRL, formatCredits, formatDate, useRefreshBilling, type CreditPool,
 } from "@/hooks/useBilling";
 import { PoolBalanceCard } from "@/components/billing/PoolBalanceCard";
+import { CreditPurchase } from "@/components/billing/CreditPurchase";
+import { AddonPurchase } from "@/components/billing/AddonPurchase";
 import { PixPaymentDialog } from "@/components/billing/PixPaymentDialog";
 import { AutoRecharge } from "@/components/billing/AutoRecharge";
 
@@ -94,70 +96,9 @@ export default function CreditsPage() {
         </div>
       )}
 
-      {/* ── Packs ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recarregar</CardTitle>
-          <CardDescription>
-            Créditos avulsos não expiram e são consumidos só depois dos créditos do plano.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs font-medium">Para qual carteira?</Label>
-            <RadioGroup value={pool} onValueChange={(v) => setPool(v as CreditPool)} className="flex gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="whatsapp" id="p-wa" />
-                <Label htmlFor="p-wa" className="cursor-pointer text-sm">
-                  Atendimento <span className="text-muted-foreground">(agente responde clientes)</span>
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem value="copilot" id="p-cp" />
-                <Label htmlFor="p-cp" className="cursor-pointer text-sm">
-                  Copiloto <span className="text-muted-foreground">(ações no CRM)</span>
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
+      <CreditPurchase />
 
-          <RadioGroup value={method} onValueChange={(v) => setMethod(v as typeof method)} className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="PIX" id="m-pix" />
-              <Label htmlFor="m-pix" className="flex items-center gap-1.5 cursor-pointer text-sm">
-                <QrCode className="w-3.5 h-3.5" /> PIX
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="CREDIT_CARD" id="m-card" />
-              <Label htmlFor="m-card" className="flex items-center gap-1.5 cursor-pointer text-sm">
-                <CreditCard className="w-3.5 h-3.5" /> Cartão / Boleto
-              </Label>
-            </div>
-          </RadioGroup>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(packs ?? []).map((p) => (
-              <div key={p.id} className="rounded-lg border border-border p-4 flex flex-col">
-                <p className="text-lg font-bold">{formatCredits(p.credits_included)}</p>
-                <p className="text-xs text-muted-foreground">créditos</p>
-                <p className="text-xl font-semibold mt-2">{formatBRL(p.list_price)}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {formatBRL(Number(p.list_price) / Math.max(1, p.credits_included))} por crédito
-                </p>
-                <Button
-                  size="sm"
-                  className="mt-3 w-full"
-                  disabled={buying !== null}
-                  onClick={() => buy(p.id, Number(p.list_price))}
-                >
-                  {buying === p.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Comprar"}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <AddonPurchase />
 
       <AutoRecharge />
 

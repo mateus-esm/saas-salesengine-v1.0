@@ -29,19 +29,27 @@ export interface CreditLedgerRow {
   created_at: string;
 }
 
-export function useCreditBalance() {
+/**
+ * Sprint 8.1 fix — this used to select from agent_credits_balance with
+ * `.limit(1)` and NO pool filter. Once the primary key became
+ * (equipe_id, pool) there were two rows per team, so it returned whichever
+ * came first — the WhatsApp balance — under a badge labelled "Copilot".
+ * That is why a tenant with 1000 attendance credits and 0 Copilot credits saw
+ * "1000" in the header.
+ */
+export function useCreditBalance(pool: "copilot" | "whatsapp" = "copilot") {
   const { profile } = useAuth();
   const equipeId = profile?.equipe_id;
 
   return useQuery({
-    queryKey: ["copilot", "credits", "balance", equipeId],
+    queryKey: ["copilot", "credits", "balance", equipeId, pool],
     enabled: !!equipeId,
     queryFn: async (): Promise<number> => {
       const { data, error } = await sb
         .from("agent_credits_balance")
         .select("balance")
         .eq("equipe_id", equipeId)
-        .limit(1)
+        .eq("pool", pool)
         .maybeSingle();
       if (error) throw error;
       return data?.balance ?? 0;

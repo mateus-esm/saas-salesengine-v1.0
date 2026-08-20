@@ -156,9 +156,11 @@ serve(async (req) => {
         total: price,
         due_date: dueDateIn(1),
         issued_at: new Date().toISOString(),
-        // Read back by asaas-webhook when the payment confirms, so the credits
-        // land in the pool the customer actually paid for.
-        metadata: { pool },
+        // Read back by asaas-webhook when the payment confirms.
+        // `credits` is recorded here because a CUSTOM amount has no catalog
+        // product to read credits_included from — without it the webhook would
+        // grant zero and the customer would pay for nothing.
+        metadata: { pool, credits },
       })
       .select("id, number").single();
     if (invErr) throw new Error(`invoice insert failed: ${invErr.message}`);

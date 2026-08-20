@@ -21,7 +21,7 @@ import BillingLayout from "./pages/billing/BillingLayout";
 import BillingOverviewPage from "./pages/billing/OverviewPage";
 import BillingInvoicesPage from "./pages/billing/InvoicesPage";
 import BillingCreditsPage from "./pages/billing/CreditsPage";
-import BillingContractPage from "./pages/billing/ContractPage";
+import BillingPlanPage from "./pages/billing/PlanPage";
 import BillingDataPage from "./pages/billing/BillingDataPage";
 import PublicProposal from "./pages/PublicProposal";
 import NotificationsPage from "./pages/NotificationsPage";
@@ -106,7 +106,8 @@ const App = () => (
                     <Route index element={<BillingOverviewPage />} />
                     <Route path="faturas" element={<BillingInvoicesPage />} />
                     <Route path="creditos" element={<BillingCreditsPage />} />
-                    <Route path="contrato" element={<BillingContractPage />} />
+                    <Route path="plano" element={<BillingPlanPage />} />
+                    <Route path="contrato" element={<Navigate to="/billing/plano" replace />} />
                     <Route path="dados" element={<BillingDataPage />} />
                   </Route>
                   <Route path="/notificacoes" element={<NotificationsPage />} />
