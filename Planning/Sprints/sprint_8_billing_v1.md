@@ -1135,7 +1135,7 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | # | Task | Tier | Engineer | Status |
 |---|---|---|---|---|
 | T1 | Schema billing core | XL | Claude (PM) | [x] |
-| T2 | Schema crédito unificado | XL | Codex | [ ] |
+| T2 | Schema crédito unificado | XL | Claude (PM) | [x] |
 | T3 | Schema propostas | M | Verboo | [ ] |
 | T4 | Schema notificações | M | Verboo | [ ] |
 | T5 | `asaas-webhook` | XL | Codex | [ ] |
