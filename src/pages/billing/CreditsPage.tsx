@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -11,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import {
   useCreditBalance, useCreditPacks, useCreditLedger,
-  formatBRL, formatCredits, formatDate, useRefreshBilling,
+  formatBRL, formatCredits, formatDate, useRefreshBilling, type CreditPool,
 } from "@/hooks/useBilling";
+import { PoolBalanceCard } from "@/components/billing/PoolBalanceCard";
 import { PixPaymentDialog } from "@/components/billing/PixPaymentDialog";
 import { AutoRecharge } from "@/components/billing/AutoRecharge";
 
@@ -31,14 +31,14 @@ export default function CreditsPage() {
   const { data: packs } = useCreditPacks();
   const { data: ledger } = useCreditLedger(30);
   const [method, setMethod] = useState<"PIX" | "CREDIT_CARD">("PIX");
+  // Sprint 8.1: the buyer picks which pool to fill. Defaults to attendance —
+  // it is the one whose exhaustion stops the customer's own conversations.
+  const [pool, setPool] = useState<CreditPool>("whatsapp");
   const [buying, setBuying] = useState<string | null>(null);
   const [pix, setPix] = useState<{ invoiceId: string; amount: number; qr?: string; copy?: string } | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const refreshBilling = useRefreshBilling();
-
-  const granted = credits?.grantTotal ?? 0;
-  const pct = granted > 0 ? Math.min(100, Math.round(((credits?.expiring ?? 0) / granted) * 100)) : 0;
 
   const buy = async (productId: string, price: number) => {
     setBuying(productId);
@@ -46,7 +46,7 @@ export default function CreditsPage() {
       // Only the product id travels. Price and credits come from the catalog
       // server-side — the browser never states what it is paying or receiving.
       const { data, error } = await supabase.functions.invoke("asaas-buy-credits", {
-        body: { product_id: productId, paymentMethod: method },
+        body: { product_id: productId, paymentMethod: method, pool },
       });
       if (error) throw error;
       if (data?.error === "billing_account_incomplete") {
@@ -84,34 +84,15 @@ export default function CreditsPage() {
         <p className="text-sm text-muted-foreground mt-1">Saldo, recarga e extrato.</p>
       </div>
 
-      {/* ── Balance ── */}
-      <Card>
-        <CardContent className="pt-6">
-          {isLoading ? (
-            <Skeleton className="h-10 w-40" />
-          ) : (
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-4xl font-bold tracking-tight">{formatCredits(credits?.total)}</p>
-                <p className="text-sm text-muted-foreground mt-1">créditos disponíveis</p>
-              </div>
-              <div className="text-sm space-y-0.5 sm:text-right">
-                <p>
-                  <span className="font-semibold">{formatCredits(credits?.expiring)}</span>{" "}
-                  <span className="text-muted-foreground">
-                    do plano{credits?.grantExpiresAt && ` — expiram ${formatDate(credits.grantExpiresAt)}`}
-                  </span>
-                </p>
-                <p>
-                  <span className="font-semibold">{formatCredits(credits?.permanent)}</span>{" "}
-                  <span className="text-muted-foreground">avulsos — não expiram</span>
-                </p>
-              </div>
-            </div>
-          )}
-          {granted > 0 && <Progress value={pct} className="mt-4 h-1.5" />}
-        </CardContent>
-      </Card>
+      {/* ── Balance: two independent pools ── */}
+      {isLoading ? (
+        <Skeleton className="h-36 w-full" />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PoolBalanceCard pool="whatsapp" balance={credits!.whatsapp} expiresAt={credits?.grantExpiresAt} />
+          <PoolBalanceCard pool="copilot" balance={credits!.copilot} expiresAt={credits?.grantExpiresAt} />
+        </div>
+      )}
 
       {/* ── Packs ── */}
       <Card>
@@ -122,6 +103,24 @@ export default function CreditsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Para qual carteira?</Label>
+            <RadioGroup value={pool} onValueChange={(v) => setPool(v as CreditPool)} className="flex gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="whatsapp" id="p-wa" />
+                <Label htmlFor="p-wa" className="cursor-pointer text-sm">
+                  Atendimento <span className="text-muted-foreground">(agente responde clientes)</span>
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="copilot" id="p-cp" />
+                <Label htmlFor="p-cp" className="cursor-pointer text-sm">
+                  Copiloto <span className="text-muted-foreground">(ações no CRM)</span>
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
           <RadioGroup value={method} onValueChange={(v) => setMethod(v as typeof method)} className="flex gap-4">
             <div className="flex items-center gap-2">
               <RadioGroupItem value="PIX" id="m-pix" />
@@ -178,7 +177,12 @@ export default function CreditsPage() {
                 return (
                   <div key={e.id} className="flex items-center justify-between px-4 py-2.5 gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm">{ENTRY_LABEL[e.entry_type] ?? e.entry_type}</p>
+                      <p className="text-sm">
+                        {ENTRY_LABEL[e.entry_type] ?? e.entry_type}
+                        <span className="text-muted-foreground">
+                          {" · "}{(e as { pool?: string }).pool === "copilot" ? "Copiloto" : "Atendimento"}
+                        </span>
+                      </p>
                       <p className="text-xs text-muted-foreground">{formatDate(e.created_at)}</p>
                     </div>
                     <span
@@ -201,7 +205,8 @@ export default function CreditsPage() {
 
       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <Zap className="w-3 h-3" />
-        Sem créditos, as ações de IA param. O chat com sua equipe continua funcionando normalmente.
+        As carteiras são independentes: ficar sem créditos de Atendimento pausa o agente,
+        mas não afeta o Copiloto — e vice-versa. O chat com sua equipe nunca consome créditos.
       </p>
 
       <PixPaymentDialog

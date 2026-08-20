@@ -45,11 +45,17 @@ serve(async (req) => {
     if (authError || !user) return json({ error: "unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    const { product_id, paymentMethod, credits: legacyCredits } = body as {
+    const { product_id, paymentMethod, credits: legacyCredits, pool: requestedPool } = body as {
       product_id?: string;
       paymentMethod?: string;
       credits?: number;
+      pool?: string;
     };
+
+    // Sprint 8.1: the buyer chooses which pool to fill. Anything unrecognised
+    // falls back to whatsapp — it is the pool whose exhaustion stops the
+    // customer's own attendance, so it is the safe default to top up.
+    const pool = requestedPool === "copilot" ? "copilot" : "whatsapp";
 
     const { data: profile } = await db
       .from("profiles").select("equipe_id, email, nome_completo, telefone")
@@ -150,6 +156,9 @@ serve(async (req) => {
         total: price,
         due_date: dueDateIn(1),
         issued_at: new Date().toISOString(),
+        // Read back by asaas-webhook when the payment confirms, so the credits
+        // land in the pool the customer actually paid for.
+        metadata: { pool },
       })
       .select("id, number").single();
     if (invErr) throw new Error(`invoice insert failed: ${invErr.message}`);
@@ -196,6 +205,7 @@ serve(async (req) => {
       invoiceNumber: invoice.number,
       invoiceUrl: payment.invoiceUrl,
       credits,
+      pool,
       amount: price,
       pixQrCode,
       pixCopyPaste,

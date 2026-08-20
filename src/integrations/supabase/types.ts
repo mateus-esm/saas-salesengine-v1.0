@@ -189,37 +189,40 @@ export type Database = {
         Row: {
           balance: number
           equipe_id: string
+          pool: string
           updated_at: string
         }
         Insert: {
           balance?: number
           equipe_id: string
+          pool?: string
           updated_at?: string
         }
         Update: {
           balance?: number
           equipe_id?: string
+          pool?: string
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "agent_credits_balance_equipe_id_fkey"
             columns: ["equipe_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "agent_credits_balance_equipe_id_fkey"
             columns: ["equipe_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "agent_credits_balance_equipe_id_fkey"
             columns: ["equipe_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "v_tenant_entitlements"
             referencedColumns: ["equipe_id"]
           },
@@ -483,7 +486,9 @@ export type Database = {
           active: boolean
           code: string
           created_at: string
+          credits_copilot: number
           credits_included: number
+          credits_whatsapp: number
           id: string
           kind: string
           list_price: number
@@ -496,7 +501,9 @@ export type Database = {
           active?: boolean
           code: string
           created_at?: string
+          credits_copilot?: number
           credits_included?: number
+          credits_whatsapp?: number
           id?: string
           kind: string
           list_price: number
@@ -509,7 +516,9 @@ export type Database = {
           active?: boolean
           code?: string
           created_at?: string
+          credits_copilot?: number
           credits_included?: number
+          credits_whatsapp?: number
           id?: string
           kind?: string
           list_price?: number
@@ -1191,6 +1200,7 @@ export type Database = {
           id: string
           idempotency_key: string
           metadata: Json
+          pool: string
           ref_id: string | null
           source: string
         }
@@ -1203,6 +1213,7 @@ export type Database = {
           id?: string
           idempotency_key: string
           metadata?: Json
+          pool?: string
           ref_id?: string | null
           source: string
         }
@@ -1215,6 +1226,7 @@ export type Database = {
           id?: string
           idempotency_key?: string
           metadata?: Json
+          pool?: string
           ref_id?: string | null
           source?: string
         }
@@ -1452,6 +1464,8 @@ export type Database = {
       }
       equipes: {
         Row: {
+          agent_paused_at: string | null
+          agent_paused_reason: string | null
           asaas_customer_id: string | null
           asaas_subscription_id: string | null
           contact_fields_schema: Json
@@ -1476,6 +1490,8 @@ export type Database = {
           workspace_id: string | null
         }
         Insert: {
+          agent_paused_at?: string | null
+          agent_paused_reason?: string | null
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
           contact_fields_schema?: Json
@@ -1500,6 +1516,8 @@ export type Database = {
           workspace_id?: string | null
         }
         Update: {
+          agent_paused_at?: string | null
+          agent_paused_reason?: string | null
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
           contact_fields_schema?: Json
@@ -3981,32 +3999,46 @@ export type Database = {
     Views: {
       v_credit_balance: {
         Row: {
+          copilot_expiring: number | null
+          copilot_total: number | null
           equipe_id: string | null
-          expiring_balance: number | null
           grant_expires_at: string | null
           total: number | null
+          whatsapp_expiring: number | null
+          whatsapp_total: number | null
         }
         Insert: {
+          copilot_expiring?: never
+          copilot_total?: never
           equipe_id?: string | null
-          expiring_balance?: never
           grant_expires_at?: never
           total?: never
+          whatsapp_expiring?: never
+          whatsapp_total?: never
         }
         Update: {
+          copilot_expiring?: never
+          copilot_total?: never
           equipe_id?: string | null
-          expiring_balance?: never
           grant_expires_at?: never
           total?: never
+          whatsapp_expiring?: never
+          whatsapp_total?: never
         }
         Relationships: []
       }
       v_tenant_entitlements: {
         Row: {
+          agent_limit: number | null
+          builder_hours: number | null
+          builder_recurrence: string | null
           contract_id: string | null
           contract_status: string | null
           current_period_end: string | null
           equipe_id: string | null
           included_credits: number | null
+          included_credits_copilot: number | null
+          included_credits_whatsapp: number | null
           instance_limit: number | null
           is_live: boolean | null
           is_read_only: boolean | null
@@ -4018,6 +4050,21 @@ export type Database = {
       }
     }
     Functions: {
+      agents_to_pause: {
+        Args: never
+        Returns: {
+          agent_id: string
+          equipe_id: string
+          reason: string
+        }[]
+      }
+      agents_to_resume: {
+        Args: never
+        Returns: {
+          agent_id: string
+          equipe_id: string
+        }[]
+      }
       charge_credits: {
         Args: {
           p_credits: number
@@ -4028,12 +4075,20 @@ export type Database = {
         Returns: string
       }
       check_credits: {
-        Args: { p_equipe_id: string; p_estimated?: number }
+        Args: { p_equipe_id: string; p_estimated?: number; p_pool?: string }
         Returns: Json
       }
-      credit_balance: { Args: { p_equipe_id: string }; Returns: number }
+      credit_balance: {
+        Args: { p_equipe_id: string; p_pool?: string }
+        Returns: number
+      }
       credits_consumed_in_window: {
-        Args: { p_equipe_id: string; p_from: string; p_to: string }
+        Args: {
+          p_equipe_id: string
+          p_from: string
+          p_pool?: string
+          p_to: string
+        }
         Returns: number
       }
       enqueue_crm_webhooks: {
@@ -4078,6 +4133,7 @@ export type Database = {
           p_equipe_id: string
           p_expires_at: string
           p_idempotency_key: string
+          p_pool?: string
           p_ref_id: string
           p_source: string
         }
@@ -4120,13 +4176,16 @@ export type Database = {
         }
         Returns: string
       }
-      pending_expiry: { Args: { p_equipe_id: string }; Returns: number }
+      pending_expiry: {
+        Args: { p_equipe_id: string; p_pool?: string }
+        Returns: number
+      }
       provision_tenant_from_proposal: {
         Args: { p_proposal_id: string }
         Returns: Json
       }
       recompute_credit_balance: {
-        Args: { p_equipe_id: string }
+        Args: { p_equipe_id: string; p_pool?: string }
         Returns: number
       }
       refresh_webhook_delivery_logs: {

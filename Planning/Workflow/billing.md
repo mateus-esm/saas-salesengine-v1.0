@@ -244,3 +244,6 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-20 | 8 W3 | T17 Página pública de proposta | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-20 | 8 W4 | T18 Auto-recarga + banners | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-08-20 | 8 W4 | T19 Runbook + TODOs 8.1 | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-08-20 | 8.1 | T1 Duas carteiras de crédito | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-08-20 | 8.1 | T2 Nova arquitetura de planos | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8.1 | T3 Liga/desliga do agente (B1) | Claude / Opus 5 (PM) | XL | R$ 28 |

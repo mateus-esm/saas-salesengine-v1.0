@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, CheckCircle2, CreditCard, Zap } from "lucide-react";
 import {
@@ -10,6 +9,7 @@ import {
   formatBRL, formatCredits, formatDate, daysUntil,
 } from "@/hooks/useBilling";
 import { InvoiceStatusBadge } from "@/components/billing/InvoiceStatusBadge";
+import { PoolBalanceCard } from "@/components/billing/PoolBalanceCard";
 
 /**
  * Sprint 8 T13 — the overview.
@@ -26,10 +26,6 @@ export default function OverviewPage() {
   const monthly = contractData?.monthlyTotal ?? 0;
   const contract = contractData?.contract;
 
-  // The gauge measures the PLAN allowance only. Top-ups are shown separately
-  // below, because mixing them in would make a big purchase look like low usage.
-  const granted = credits?.grantTotal ?? 0;
-  const pct = granted > 0 ? Math.min(100, Math.round(((credits?.expiring ?? 0) / granted) * 100)) : 0;
   const daysToRenew = daysUntil(contract?.current_period_end);
 
   return (
@@ -77,36 +73,31 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
 
-        {/* ── Credits ── */}
+        {/* ── Credits: two independent pools (Sprint 8.1) ── */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Créditos</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             {creditsLoading ? (
               <Skeleton className="h-9 w-28" />
             ) : (
               <>
-                <p className="text-3xl font-bold tracking-tight">{formatCredits(credits?.total)}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {granted > 0
-                    ? `${formatCredits(credits?.expiring)} de ${formatCredits(granted)} do plano restantes`
-                    : "sem créditos do plano neste período"}
-                </p>
-                <Progress value={pct} className="mt-3 h-1.5" />
-                {/* The split is commercial, not cosmetic: a customer who believes
-                    purchased credits vanish at renewal will not buy top-ups. */}
-                <div className="mt-3 space-y-0.5 text-xs text-muted-foreground">
-                  <p>
-                    <span className="font-medium text-foreground">{formatCredits(credits?.expiring)}</span> do plano
-                    {credits?.grantExpiresAt && ` — expiram ${formatDate(credits.grantExpiresAt)}`}
-                  </p>
-                  <p>
-                    <span className="font-medium text-foreground">{formatCredits(credits?.permanent)}</span> avulsos —
-                    não expiram
-                  </p>
-                </div>
-                <Button asChild variant="ghost" size="sm" className="mt-2 -ml-2 h-8 text-xs">
+                {/* Never summed into one figure: a healthy Copilot balance says
+                    nothing about whether the attendance agent is about to stop. */}
+                <PoolBalanceCard
+                  pool="whatsapp"
+                  balance={credits!.whatsapp}
+                  expiresAt={credits?.grantExpiresAt}
+                  compact
+                />
+                <PoolBalanceCard
+                  pool="copilot"
+                  balance={credits!.copilot}
+                  expiresAt={credits?.grantExpiresAt}
+                  compact
+                />
+                <Button asChild variant="ghost" size="sm" className="h-8 text-xs -ml-2">
                   <Link to="/billing/creditos">
                     Recarregar <ArrowRight className="w-3 h-3 ml-1" />
                   </Link>
