@@ -1307,11 +1307,17 @@ de receita; o resto é dívida técnica conhecida.
       `auto_recharge_enabled` e dispara. Para cartão salvo, avaliar tokenização
       no Asaas.
 
-- [ ] **B3 · Modo somente leitura não é aplicado no backend.**
-      `v_tenant_entitlements.is_read_only` existe e a UI o consome, mas nenhuma
-      policy de escrita nem edge function verifica esse estado. Um tenant
-      suspenso ainda consegue escrever via API direta. Fechar antes de suspender
-      o primeiro cliente de verdade.
+- [x] ~~**B3 · Modo somente leitura não é aplicado no backend.**~~ ✅ **FEITO**
+      (`20260820000400_sprint81_enforcement.sql`). Aplicado no **ponto de
+      estrangulamento**, não em cada chamador: `charge_credits` recusa com
+      `contract_suspended`, e `check_credits` devolve `suspended: true` para o
+      pré-voo do Copiloto barrar o plano inteiro. `send-chat-message` devolve
+      **402** (não 403 — a UI precisa distinguir "você deve" de "você não pode").
+      Um replay de ação cobrada **antes** da suspensão ainda devolve o id
+      original, senão um retry viraria erro novo.
+      Somente leitura continua sendo **leitura liberada**: o cliente suspenso
+      ainda vê o CRM e paga a fatura. Bloquear tudo puniria quem nos deve de um
+      jeito que dificulta o pagamento.
 
 ## 🟡 C. Dívida técnica do sprint
 
@@ -1356,9 +1362,15 @@ de receita; o resto é dívida técnica conhecida.
 
 ## 🆕 Novos itens surgidos do 8.1
 
-- [ ] **E1 · Aplicar o limite de assentos e de agentes.** `v_tenant_entitlements`
-      já expõe `seat_limit` (3/5/10) e `agent_limit` (1), mas **nada bloqueia**
-      convidar o 6º usuário num Growth. Ligar em `create-equipe-member`.
+- [x] ~~**E1 · Aplicar o limite de assentos.**~~ ✅ **FEITO** — via **trigger** em
+      `profiles`, não checagem na edge function: `create-equipe-member` é um
+      caminho de entrada, e o próximo que alguém criar passaria por cima de um
+      guard de aplicação. Starter/Growth/Scale = 3/5/10 assentos; o 4º num
+      Starter é recusado com `seat_limit_reached`. Equipe sem contrato não tem
+      limite — não estamos vendendo assento para ela.
+      **Falta ainda o limite de agentes** (`agent_limit`, 1 em todos os planos):
+      exposto no entitlement, não aplicado.
+
 - [ ] **E2 · Cobrar as instâncias de fato.** O produto `instance_whatsapp` custa
       R$90 e o entitlement conta as instâncias contratadas, mas conectar uma
       instância **não cria** o `contract_item` correspondente. Hoje isso é manual
@@ -1366,10 +1378,12 @@ de receita; o resto é dívida técnica conhecida.
 - [ ] **E3 · Retainer de Builder Mode.** `builder_hours` e `builder_recurrence`
       estão no catálogo (1h/2h/1h-mensal), mas não existe controle de horas
       consumidas nem cobrança automática do excedente a R$300/h.
-- [ ] **E4 · Reconciliação por carteira.** `credits-reconcile` compara o
-      `credits-spent` do provider com o ledger, mas ainda soma sem filtrar por
-      `pool`. Como o provider só mede o agente de atendimento, o ajuste deve ser
-      lançado em `whatsapp` explicitamente.
+- [x] ~~**E4 · Reconciliação por carteira.**~~ ✅ **FEITO** —
+      `credits-reconcile` agora filtra `pool = 'whatsapp'` na leitura **e** lança
+      o ajuste nessa carteira. O provider mede só o agente de atendimento;
+      comparar contra um total que também contém débitos do Copiloto lançaria o
+      consumo do Copiloto como "divergência" toda noite.
+
 - [ ] **E5 · Migrar tenants existentes para os novos planos.** Os planos legados
       foram desativados; contratos vigentes seguem apontando para eles e mantêm o
       preço antigo (correto). Definir quando e como migrar cada cliente.
@@ -1378,8 +1392,8 @@ de receita; o resto é dívida técnica conhecida.
 
 1. `A2` — rotacionar a chave do Asaas de produção (foi colada em texto puro).
 2. Runbook `docs/billing-runbook.md` §1-§5 — secrets, deploy, webhook, crons.
-3. `B3` — fechar a escrita no modo somente leitura.
-4. `C5` — abrir as telas logado, uma vez, com olhos humanos.
-5. `E1` — aplicar o limite de assentos, senão o plano não limita nada.
+3. `C5` — abrir as telas logado, uma vez, com olhos humanos.
+4. `E2` — cobrar as instâncias automaticamente, senão essa receita depende de memória.
 
-> `A1` (preço) e `B1` (desligar o agente) foram **resolvidos no 8.1**.
+> **Resolvidos no 8.1:** `A1` (preço), `B1` (desligar o agente), `B3` (somente
+> leitura aplicado), `E1` (assentos), `E4` (reconciliação por carteira).

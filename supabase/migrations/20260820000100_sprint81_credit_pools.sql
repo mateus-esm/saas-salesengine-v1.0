@@ -75,6 +75,12 @@ end $$;
 -- first is what makes existing callers keep working.
 -- ============================================================================
 
+-- The view must go FIRST: it is built on credit_balance(uuid), and Postgres
+-- refuses to drop a function something depends on. Dropping the functions first
+-- happens to work on a database where the view was already replaced, and fails
+-- on a clean one — caught by a full `supabase db reset` replay.
+drop view if exists public.v_credit_balance;
+
 drop function if exists public.credit_balance(uuid);
 drop function if exists public.recompute_credit_balance(uuid);
 drop function if exists public.pending_expiry(uuid);
@@ -152,7 +158,7 @@ begin
 end;
 $fn$;
 
-drop view if exists public.v_credit_balance;
+-- Already dropped above, before the functions it depends on.
 create view public.v_credit_balance as
 select
   e.id as equipe_id,

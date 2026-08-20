@@ -85,10 +85,14 @@ serve(async (req) => {
     // The provider reports PROVIDER credits; the ledger stores BILLED.
     const providerBilled = toBilledCredits(providerSpent);
 
+    // Sprint 8.1 E4 — WhatsApp pool only. The provider measures the attendance
+    // agent and nothing else, so comparing it against a total that also contains
+    // Copilot debits would book the Copilot's usage as "drift" every night.
     const { data: rows } = await db
       .from("credit_ledger")
       .select("credits, source")
       .eq("equipe_id", equipe.id)
+      .eq("pool", "whatsapp")
       .in("entry_type", ["debit", "adjustment"])
       .gte("created_at", periodStart);
 
@@ -107,6 +111,7 @@ serve(async (req) => {
       entry_type: "adjustment",
       credits: -diff, // provider says we spent more -> book a further debit
       source: "reconcile",
+      pool: "whatsapp",
       idempotency_key: key,
       metadata: {
         period: periodKey,

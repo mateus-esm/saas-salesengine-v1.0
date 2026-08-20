@@ -144,6 +144,20 @@ async function loadAuthorizedContext(
     throw new HttpError('Forbidden', 403)
   }
 
+  // Sprint 8.1 B3 — read-only means outbound stops. Reads stay open so the
+  // customer can still see their CRM and pay the invoice; what they cannot do is
+  // keep sending on an account they are not paying for. 402 (not 403) so the UI
+  // can tell "you owe us" apart from "you lack permission".
+  const { data: suspended } = await supabase.rpc('tenant_is_suspended', {
+    p_equipe_id: caller.equipe_id,
+  })
+  if (suspended === true) {
+    throw new HttpError(
+      'contract_suspended: sua conta está em modo somente leitura. Pague a fatura em aberto para voltar a enviar mensagens.',
+      402,
+    )
+  }
+
   return {
     resolvedConversationId,
     resolvedLeadId,
