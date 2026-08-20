@@ -17,7 +17,14 @@ import PipelineSettings from "./pages/PipelineSettings";
 import Webhooks from "./pages/Webhooks";
 import Suporte from "./pages/Suporte";
 import Dashboard from "./pages/Dashboard";
-import Billing from "./pages/Billing";
+import BillingLayout from "./pages/billing/BillingLayout";
+import BillingOverviewPage from "./pages/billing/OverviewPage";
+import BillingInvoicesPage from "./pages/billing/InvoicesPage";
+import BillingCreditsPage from "./pages/billing/CreditsPage";
+import BillingContractPage from "./pages/billing/ContractPage";
+import BillingDataPage from "./pages/billing/BillingDataPage";
+import PublicProposal from "./pages/PublicProposal";
+import NotificationsPage from "./pages/NotificationsPage";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
@@ -55,6 +62,9 @@ const App = () => (
                 {/* Public */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/login" element={<Login />} />
+                {/* Sprint 8 T17 — public, outside ProtectedRoute: the person
+                    reading a proposal is not a user yet. */}
+                <Route path="/proposta/:codigo" element={<PublicProposal />} />
 
                 {/* Authenticated shell — mounted once; children swap via <Outlet/> */}
                 <Route
@@ -90,9 +100,16 @@ const App = () => (
                   </Route>
                   <Route path="/billing" element={
                     <PageRouteGuard permissionKey="billing">
-                      <Billing />
+                      <BillingLayout />
                     </PageRouteGuard>
-                  } />
+                  }>
+                    <Route index element={<BillingOverviewPage />} />
+                    <Route path="faturas" element={<BillingInvoicesPage />} />
+                    <Route path="creditos" element={<BillingCreditsPage />} />
+                    <Route path="contrato" element={<BillingContractPage />} />
+                    <Route path="dados" element={<BillingDataPage />} />
+                  </Route>
+                  <Route path="/notificacoes" element={<NotificationsPage />} />
                   <Route path="/suporte" element={
                     <PageRouteGuard permissionKey="suporte">
                       <Suporte />

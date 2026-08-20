@@ -22,6 +22,7 @@ import { useRole } from "@/hooks/useRole";
 import { TenantLogo } from "@/components/TenantLogo";
 import { UserMenu } from "@/components/UserMenu";
 import { ModeToggle } from "@/components/ModeToggle";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { CreditBalanceBadge } from "@/components/crm/copilot/CreditBalanceBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -243,6 +244,7 @@ export function TopNavbar() {
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
           <CreditBalanceBadge className="hidden sm:inline-flex" />
+          <NotificationBell />
           <ModeToggle />
           <UserMenu />
 

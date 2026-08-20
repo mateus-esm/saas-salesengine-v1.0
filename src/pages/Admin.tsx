@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
+import { ProposalsTab } from "@/components/admin/proposals/ProposalsTab";
+import { AdminBillingTab } from "@/components/admin/billing/BillingTab";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +25,8 @@ import {
   RefreshCw, UserCog, Globe, LayoutGrid, Key, Webhook, Home,
   CreditCard, Bot, ChevronRight, UserMinus, UserPlus, Copy, RefreshCcw,
   Radio,
+  FileText,
+  Receipt,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -665,7 +669,24 @@ const Admin = () => {
             <Radio className="h-4 w-4" />
             Instâncias Solo ({wppInstances.length})
           </TabsTrigger>
+          {/* Sprint 8 T15/T16 */}
+          <TabsTrigger value="propostas" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Propostas
+          </TabsTrigger>
+          <TabsTrigger value="faturamento" className="flex items-center gap-2">
+            <Receipt className="h-4 w-4" />
+            Faturamento
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="propostas" className="mt-4">
+          <ProposalsTab />
+        </TabsContent>
+
+        <TabsContent value="faturamento" className="mt-4">
+          <AdminBillingTab />
+        </TabsContent>
 
         {/* ══════════════════════════════════════════════════════════════════════
             TAB: NICHOS

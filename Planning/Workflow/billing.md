@@ -237,3 +237,10 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-20 | 8 W2 | T10 Pre-flight de crédito no Copilot | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-20 | 8 W2 | T11 Saldo do ledger + conciliação | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-20 | 8 W2 | T12 Entitlements derivados + RLS explícita | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W3 | T13 Billing UI (5 sub-rotas) | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-08-20 | 8 W3 | T14 Central de notificações | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W3 | T15 Admin — Propostas | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-08-20 | 8 W3 | T16 Admin — Faturamento | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W3 | T17 Página pública de proposta | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W4 | T18 Auto-recarga + banners | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-08-20 | 8 W4 | T19 Runbook + TODOs 8.1 | Claude / Opus 5 (PM) | S | R$ 5 |
