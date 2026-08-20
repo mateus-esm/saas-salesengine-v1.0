@@ -99,3 +99,8 @@ verify_jwt = false
 # verification: it must know who is asking.
 [functions.provision-tenant]
 verify_jwt = true
+
+# Sprint 8 T11 — nightly reconciliation of the ledger against the provider.
+# Corrects the ledger; never becomes the source of truth.
+[functions.credits-reconcile]
+verify_jwt = false

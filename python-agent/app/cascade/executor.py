@@ -65,6 +65,7 @@ async def run_plan(
     rules: dict | None,
     client: Any,
     charge_fn: Callable[..., Awaitable[str]],
+    check_fn: Callable[..., Awaitable[dict]] | None = None,
     mode: str = "manual",
     run_id: str = "run",
     emit: Callable[[str, dict], Awaitable[None]] | None = None,
@@ -83,6 +84,29 @@ async def run_plan(
         )
     except Exception:
         pipeline_fields = {}
+
+    # Pre-flight (Sprint 8 T10). charge_fn already charges on success and halts
+    # mid-plan when the wallet runs dry, which is correct but wasteful: the first
+    # actions have already been applied to the customer's CRM before we discover
+    # the plan was unaffordable. Checking the whole plan up front means a tenant
+    # without credits gets a clean refusal instead of a half-applied plan.
+    if check_fn is not None:
+        billable = sum(1 for a in plan.actions if not a.requires_confirmation)
+        if billable:
+            try:
+                verdict = await check_fn(equipe_id=ctx.equipe_id, estimated=billable)
+            except Exception:
+                verdict = None  # never block the plan on a failed check
+            if verdict is not None and not verdict.get("allowed", True):
+                res.halted = True
+                res.halt_reason = "no_credits"
+                if emit:
+                    await emit("halted", {
+                        "reason": "no_credits",
+                        "balance": verdict.get("balance"),
+                        "deficit": verdict.get("deficit"),
+                    })
+                return res
 
     for action in plan.actions:
         if action.requires_confirmation:

@@ -28,6 +28,9 @@ Levantamento feito antes do plano. Cada item foi verificado no código.
 
 ### 🔴 P0 — buracos de receita e de confiança
 
+> **Nota de 2026-08-20:** os itens 5, 6 e 7 foram **corrigidos após verificação
+> contra banco real** durante a execução. Leia as marcações antes de agir.
+
 1. **Não existe webhook do Asaas.** `ls supabase/functions` não tem nenhum
    handler. Pagamentos são criados e nunca confirmados.
 2. **Acesso é liberado antes do pagamento.** `asaas-subscribe/index.ts:185`
@@ -38,13 +41,21 @@ Levantamento feito antes do plano. Cada item foi verificado no código.
    existe caminho no código que credite um pagamento aprovado.
 4. **Não existe fatura.** Sem tabela de invoices, sem histórico, sem recibo, sem
    número fiscal. O cliente não tem o que consultar e você não tem o que conciliar.
-5. **Vazamento cross-tenant em `webhook_configs`.** A migration
-   `20260617000000_add_team_page_permissions.sql` criou políticas RLS que filtram
-   por permissão mas **não escopam por equipe**:
-   `equipe_id IN (SELECT id FROM equipes WHERE page_permissions->>'webhooks' = true)`.
-   Ela não removeu a política original `"Team members can manage webhooks"`, e
-   políticas permissivas em Postgres são **OR** — qualquer autenticado lê e
-   escreve os webhooks de qualquer equipe com o módulo ligado.
+5. ~~**Vazamento cross-tenant em `webhook_configs`.**~~ ⚠️ **SEVERIDADE CORRIGIDA
+   EM 2026-08-20 (T12) — não é vazamento.** Testado contra banco real: o tenant A
+   vê **1** de 2 registros e não lê o do tenant B. A afirmação original estava
+   errada.
+   O que é verdade: as políticas criadas por
+   `20260617000000_add_team_page_permissions.sql` **são escritas sem escopo de
+   tenant** (`equipe_id IN (SELECT id FROM equipes WHERE page_permissions...)`).
+   O que impede o vazamento é que **`equipes` tem RLS própria** com SELECT
+   escopado, então a subquery só devolve a equipe do próprio usuário. O escopo é
+   real, mas **acidental**: depende inteiramente da RLS de `equipes` continuar
+   estreita. No dia em que alguém adicionar um "authenticated pode ler todas as
+   equipes" (para um seletor, uma tela de admin, um relatório), essas políticas
+   viram cross-tenant silenciosamente.
+   Logo: **hardening**, não incidente. T12 torna o escopo explícito e consolida
+   em **uma** política por operação.
 
 ### 🟠 P1 — o dinheiro mora em quatro lugares que discordam
 
@@ -55,12 +66,25 @@ Levantamento feito antes do plano. Cada item foi verificado no código.
 | Recargas | `equipes.creditos_avulsos` | coluna int solta |
 | Instâncias WhatsApp | env `SOLO_INSTANCE_MONTHLY_PRICE` (default 100) | não está no banco |
 
-6. **`charge_credits()` tem zero chamadores.** O ledger atômico do Sprint 6.1 foi
-   construído e nunca ligado — `agent_credits_balance` é uma tabela vazia. Grep
-   em `src/` e `supabase/functions/` só encontra a assinatura em `types.ts`.
-7. **Nada bloqueia uma ação por saldo.** O saldo é derivado chamando
-   `credits-spent` do provider a cada carregamento de página. Não existe
-   pré-checagem, logo **não existe como parar** um tenant sem crédito hoje.
+6. ~~**`charge_credits()` tem zero chamadores.**~~ ❌ **CORRIGIDO EM 2026-08-20
+   (T10).** Esta afirmação estava **errada**. O grep original cobriu apenas `src/`
+   e `supabase/functions/` e não olhou o serviço Python. O Copilot **está
+   medido**: `agno_workflow.py:338` passa `charge_fn=_charge_credit` para
+   `executor.run_plan`, que cobra por ação bem-sucedida, usa chave de
+   idempotência determinística e para o plano em `InsufficientCredits`.
+   `python-agent/app/credits.py` e `app/metering.py` existem e têm 11 testes
+   passando. `agent_credits_balance` está vazia porque os tenants ainda não
+   usaram o Copilot, não porque o código não exista.
+7. **A IA do provider (WhatsApp) não pode ser pré-checada.** ⚠️ Descoberta de
+   arquitetura (T10). A geração acontece **no lado do provider**, de forma
+   autônoma, quando o cliente manda mensagem no WhatsApp. `send-chat-message`
+   envia mensagem de um **humano**; `solo-wpp-webhook` só ingere no CRM; nenhum
+   caminho nosso pede geração. Logo **não existe ponto onde interceptar** essa
+   consumação — ela só pode ser medida depois, via `credits-spent` (T11).
+   Consequência honesta: o *soft stop* vale para o **Copilot** (medível e
+   bloqueável) e **não** para o agente de WhatsApp. Parar o agente do provider
+   exigiria escrever `status` no recurso do agente — capacidade **não
+   verificada**; virou spike para 8.1.
 8. **Preço de instância não é dado.** Mudar o preço exige redeploy de função.
 9. **Pagador errado.** `asaas-subscribe` envia `profile.cpf` — o CPF de quem se
    cadastrou. Cliente PJ não tem como assinar; a entidade pagadora é a empresa.
@@ -1143,8 +1167,8 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T7 | `billing-cron` | L | Claude (PM) | [x] |
 | T8 | `notification-dispatcher` | L | Claude (PM) | [x] |
 | T9 | `provision-tenant` | L | Claude (PM) | [x] |
-| T10 | Wire `charge_credits` | XL | Codex | [ ] |
-| T11 | Saldo do ledger + conciliação | L | Verboo | [ ] |
+| T10 | Pre-flight de crédito (escopo corrigido) | L | Claude (PM) | [x] |
+| T11 | Saldo do ledger + conciliação | L | Claude (PM) | [x] |
 | T12 | Entitlements + fix RLS | L | Codex | [ ] |
 | T13 | Billing UI | XL | Verboo | [ ] |
 | T14 | Central de notificações | L | Verboo | [ ] |

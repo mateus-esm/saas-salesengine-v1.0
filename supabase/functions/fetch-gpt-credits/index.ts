@@ -36,7 +36,7 @@ serve(async (req) => {
 
     const { data: equipe } = await supabaseClient
       .from('equipes')
-      .select('gpt_maker_agent_id, workspace_id, plano_id, limite_creditos, creditos_avulsos')
+      .select('id, gpt_maker_agent_id, workspace_id, plano_id, limite_creditos, creditos_avulsos')
       .eq('id', profile.equipe_id)
       .single();
 
@@ -119,50 +119,73 @@ serve(async (req) => {
     }
 
     // ── Balance ──────────────────────────────────────────────────────────────
-    // Sprint 7.5 W2: this used to return GET /workspace/{wsId}/credits, which
-    // is the RESELLER's pooled balance. Seven tenants share workspace
-    // 3DF0B518…, so every one of them saw the same number — another tenant's
-    // spending moved your balance. That is a cross-tenant leak, not a display
-    // bug.
+    // Sprint 8 T11: the balance now comes from the LOCAL LEDGER — one SELECT
+    // instead of an API call on every page load.
     //
-    // A tenant's allowance comes from their plan, in BILLED credits:
-    //   equipes.limite_creditos (per-tenant override)
-    //     ?? planos.limite_creditos (their plan's allotment)
-    //   + equipes.creditos_avulsos (top-ups)
-    //   - what this agent consumed in the current period
-    // The PLAN is the source of truth — the founder's rule is "the credits
-    // available is based in the account plan". `equipes.limite_creditos` is a
-    // legacy column sitting at 1000 for every tenant, including one on Solo
-    // Scale (3000); letting it win would silently cap that tenant at a third
-    // of what they pay for. It is used only when no plan is linked.
-    let planAllowance: number | null = null;
-    if (equipe.plano_id) {
-      const { data: plano } = await supabaseClient
-        .from('planos')
-        .select('limite_creditos')
-        .eq('id', equipe.plano_id)
-        .single();
-      planAllowance = plano?.limite_creditos ?? null;
-    }
-    if (planAllowance === null) planAllowance = equipe.limite_creditos ?? 0;
-    const allowance = (planAllowance ?? 0) + (equipe.creditos_avulsos ?? 0);
+    // History worth keeping: this once returned GET /workspace/{id}/credits, the
+    // RESELLER's pooled balance shared by seven tenants, so one tenant's spending
+    // moved everyone's number. Sprint 7.5 replaced that with a figure derived
+    // from the plan on each read. Deriving on read was still wrong in two ways:
+    // it cannot be audited (no record of why the number is what it is) and it
+    // cannot be enforced (nothing to debit before an action).
+    //
+    // credit_ledger is now the source of truth. `credits-spent` from the provider
+    // becomes a nightly RECONCILIATION input (credits-reconcile), not the truth —
+    // if it ever became the truth again we would be back to deriving on read.
+    const { data: ledgerBalance, error: balErr } = await supabaseClient
+      .rpc('credit_balance', { p_equipe_id: equipe.id ?? profile.equipe_id });
 
-    // Always measure the balance against the CURRENT month, even when the user
-    // is looking at a past month or the yearly view — otherwise switching the
-    // filter would appear to change how many credits they have left.
-    let currentMonthSpentProvider = totalSpentProvider;
-    if (period === 'year' || year !== now.getFullYear() || month !== now.getMonth() + 1) {
-      try {
-        const curUrl = `${AI_ENGINE_BASE}/agent/${agentId}/credits-spent`
-          + `?year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
-        const curRes = await fetch(curUrl, { headers: engineHeaders });
-        currentMonthSpentProvider = curRes.ok ? ((await curRes.json()).total || 0) : 0;
-      } catch {
-        currentMonthSpentProvider = 0;
+    let balance: number;
+    let allowance: number;
+
+    if (balErr || ledgerBalance === null || ledgerBalance === undefined) {
+      // Ledger unavailable: fall back to the Sprint 7.5 derivation rather than
+      // showing zero, which would look like the customer lost their credits.
+      console.error('[fetch-gpt-credits] credit_balance failed, using legacy derivation:', balErr?.message);
+      let planAllowance: number | null = null;
+      if (equipe.plano_id) {
+        const { data: plano } = await supabaseClient
+          .from('planos').select('limite_creditos').eq('id', equipe.plano_id).single();
+        planAllowance = plano?.limite_creditos ?? null;
       }
+      if (planAllowance === null) planAllowance = equipe.limite_creditos ?? 0;
+      allowance = (planAllowance ?? 0) + (equipe.creditos_avulsos ?? 0);
+
+      let currentMonthSpentProvider = totalSpentProvider;
+      if (period === 'year' || year !== now.getFullYear() || month !== now.getMonth() + 1) {
+        try {
+          const curUrl = `${AI_ENGINE_BASE}/agent/${agentId}/credits-spent`
+            + `?year=${now.getFullYear()}&month=${now.getMonth() + 1}`;
+          const curRes = await fetch(curUrl, { headers: engineHeaders });
+          currentMonthSpentProvider = curRes.ok ? ((await curRes.json()).total || 0) : 0;
+        } catch {
+          currentMonthSpentProvider = 0;
+        }
+      }
+      balance = Math.max(0, allowance - toBilledCredits(currentMonthSpentProvider));
+    } else {
+      balance = Number(ledgerBalance);
+      // The allowance is what the active grant was worth, so the UI can show
+      // "restante / total do plano" without inventing a denominator.
+      const { data: grant } = await supabaseClient
+        .from('credit_ledger')
+        .select('credits')
+        .eq('equipe_id', equipe.id ?? profile.equipe_id)
+        .eq('entry_type', 'grant')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { data: topups } = await supabaseClient
+        .from('credit_ledger')
+        .select('credits')
+        .eq('equipe_id', equipe.id ?? profile.equipe_id)
+        .eq('entry_type', 'topup');
+      const topupTotal = (topups ?? []).reduce((sum: number, r: any) => sum + (r.credits ?? 0), 0);
+      allowance = (grant?.credits ?? 0) + topupTotal;
     }
 
-    const balance = Math.max(0, allowance - toBilledCredits(currentMonthSpentProvider));
+
 
     // Model keys pass through unchanged (T0 §6.1: they are concrete slugs).
     // Each detail item carries the contract shape for T10 plus the legacy

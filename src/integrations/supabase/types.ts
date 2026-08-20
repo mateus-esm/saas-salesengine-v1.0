@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -7,11 +7,6 @@
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -88,6 +83,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agenda_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "agenda_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "agenda_events_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
@@ -154,6 +163,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agent_action_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "agent_action_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "agent_action_ledger_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -185,6 +208,20 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_credits_balance_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "agent_credits_balance_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -226,6 +263,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_trainings_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "agent_trainings_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -296,6 +347,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ai_decisions_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "ai_decisions_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "ai_decisions_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -317,6 +382,143 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      billing_accounts: {
+        Row: {
+          address_city: string | null
+          address_complement: string | null
+          address_district: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          asaas_customer_id: string | null
+          auto_recharge_enabled: boolean
+          auto_recharge_product_id: string | null
+          auto_recharge_threshold: number | null
+          billing_email: string | null
+          created_at: string
+          doc_number: string | null
+          doc_type: string | null
+          equipe_id: string
+          legal_name: string | null
+          phone: string | null
+          postal_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_city?: string | null
+          address_complement?: string | null
+          address_district?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          asaas_customer_id?: string | null
+          auto_recharge_enabled?: boolean
+          auto_recharge_product_id?: string | null
+          auto_recharge_threshold?: number | null
+          billing_email?: string | null
+          created_at?: string
+          doc_number?: string | null
+          doc_type?: string | null
+          equipe_id: string
+          legal_name?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_city?: string | null
+          address_complement?: string | null
+          address_district?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          asaas_customer_id?: string | null
+          auto_recharge_enabled?: boolean
+          auto_recharge_product_id?: string | null
+          auto_recharge_threshold?: number | null
+          billing_email?: string | null
+          created_at?: string
+          doc_number?: string | null
+          doc_type?: string | null
+          equipe_id?: string
+          legal_name?: string | null
+          phone?: string | null
+          postal_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_accounts_auto_recharge_product_id_fkey"
+            columns: ["auto_recharge_product_id"]
+            isOneToOne: false
+            referencedRelation: "billing_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_accounts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_accounts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "billing_accounts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
+      billing_products: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          credits_included: number
+          id: string
+          kind: string
+          list_price: number
+          metadata: Json
+          name: string
+          period: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          credits_included?: number
+          id?: string
+          kind: string
+          list_price: number
+          metadata?: Json
+          name: string
+          period: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          credits_included?: number
+          id?: string
+          kind?: string
+          list_price?: number
+          metadata?: Json
+          name?: string
+          period?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       companies: {
         Row: {
@@ -369,6 +571,20 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "companies_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "companies_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
         ]
       }
       consumo_creditos: {
@@ -406,6 +622,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consumo_creditos_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "consumo_creditos_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -460,6 +690,149 @@ export type Database = {
             columns: ["equipe_id"]
             isOneToOne: false
             referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_company_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "contact_company_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
+      contract_items: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          period: string
+          product_id: string | null
+          quantity: number
+          unit_price: number
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          period: string
+          product_id?: string | null
+          quantity?: number
+          unit_price: number
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          period?: string
+          product_id?: string | null
+          quantity?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_items_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_items_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["contract_id"]
+          },
+          {
+            foreignKeyName: "contract_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "billing_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          cancel_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          equipe_id: string
+          id: string
+          notes: string | null
+          past_due_since: string | null
+          proposal_id: string | null
+          started_at: string | null
+          status: string
+          term_months: number | null
+          updated_at: string
+        }
+        Insert: {
+          cancel_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          equipe_id: string
+          id?: string
+          notes?: string | null
+          past_due_since?: string | null
+          proposal_id?: string | null
+          started_at?: string | null
+          status?: string
+          term_months?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cancel_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          equipe_id?: string
+          id?: string
+          notes?: string | null
+          past_due_since?: string | null
+          proposal_id?: string | null
+          started_at?: string | null
+          status?: string
+          term_months?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "contracts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "contracts_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
             referencedColumns: ["id"]
           },
         ]
@@ -528,6 +901,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "conversations_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "conversations_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "conversations_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
@@ -593,6 +980,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "copilot_agents_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "copilot_agents_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "copilot_agents_pipeline_id_fkey"
             columns: ["pipeline_id"]
             isOneToOne: false
@@ -642,6 +1043,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_ingest_queue_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "copilot_ingest_queue_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "copilot_ingest_queue_lead_id_fkey"
@@ -695,6 +1110,20 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "copilot_knowledge_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "copilot_knowledge_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
         ]
       }
       copilot_run_events: {
@@ -735,6 +1164,81 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_run_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "copilot_run_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
+      credit_ledger: {
+        Row: {
+          created_at: string
+          credits: number
+          entry_type: string
+          equipe_id: string
+          expires_at: string | null
+          id: string
+          idempotency_key: string
+          metadata: Json
+          ref_id: string | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          credits: number
+          entry_type: string
+          equipe_id: string
+          expires_at?: string | null
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          ref_id?: string | null
+          source: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          entry_type?: string
+          equipe_id?: string
+          expires_at?: string | null
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          ref_id?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "credit_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -780,6 +1284,20 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "custom_table_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "custom_table_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
         ]
       }
       custom_table_records: {
@@ -817,6 +1335,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_table_records_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "custom_table_records_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "custom_table_records_table_id_fkey"
@@ -871,6 +1403,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_tables_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "custom_tables_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -994,6 +1540,156 @@ export type Database = {
           },
         ]
       }
+      invoice_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          product_id: string | null
+          quantity: number
+          total: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          product_id?: string | null
+          quantity?: number
+          total: number
+          unit_price: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          product_id?: string | null
+          quantity?: number
+          total?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "billing_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          asaas_invoice_url: string | null
+          asaas_payment_id: string | null
+          contract_id: string | null
+          created_at: string
+          currency: string
+          discount: number
+          due_date: string | null
+          equipe_id: string
+          id: string
+          issued_at: string | null
+          kind: string
+          metadata: Json
+          number: string
+          paid_at: string | null
+          pix_payload: string | null
+          status: string
+          subtotal: number
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          asaas_invoice_url?: string | null
+          asaas_payment_id?: string | null
+          contract_id?: string | null
+          created_at?: string
+          currency?: string
+          discount?: number
+          due_date?: string | null
+          equipe_id: string
+          id?: string
+          issued_at?: string | null
+          kind: string
+          metadata?: Json
+          number?: string
+          paid_at?: string | null
+          pix_payload?: string | null
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          asaas_invoice_url?: string | null
+          asaas_payment_id?: string | null
+          contract_id?: string | null
+          created_at?: string
+          currency?: string
+          discount?: number
+          due_date?: string | null
+          equipe_id?: string
+          id?: string
+          issued_at?: string | null
+          kind?: string
+          metadata?: Json
+          number?: string
+          paid_at?: string | null
+          pix_payload?: string | null
+          status?: string
+          subtotal?: number
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["contract_id"]
+          },
+          {
+            foreignKeyName: "invoices_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "invoices_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
       kpis_dashboard: {
         Row: {
           created_at: string | null
@@ -1035,6 +1731,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpis_dashboard_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "kpis_dashboard_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -1236,6 +1946,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "leads_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "leads_responsible_id_fkey"
@@ -1602,6 +2326,193 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_deliveries: {
+        Row: {
+          attempts: number
+          channel: string
+          created_at: string
+          id: string
+          last_error: string | null
+          notification_id: string
+          provider_id: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          channel: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          notification_id: string
+          provider_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          channel?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          notification_id?: string
+          provider_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          channels: string[]
+          created_at: string
+          equipe_id: string
+          id: string
+          type: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          channels?: string[]
+          created_at?: string
+          equipe_id: string
+          id?: string
+          type: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          channels?: string[]
+          created_at?: string
+          equipe_id?: string
+          id?: string
+          type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
+      notification_types: {
+        Row: {
+          audience: string
+          default_channels: string[]
+          default_severity: string
+          description: string | null
+          type: string
+        }
+        Insert: {
+          audience: string
+          default_channels: string[]
+          default_severity: string
+          description?: string | null
+          type: string
+        }
+        Update: {
+          audience?: string
+          default_channels?: string[]
+          default_severity?: string
+          description?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          action_url: string | null
+          body: string | null
+          created_at: string
+          data: Json
+          dedup_key: string | null
+          equipe_id: string
+          id: string
+          read_at: string | null
+          severity: string
+          title: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          action_url?: string | null
+          body?: string | null
+          created_at?: string
+          data?: Json
+          dedup_key?: string | null
+          equipe_id: string
+          id?: string
+          read_at?: string | null
+          severity?: string
+          title: string
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          action_url?: string | null
+          body?: string | null
+          created_at?: string
+          data?: Json
+          dedup_key?: string | null
+          equipe_id?: string
+          id?: string
+          read_at?: string | null
+          severity?: string
+          title?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "notifications_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
       opportunities: {
         Row: {
           closed_at: string | null
@@ -1661,6 +2572,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "opportunities_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "opportunities_lead_id_fkey"
@@ -1723,6 +2648,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "opportunity_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "opportunity_links_opportunity_id_fkey"
@@ -1827,6 +2766,70 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "origin_taxonomy_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "origin_taxonomy_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+        ]
+      }
+      payment_events: {
+        Row: {
+          attempts: number
+          event_type: string
+          id: string
+          invoice_id: string | null
+          last_error: string | null
+          payload: Json
+          processed_at: string | null
+          provider: string
+          provider_event_id: string
+          received_at: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          event_type: string
+          id?: string
+          invoice_id?: string | null
+          last_error?: string | null
+          payload: Json
+          processed_at?: string | null
+          provider?: string
+          provider_event_id: string
+          received_at?: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          event_type?: string
+          id?: string
+          invoice_id?: string | null
+          last_error?: string | null
+          payload?: Json
+          processed_at?: string | null
+          provider?: string
+          provider_event_id?: string
+          received_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pipeline_agent_rules: {
@@ -1908,6 +2911,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pipeline_agent_rules_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "pipeline_agent_rules_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "pipeline_agent_rules_pipeline_id_fkey"
             columns: ["pipeline_id"]
             isOneToOne: true
@@ -1954,6 +2971,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -2034,6 +3065,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pipeline_stages_v2_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_v2_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "pipeline_stages_v2_pipeline_id_fkey"
             columns: ["pipeline_id"]
             isOneToOne: false
@@ -2095,6 +3140,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipelines_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "pipelines_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -2182,6 +3241,20 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "profiles_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "profiles_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
         ]
       }
       properties: {
@@ -2232,6 +3305,20 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "properties_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "properties_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
         ]
       }
       property_owner_links: {
@@ -2271,11 +3358,211 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "property_owner_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "property_owner_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "property_owner_links_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_acceptances: {
+        Row: {
+          accepted_at: string
+          accepted_doc: string | null
+          accepted_name: string | null
+          created_at: string
+          id: string
+          ip: unknown
+          proposal_id: string
+          terms_snapshot: Json
+          user_agent: string | null
+        }
+        Insert: {
+          accepted_at?: string
+          accepted_doc?: string | null
+          accepted_name?: string | null
+          created_at?: string
+          id?: string
+          ip?: unknown
+          proposal_id: string
+          terms_snapshot: Json
+          user_agent?: string | null
+        }
+        Update: {
+          accepted_at?: string
+          accepted_doc?: string | null
+          accepted_name?: string | null
+          created_at?: string
+          id?: string
+          ip?: unknown
+          proposal_id?: string
+          terms_snapshot?: Json
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_acceptances_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          label: string
+          period: string
+          product_id: string | null
+          proposal_id: string
+          quantity: number
+          sort_order: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          label: string
+          period?: string
+          product_id?: string | null
+          proposal_id: string
+          quantity?: number
+          sort_order?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          label?: string
+          period?: string
+          product_id?: string | null
+          proposal_id?: string
+          quantity?: number
+          sort_order?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "billing_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_items_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposals: {
+        Row: {
+          cliente_doc: string | null
+          cliente_email: string | null
+          cliente_nome: string
+          cliente_whatsapp: string | null
+          codigo: string
+          created_at: string
+          created_by: string | null
+          equipe_id: string | null
+          first_viewed_at: string | null
+          id: string
+          list_monthly_price: number | null
+          monthly_price: number
+          notes: string | null
+          sent_at: string | null
+          setup_price: number
+          status: string
+          term_months: number | null
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          cliente_doc?: string | null
+          cliente_email?: string | null
+          cliente_nome: string
+          cliente_whatsapp?: string | null
+          codigo?: string
+          created_at?: string
+          created_by?: string | null
+          equipe_id?: string | null
+          first_viewed_at?: string | null
+          id?: string
+          list_monthly_price?: number | null
+          monthly_price?: number
+          notes?: string | null
+          sent_at?: string | null
+          setup_price?: number
+          status?: string
+          term_months?: number | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          cliente_doc?: string | null
+          cliente_email?: string | null
+          cliente_nome?: string
+          cliente_whatsapp?: string | null
+          codigo?: string
+          created_at?: string
+          created_by?: string | null
+          equipe_id?: string | null
+          first_viewed_at?: string | null
+          id?: string
+          list_monthly_price?: number | null
+          monthly_price?: number
+          notes?: string | null
+          sent_at?: string | null
+          setup_price?: number
+          status?: string
+          term_months?: number | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "equipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "proposals_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
         ]
       }
@@ -2320,6 +3607,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_automations_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "scheduled_automations_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "scheduled_automations_lead_id_fkey"
@@ -2446,59 +3747,6 @@ export type Database = {
           },
         ]
       }
-      transacoes: {
-        Row: {
-          data_pagamento: string | null
-          data_transacao: string | null
-          descricao: string | null
-          equipe_id: string
-          forma_pagamento: string | null
-          gateway_id: string | null
-          id: string
-          invoice_url: string | null
-          metadata: Json | null
-          status: string | null
-          tipo: string
-          valor: number
-        }
-        Insert: {
-          data_pagamento?: string | null
-          data_transacao?: string | null
-          descricao?: string | null
-          equipe_id: string
-          forma_pagamento?: string | null
-          gateway_id?: string | null
-          id?: string
-          invoice_url?: string | null
-          metadata?: Json | null
-          status?: string | null
-          tipo: string
-          valor: number
-        }
-        Update: {
-          data_pagamento?: string | null
-          data_transacao?: string | null
-          descricao?: string | null
-          equipe_id?: string
-          forma_pagamento?: string | null
-          gateway_id?: string | null
-          id?: string
-          invoice_url?: string | null
-          metadata?: Json | null
-          status?: string | null
-          tipo?: string
-          valor?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transacoes_equipe_id_fkey"
-            columns: ["equipe_id"]
-            isOneToOne: false
-            referencedRelation: "equipes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_roles: {
         Row: {
           id: string
@@ -2569,6 +3817,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "webhook_configs_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "webhook_configs_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "webhook_configs_pipeline_id_fkey"
             columns: ["pipeline_id"]
             isOneToOne: false
@@ -2629,6 +3891,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "webhook_logs_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "webhook_logs_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
+          {
             foreignKeyName: "webhook_logs_webhook_config_id_fkey"
             columns: ["webhook_config_id"]
             isOneToOne: false
@@ -2685,11 +3961,61 @@ export type Database = {
             referencedRelation: "equipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "wpp_instances_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_balance"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "wpp_instances_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_entitlements"
+            referencedColumns: ["equipe_id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      v_credit_balance: {
+        Row: {
+          equipe_id: string | null
+          expiring_balance: number | null
+          grant_expires_at: string | null
+          total: number | null
+        }
+        Insert: {
+          equipe_id?: string | null
+          expiring_balance?: never
+          grant_expires_at?: never
+          total?: never
+        }
+        Update: {
+          equipe_id?: string | null
+          expiring_balance?: never
+          grant_expires_at?: never
+          total?: never
+        }
+        Relationships: []
+      }
+      v_tenant_entitlements: {
+        Row: {
+          contract_id: string | null
+          contract_status: string | null
+          current_period_end: string | null
+          equipe_id: string | null
+          included_credits: number | null
+          instance_limit: number | null
+          is_live: boolean | null
+          is_read_only: boolean | null
+          modules: string[] | null
+          page_permissions: Json | null
+          seat_limit: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       charge_credits: {
@@ -2701,7 +4027,21 @@ export type Database = {
         }
         Returns: string
       }
+      check_credits: {
+        Args: { p_equipe_id: string; p_estimated?: number }
+        Returns: Json
+      }
+      credit_balance: { Args: { p_equipe_id: string }; Returns: number }
+      credits_consumed_in_window: {
+        Args: { p_equipe_id: string; p_from: string; p_to: string }
+        Returns: number
+      }
+      enqueue_crm_webhooks: {
+        Args: { p_context: Json; p_equipe_id: string; p_event: string }
+        Returns: undefined
+      }
       ensure_negative_stages: { Args: never; Returns: undefined }
+      expire_credits: { Args: never; Returns: number }
       fn_calculate_icp_score: {
         Args: { p_lead_id: string }
         Returns: {
@@ -2722,6 +4062,7 @@ export type Database = {
           stage_position: number
         }[]
       }
+      gen_proposal_code: { Args: never; Returns: string }
       get_dashboard_kpis: {
         Args: {
           p_end_date?: string
@@ -2730,16 +4071,28 @@ export type Database = {
         }
         Returns: Json
       }
+      grant_credits: {
+        Args: {
+          p_credits: number
+          p_entry_type?: string
+          p_equipe_id: string
+          p_expires_at: string
+          p_idempotency_key: string
+          p_ref_id: string
+          p_source: string
+        }
+        Returns: string
+      }
+      has_module_access: {
+        Args: { p_equipe_id: string; p_module: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
-      }
-      refresh_webhook_delivery_logs: {
-        Args: { p_equipe_id: string }
-        Returns: number
       }
       increment_conversation_unread_count: {
         Args: { conv_id: string }
@@ -2750,7 +4103,40 @@ export type Database = {
         Args: { target_equipe_id: string }
         Returns: undefined
       }
+      is_super_admin: { Args: never; Returns: boolean }
+      next_invoice_number: { Args: never; Returns: string }
       normalize_phone_br: { Args: { raw: string }; Returns: string }
+      notify: {
+        Args: {
+          p_action_url?: string
+          p_body?: string
+          p_data?: Json
+          p_dedup_key?: string
+          p_equipe_id: string
+          p_severity?: string
+          p_title: string
+          p_type: string
+          p_user_id?: string
+        }
+        Returns: string
+      }
+      pending_expiry: { Args: { p_equipe_id: string }; Returns: number }
+      provision_tenant_from_proposal: {
+        Args: { p_proposal_id: string }
+        Returns: Json
+      }
+      recompute_credit_balance: {
+        Args: { p_equipe_id: string }
+        Returns: number
+      }
+      refresh_webhook_delivery_logs: {
+        Args: { p_equipe_id: string }
+        Returns: number
+      }
+      render_webhook_payload: {
+        Args: { p_context: Json; p_template: Json }
+        Returns: Json
+      }
       set_default_pipeline: { Args: { p_pipeline_id: string }; Returns: string }
       shape_pipeline: {
         Args: { p_equipe_id: string; p_payload: Json }
@@ -2858,6 +4244,101 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      iceberg_namespaces: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_namespaces_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      iceberg_tables: {
+        Row: {
+          bucket_name: string
+          catalog_id: string
+          created_at: string
+          id: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id: string | null
+          shard_id: string | null
+          shard_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          catalog_id: string
+          created_at?: string
+          id?: string
+          location: string
+          name: string
+          namespace_id: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          catalog_id?: string
+          created_at?: string
+          id?: string
+          location?: string
+          name?: string
+          namespace_id?: string
+          remote_table_id?: string | null
+          shard_id?: string | null
+          shard_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iceberg_tables_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "buckets_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iceberg_tables_namespace_id_fkey"
+            columns: ["namespace_id"]
+            isOneToOne: false
+            referencedRelation: "iceberg_namespaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       migrations: {
         Row: {
@@ -3348,3 +4829,4 @@ export const Constants = {
     },
   },
 } as const
+

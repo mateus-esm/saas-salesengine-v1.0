@@ -36,6 +36,7 @@ from app.cascade.worker import is_pipeline_relevant
 from app.cognition.router import Stakes, select_model
 from app.config import get_settings
 from app.credits import charge_credit as _charge_credit
+from app.credits import check_credits as _check_credits
 from app.llm import build_reasoning_model
 from app.schemas import ActionPlan, PlannedAction
 from app.security import TenantContext
@@ -333,9 +334,12 @@ async def run_workflow(
             client, equipe_id=equipe_id, idempotency_key=idempotency_key, ledger=ledger
         )
 
+    async def _check(*, equipe_id: str, estimated: int) -> dict:
+        return await _check_credits(client, equipe_id=equipe_id, estimated=estimated)
+
     exec_res = await _run_plan(
         combined, ctx=ctx, opportunity=opportunity, lead=lead, rules=rules,
-        client=client, charge_fn=_charge, mode=mode, run_id=run_id, emit=emit,
+        client=client, charge_fn=_charge, check_fn=_check, mode=mode, run_id=run_id, emit=emit,
     )
 
     decision_ids: list[str] = []
