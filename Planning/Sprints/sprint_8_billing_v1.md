@@ -1169,14 +1169,14 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T9 | `provision-tenant` | L | Claude (PM) | [x] |
 | T10 | Pre-flight de crédito (escopo corrigido) | L | Claude (PM) | [x] |
 | T11 | Saldo do ledger + conciliação | L | Claude (PM) | [x] |
-| T12 | Entitlements + fix RLS | L | Codex | [ ] |
+| T12 | Entitlements derivados + RLS explícita | L | Claude (PM) | [x] |
 | T13 | Billing UI | XL | Claude (PM) | [x] |
 | T14 | Central de notificações | L | Claude (PM) | [x] |
 | T15 | Admin — Propostas | XL | Claude (PM) | [x] |
 | T16 | Admin — Faturamento | L | Claude (PM) | [x] |
 | T17 | Página pública de proposta | L | Claude (PM) | [x] |
 | T18 | Auto-recarga + banners | M | Claude (PM) | [x] |
-| T19 | Sweep de copy + docs | S | Gemini | [ ] |
+| T19 | Runbook + TODOs 8.1 | S | Claude (PM) | [x] |
 
 > Cada engenheiro adiciona **uma linha** em `Planning/Workflow/billing.md` ao
 > concluir sua task, e marca `[x]` aqui na própria branch.
@@ -1198,3 +1198,154 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 5. **Deploy manual.** Sem CI, cada função nova precisa de deploy explícito. T5 e
    T17 exigem `--no-verify-jwt`; esquecer isso faz o webhook devolver 401 para o
    Asaas silenciosamente. O runbook de T19 cobre isso.
+
+---
+
+# ✅ FECHAMENTO DO SPRINT 8 (PM, 2026-08-20)
+
+**19/19 tasks entregues.** Todas as ondas mergeadas em `main`.
+
+## O que foi provado contra banco e runtime reais
+
+| Garantia | Prova |
+|---|---|
+| Reentrega do webhook não credita duas vezes | 3 reentregas do mesmo `event.id` → saldo 10.000, não 40.000 |
+| Pagar R$1 não compra um pacote de R$800 | Créditos vieram do catálogo; `payment.value` ignorado |
+| Ninguém tem acesso sem pagar | Gateway falhando → contrato `draft`, `subscription_status` NULL |
+| Tenant não forja pagamento | `update invoices set status='paid'` → 0 linhas |
+| Inadimplência é automática e idempotente | 9 dias → suspenso; 2ª execução → todos os jobs em 0 |
+| Crédito comprado sobrevive à renovação | 1000 plano + 500 avulso, 200 usados → após expiry restam **500** |
+| Dois cliques em "Provisionar" não cobram em dobro | Mesma equipe, 2 faturas (não 4) |
+| Falha de e-mail não derruba o in-app | Sem Resend/WhatsApp → 2 cópias in-app entregues |
+| Isolamento entre tenants | Tenant A vê 1 de 2 faturas; `payment_events` invisível |
+| Loop comercial completo | proposta → vista → aceite com auditoria → provisionamento → 2 faturas abertas |
+
+**Gates:** `npx tsc -b` limpo · `npm run build` limpo · 92 testes de frontend ·
+324 testes do python-agent · 7 migrations idempotentes, todas replicando limpo
+em banco novo via `supabase db reset`.
+
+## ⚠️ Correções à auditoria original (leia antes de agir nela)
+
+Três afirmações da ZONE 1 estavam **erradas** e foram corrigidas no próprio texto
+depois de testadas contra banco real. Registrado aqui porque quem ler a auditoria
+antiga tomará decisões erradas:
+
+1. **Item 6 — "`charge_credits` tem zero chamadores": FALSO.** O Copilot está
+   medido desde o Sprint 6.1, via `agno_workflow.py → executor.run_plan`. O grep
+   original só cobriu `src/` e `supabase/functions/` e ignorou o serviço Python.
+2. **Item 5 — "vazamento cross-tenant em `webhook_configs`": FALSO.** Tenant A vê
+   1 de 2 registros. As políticas são escritas sem escopo, mas a RLS de `equipes`
+   restringe a subquery. É fragilidade latente (hardening), não incidente.
+3. **Item 7 — reformulado.** O soft stop **não alcança o agente de WhatsApp**;
+   ver o TODO 8.1-A abaixo.
+
+---
+
+# 🔜 TODO — SPRINT 8.1
+
+Ordenado por consequência. Os três primeiros são decisões de negócio ou riscos
+de receita; o resto é dívida técnica conhecida.
+
+## 🔴 A. Decisões do founder (bloqueiam receita, não código)
+
+- [ ] **A1 · Corrigir a inversão de preço.** Hoje o crédito avulso é **mais
+      barato** que o de qualquer plano:
+
+      | | Preço | Créditos | R$/crédito |
+      |---|---|---|---|
+      | Solo Starter | R$150 | 1.000 | **R$0,150** |
+      | Solo Scale | R$400 | 3.000 | **R$0,133** |
+      | Solo Pro | R$1.000 | 10.000 | **R$0,100** |
+      | Avulso | R$40 | 500 | **R$0,080** |
+
+      Um cliente racional assina o plano **mais barato** que cobre assentos e
+      módulos e compra crédito à parte — o oposto do que a escada de planos
+      deveria premiar. O catálogo foi semeado com os valores de hoje, então nada
+      mudou comercialmente; a correção é uma linha em `billing_products`.
+      **Decidir:** subir o avulso acima de R$0,10, ou baixar o preço dos planos.
+
+- [ ] **A2 · Rotacionar a `ASAAS_API_KEY` de produção.** A chave foi colada em
+      texto puro no chat durante a execução. Ela cria cobranças e lê dados de
+      clientes na conta real. Gerar uma nova no painel do Asaas e atualizar o
+      edge secret. Gerar **separadamente** um `ASAAS_WEBHOOK_TOKEN` aleatório —
+      não são a mesma coisa (ver `docs/billing-runbook.md` §1).
+
+- [ ] **A3 · Definir política de preço para instância WhatsApp.** O preço saiu da
+      env `SOLO_INSTANCE_MONTHLY_PRICE` e virou catálogo (`instance_whatsapp`,
+      R$100). Falta decidir se é por instância, incluída em algum plano, ou
+      escalonada. Enquanto não decidir, a instância não é cobrada
+      automaticamente — precisa ser adicionada como `contract_item` à mão.
+
+## 🟠 B. Furos de enforcement conhecidos
+
+- [ ] **B1 · Spike: dá para pausar o agente no provider?** ⭐ *o furo mais
+      relevante do sprint.* A IA do WhatsApp gera de forma autônoma no lado do
+      provider — nenhum caminho nosso pede geração, logo **não existe onde
+      interceptar**. O consumo só é medido depois, pelo `credits-reconcile`.
+      Consequência: um tenant sem crédito **continua consumindo** no WhatsApp.
+      Investigar se `PUT /agent/{id}` aceita escrever `status`, ou se dá para
+      desconectar o canal. Se der, ligar em `credits.exhausted` e religar no
+      topup. Se não der, decidir conscientemente: absorver o custo ou suspender
+      o contrato mais cedo.
+
+- [ ] **B2 · Auto-recarga com PIX não é automática.** Restrição do meio de
+      pagamento, não do código. Hoje a UI é honesta sobre isso (T18), mas a
+      execução automática (gerar cobrança ao cruzar o limiar) **ainda não foi
+      implementada** — só a configuração foi. Falta o job que lê
+      `auto_recharge_enabled` e dispara. Para cartão salvo, avaliar tokenização
+      no Asaas.
+
+- [ ] **B3 · Modo somente leitura não é aplicado no backend.**
+      `v_tenant_entitlements.is_read_only` existe e a UI o consome, mas nenhuma
+      policy de escrita nem edge function verifica esse estado. Um tenant
+      suspenso ainda consegue escrever via API direta. Fechar antes de suspender
+      o primeiro cliente de verdade.
+
+## 🟡 C. Dívida técnica do sprint
+
+- [ ] **C1 · Remover o caminho legado de `asaas-buy-credits`.** Ele ainda aceita
+      `{credits}` (precificado no servidor) para não quebrar a UI antiga durante
+      a transição. A UI nova manda `product_id`. Apagar o ramo legado.
+- [ ] **C2 · Aposentar `planos`.** `billing_products` é o catálogo, mas
+      `equipes.plano_id` ainda referencia `planos`, e `fetch-gpt-credits` a usa
+      no fallback. Migrar os leitores e dropar.
+- [ ] **C3 · Dropar `equipes.asaas_customer_id` e `creditos_avulsos`.** Marcadas
+      como DEPRECATED; os dados foram migrados para `billing_accounts` e
+      `credit_ledger`. Confirmar que nada lê e remover.
+- [ ] **C4 · Importar as propostas do `localStorage`.** O `manager.html` antigo
+      guardava o funil no navegador. Exportar para JSON e importar em
+      `proposals`, senão o histórico comercial se perde na virada.
+- [ ] **C5 · Verificar a UI logada num navegador.** As telas de billing e a
+      central de notificações passam em typecheck, build, lint e testes, mas
+      **não foram abertas com uma sessão real** — só a página pública de
+      proposta foi verificada ponta a ponta. Fazer um passe manual antes de
+      apresentar a clientes.
+- [ ] **C6 · `Admin.tsx` está grande demais.** Passou de 1.400 linhas com as duas
+      abas novas. As abas novas já vivem em `components/admin/**`; extrair
+      nichos/equipes/usuários no mesmo padrão.
+- [ ] **C7 · Bundle acima de 500 kB.** Aviso do Vite desde antes deste sprint,
+      agora com mais telas. As sub-rotas de billing são candidatas naturais a
+      `React.lazy`.
+- [ ] **C8 · Testes de UI de billing.** Existem testes para validação de
+      documento e para o executor; faltam testes de componente para o banner de
+      status (a contagem de dias) e para o polling do PIX.
+
+## 🔵 D. Onboarding (era o Sprint 8.2 — segue separado)
+
+- [ ] **D1 · Checklist de onboarding pós-provisionamento.** O ambiente nasce
+      vazio: sem agente, sem canal, sem pipeline. Definir o "primeiro valor" e
+      guiar até ele.
+- [ ] **D2 · Self-service.** Os trilhos existem (catálogo, contrato, fatura,
+      webhook). Falta a página pública de preços + checkout sem proposta.
+- [ ] **D3 · Trial.** Não implementado. Se for existir, decidir se é tempo,
+      créditos, ou ambos — `contracts.status` já suporta um novo valor.
+
+---
+
+## 📌 Antes de faturar o primeiro cliente de verdade
+
+1. `A2` — rotacionar a chave do Asaas.
+2. Runbook `docs/billing-runbook.md` §1-§5 — secrets, deploy, webhook, crons.
+3. `B3` — fechar a escrita no modo somente leitura.
+4. `A1` — decidir o preço antes que alguém compre no modelo invertido.
+5. `C5` — abrir as telas logado, uma vez, com olhos humanos.
