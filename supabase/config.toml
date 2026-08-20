@@ -79,3 +79,8 @@ jwt_expiry = 3600
 enabled = true
 policy = "per_worker"
 inspector_port = 64325 # Porta de inspeção também movida
+
+# Sprint 8 T5 — Asaas calls this; there is no Supabase JWT. Authenticated by the
+# asaas-access-token header compared against ASAAS_WEBHOOK_TOKEN.
+[functions.asaas-webhook]
+verify_jwt = false
