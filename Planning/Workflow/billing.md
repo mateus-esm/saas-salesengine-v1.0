@@ -235,3 +235,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-20 | 8 W1 | T8 notification-dispatcher | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-20 | 8 W1 | T9 provision-tenant | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-20 | 8 W2 | T10 Pre-flight de crédito no Copilot | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W2 | T11 Saldo do ledger + conciliação | Claude / Opus 5 (PM) | L | R$ 20 |

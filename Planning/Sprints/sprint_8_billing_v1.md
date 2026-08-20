@@ -1157,7 +1157,7 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T8 | `notification-dispatcher` | L | Claude (PM) | [x] |
 | T9 | `provision-tenant` | L | Claude (PM) | [x] |
 | T10 | Pre-flight de crédito (escopo corrigido) | L | Claude (PM) | [x] |
-| T11 | Saldo do ledger + conciliação | L | Verboo | [ ] |
+| T11 | Saldo do ledger + conciliação | L | Claude (PM) | [x] |
 | T12 | Entitlements + fix RLS | L | Codex | [ ] |
 | T13 | Billing UI | XL | Verboo | [ ] |
 | T14 | Central de notificações | L | Verboo | [ ] |
