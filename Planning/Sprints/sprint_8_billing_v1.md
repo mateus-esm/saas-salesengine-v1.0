@@ -1243,26 +1243,32 @@ antiga tomará decisões erradas:
 
 # 🔜 TODO — SPRINT 8.1
 
+> **Status em 2026-08-20:** **A1 e B1 concluídos** (ver marcações abaixo), junto
+> com a separação em duas carteiras de crédito. Commit `b2fe608`. O restante
+> segue em aberto.
+
 Ordenado por consequência. Os três primeiros são decisões de negócio ou riscos
 de receita; o resto é dívida técnica conhecida.
 
 ## 🔴 A. Decisões do founder (bloqueiam receita, não código)
 
-- [ ] **A1 · Corrigir a inversão de preço.** Hoje o crédito avulso é **mais
-      barato** que o de qualquer plano:
+- [x] ~~**A1 · Corrigir a inversão de preço.**~~ ✅ **FEITO em 8.1**
+      (`20260820000200_sprint81_plan_architecture.sql`). Nova escada:
 
-      | | Preço | Créditos | R$/crédito |
-      |---|---|---|---|
-      | Solo Starter | R$150 | 1.000 | **R$0,150** |
-      | Solo Scale | R$400 | 3.000 | **R$0,133** |
-      | Solo Pro | R$1.000 | 10.000 | **R$0,100** |
-      | Avulso | R$40 | 500 | **R$0,080** |
+      | Plano | Base | WhatsApp | Copilot | Total | R$/crédito |
+      |---|---|---|---|---|---|
+      | Starter | R$200 | 2.500 | 500 | 3.000 | **R$0,067** |
+      | Growth | R$400 | 5.500 | 1.000 | 6.500 | **R$0,062** |
+      | Scale | R$1.000 | 15.000 | 3.000 | 18.000 | **R$0,056** |
+      | Recarga | R$40 | — | — | 500 | **R$0,080** |
 
-      Um cliente racional assina o plano **mais barato** que cobre assentos e
-      módulos e compra crédito à parte — o oposto do que a escada de planos
-      deveria premiar. O catálogo foi semeado com os valores de hoje, então nada
-      mudou comercialmente; a correção é uma linha em `billing_products`.
-      **Decidir:** subir o avulso acima de R$0,10, ou baixar o preço dos planos.
+      Assinar agora é mais barato por crédito em todos os níveis, e fica mais
+      barato conforme sobe. Uma **asserção na migration** garante isso — uma
+      edição futura de preço que reintroduza a inversão quebra a migration em
+      vez de ir para produção. Planos legados foram **desativados, não
+      reprecificados**: `contract_items` aponta para o produto, e reescrever o
+      preço reprecificaria contrato assinado.
+      Add-ons: instância R$90 (só conectividade), Builder extra **R$300/h**.
 
 - [ ] **A2 · Rotacionar a `ASAAS_API_KEY` de produção.** A chave foi colada em
       texto puro no chat durante a execução. Ela cria cobranças e lê dados de
@@ -1278,15 +1284,21 @@ de receita; o resto é dívida técnica conhecida.
 
 ## 🟠 B. Furos de enforcement conhecidos
 
-- [ ] **B1 · Spike: dá para pausar o agente no provider?** ⭐ *o furo mais
-      relevante do sprint.* A IA do WhatsApp gera de forma autônoma no lado do
-      provider — nenhum caminho nosso pede geração, logo **não existe onde
-      interceptar**. O consumo só é medido depois, pelo `credits-reconcile`.
-      Consequência: um tenant sem crédito **continua consumindo** no WhatsApp.
-      Investigar se `PUT /agent/{id}` aceita escrever `status`, ou se dá para
-      desconectar o canal. Se der, ligar em `credits.exhausted` e religar no
-      topup. Se não der, decidir conscientemente: absorver o custo ou suspender
-      o contrato mais cedo.
+- [x] ~~**B1 · Spike: dá para pausar o agente no provider?**~~ ✅ **FEITO em 8.1.**
+      **Dá.** O provider expõe `PUT /v2/agent/{id}/inactive` **e**
+      `PUT /v2/agent/{id}/active` — as duas metades importam, porque um botão que
+      só desliga deixaria no escuro um cliente que acabou de pagar.
+      Implementado em `_shared/agent-power.ts` + `20260820000300_sprint81_agent_power.sql`:
+      - A elegibilidade mora em SQL (`agents_to_pause` / `agents_to_resume`), para
+        o cron e o webhook não discordarem da regra.
+      - O banco só é atualizado **depois** que o provider confirma. Marcar como
+        pausado após uma chamada que falhou faria a próxima execução pular o
+        tenant enquanto o agente seguia respondendo — o lado caro de errar.
+      - Pausa **manual** nunca é religada automaticamente.
+      - Pagamento religa **na hora**, pelo webhook, em vez de esperar até 24h
+        pelo cron.
+      - Créditos de Copiloto **não** mantêm o agente de atendimento vivo — é
+        exatamente por isso que as carteiras são separadas.
 
 - [ ] **B2 · Auto-recarga com PIX não é automática.** Restrição do meio de
       pagamento, não do código. Hoje a UI é honesta sobre isso (T18), mas a
@@ -1342,10 +1354,32 @@ de receita; o resto é dívida técnica conhecida.
 
 ---
 
+## 🆕 Novos itens surgidos do 8.1
+
+- [ ] **E1 · Aplicar o limite de assentos e de agentes.** `v_tenant_entitlements`
+      já expõe `seat_limit` (3/5/10) e `agent_limit` (1), mas **nada bloqueia**
+      convidar o 6º usuário num Growth. Ligar em `create-equipe-member`.
+- [ ] **E2 · Cobrar as instâncias de fato.** O produto `instance_whatsapp` custa
+      R$90 e o entitlement conta as instâncias contratadas, mas conectar uma
+      instância **não cria** o `contract_item` correspondente. Hoje isso é manual
+      — logo, receita que depende de alguém lembrar.
+- [ ] **E3 · Retainer de Builder Mode.** `builder_hours` e `builder_recurrence`
+      estão no catálogo (1h/2h/1h-mensal), mas não existe controle de horas
+      consumidas nem cobrança automática do excedente a R$300/h.
+- [ ] **E4 · Reconciliação por carteira.** `credits-reconcile` compara o
+      `credits-spent` do provider com o ledger, mas ainda soma sem filtrar por
+      `pool`. Como o provider só mede o agente de atendimento, o ajuste deve ser
+      lançado em `whatsapp` explicitamente.
+- [ ] **E5 · Migrar tenants existentes para os novos planos.** Os planos legados
+      foram desativados; contratos vigentes seguem apontando para eles e mantêm o
+      preço antigo (correto). Definir quando e como migrar cada cliente.
+
 ## 📌 Antes de faturar o primeiro cliente de verdade
 
-1. `A2` — rotacionar a chave do Asaas.
+1. `A2` — rotacionar a chave do Asaas de produção (foi colada em texto puro).
 2. Runbook `docs/billing-runbook.md` §1-§5 — secrets, deploy, webhook, crons.
 3. `B3` — fechar a escrita no modo somente leitura.
-4. `A1` — decidir o preço antes que alguém compre no modelo invertido.
-5. `C5` — abrir as telas logado, uma vez, com olhos humanos.
+4. `C5` — abrir as telas logado, uma vez, com olhos humanos.
+5. `E1` — aplicar o limite de assentos, senão o plano não limita nada.
+
+> `A1` (preço) e `B1` (desligar o agente) foram **resolvidos no 8.1**.
