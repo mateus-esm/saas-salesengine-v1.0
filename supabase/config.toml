@@ -104,3 +104,8 @@ verify_jwt = true
 # Corrects the ledger; never becomes the source of truth.
 [functions.credits-reconcile]
 verify_jwt = false
+
+# Sprint 8 T17 — public: the person reading a proposal is not a user yet.
+# Reads by codigo with the service role; the proposals table is never exposed to anon.
+[functions.public-proposal]
+verify_jwt = false

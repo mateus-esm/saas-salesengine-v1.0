@@ -1,0 +1,200 @@
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useBillingAccount, useEquipeId } from "@/hooks/useBilling";
+import { isValidCPF, isValidCNPJ, maskDoc, onlyDigits } from "@/lib/br-doc";
+
+/**
+ * Sprint 8 T13 — the paying entity.
+ *
+ * The document is validated by check digit here, not just by length. Asaas
+ * rejects an invalid one at charge time, which is the worst possible moment to
+ * find out: the customer has already decided to pay.
+ */
+export default function BillingDataPage() {
+  const equipeId = useEquipeId();
+  const { data: account, refetch, isLoading } = useBillingAccount();
+  const { toast } = useToast();
+
+  const [docType, setDocType] = useState<"CPF" | "CNPJ">("CNPJ");
+  const [form, setForm] = useState({
+    doc_number: "", legal_name: "", billing_email: "", phone: "",
+    postal_code: "", address_street: "", address_number: "",
+    address_complement: "", address_district: "", address_city: "", address_state: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!account) return;
+    setDocType((account.doc_type as "CPF" | "CNPJ") ?? "CNPJ");
+    setForm({
+      doc_number: maskDoc(account.doc_number ?? "", (account.doc_type as "CPF" | "CNPJ") ?? "CNPJ"),
+      legal_name: account.legal_name ?? "",
+      billing_email: account.billing_email ?? "",
+      phone: account.phone ?? "",
+      postal_code: account.postal_code ?? "",
+      address_street: account.address_street ?? "",
+      address_number: account.address_number ?? "",
+      address_complement: account.address_complement ?? "",
+      address_district: account.address_district ?? "",
+      address_city: account.address_city ?? "",
+      address_state: account.address_state ?? "",
+    });
+  }, [account]);
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  /** Fill the address from the CEP so the customer types less. Silent on failure. */
+  const lookupCep = async () => {
+    const cep = onlyDigits(form.postal_code);
+    if (cep.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (data?.erro) return;
+      setForm((f) => ({
+        ...f,
+        address_street: data.logradouro || f.address_street,
+        address_district: data.bairro || f.address_district,
+        address_city: data.localidade || f.address_city,
+        address_state: data.uf || f.address_state,
+      }));
+    } catch { /* leave the fields for manual entry */ }
+  };
+
+  const save = async () => {
+    const digits = onlyDigits(form.doc_number);
+    const valid = docType === "CPF" ? isValidCPF(digits) : isValidCNPJ(digits);
+    if (!valid) {
+      setDocError(`${docType} inválido. Confira os números.`);
+      return;
+    }
+    setDocError(null);
+    if (!equipeId) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("billing_accounts").upsert({
+        equipe_id: equipeId,
+        doc_type: docType,
+        doc_number: digits,
+        legal_name: form.legal_name || null,
+        billing_email: form.billing_email || null,
+        phone: form.phone || null,
+        postal_code: form.postal_code || null,
+        address_street: form.address_street || null,
+        address_number: form.address_number || null,
+        address_complement: form.address_complement || null,
+        address_district: form.address_district || null,
+        address_city: form.address_city || null,
+        address_state: form.address_state || null,
+      }, { onConflict: "equipe_id" });
+      if (error) throw error;
+      await refetch();
+      toast({ title: "Dados de cobrança salvos" });
+    } catch (e) {
+      toast({
+        title: "Não foi possível salvar",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-4 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dados de cobrança</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Usados para emitir suas faturas. Precisam estar completos antes de qualquer cobrança.
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Identificação</CardTitle>
+          <CardDescription>Quem é o responsável financeiro pela conta.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <RadioGroup
+            value={docType}
+            onValueChange={(v) => { setDocType(v as "CPF" | "CNPJ"); setDocError(null); }}
+            className="flex gap-5"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="CNPJ" id="d-cnpj" />
+              <Label htmlFor="d-cnpj" className="cursor-pointer text-sm">Empresa (CNPJ)</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="CPF" id="d-cpf" />
+              <Label htmlFor="d-cpf" className="cursor-pointer text-sm">Pessoa física (CPF)</Label>
+            </div>
+          </RadioGroup>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="doc" className="text-xs">{docType}</Label>
+              <Input
+                id="doc"
+                value={form.doc_number}
+                onChange={(e) => setForm((f) => ({ ...f, doc_number: maskDoc(e.target.value, docType) }))}
+                placeholder={docType === "CPF" ? "000.000.000-00" : "00.000.000/0000-00"}
+                aria-invalid={!!docError}
+              />
+              {docError && <p className="text-xs text-destructive">{docError}</p>}
+            </div>
+            <Text label={docType === "CPF" ? "Nome completo" : "Razão social"} value={form.legal_name} onChange={set("legal_name")} />
+            <Text label="E-mail de cobrança" value={form.billing_email} onChange={set("billing_email")} type="email" />
+            <Text label="Telefone" value={form.phone} onChange={set("phone")} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Endereço</CardTitle></CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="cep" className="text-xs">CEP</Label>
+            <Input id="cep" value={form.postal_code} onChange={set("postal_code")} onBlur={lookupCep} placeholder="00000-000" />
+          </div>
+          <Text label="Rua" value={form.address_street} onChange={set("address_street")} />
+          <Text label="Número" value={form.address_number} onChange={set("address_number")} />
+          <Text label="Complemento" value={form.address_complement} onChange={set("address_complement")} />
+          <Text label="Bairro" value={form.address_district} onChange={set("address_district")} />
+          <Text label="Cidade" value={form.address_city} onChange={set("address_city")} />
+          <Text label="Estado" value={form.address_state} onChange={set("address_state")} />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={saving || isLoading}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Salvar dados
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Text({ label, value, onChange, type = "text" }: {
+  label: string; value: string; type?: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const id = label.toLowerCase().replace(/\s+/g, "-");
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs">{label}</Label>
+      <Input id={id} type={type} value={value} onChange={onChange} />
+    </div>
+  );
+}

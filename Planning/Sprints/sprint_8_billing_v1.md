@@ -1170,12 +1170,12 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T10 | Pre-flight de crédito (escopo corrigido) | L | Claude (PM) | [x] |
 | T11 | Saldo do ledger + conciliação | L | Claude (PM) | [x] |
 | T12 | Entitlements + fix RLS | L | Codex | [ ] |
-| T13 | Billing UI | XL | Verboo | [ ] |
-| T14 | Central de notificações | L | Verboo | [ ] |
-| T15 | Admin — Propostas | XL | Codex | [ ] |
-| T16 | Admin — Faturamento | L | Codex | [ ] |
-| T17 | Página pública de proposta | L | Verboo | [ ] |
-| T18 | Auto-recarga + banners | M | Verboo | [ ] |
+| T13 | Billing UI | XL | Claude (PM) | [x] |
+| T14 | Central de notificações | L | Claude (PM) | [x] |
+| T15 | Admin — Propostas | XL | Claude (PM) | [x] |
+| T16 | Admin — Faturamento | L | Claude (PM) | [x] |
+| T17 | Página pública de proposta | L | Claude (PM) | [x] |
+| T18 | Auto-recarga + banners | M | Claude (PM) | [x] |
 | T19 | Sweep de copy + docs | S | Gemini | [ ] |
 
 > Cada engenheiro adiciona **uma linha** em `Planning/Workflow/billing.md` ao
