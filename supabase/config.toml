@@ -79,3 +79,23 @@ jwt_expiry = 3600
 enabled = true
 policy = "per_worker"
 inspector_port = 64325 # Porta de inspeção também movida
+
+# Sprint 8 T5 — Asaas calls this; there is no Supabase JWT. Authenticated by the
+# asaas-access-token header compared against ASAAS_WEBHOOK_TOKEN.
+[functions.asaas-webhook]
+verify_jwt = false
+
+# Sprint 8 T7 — called by pg_cron via net.http_post; authenticated by
+# x-cron-secret against BILLING_CRON_SECRET, never a service-role key.
+[functions.billing-cron]
+verify_jwt = false
+
+# Sprint 8 T8 — drains notification_deliveries. Called by cron and directly
+# after critical events. Authenticated by x-cron-secret.
+[functions.notification-dispatcher]
+verify_jwt = false
+
+# Sprint 8 T9 — super-admin only, called from the admin panel. Keeps JWT
+# verification: it must know who is asking.
+[functions.provision-tenant]
+verify_jwt = true

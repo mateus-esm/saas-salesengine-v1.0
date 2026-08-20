@@ -229,3 +229,8 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-20 | 8 W0 | T2 Schema crédito unificado | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-08-20 | 8 W0 | T3 Schema propostas | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-08-20 | 8 W0 | T4 Schema notificações | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-08-20 | 8 W1 | T5 asaas-webhook | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-08-20 | 8 W1 | T6 Refactor subscribe + buy-credits | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W1 | T7 billing-cron (dunning/rollover) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W1 | T8 notification-dispatcher | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-20 | 8 W1 | T9 provision-tenant | Claude / Opus 5 (PM) | L | R$ 20 |
