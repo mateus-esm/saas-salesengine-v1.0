@@ -1,5 +1,44 @@
 # Deploy — Sprint 8 + 8.1
 
+> ## ✅ EXECUTADO EM 2026-08-20
+>
+> | Etapa | Status |
+> |---|---|
+> | Git push (23 commits) | ✅ feito — `5047c9b..357a854` |
+> | 11 migrations em produção | ✅ feito — **todas as asserções passaram contra o banco real** |
+> | 10 edge functions | ✅ feito |
+> | `public-proposal` respondendo | ✅ verificado em produção |
+> | **Secrets** | ❌ **FALTAM 2 — veja abaixo** |
+> | Crons (`pg_cron`) | ❌ pendente (depende do secret) |
+> | Rotacionar chave Asaas | ❌ pendente — **só você pode fazer** |
+>
+> ### O que falta, e por que só você pode fazer
+>
+> As functions estão no ar mas devolvem `{"error":"not_configured"}` porque
+> faltam dois secrets. **Isso é o fail-safe funcionando** — o webhook recusa
+> tudo em vez de aceitar chamada não autenticada. Nenhum pagamento é perdido:
+> a fila de sincronização do Asaas reenfileira e reentrega quando o token entrar.
+>
+> Não gerei os valores por você de propósito: um secret gerado nesta conversa
+> ficaria registrado no histórico dela, que é exatamente o problema da chave do
+> Asaas que precisa ser rotacionada.
+>
+> **No SEU terminal** (não aqui):
+>
+> ```bash
+> openssl rand -hex 32    # -> ASAAS_WEBHOOK_TOKEN
+> openssl rand -hex 32    # -> BILLING_CRON_SECRET
+> ```
+>
+> 1. Cole os dois em Supabase Dashboard → Edge Functions → Secrets.
+> 2. Cole o **mesmo** `ASAAS_WEBHOOK_TOKEN` no painel do Asaas → Webhooks →
+>    Token de autenticação.
+> 3. Rode o teste do §5 abaixo: token errado deve dar **401** (hoje dá 500).
+> 4. Agende os crons do §6.
+>
+> Depois disso a cobrança está funcional ponta a ponta.
+
+
 Sequência exata, na ordem. **Não pule a ordem** — os secrets precisam existir
 antes das functions, e as migrations antes de tudo.
 
