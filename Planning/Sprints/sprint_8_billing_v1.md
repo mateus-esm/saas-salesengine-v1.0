@@ -1141,7 +1141,7 @@ catálogo). Manter a env até T13 migrar a leitura; remover em 8.1.
 | T5 | `asaas-webhook` | XL | Claude (PM) | [x] |
 | T6 | Refactor subscribe + buy-credits | L | Claude (PM) | [x] |
 | T7 | `billing-cron` | L | Claude (PM) | [x] |
-| T8 | `notification-dispatcher` | L | Verboo | [ ] |
+| T8 | `notification-dispatcher` | L | Claude (PM) | [x] |
 | T9 | `provision-tenant` | L | Codex | [ ] |
 | T10 | Wire `charge_credits` | XL | Codex | [ ] |
 | T11 | Saldo do ledger + conciliação | L | Verboo | [ ] |

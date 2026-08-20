@@ -89,3 +89,8 @@ verify_jwt = false
 # x-cron-secret against BILLING_CRON_SECRET, never a service-role key.
 [functions.billing-cron]
 verify_jwt = false
+
+# Sprint 8 T8 — drains notification_deliveries. Called by cron and directly
+# after critical events. Authenticated by x-cron-secret.
+[functions.notification-dispatcher]
+verify_jwt = false
