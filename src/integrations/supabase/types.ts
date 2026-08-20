@@ -86,6 +86,13 @@ export type Database = {
             foreignKeyName: "agenda_events_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "agenda_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -166,6 +173,13 @@ export type Database = {
             foreignKeyName: "agent_action_ledger_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "agent_action_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -211,6 +225,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_credits_balance_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "agent_credits_balance_equipe_id_fkey"
@@ -266,6 +287,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_trainings_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "agent_trainings_equipe_id_fkey"
@@ -348,6 +376,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decisions_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "ai_decisions_equipe_id_fkey"
@@ -469,6 +504,13 @@ export type Database = {
             foreignKeyName: "billing_accounts_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: true
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "billing_accounts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: true
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -584,6 +626,13 @@ export type Database = {
             foreignKeyName: "companies_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "companies_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -631,6 +680,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consumo_creditos_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "consumo_creditos_equipe_id_fkey"
@@ -705,6 +761,13 @@ export type Database = {
             foreignKeyName: "contact_company_links_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "contact_company_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -752,6 +815,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contracts"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_items_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["contract_id"]
           },
           {
             foreignKeyName: "contract_items_contract_id_fkey"
@@ -822,6 +892,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "contracts_equipe_id_fkey"
@@ -913,6 +990,13 @@ export type Database = {
             foreignKeyName: "conversations_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "conversations_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -992,6 +1076,13 @@ export type Database = {
             foreignKeyName: "copilot_agents_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "copilot_agents_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -1052,6 +1143,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_ingest_queue_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "copilot_ingest_queue_equipe_id_fkey"
@@ -1123,6 +1221,13 @@ export type Database = {
             foreignKeyName: "copilot_knowledge_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "copilot_knowledge_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -1173,6 +1278,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "copilot_run_events_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "copilot_run_events_equipe_id_fkey"
@@ -1242,6 +1354,13 @@ export type Database = {
             foreignKeyName: "credit_ledger_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "credit_ledger_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -1300,6 +1419,13 @@ export type Database = {
             foreignKeyName: "custom_table_links_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "custom_table_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -1347,6 +1473,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_table_records_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "custom_table_records_equipe_id_fkey"
@@ -1415,6 +1548,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_tables_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "custom_tables_equipe_id_fkey"
@@ -1682,6 +1822,13 @@ export type Database = {
             foreignKeyName: "invoices_contract_id_fkey"
             columns: ["contract_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["contract_id"]
+          },
+          {
+            foreignKeyName: "invoices_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
             referencedRelation: "v_tenant_entitlements"
             referencedColumns: ["contract_id"]
           },
@@ -1691,6 +1838,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "invoices_equipe_id_fkey"
@@ -1749,6 +1903,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kpis_dashboard_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "kpis_dashboard_equipe_id_fkey"
@@ -1964,6 +2125,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "leads_equipe_id_fkey"
@@ -2428,6 +2596,13 @@ export type Database = {
             foreignKeyName: "notification_preferences_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -2519,6 +2694,13 @@ export type Database = {
             foreignKeyName: "notifications_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "notifications_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -2595,6 +2777,13 @@ export type Database = {
             foreignKeyName: "opportunities_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "opportunities_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -2666,6 +2855,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "opportunity_links_equipe_id_fkey"
@@ -2783,6 +2979,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "origin_taxonomy_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "origin_taxonomy_equipe_id_fkey"
@@ -2932,6 +3135,13 @@ export type Database = {
             foreignKeyName: "pipeline_agent_rules_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "pipeline_agent_rules_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -2989,6 +3199,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "pipeline_stages_equipe_id_fkey"
@@ -3086,6 +3303,13 @@ export type Database = {
             foreignKeyName: "pipeline_stages_v2_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "pipeline_stages_v2_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -3158,6 +3382,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pipelines_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "pipelines_equipe_id_fkey"
@@ -3263,6 +3494,13 @@ export type Database = {
             foreignKeyName: "profiles_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "profiles_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -3327,6 +3565,13 @@ export type Database = {
             foreignKeyName: "properties_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "properties_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -3374,6 +3619,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_owner_links_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "property_owner_links_equipe_id_fkey"
@@ -3572,6 +3824,13 @@ export type Database = {
             foreignKeyName: "proposals_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "proposals_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -3625,6 +3884,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_automations_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "scheduled_automations_equipe_id_fkey"
@@ -3838,6 +4104,13 @@ export type Database = {
             foreignKeyName: "webhook_configs_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "webhook_configs_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -3907,6 +4180,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "equipes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webhook_logs_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
           },
           {
             foreignKeyName: "webhook_logs_equipe_id_fkey"
@@ -3983,6 +4263,13 @@ export type Database = {
             foreignKeyName: "wpp_instances_equipe_id_fkey"
             columns: ["equipe_id"]
             isOneToOne: false
+            referencedRelation: "v_admin_team_billing"
+            referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "wpp_instances_equipe_id_fkey"
+            columns: ["equipe_id"]
+            isOneToOne: false
             referencedRelation: "v_credit_balance"
             referencedColumns: ["equipe_id"]
           },
@@ -3997,6 +4284,30 @@ export type Database = {
       }
     }
     Views: {
+      v_admin_team_billing: {
+        Row: {
+          agent_paused_at: string | null
+          agent_paused_reason: string | null
+          builder_hours_extra: number | null
+          contract_id: string | null
+          contract_status: string | null
+          copilot_balance: number | null
+          current_period_end: string | null
+          equipe_id: string | null
+          has_agent: boolean | null
+          instances_connected: number | null
+          instances_contracted: number | null
+          mrr: number | null
+          nome: string | null
+          open_amount: number | null
+          plan_code: string | null
+          plan_name: string | null
+          seat_limit: number | null
+          seats_used: number | null
+          whatsapp_balance: number | null
+        }
+        Relationships: []
+      }
       v_credit_balance: {
         Row: {
           copilot_expiring: number | null
@@ -4050,6 +4361,25 @@ export type Database = {
       }
     }
     Functions: {
+      admin_grant_credits: {
+        Args: {
+          p_credits: number
+          p_equipe_id: string
+          p_expires_at?: string
+          p_pool: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      admin_set_contract_item: {
+        Args: {
+          p_equipe_id: string
+          p_product_code: string
+          p_quantity?: number
+          p_unit_price?: number
+        }
+        Returns: Json
+      }
       agents_to_pause: {
         Args: never
         Returns: {
@@ -4201,6 +4531,8 @@ export type Database = {
         Args: { p_equipe_id: string; p_payload: Json }
         Returns: string
       }
+      tenant_is_suspended: { Args: { p_equipe_id: string }; Returns: boolean }
+      tenant_seat_usage: { Args: { p_equipe_id: string }; Returns: Json }
     }
     Enums: {
       app_role: "user" | "admin" | "owner" | "super_admin"

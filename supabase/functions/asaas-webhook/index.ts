@@ -174,7 +174,7 @@ type Invoice = {
   status: string;
   total: number;
   /** Carries the credit pool chosen at purchase (Sprint 8.1). */
-  metadata: { pool?: string } | null;
+  metadata: { pool?: string; credits?: number; addon?: string } | null;
 };
 
 async function onPaid(db: SupabaseClient, invoice: Invoice) {
@@ -196,6 +196,12 @@ async function onPaid(db: SupabaseClient, invoice: Invoice) {
       const included = (item as { billing_products?: { credits_included?: number } }).billing_products?.credits_included ?? 0;
       credits += included * ((item as { quantity?: number }).quantity ?? 1);
     }
+
+    // A custom amount has no catalog product, so credits_included is 0 and the
+    // loop above yields nothing. The amount was recorded on the invoice at
+    // purchase time — server-side, never from the browser — so use it.
+    const recorded = Number((invoice.metadata as { credits?: number } | null)?.credits ?? 0);
+    if (credits === 0 && recorded > 0) credits = recorded;
 
     // Sprint 8.1: the buyer picks the pool at purchase; asaas-buy-credits stored
     // it on the invoice. Defaulting to whatsapp is the safe direction — it is the

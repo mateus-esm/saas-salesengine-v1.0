@@ -1,51 +1,59 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Receipt } from "lucide-react";
+import { Receipt, Search, Settings2, AlertTriangle, PauseCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { formatBRL, formatDate } from "@/hooks/useBilling";
+import { formatBRL, formatCredits, formatDate } from "@/hooks/useBilling";
 import { InvoiceStatusBadge } from "@/components/billing/InvoiceStatusBadge";
 import type { InvoiceStatus } from "@/hooks/useBilling";
+import { TeamBillingDialog, type TeamBillingRow } from "./TeamBillingDialog";
 
 const CONTRACT_STATUS: Record<string, { label: string; className: string }> = {
-  draft:     { label: "Rascunho",     className: "bg-muted text-muted-foreground" },
-  active:    { label: "Ativo",        className: "bg-green-500/10 text-green-700 dark:text-green-300" },
-  past_due:  { label: "Em atraso",    className: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
-  suspended: { label: "Suspenso",     className: "bg-red-500/10 text-red-700 dark:text-red-300" },
-  cancelled: { label: "Cancelado",    className: "bg-muted text-muted-foreground" },
+  none:      { label: "Sem plano",  className: "bg-muted text-muted-foreground" },
+  draft:     { label: "Rascunho",   className: "bg-muted text-muted-foreground" },
+  active:    { label: "Ativo",      className: "bg-green-500/10 text-green-700 dark:text-green-300" },
+  past_due:  { label: "Em atraso",  className: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
+  suspended: { label: "Suspenso",   className: "bg-red-500/10 text-red-700 dark:text-red-300" },
+  cancelled: { label: "Cancelado",  className: "bg-muted text-muted-foreground" },
 };
 
 /**
- * Sprint 8 T16 — the revenue view.
+ * Sprint 8.2 — the admin billing screen is organised around TEAMS, not invoices.
  *
- * MRR counts monthly contract_items on live contracts at the NEGOTIATED price,
- * which is why it can differ from the sum of catalog list prices.
+ * The operational question is "who needs attention and what do I do about it",
+ * and a flat invoice list answers neither. Each row is a tenant with its plan,
+ * both credit pools, seats, instances contracted vs connected, and what it owes;
+ * clicking one opens the panel that can actually fix it.
  */
 export function AdminBillingTab() {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selected, setSelected] = useState<TeamBillingRow | null>(null);
   const [invoiceFilter, setInvoiceFilter] = useState<"all" | InvoiceStatus>("all");
 
-  const { data: contracts, isLoading: contractsLoading } = useQuery({
-    queryKey: ["admin-contracts"],
-    queryFn: async () => {
+  const { data: teams, isLoading } = useQuery({
+    queryKey: ["admin-team-billing"],
+    queryFn: async (): Promise<TeamBillingRow[]> => {
       const { data, error } = await supabase
-        .from("contracts")
-        .select("id, status, current_period_end, term_months, equipes(nome), contract_items(quantity, unit_price, period)")
-        .in("status", ["draft", "active", "past_due", "suspended"])
-        .order("created_at", { ascending: false });
+        .from("v_admin_team_billing")
+        .select("*")
+        .order("mrr", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as TeamBillingRow[];
     },
   });
 
-  const { data: invoices, isLoading: invoicesLoading } = useQuery({
+  const { data: invoices } = useQuery({
     queryKey: ["admin-invoices"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
-        .select("id, number, kind, status, total, due_date, issued_at, paid_at, equipes(nome)")
+        .select("id, number, kind, status, total, due_date, paid_at, equipes(nome)")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -53,63 +61,110 @@ export function AdminBillingTab() {
     },
   });
 
-  const monthlyOf = (c: Record<string, unknown>): number =>
-    ((c.contract_items as Array<{ quantity: number; unit_price: number; period: string }>) ?? [])
-      .filter((i) => i.period === "monthly")
-      .reduce((s, i) => s + Number(i.unit_price) * (i.quantity ?? 1), 0);
-
-  const mrr = (contracts ?? [])
-    .filter((c) => ["active", "past_due"].includes(c.status as string))
-    .reduce((s, c) => s + monthlyOf(c as Record<string, unknown>), 0);
-
-  const open = (invoices ?? []).filter((i) => i.status === "open");
-  const overdue = (invoices ?? []).filter((i) => i.status === "overdue");
-  const paidThisMonth = (invoices ?? []).filter((i) => {
-    if (i.status !== "paid" || !i.paid_at) return false;
-    const d = new Date(i.paid_at as string);
-    const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  const rows = (teams ?? []).filter((t) => {
+    if (statusFilter !== "all" && t.contract_status !== statusFilter) return false;
+    if (!search.trim()) return true;
+    return t.nome?.toLowerCase().includes(search.toLowerCase());
   });
 
-  const rows = (invoices ?? []).filter((i) => invoiceFilter === "all" || i.status === invoiceFilter);
+  const mrr = (teams ?? [])
+    .filter((t) => ["active", "past_due"].includes(t.contract_status))
+    .reduce((s, t) => s + Number(t.mrr ?? 0), 0);
+  const owed = (teams ?? []).reduce((s, t) => s + Number(t.open_amount ?? 0), 0);
+  const noPlan = (teams ?? []).filter((t) => t.contract_status === "none").length;
+  const paused = (teams ?? []).filter((t) => t.agent_paused_at).length;
+
+  const invoiceRows = (invoices ?? []).filter((i) => invoiceFilter === "all" || i.status === invoiceFilter);
 
   return (
     <div className="space-y-4">
+      {/* ── What needs attention ── */}
       <div className="grid gap-3 sm:grid-cols-4">
-        <Stat label="MRR" value={formatBRL(mrr)} hint="contratos ativos, preço negociado" />
-        <Stat label="Em aberto" value={formatBRL(open.reduce((s, i) => s + Number(i.total), 0))} hint={`${open.length} faturas`} />
-        <Stat label="Vencidas" value={formatBRL(overdue.reduce((s, i) => s + Number(i.total), 0))} hint={`${overdue.length} faturas`} danger={overdue.length > 0} />
-        <Stat label="Recebido no mês" value={formatBRL(paidThisMonth.reduce((s, i) => s + Number(i.total), 0))} hint={`${paidThisMonth.length} pagamentos`} />
+        <Stat label="MRR" value={formatBRL(mrr)} hint="planos ativos, preço negociado" />
+        <Stat label="Em aberto" value={formatBRL(owed)} hint="faturas não pagas" danger={owed > 0} />
+        <Stat label="Sem plano" value={String(noPlan)} hint="equipes a regularizar" danger={noPlan > 0} />
+        <Stat label="Agentes pausados" value={String(paused)} hint="sem crédito ou suspensos" danger={paused > 0} />
       </div>
 
+      {/* ── Teams ── */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Contratos</CardTitle></CardHeader>
+        <CardHeader className="flex-row items-center justify-between space-y-0 gap-3 flex-wrap">
+          <CardTitle className="text-base">Equipes</CardTitle>
+          <div className="flex gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar equipe"
+                className="pl-8 h-8 w-[180px] text-xs"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {Object.entries(CONTRACT_STATUS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+
         <CardContent className="p-0">
-          {contractsLoading ? (
-            <div className="p-4 space-y-2">{[0, 1].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : !contracts?.length ? (
-            <p className="text-sm text-muted-foreground py-10 text-center">Nenhum contrato.</p>
+          {isLoading ? (
+            <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : !rows.length ? (
+            <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma equipe encontrada.</p>
           ) : (
             <div className="divide-y divide-border">
-              {contracts.map((c) => {
-                const s = CONTRACT_STATUS[c.status as string] ?? CONTRACT_STATUS.draft;
-                const equipe = c.equipes as { nome?: string } | null;
+              {rows.map((t) => {
+                const s = CONTRACT_STATUS[t.contract_status] ?? CONTRACT_STATUS.none;
+                const overInstances = t.instances_connected > t.instances_contracted;
+                const overSeats = t.seat_limit != null && t.seats_used > t.seat_limit;
                 return (
-                  <div key={c.id as string} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{equipe?.nome ?? "—"}</p>
+                  <button
+                    key={t.equipe_id}
+                    onClick={() => setSelected(t)}
+                    className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors flex items-center gap-3 flex-wrap"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium truncate">{t.nome}</span>
                         <Badge variant="outline" className={`text-[10px] ${s.className}`}>{s.label}</Badge>
+                        {t.plan_name && <Badge variant="outline" className="text-[10px]">{t.plan_name}</Badge>}
+                        {t.agent_paused_at && (
+                          <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-700 dark:text-red-300 gap-1">
+                            <PauseCircle className="w-3 h-3" /> agente pausado
+                          </Badge>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        renova {formatDate(c.current_period_end as string)}
-                        {c.term_months ? ` · ${c.term_months} meses` : ""}
-                      </p>
+                      <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground flex-wrap">
+                        <span>Atend. {formatCredits(t.whatsapp_balance)}</span>
+                        <span>Copiloto {formatCredits(t.copilot_balance)}</span>
+                        <span className={overSeats ? "text-amber-600 font-medium" : ""}>
+                          {t.seats_used}
+                          {t.seat_limit != null ? `/${t.seat_limit}` : ""} usuários
+                        </span>
+                        <span className={overInstances ? "text-amber-600 font-medium" : ""}>
+                          {t.instances_connected}/{t.instances_contracted} instâncias
+                        </span>
+                        {t.current_period_end && <span>renova {formatDate(t.current_period_end)}</span>}
+                      </div>
                     </div>
-                    <span className="text-sm font-bold tabular-nums shrink-0">
-                      {formatBRL(monthlyOf(c as Record<string, unknown>))}/mês
-                    </span>
-                  </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold tabular-nums">{formatBRL(t.mrr)}<span className="text-[10px] font-normal text-muted-foreground">/mês</span></p>
+                      {Number(t.open_amount) > 0 && (
+                        <p className="text-[11px] text-destructive flex items-center gap-1 justify-end">
+                          <AlertTriangle className="w-3 h-3" /> {formatBRL(t.open_amount)} em aberto
+                        </p>
+                      )}
+                    </div>
+
+                    <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </button>
                 );
               })}
             </div>
@@ -117,6 +172,7 @@ export function AdminBillingTab() {
         </CardContent>
       </Card>
 
+      {/* ── Invoices ── */}
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Faturas</CardTitle>
@@ -132,16 +188,14 @@ export function AdminBillingTab() {
           </Select>
         </CardHeader>
         <CardContent className="p-0">
-          {invoicesLoading ? (
-            <div className="p-4 space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : !rows.length ? (
-            <div className="py-12 text-center">
+          {!invoiceRows.length ? (
+            <div className="py-10 text-center">
               <Receipt className="w-7 h-7 mx-auto text-muted-foreground/40 mb-2" />
               <p className="text-sm text-muted-foreground">Nenhuma fatura.</p>
             </div>
           ) : (
-            <div className="divide-y divide-border max-h-[480px] overflow-y-auto">
-              {rows.map((i) => {
+            <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
+              {invoiceRows.map((i) => {
                 const equipe = i.equipes as { nome?: string } | null;
                 return (
                   <div key={i.id as string} className="flex items-center justify-between gap-3 px-4 py-2.5">
@@ -164,6 +218,12 @@ export function AdminBillingTab() {
           )}
         </CardContent>
       </Card>
+
+      <TeamBillingDialog
+        team={selected}
+        open={selected !== null}
+        onOpenChange={(o) => !o && setSelected(null)}
+      />
     </div>
   );
 }
