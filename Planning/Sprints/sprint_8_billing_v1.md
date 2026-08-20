@@ -28,6 +28,9 @@ Levantamento feito antes do plano. Cada item foi verificado no código.
 
 ### 🔴 P0 — buracos de receita e de confiança
 
+> **Nota de 2026-08-20:** os itens 5, 6 e 7 foram **corrigidos após verificação
+> contra banco real** durante a execução. Leia as marcações antes de agir.
+
 1. **Não existe webhook do Asaas.** `ls supabase/functions` não tem nenhum
    handler. Pagamentos são criados e nunca confirmados.
 2. **Acesso é liberado antes do pagamento.** `asaas-subscribe/index.ts:185`
@@ -38,13 +41,21 @@ Levantamento feito antes do plano. Cada item foi verificado no código.
    existe caminho no código que credite um pagamento aprovado.
 4. **Não existe fatura.** Sem tabela de invoices, sem histórico, sem recibo, sem
    número fiscal. O cliente não tem o que consultar e você não tem o que conciliar.
-5. **Vazamento cross-tenant em `webhook_configs`.** A migration
-   `20260617000000_add_team_page_permissions.sql` criou políticas RLS que filtram
-   por permissão mas **não escopam por equipe**:
-   `equipe_id IN (SELECT id FROM equipes WHERE page_permissions->>'webhooks' = true)`.
-   Ela não removeu a política original `"Team members can manage webhooks"`, e
-   políticas permissivas em Postgres são **OR** — qualquer autenticado lê e
-   escreve os webhooks de qualquer equipe com o módulo ligado.
+5. ~~**Vazamento cross-tenant em `webhook_configs`.**~~ ⚠️ **SEVERIDADE CORRIGIDA
+   EM 2026-08-20 (T12) — não é vazamento.** Testado contra banco real: o tenant A
+   vê **1** de 2 registros e não lê o do tenant B. A afirmação original estava
+   errada.
+   O que é verdade: as políticas criadas por
+   `20260617000000_add_team_page_permissions.sql` **são escritas sem escopo de
+   tenant** (`equipe_id IN (SELECT id FROM equipes WHERE page_permissions...)`).
+   O que impede o vazamento é que **`equipes` tem RLS própria** com SELECT
+   escopado, então a subquery só devolve a equipe do próprio usuário. O escopo é
+   real, mas **acidental**: depende inteiramente da RLS de `equipes` continuar
+   estreita. No dia em que alguém adicionar um "authenticated pode ler todas as
+   equipes" (para um seletor, uma tela de admin, um relatório), essas políticas
+   viram cross-tenant silenciosamente.
+   Logo: **hardening**, não incidente. T12 torna o escopo explícito e consolida
+   em **uma** política por operação.
 
 ### 🟠 P1 — o dinheiro mora em quatro lugares que discordam
 
