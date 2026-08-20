@@ -213,10 +213,13 @@ where status = 'open' and asaas_payment_id is null
 
 ## 7. O que este sprint NÃO cobre
 
-- **Não é possível parar o agente de WhatsApp por falta de crédito.** A geração
-  acontece no lado do provider, de forma autônoma; não existe ponto onde
-  interceptar. O consumo é medido depois, pelo `credits-reconcile`. O soft stop
-  vale para o Copilot. Ver TODO 8.1 no arquivo do sprint.
+> **Atualizado no 8.1:** o agente de atendimento **agora pode** ser desligado por
+> falta de crédito, via `PUT /agent/{id}/inactive` e religado por
+> `/active` (`_shared/agent-power.ts`). A geração continua acontecendo no lado
+> do provider — o que mudou é que passamos a ter o interruptor.
+>
+> Duas carteiras separadas: **Atendimento** (WhatsApp) e **Copiloto**. Ficar sem
+> uma não afeta a outra. A recarga escolhe a carteira na compra.
 - **Recarga automática só é automática com cartão salvo.** Com PIX, geramos a
   cobrança e avisamos — alguém ainda precisa pagar.
 - **Não há checkout público.** Toda venda passa por proposta.
