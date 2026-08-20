@@ -14,8 +14,9 @@
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.80.0";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createPayment, dueDateIn, safeEqual } from "../_shared/asaas.ts";
+import { syncAgentPower } from "../_shared/agent-power.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,6 +75,9 @@ const JOBS: Record<string, (db: SupabaseClient) => Promise<unknown>> = {
   expireCredits,
   creditAlerts,
   retryFailedEvents,
+  // Sprint 8.1 B1 — runs LAST, so it reacts to the suspensions and expiries the
+  // jobs above just applied rather than to yesterday's state.
+  agentPower,
 };
 
 /**
@@ -258,15 +262,18 @@ async function expireCredits(db: SupabaseClient) {
  * once per period instead of on every run.
  */
 async function creditAlerts(db: SupabaseClient) {
+  // WhatsApp pool only: it is the one that stops the customer's attendance when
+  // it runs dry, and warning about a combined balance would understate the risk.
   const { data: grants } = await db
     .from("credit_ledger")
     .select("equipe_id, credits, expires_at, created_at")
     .eq("entry_type", "grant")
+    .eq("pool", "whatsapp")
     .gt("expires_at", new Date().toISOString());
 
   let fired = 0;
   for (const g of grants ?? []) {
-    const { data: balance } = await db.rpc("credit_balance", { p_equipe_id: g.equipe_id });
+    const { data: balance } = await db.rpc("credit_balance", { p_equipe_id: g.equipe_id, p_pool: "whatsapp" });
     const total = Number(balance ?? 0);
     const granted = Number(g.credits);
     if (granted <= 0) continue;
@@ -317,6 +324,11 @@ async function retryFailedEvents(db: SupabaseClient) {
       .eq("id", ev.id);
   }
   return { requeued: data?.length ?? 0 };
+}
+
+/** Sprint 8.1 · turn the attendance agent off/on to match ledger and contract. */
+async function agentPower(db: SupabaseClient) {
+  return await syncAgentPower(db);
 }
 
 async function notify(

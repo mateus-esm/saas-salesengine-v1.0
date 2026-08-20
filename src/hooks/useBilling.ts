@@ -29,13 +29,25 @@ export interface Invoice {
   created_at: string;
 }
 
-export interface CreditBalance {
+/** Sprint 8.1 — attendance and Copilot credits are separate pools. */
+export type CreditPool = "whatsapp" | "copilot";
+
+export interface PoolBalance {
   total: number;
+  /** Left of this period's plan grant. Expires at period end. */
   expiring: number;
+  /** Purchased credits. Never expire. */
   permanent: number;
-  grantExpiresAt: string | null;
-  /** What the current period's grant was worth, so a gauge has an honest denominator. */
+  /** What the period's grant started at — the gauge's denominator. */
   grantTotal: number;
+}
+
+export interface CreditBalance {
+  whatsapp: PoolBalance;
+  copilot: PoolBalance;
+  /** Both pools combined. Display only — never charge against this. */
+  total: number;
+  grantExpiresAt: string | null;
 }
 
 /** Money, always through Intl — never 'R$ ' + value. */
@@ -104,33 +116,40 @@ export function useCreditBalance() {
     queryFn: async (): Promise<CreditBalance> => {
       const { data, error } = await supabase
         .from("v_credit_balance")
-        .select("total, expiring_balance, grant_expires_at")
+        .select("total, whatsapp_total, copilot_total, whatsapp_expiring, copilot_expiring, grant_expires_at")
         .eq("equipe_id", equipeId!)
         .maybeSingle();
       if (error) throw error;
 
-      // The gauge needs what the period STARTED with, which the balance view
-      // does not carry — it reports what is left.
-      const { data: grant } = await supabase
+      // The gauges need what each period STARTED with; the balance view reports
+      // what is left. One query for both pools rather than two round trips.
+      const { data: grants } = await supabase
         .from("credit_ledger")
-        .select("credits")
+        .select("credits, pool, created_at")
         .eq("equipe_id", equipeId!)
         .eq("entry_type", "grant")
         .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("created_at", { ascending: false });
 
-      const total = Number(data?.total ?? 0);
-      const expiring = Number(data?.expiring_balance ?? 0);
-      return {
+      const grantFor = (pool: CreditPool): number =>
+        Number((grants ?? []).find((g) => (g as { pool?: string }).pool === pool)?.credits ?? 0);
+
+      const build = (total: number, expiring: number, pool: CreditPool): PoolBalance => ({
         total,
         expiring,
         // Derived, never queried separately — two sources for one number is how
-        // the 7.5 discrepancy happened.
+        // the Sprint 7.5 discrepancy happened.
         permanent: Math.max(0, total - expiring),
+        grantTotal: grantFor(pool),
+      });
+
+      const wa = Number(data?.whatsapp_total ?? 0);
+      const cp = Number(data?.copilot_total ?? 0);
+      return {
+        whatsapp: build(wa, Number(data?.whatsapp_expiring ?? 0), "whatsapp"),
+        copilot: build(cp, Number(data?.copilot_expiring ?? 0), "copilot"),
+        total: Number(data?.total ?? wa + cp),
         grantExpiresAt: (data?.grant_expires_at as string) ?? null,
-        grantTotal: Number(grant?.credits ?? 0),
       };
     },
   });
@@ -227,7 +246,7 @@ export function useCreditLedger(limit = 50) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("credit_ledger")
-        .select("id, entry_type, credits, source, created_at, expires_at, metadata")
+        .select("id, entry_type, credits, source, created_at, expires_at, metadata, pool")
         .eq("equipe_id", equipeId!)
         .order("created_at", { ascending: false })
         .limit(limit);

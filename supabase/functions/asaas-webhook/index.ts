@@ -18,8 +18,9 @@
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.80.0";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { AsaasWebhookEvent, mapEventToInvoiceStatus, safeEqual } from "../_shared/asaas.ts";
+import { syncAgentPower } from "../_shared/agent-power.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,7 +130,7 @@ async function processEvent(db: SupabaseClient, event: AsaasWebhookEvent): Promi
 
   const { data: invoice, error } = await db
     .from("invoices")
-    .select("id, equipe_id, contract_id, kind, status, total")
+    .select("id, equipe_id, contract_id, kind, status, total, metadata")
     .eq("asaas_payment_id", paymentId)
     .maybeSingle();
 
@@ -172,6 +173,8 @@ type Invoice = {
   kind: string;
   status: string;
   total: number;
+  /** Carries the credit pool chosen at purchase (Sprint 8.1). */
+  metadata: { pool?: string } | null;
 };
 
 async function onPaid(db: SupabaseClient, invoice: Invoice) {
@@ -194,6 +197,11 @@ async function onPaid(db: SupabaseClient, invoice: Invoice) {
       credits += included * ((item as { quantity?: number }).quantity ?? 1);
     }
 
+    // Sprint 8.1: the buyer picks the pool at purchase; asaas-buy-credits stored
+    // it on the invoice. Defaulting to whatsapp is the safe direction — it is the
+    // pool that stops customer-facing attendance when empty.
+    const pool = (invoice.metadata as { pool?: string } | null)?.pool === "copilot" ? "copilot" : "whatsapp";
+
     if (credits > 0) {
       const { error } = await db.rpc("grant_credits", {
         p_equipe_id: invoice.equipe_id,
@@ -203,6 +211,7 @@ async function onPaid(db: SupabaseClient, invoice: Invoice) {
         p_expires_at: null,
         p_idempotency_key: `invoice_${invoice.id}`,
         p_entry_type: "topup",
+        p_pool: pool,
       });
       if (error) throw new Error(`grant_credits failed: ${error.message}`);
     }
@@ -229,6 +238,17 @@ async function onPaid(db: SupabaseClient, invoice: Invoice) {
   await notify(db, invoice.equipe_id, "invoice.paid", "Pagamento confirmado",
     `Recebemos o pagamento de R$ ${Number(invoice.total).toFixed(2).replace(".", ",")}.`,
     "/billing/faturas", `paid_${invoice.id}`);
+
+  // Sprint 8.1 B1 — bring the attendance agent back NOW. Waiting for the daily
+  // cron would leave a customer who just paid dark for up to 24 hours, which is
+  // the worst possible moment to be slow. The SQL decides eligibility, so this is
+  // a no-op when the agent was never paused.
+  try {
+    await syncAgentPower(db);
+  } catch (e) {
+    // Never fail a confirmed payment over the provider's switch.
+    console.error("[asaas-webhook] agent power sync failed:", e);
+  }
 }
 
 async function rollContractPeriod(db: SupabaseClient, invoice: Invoice) {
@@ -260,29 +280,40 @@ async function rollContractPeriod(db: SupabaseClient, invoice: Invoice) {
     })
     .eq("id", contract.id);
 
-  // Monthly allowance for the period just paid for.
+  // Monthly allowance for the period just paid for — one grant PER POOL.
+  // Sprint 8.1: the plan sells attendance and Copilot credits separately, so a
+  // single combined grant would let WhatsApp usage silently eat the Copilot's
+  // allowance (and vice versa).
   const { data: items } = await db
     .from("contract_items")
-    .select("quantity, billing_products(credits_included, kind)")
+    .select("quantity, billing_products(credits_whatsapp, credits_copilot, kind)")
     .eq("contract_id", contract.id);
 
-  let credits = 0;
+  let whatsapp = 0;
+  let copilot = 0;
   for (const item of items ?? []) {
-    const prod = (item as { billing_products?: { credits_included?: number } }).billing_products;
-    credits += (prod?.credits_included ?? 0) * ((item as { quantity?: number }).quantity ?? 1);
+    const prod = (item as { billing_products?: { credits_whatsapp?: number; credits_copilot?: number } }).billing_products;
+    const qty = (item as { quantity?: number }).quantity ?? 1;
+    whatsapp += (prod?.credits_whatsapp ?? 0) * qty;
+    copilot  += (prod?.credits_copilot ?? 0) * qty;
   }
 
-  if (credits > 0) {
+  const periodKey = base.toISOString().slice(0, 10);
+  for (const [pool, amount] of [["whatsapp", whatsapp], ["copilot", copilot]] as const) {
+    if (amount <= 0) continue;
     const { error } = await db.rpc("grant_credits", {
       p_equipe_id: invoice.equipe_id,
-      p_credits: credits,
+      p_credits: amount,
       p_source: "plan_period",
       p_ref_id: invoice.id,
       p_expires_at: nextEnd.toISOString(),
-      p_idempotency_key: `period_${contract.id}_${base.toISOString().slice(0, 10)}`,
+      // Distinct keys per pool: one shared key would make the second grant look
+      // like a replay of the first and silently skip it.
+      p_idempotency_key: `period_${contract.id}_${periodKey}_${pool}`,
       p_entry_type: "grant",
+      p_pool: pool,
     });
-    if (error) throw new Error(`grant_credits (period) failed: ${error.message}`);
+    if (error) throw new Error(`grant_credits (${pool}) failed: ${error.message}`);
   }
 
   if (wasSuspended) {
