@@ -249,12 +249,17 @@ async function recipientPhones(db: SupabaseClient, d: Delivery): Promise<string[
 
 interface Brand { name: string; color: string; from: string; appUrl: string }
 
+/** The one address every notification is sent from. Its domain must be verified. */
+function senderAddress(): string {
+  return Deno.env.get("NOTIFICATION_FROM_EMAIL") ?? "no-reply@soloventures.com.br";
+}
+
 /** White-label per niche, so the email is not a generic gateway notice. */
 async function brandFor(db: SupabaseClient, equipeId: string): Promise<Brand> {
   const fallback: Brand = {
     name: Deno.env.get("PLATFORM_NAME") ?? "Sales Engine",
     color: "#2563eb",
-    from: Deno.env.get("NOTIFICATION_FROM_EMAIL") ?? "no-reply@soloventures.com.br",
+    from: `${Deno.env.get("PLATFORM_NAME") ?? "Sales Engine"} <${senderAddress()}>`,
     appUrl: Deno.env.get("APP_BASE_URL") ?? "",
   };
 
@@ -265,10 +270,21 @@ async function brandFor(db: SupabaseClient, equipeId: string): Promise<Brand> {
     .from("niches").select("nome, domain, primary_color").eq("id", equipe.niche).maybeSingle();
   if (!niche) return fallback;
 
+  // WHITE-LABEL THE NAME, NOT THE SENDING DOMAIN.
+  //
+  // This used to build `no-reply@<niche.domain>` — solon.soloventures.com.br,
+  // bmg.soloventures.com.br and so on. Production rejected every one of them:
+  // "domain is not verified". Those are APP domains; an email sender domain has
+  // to be verified with the provider first, and verifying one per niche does not
+  // scale as niches are added.
+  //
+  // So the address stays on a single verified domain and the NICHE becomes the
+  // display name. The recipient still reads "Solon" in their inbox, and there is
+  // exactly one DNS setup to maintain.
   return {
     name: niche.nome ?? fallback.name,
     color: niche.primary_color ?? fallback.color,
-    from: niche.domain ? `${niche.nome ?? "Notificações"} <no-reply@${niche.domain}>` : fallback.from,
+    from: `${(niche.nome ?? fallback.name).replace(/[<>"]/g, "")} <${senderAddress()}>`,
     appUrl: niche.domain ? `https://${niche.domain}` : fallback.appUrl,
   };
 }

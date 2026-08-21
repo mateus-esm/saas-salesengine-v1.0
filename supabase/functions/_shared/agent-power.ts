@@ -62,11 +62,14 @@ export async function pauseAgent(
   const result = await setAgentState(agentId, "inactive");
   if (!result.ok) {
     console.error(`[agent-power] pause failed for ${equipeId}: ${result.error}`);
+    await recordFailure(db, equipeId, result.error ?? "unknown");
     return result;
   }
   await db.from("equipes").update({
     agent_paused_at: new Date().toISOString(),
     agent_paused_reason: reason,
+    agent_power_error: null,
+    agent_power_failures: 0,
   }).eq("id", equipeId);
   console.log(`[agent-power] paused ${equipeId} (${reason})`);
   return { ok: true };
@@ -83,11 +86,14 @@ export async function resumeAgent(
   const result = await setAgentState(agentId, "active");
   if (!result.ok) {
     console.error(`[agent-power] resume failed for ${equipeId}: ${result.error}`);
+    await recordFailure(db, equipeId, result.error ?? "unknown");
     return result;
   }
   await db.from("equipes").update({
     agent_paused_at: null,
     agent_paused_reason: null,
+    agent_power_error: null,
+    agent_power_failures: 0,
   }).eq("id", equipeId);
   console.log(`[agent-power] resumed ${equipeId}`);
   return { ok: true };
@@ -129,6 +135,21 @@ export async function syncAgentPower(db: SupabaseClient): Promise<{ paused: numb
   }
 
   return out;
+}
+
+/**
+ * Count consecutive failures so agents_to_pause can back off after five.
+ * Without this, one stale agent id produces a failed provider call on every run
+ * forever — noise that buries a real failure.
+ */
+async function recordFailure(db: SupabaseClient, equipeId: string, error: string) {
+  const { data } = await db
+    .from("equipes").select("agent_power_failures").eq("id", equipeId).maybeSingle();
+  await db.from("equipes").update({
+    agent_power_error: error.slice(0, 500),
+    agent_power_failures: Number(data?.agent_power_failures ?? 0) + 1,
+    agent_power_last_try: new Date().toISOString(),
+  }).eq("id", equipeId);
 }
 
 async function notify(
