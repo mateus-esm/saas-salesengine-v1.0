@@ -78,6 +78,17 @@ export function TeamBillingDialog({
     qc.invalidateQueries({ queryKey: ["admin-contracts"] });
   };
 
+  /**
+   * Reconcile the attendance agent immediately after a grant. The daily cron
+   * would do this eventually, but a client you just unblocked should not stay
+   * dark until tomorrow. Failure is non-fatal: the credits landed either way and
+   * the cron will catch up.
+   */
+  const syncAgentPower = async () => {
+    const { error } = await supabase.functions.invoke("agent-power-sync", { body: {} });
+    if (error) console.error("[admin] agent power sync failed:", error.message);
+  };
+
   const grant = async () => {
     if (!team) return;
     const n = Number(credits);
@@ -95,11 +106,14 @@ export function TeamBillingDialog({
         p_expires_at: null,
       });
       if (error) throw error;
+      if (pool === "whatsapp" && n > 0) await syncAgentPower();
       refresh();
       const balance = (data as { balance?: number })?.balance ?? 0;
       toast({
         title: n > 0 ? "Créditos concedidos" : "Ajuste aplicado",
-        description: `Novo saldo de ${pool === "whatsapp" ? "Atendimento" : "Copiloto"}: ${formatCredits(balance)}.`,
+        description:
+          `Novo saldo de ${pool === "whatsapp" ? "Atendimento" : "Copiloto"}: ${formatCredits(balance)}.`
+          + (pool === "whatsapp" && n > 0 ? " O agente é religado automaticamente." : ""),
       });
       setReason("");
     } catch (e) {

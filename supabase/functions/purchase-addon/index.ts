@@ -57,7 +57,7 @@ serve(async (req) => {
 
     const { data: product } = await db
       .from("billing_products")
-      .select("id, code, name, list_price, period, kind")
+      .select("id, code, name, list_price, period, kind, metadata")
       .eq("code", product_code).eq("active", true).maybeSingle();
     if (!product) return json({ error: "product_not_found" }, 404);
 
@@ -140,10 +140,14 @@ serve(async (req) => {
       .select("id, number").single();
     if (invErr) throw new Error(`invoice insert failed: ${invErr.message}`);
 
+    const itemDescription = product.code === "builder_hour"
+      ? `Builder Mode — ${qty} ${qty === 1 ? "hora" : "horas"} de automação sob medida`
+      : `${product.name} × ${qty}`;
+
     await db.from("invoice_items").insert({
       invoice_id: invoice.id,
       product_id: product.id,
-      description: `${product.name} × ${qty}`,
+      description: itemDescription,
       quantity: qty,
       unit_price: product.list_price,
       total,
@@ -154,7 +158,7 @@ serve(async (req) => {
       billingType: "UNDEFINED",
       value: total,
       dueDate: dueDateIn(3),
-      description: `${product.name} × ${qty} — fatura ${invoice.number}`,
+      description: `${itemDescription} — fatura ${invoice.number}`,
       externalReference: `invoice_${invoice.id}`,
     });
 
@@ -166,6 +170,9 @@ serve(async (req) => {
     return json({
       success: true,
       recurring: false,
+      // Empty until the founder provides the calendar; the UI hides the button
+      // rather than linking nowhere.
+      schedulingUrl: (product.metadata as { scheduling_url?: string } | null)?.scheduling_url || null,
       invoiceId: invoice.id,
       invoiceNumber: invoice.number,
       invoiceUrl: payment.invoiceUrl,

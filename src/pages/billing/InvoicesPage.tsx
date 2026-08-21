@@ -73,12 +73,31 @@ export default function InvoicesPage() {
                 return (
                   <div key={inv.id} className="flex items-center gap-4 px-4 py-3 flex-wrap sm:flex-nowrap">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold">{inv.number}</span>
                         <InvoiceStatusBadge status={inv.status} />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {KIND_LABEL[inv.kind] ?? inv.kind} · emitida {formatDate(inv.issued_at ?? inv.created_at)}
+
+                      {/* What was actually bought. "Assinatura" or "Recarga" on
+                          its own does not tell the customer which plan or which
+                          wallet, which is the first thing they ask. */}
+                      {inv.items?.length ? (
+                        <ul className="mt-1 space-y-0.5">
+                          {inv.items.map((it, idx) => (
+                            <li key={idx} className="text-xs text-foreground/90">
+                              {it.quantity > 1 && (
+                                <span className="text-muted-foreground">{it.quantity}× </span>
+                              )}
+                              {it.description}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-foreground/90 mt-1">{KIND_LABEL[inv.kind] ?? inv.kind}</p>
+                      )}
+
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Emitida {formatDate(inv.issued_at ?? inv.created_at)}
                         {inv.due_date && ` · vence ${formatDate(inv.due_date)}`}
                         {inv.paid_at && ` · paga ${formatDate(inv.paid_at)}`}
                       </p>

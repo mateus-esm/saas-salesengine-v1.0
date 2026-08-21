@@ -155,7 +155,7 @@ export default function PlanPage() {
       <div>
         <h2 className="text-base font-semibold mb-1">Planos disponíveis</h2>
         <p className="text-sm text-muted-foreground mb-3">
-          Todos incluem as duas carteiras de crédito. Quanto maior o plano, mais barato fica o crédito.
+          Todos incluem as duas carteiras de crédito.
         </p>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -165,8 +165,6 @@ export default function PlanPage() {
             const currentPrice = currentPlan?.product?.list_price ?? 0;
             const isUpgrade = !isCurrent && currentCode && Number(plan.list_price) > Number(currentPrice);
             const isDowngrade = !isCurrent && currentCode && Number(plan.list_price) < Number(currentPrice);
-            const total = plan.credits_whatsapp + plan.credits_copilot;
-            const perCredit = total > 0 ? Number(plan.list_price) / total : 0;
 
             return (
               <Card key={plan.id} className={cn(isCurrent && "border-primary ring-1 ring-primary/20")}>
@@ -177,9 +175,7 @@ export default function PlanPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold tracking-tight">{formatBRL(plan.list_price)}</p>
-                    <CardDescription className="text-[11px]">
-                      por mês · {formatBRL(perCredit)} por crédito
-                    </CardDescription>
+                    <CardDescription className="text-[11px]">por mês</CardDescription>
                   </div>
                 </CardHeader>
 

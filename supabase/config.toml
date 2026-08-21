@@ -113,3 +113,8 @@ verify_jwt = false
 # Sprint 8.2 — buy instances (recurring contract item) or Builder hours (adhoc).
 [functions.purchase-addon]
 verify_jwt = true
+
+# Sprint 8.1 fixes — on-demand agent on/off reconciliation. Super-admin JWT or
+# the cron secret; "daily" is the wrong latency for resuming a paying customer.
+[functions.agent-power-sync]
+verify_jwt = false
