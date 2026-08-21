@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL, useContract, useRefreshBilling } from "@/hooks/useBilling";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { BuilderPurchaseDialog, type BuilderPurchaseResult } from "@/components/billing/BuilderPurchaseDialog";
 
 /**
  * Sprint 8.2 — buy the add-ons, not just credits.
@@ -29,6 +30,7 @@ export function AddonPurchase() {
   const { entitlements } = useEntitlements();
   const [busy, setBusy] = useState<string | null>(null);
   const [hours, setHours] = useState(1);
+  const [builderResult, setBuilderResult] = useState<BuilderPurchaseResult | null>(null);
 
   const { data: products } = useQuery({
     queryKey: ["addon-products"],
@@ -79,14 +81,25 @@ export function AddonPurchase() {
       if (data?.error) throw new Error(data.error);
 
       refreshBilling();
+
+      if (code === "builder_hour") {
+        // Buying hours is half the transaction — the customer still has to book
+        // them. Hand over both next steps instead of ending on a toast.
+        setBuilderResult({
+          hours: quantity,
+          total: Number(data?.total ?? 0),
+          invoiceId: data?.invoiceId ?? null,
+          invoiceNumber: data?.invoiceNumber ?? null,
+          invoiceUrl: data?.invoiceUrl ?? null,
+          schedulingUrl: data?.schedulingUrl ?? null,
+        });
+        return;
+      }
+
       toast({
-        title: code === "instance_whatsapp" ? "Instância contratada" : "Horas contratadas",
-        description:
-          code === "instance_whatsapp"
-            ? "Entrou como item mensal do contrato e aparecerá na próxima fatura."
-            : "Geramos uma fatura avulsa para essas horas.",
+        title: "Instância contratada",
+        description: "Entrou como item mensal do contrato e aparecerá na próxima fatura.",
       });
-      if (data?.invoiceUrl) window.open(data.invoiceUrl, "_blank", "noopener");
     } catch (e) {
       toast({
         title: "Não foi possível contratar",
@@ -204,6 +217,12 @@ export function AddonPurchase() {
           </div>
         )}
       </CardContent>
+
+      <BuilderPurchaseDialog
+        result={builderResult}
+        open={builderResult !== null}
+        onOpenChange={(o) => !o && setBuilderResult(null)}
+      />
     </Card>
   );
 }

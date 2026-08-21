@@ -165,10 +165,16 @@ serve(async (req) => {
       .select("id, number").single();
     if (invErr) throw new Error(`invoice insert failed: ${invErr.message}`);
 
+    // The customer sees this in the invoice list, in the receipt and on the bank
+    // statement. "Recarga de créditos" alone does not say which wallet was
+    // topped up, and with two pools that is the first question they will ask.
+    const poolLabel = pool === "copilot" ? "Copiloto" : "Atendimento";
+    const itemDescription = `Recarga de ${credits.toLocaleString("pt-BR")} créditos — ${poolLabel}`;
+
     await db.from("invoice_items").insert({
       invoice_id: invoice.id,
       product_id: productId,
-      description: label,
+      description: itemDescription,
       quantity: 1,
       unit_price: price,
       total: price,
@@ -179,7 +185,7 @@ serve(async (req) => {
       billingType: paymentMethod === "PIX" ? "PIX" : "UNDEFINED",
       value: price,
       dueDate: dueDateIn(1),
-      description: `${label} — fatura ${invoice.number}`,
+      description: `${itemDescription} — fatura ${invoice.number}`,
       externalReference: `invoice_${invoice.id}`,
     });
 

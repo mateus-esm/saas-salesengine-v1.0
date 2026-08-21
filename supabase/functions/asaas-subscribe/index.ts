@@ -66,12 +66,12 @@ serve(async (req) => {
     let plan;
     if (product_id) {
       const { data } = await db.from("billing_products")
-        .select("id, name, list_price, credits_included, kind, active")
+        .select("id, name, list_price, credits_included, credits_whatsapp, credits_copilot, kind, active")
         .eq("id", product_id).eq("kind", "plan").maybeSingle();
       plan = data;
     } else if (plano_id != null) {
       const { data } = await db.from("billing_products")
-        .select("id, name, list_price, credits_included, kind, active")
+        .select("id, name, list_price, credits_included, credits_whatsapp, credits_copilot, kind, active")
         .eq("kind", "plan").eq("code", `plan_${plano_id}`).maybeSingle();
       plan = data;
     } else {
@@ -157,7 +157,13 @@ serve(async (req) => {
     await db.from("invoice_items").insert({
       invoice_id: invoice.id,
       product_id: plan.id,
-      description: plan.name,
+      // Spell out what the plan includes: someone reading a R$400 line a month
+      // later should not have to look up what Growth was.
+      description: `Plano ${plan.name} — mensalidade`
+        + (plan.credits_whatsapp || plan.credits_copilot
+            ? ` (${Number(plan.credits_whatsapp ?? 0).toLocaleString("pt-BR")} cr Atendimento`
+              + ` + ${Number(plan.credits_copilot ?? 0).toLocaleString("pt-BR")} cr Copiloto)`
+            : ""),
       quantity: 1,
       unit_price: price,
       total: price,
@@ -168,7 +174,7 @@ serve(async (req) => {
       billingType: paymentMethod === "PIX" ? "PIX" : "UNDEFINED",
       value: price,
       dueDate: dueDateIn(1),
-      description: `${plan.name} — fatura ${invoice.number}`,
+      description: `Plano ${plan.name} — fatura ${invoice.number}`,
       externalReference: `invoice_${invoice.id}`,
     });
 

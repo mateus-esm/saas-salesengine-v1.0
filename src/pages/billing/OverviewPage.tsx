@@ -161,9 +161,12 @@ export default function OverviewPage() {
               {invoices.slice(0, 5).map((inv) => (
                 <div key={inv.id} className="flex items-center justify-between py-2.5 gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{inv.number}</p>
+                    <p className="text-sm font-medium truncate">
+                      {inv.items?.[0]?.description ?? KIND_LABEL[inv.kind] ?? inv.kind}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {KIND_LABEL[inv.kind]} · {formatDate(inv.issued_at ?? inv.created_at)}
+                      {inv.number} · {formatDate(inv.issued_at ?? inv.created_at)}
+                      {(inv.items?.length ?? 0) > 1 && ` · +${(inv.items?.length ?? 0) - 1} item(s)`}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">

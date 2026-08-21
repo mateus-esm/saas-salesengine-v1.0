@@ -144,7 +144,6 @@ export function CreditPurchase() {
             <div className="text-right shrink-0">
               <p className="text-[11px] text-muted-foreground">Valor</p>
               <p className="text-2xl font-bold tracking-tight">{formatBRL(price)}</p>
-              <p className="text-[11px] text-muted-foreground">{formatBRL(rate)} por crédito</p>
             </div>
           </div>
 

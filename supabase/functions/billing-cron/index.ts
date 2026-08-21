@@ -213,7 +213,8 @@ async function renewPeriods(db: SupabaseClient) {
       items.map((i) => ({
         invoice_id: invoice.id,
         product_id: i.product_id,
-        description: (i as { billing_products?: { name?: string } }).billing_products?.name ?? "Assinatura",
+        description: ((i as { billing_products?: { name?: string } }).billing_products?.name ?? "Assinatura")
+          + " — mensalidade",
         quantity: i.quantity ?? 1,
         unit_price: i.unit_price,
         total: Number(i.unit_price) * (i.quantity ?? 1),

@@ -27,6 +27,8 @@ export interface Invoice {
   asaas_invoice_url: string | null;
   pix_payload: string | null;
   created_at: string;
+  /** What was actually bought. The kind alone ("recurring") tells nobody. */
+  items?: { description: string; quantity: number; total: number }[];
 }
 
 /** Sprint 8.1 — attendance and Copilot credits are separate pools. */
@@ -86,13 +88,16 @@ export function useInvoices(status?: InvoiceStatus[]) {
     queryFn: async (): Promise<Invoice[]> => {
       let q = supabase
         .from("invoices")
-        .select("id, number, kind, status, subtotal, discount, total, due_date, issued_at, paid_at, asaas_invoice_url, pix_payload, created_at")
+        .select("id, number, kind, status, subtotal, discount, total, due_date, issued_at, paid_at, asaas_invoice_url, pix_payload, created_at, invoice_items(description, quantity, total)")
         .eq("equipe_id", equipeId!)
         .order("created_at", { ascending: false });
       if (status?.length) q = q.in("status", status);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []) as Invoice[];
+      return (data ?? []).map((row) => {
+        const r = row as Record<string, unknown>;
+        return { ...r, items: (r.invoice_items as Invoice["items"]) ?? [] } as Invoice;
+      });
     },
   });
 }
