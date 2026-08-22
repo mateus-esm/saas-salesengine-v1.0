@@ -65,6 +65,9 @@ const App = () => (
                 {/* Sprint 8 T17 — public, outside ProtectedRoute: the person
                     reading a proposal is not a user yet. */}
                 <Route path="/proposta/:codigo" element={<PublicProposal />} />
+                {/* Alias for proposta.soloventures.com.br/sales-engine/:codigo -
+                    DNS points here and the path stays readable in the link. */}
+                <Route path="/sales-engine/:codigo" element={<PublicProposal />} />
 
                 {/* Authenticated shell — mounted once; children swap via <Outlet/> */}
                 <Route

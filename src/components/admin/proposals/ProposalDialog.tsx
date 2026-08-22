@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Copy, Loader2, Plus, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/hooks/useBilling";
@@ -39,6 +41,16 @@ const STATUSES = ["rascunho", "enviada", "vista", "aceita", "recusada", "expirad
  */
 export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
   const { toast } = useToast();
+  const { data: plans } = useQuery({
+    queryKey: ["plan-products"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("billing_products").select("code, name, list_price")
+        .eq("kind", "plan").eq("active", true).order("list_price");
+      return data ?? [];
+    },
+  });
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
@@ -46,6 +58,12 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
     cliente_nome: "", cliente_email: "", cliente_whatsapp: "", cliente_doc: "",
     setup_price: "0", list_monthly_price: "", term_months: "12",
     valid_until: "", status: "rascunho" as string, notes: "",
+    // Sprint 9 — the offer terms
+    allow_plan_choice: true,
+    recommended_plan_code: "",
+    setup_waived: false,
+    setup_charge_timing: "on_accept" as "on_accept" | "on_golive",
+    trial_days: "15",
   });
   const [items, setItems] = useState<ItemDraft[]>([]);
 
@@ -63,6 +81,11 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         valid_until: proposal.valid_until ?? "",
         status: proposal.status,
         notes: "",
+        allow_plan_choice: proposal.allow_plan_choice !== false,
+        recommended_plan_code: proposal.recommended_plan_code ?? "",
+        setup_waived: proposal.setup_waived === true,
+        setup_charge_timing: proposal.setup_charge_timing ?? "on_accept",
+        trial_days: String(proposal.trial_days ?? 15),
       });
       void loadItems(proposal.id);
     } else {
@@ -70,6 +93,8 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         cliente_nome: "", cliente_email: "", cliente_whatsapp: "", cliente_doc: "",
         setup_price: "0", list_monthly_price: "", term_months: "12",
         valid_until: defaultValidity(), status: "rascunho", notes: "",
+        allow_plan_choice: true, recommended_plan_code: "", setup_waived: false,
+        setup_charge_timing: "on_accept", trial_days: "15",
       });
       setItems([{ label: "Agente de IA", description: "", quantity: 1, unit_price: 0, period: "monthly" }]);
     }
@@ -121,6 +146,11 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         term_months: form.term_months ? Number(form.term_months) : null,
         valid_until: form.valid_until || null,
         status: form.status,
+        allow_plan_choice: form.allow_plan_choice,
+        recommended_plan_code: form.recommended_plan_code || null,
+        setup_waived: form.setup_waived,
+        setup_charge_timing: form.setup_charge_timing,
+        trial_days: Number(form.trial_days) || 0,
       };
 
       let proposalId = proposal?.id;
@@ -249,6 +279,86 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
             <Field label="De (sem desconto)" value={form.list_monthly_price} onChange={set("list_monthly_price")} type="number" />
             <Field label="Prazo (meses)" value={form.term_months} onChange={set("term_months")} type="number" />
             <Field label="Válida até" value={form.valid_until} onChange={set("valid_until")} type="date" />
+          </div>
+
+          {/* Sprint 9 - offer terms. These decide how the public page behaves
+              and how provisioning bills, so they live with the proposal. */}
+          <div className="rounded-lg border border-border p-3.5 space-y-3">
+            <p className="text-xs font-semibold">Condicoes da oferta</p>
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Label htmlFor="pc" className="text-xs cursor-pointer">Cliente escolhe o plano</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  A pagina mostra os 3 tiers e ele decide. Desligado, vale so o valor fixo acima.
+                </p>
+              </div>
+              <Switch
+                id="pc"
+                checked={form.allow_plan_choice}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, allow_plan_choice: v }))}
+              />
+            </div>
+
+            {form.allow_plan_choice && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Plano recomendado (destacado)</Label>
+                <Select
+                  value={form.recommended_plan_code || "__none__"}
+                  onValueChange={(v) => setForm((f) => ({ ...f, recommended_plan_code: v === "__none__" ? "" : v }))}
+                >
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
+                    {(plans ?? []).map((p) => (
+                      <SelectItem key={p.code} value={p.code}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Label htmlFor="sw" className="text-xs cursor-pointer">Implantacao como cortesia</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Voce absorve o setup. Combine com fidelidade: troque seu risco por compromisso, nao por esperanca.
+                </p>
+              </div>
+              <Switch
+                id="sw"
+                checked={form.setup_waived}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, setup_waived: v }))}
+              />
+            </div>
+
+            {!form.setup_waived && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Quando cobrar a implantacao</Label>
+                <Select
+                  value={form.setup_charge_timing}
+                  onValueChange={(v) => setForm((f) => ({ ...f, setup_charge_timing: v as "on_accept" | "on_golive" }))}
+                >
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on_accept">No aceite, antes de comecar o trabalho</SelectItem>
+                    <SelectItem value="on_golive">Na entrega, voce faz o trabalho primeiro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Dias de teste gratis (a partir do go-live)</Label>
+              <Input
+                type="number" min={0} max={60} className="h-8"
+                value={form.trial_days}
+                onChange={(e) => setForm((f) => ({ ...f, trial_days: e.target.value }))}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                0 = sem teste. O periodo comeca quando o ambiente entra no ar, nunca no aceite.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-1.5">
