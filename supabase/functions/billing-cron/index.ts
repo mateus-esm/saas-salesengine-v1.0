@@ -71,6 +71,7 @@ const JOBS: Record<string, (db: SupabaseClient) => Promise<unknown>> = {
   markOverdue,
   remindDueSoon,
   suspendPastDue,
+  endTrials,
   renewPeriods,
   expireCredits,
   creditAlerts,
@@ -155,6 +156,108 @@ async function suspendPastDue(db: SupabaseClient) {
       "/billing/faturas", `susp_${c.id}_${c.past_due_since}`);
   }
   return { suspended: data?.length ?? 0 };
+}
+
+/**
+ * Sprint 9 — a trial has run out: charge the rest of THIS month, prorated, and
+ * move the contract to active so day-1 billing takes over from here.
+ *
+ * Prorating rather than giving the partial month away is deliberate: on a
+ * R$1.000 plan, waiting for the next 1st can be thirty free days.
+ */
+async function endTrials(db: SupabaseClient) {
+  const { data: due, error } = await db.rpc("contracts_ending_trial");
+  if (error) throw new Error(error.message);
+
+  let billed = 0;
+  for (const row of (due ?? []) as Array<{
+    contract_id: string; equipe_id: string; monthly: number; trial_ends_at: string;
+  }>) {
+    const monthly = Number(row.monthly ?? 0);
+    const from = new Date(row.trial_ends_at);
+
+    // Everything bills on the 1st from now on.
+    const periodEnd = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1));
+
+    await db.from("contracts").update({
+      status: "active",
+      current_period_start: from.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+    }).eq("id", row.contract_id);
+
+    if (monthly <= 0) { billed++; continue; }
+
+    const { data: prorated } = await db.rpc("prorated_amount", {
+      p_monthly: monthly,
+      p_from: from.toISOString(),
+    });
+    const total = Number(prorated ?? monthly);
+    const periodKey = from.toISOString().slice(0, 10);
+
+    // One first-invoice per contract per trial end, so a re-run cannot bill twice.
+    const { data: already } = await db
+      .from("invoices").select("id")
+      .eq("contract_id", row.contract_id).eq("kind", "recurring")
+      .contains("metadata", { period_key: periodKey }).maybeSingle();
+    if (already) { billed++; continue; }
+
+    const { data: invoice, error: invErr } = await db
+      .from("invoices")
+      .insert({
+        equipe_id: row.equipe_id,
+        contract_id: row.contract_id,
+        kind: "recurring",
+        status: "open",
+        subtotal: total,
+        total,
+        due_date: dueDateIn(5),
+        issued_at: new Date().toISOString(),
+        metadata: { period_key: periodKey, prorated: true },
+      })
+      .select("id, number").single();
+    if (invErr) { console.error("[endTrials]", invErr.message); continue; }
+
+    await db.from("invoice_items").insert({
+      invoice_id: invoice.id,
+      description: `Assinatura — período proporcional de ${from.toLocaleDateString("pt-BR")} até o fim do mês`,
+      quantity: 1,
+      unit_price: total,
+      total,
+    });
+
+    await chargeInvoice(db, row.equipe_id, invoice.id, total, `Assinatura — fatura ${invoice.number}`);
+
+    await notify(db, row.equipe_id, "invoice.issued", "Seu período de teste terminou",
+      `Primeira fatura de ${money(total)} referente aos dias restantes deste mês. A partir do próximo mês, a cobrança acontece todo dia 1.`,
+      "/billing/faturas", `trialend_${row.contract_id}`);
+    billed++;
+  }
+  return { billed };
+}
+
+/** Creates the gateway charge for an invoice that already exists. */
+async function chargeInvoice(
+  db: SupabaseClient, equipeId: string, invoiceId: string, total: number, description: string,
+) {
+  const { data: account } = await db
+    .from("billing_accounts").select("asaas_customer_id").eq("equipe_id", equipeId).maybeSingle();
+  if (!account?.asaas_customer_id) return;
+  try {
+    const payment = await createPayment({
+      customer: account.asaas_customer_id,
+      billingType: "UNDEFINED",
+      value: total,
+      dueDate: dueDateIn(5),
+      description,
+      externalReference: `invoice_${invoiceId}`,
+    });
+    await db.from("invoices")
+      .update({ asaas_payment_id: payment.id, asaas_invoice_url: payment.invoiceUrl ?? null })
+      .eq("id", invoiceId);
+  } catch (e) {
+    // voidOrphanInvoices clears it after 2h and the next run re-issues.
+    console.error("[chargeInvoice] gateway failed:", e);
+  }
 }
 
 /**

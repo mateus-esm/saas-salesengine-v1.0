@@ -43,7 +43,7 @@ serve(async (req) => {
 
     const { data: proposal, error } = await db
       .from("proposals")
-      .select("id, codigo, cliente_nome, cliente_email, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, first_viewed_at")
+      .select("id, codigo, cliente_nome, cliente_email, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, first_viewed_at, allow_plan_choice, recommended_plan_code, setup_waived, setup_charge_timing, trial_days, chosen_plan_code")
       .eq("codigo", codigo)
       .maybeSingle();
 
@@ -59,6 +59,20 @@ serve(async (req) => {
     const expired = proposal.valid_until
       ? new Date(`${proposal.valid_until}T23:59:59`) < new Date()
       : false;
+
+    // The page is a landing page now, so it needs the catalogue and the offer
+    // terms, not just this client's numbers.
+    const { data: plans } = await db
+      .from("billing_products")
+      .select("code, name, list_price, credits_whatsapp, credits_copilot, metadata")
+      .eq("kind", "plan").eq("active", true)
+      .order("list_price", { ascending: true });
+
+    const { data: deliverables } = await db
+      .from("setup_deliverables")
+      .select("code, title, description, client_keeps")
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
 
     if (action === "get") {
       // First open: record it and tell the founder. Deduped on proposal id, so
@@ -84,6 +98,15 @@ serve(async (req) => {
         expired,
         accepted: proposal.status === "aceita",
         items: items ?? [],
+        // The offer itself
+        allow_plan_choice: proposal.allow_plan_choice !== false,
+        recommended_plan_code: proposal.recommended_plan_code,
+        chosen_plan_code: proposal.chosen_plan_code,
+        setup_waived: proposal.setup_waived === true,
+        setup_charge_timing: proposal.setup_charge_timing ?? "on_accept",
+        trial_days: proposal.trial_days ?? 15,
+        plans: plans ?? [],
+        deliverables: deliverables ?? [],
       });
     }
 
@@ -94,19 +117,42 @@ serve(async (req) => {
         return json({ error: "not_acceptable" }, 409);
       }
 
-      const { accepted_name, accepted_doc } = body as { accepted_name?: string; accepted_doc?: string };
+      const { accepted_name, accepted_doc, chosen_plan_code } = body as {
+        accepted_name?: string; accepted_doc?: string; chosen_plan_code?: string;
+      };
       if (!accepted_name?.trim()) return json({ error: "name_required" }, 400);
+
+      // Validate the choice against the catalogue rather than trusting the
+      // browser: a forged code would otherwise become the signed contract.
+      let planCode: string | null = proposal.chosen_plan_code ?? null;
+      if (proposal.allow_plan_choice !== false && chosen_plan_code) {
+        const valid = (plans ?? []).some((p) => (p as { code: string }).code === chosen_plan_code);
+        if (!valid) return json({ error: "invalid_plan" }, 400);
+        planCode = chosen_plan_code;
+      }
+      if (proposal.allow_plan_choice !== false && !planCode) {
+        return json({ error: "plan_required" }, 400);
+      }
 
       // Built from the database, never from the request. If the client could
       // supply the snapshot, the audit trail would prove nothing.
+      const chosenPlan = (plans ?? []).find((p) => (p as { code: string }).code === planCode) as
+        { code: string; name: string; list_price: number } | undefined;
+
       const snapshot = {
         codigo: proposal.codigo,
         cliente_nome: proposal.cliente_nome,
-        setup_price: Number(proposal.setup_price ?? 0),
-        monthly_price: Number(proposal.monthly_price ?? 0),
+        setup_price: proposal.setup_waived ? 0 : Number(proposal.setup_price ?? 0),
+        setup_waived: proposal.setup_waived === true,
+        setup_charge_timing: proposal.setup_charge_timing ?? "on_accept",
+        trial_days: proposal.trial_days ?? 15,
+        // The tier they actually picked, at the price shown when they picked it.
+        chosen_plan: chosenPlan ? { code: chosenPlan.code, name: chosenPlan.name, price: chosenPlan.list_price } : null,
+        monthly_price: chosenPlan ? Number(chosenPlan.list_price) : Number(proposal.monthly_price ?? 0),
         list_monthly_price: proposal.list_monthly_price,
         term_months: proposal.term_months,
         items: items ?? [],
+        deliverables: deliverables ?? [],
         captured_at: new Date().toISOString(),
       };
 
@@ -123,10 +169,16 @@ serve(async (req) => {
       // 23505 = a second click on Accept. Not an error worth showing.
       if (accErr && accErr.code !== "23505") throw new Error(accErr.message);
 
-      await db.from("proposals").update({ status: "aceita" }).eq("id", proposal.id);
+      await db.from("proposals").update({
+        status: "aceita",
+        chosen_plan_code: planCode,
+        monthly_price: chosenPlan ? chosenPlan.list_price : proposal.monthly_price,
+      }).eq("id", proposal.id);
 
       await notifyFounder(db, "proposal.accepted", "Proposta aceita! 🎉",
-        `${proposal.cliente_nome} aceitou a proposta ${proposal.codigo}. Provisione o ambiente no painel.`,
+        `${proposal.cliente_nome} aceitou a proposta ${proposal.codigo}`
+          + (chosenPlan ? ` no plano ${chosenPlan.name}` : "")
+          + ". Provisione o ambiente no painel.",
         `accepted_${proposal.id}`, "/admin");
 
       return json({ success: true, accepted: true });

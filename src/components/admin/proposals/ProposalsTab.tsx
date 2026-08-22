@@ -36,6 +36,13 @@ export interface ProposalRow {
   status: string;
   equipe_id: string | null;
   created_at: string;
+  // Sprint 9 - offer terms
+  allow_plan_choice: boolean;
+  recommended_plan_code: string | null;
+  chosen_plan_code: string | null;
+  setup_waived: boolean;
+  setup_charge_timing: "on_accept" | "on_golive";
+  trial_days: number;
 }
 
 /**
@@ -57,7 +64,7 @@ export function ProposalsTab() {
     queryFn: async (): Promise<ProposalRow[]> => {
       const { data, error } = await supabase
         .from("proposals")
-        .select("id, codigo, cliente_nome, cliente_email, cliente_whatsapp, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, equipe_id, created_at")
+        .select("id, codigo, cliente_nome, cliente_email, cliente_whatsapp, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, equipe_id, created_at, allow_plan_choice, recommended_plan_code, chosen_plan_code, setup_waived, setup_charge_timing, trial_days")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ProposalRow[];

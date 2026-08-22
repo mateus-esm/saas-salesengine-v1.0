@@ -853,7 +853,9 @@ export type Database = {
           started_at: string | null
           status: string
           term_months: number | null
+          trial_ends_at: string | null
           updated_at: string
+          went_live_at: string | null
         }
         Insert: {
           cancel_at?: string | null
@@ -868,7 +870,9 @@ export type Database = {
           started_at?: string | null
           status?: string
           term_months?: number | null
+          trial_ends_at?: string | null
           updated_at?: string
+          went_live_at?: string | null
         }
         Update: {
           cancel_at?: string | null
@@ -883,7 +887,9 @@ export type Database = {
           started_at?: string | null
           status?: string
           term_months?: number | null
+          trial_ends_at?: string | null
           updated_at?: string
+          went_live_at?: string | null
         }
         Relationships: [
           {
@@ -1606,6 +1612,9 @@ export type Database = {
         Row: {
           agent_paused_at: string | null
           agent_paused_reason: string | null
+          agent_power_error: string | null
+          agent_power_failures: number
+          agent_power_last_try: string | null
           asaas_customer_id: string | null
           asaas_subscription_id: string | null
           contact_fields_schema: Json
@@ -1632,6 +1641,9 @@ export type Database = {
         Insert: {
           agent_paused_at?: string | null
           agent_paused_reason?: string | null
+          agent_power_error?: string | null
+          agent_power_failures?: number
+          agent_power_last_try?: string | null
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
           contact_fields_schema?: Json
@@ -1658,6 +1670,9 @@ export type Database = {
         Update: {
           agent_paused_at?: string | null
           agent_paused_reason?: string | null
+          agent_power_error?: string | null
+          agent_power_failures?: number
+          agent_power_last_try?: string | null
           asaas_customer_id?: string | null
           asaas_subscription_id?: string | null
           contact_fields_schema?: Json
@@ -3750,6 +3765,8 @@ export type Database = {
       }
       proposals: {
         Row: {
+          allow_plan_choice: boolean
+          chosen_plan_code: string | null
           cliente_doc: string | null
           cliente_email: string | null
           cliente_nome: string
@@ -3763,14 +3780,20 @@ export type Database = {
           list_monthly_price: number | null
           monthly_price: number
           notes: string | null
+          recommended_plan_code: string | null
           sent_at: string | null
+          setup_charge_timing: string
           setup_price: number
+          setup_waived: boolean
           status: string
           term_months: number | null
+          trial_days: number
           updated_at: string
           valid_until: string | null
         }
         Insert: {
+          allow_plan_choice?: boolean
+          chosen_plan_code?: string | null
           cliente_doc?: string | null
           cliente_email?: string | null
           cliente_nome: string
@@ -3784,14 +3807,20 @@ export type Database = {
           list_monthly_price?: number | null
           monthly_price?: number
           notes?: string | null
+          recommended_plan_code?: string | null
           sent_at?: string | null
+          setup_charge_timing?: string
           setup_price?: number
+          setup_waived?: boolean
           status?: string
           term_months?: number | null
+          trial_days?: number
           updated_at?: string
           valid_until?: string | null
         }
         Update: {
+          allow_plan_choice?: boolean
+          chosen_plan_code?: string | null
           cliente_doc?: string | null
           cliente_email?: string | null
           cliente_nome?: string
@@ -3805,10 +3834,14 @@ export type Database = {
           list_monthly_price?: number | null
           monthly_price?: number
           notes?: string | null
+          recommended_plan_code?: string | null
           sent_at?: string | null
+          setup_charge_timing?: string
           setup_price?: number
+          setup_waived?: boolean
           status?: string
           term_months?: number | null
+          trial_days?: number
           updated_at?: string
           valid_until?: string | null
         }
@@ -3914,6 +3947,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      setup_deliverables: {
+        Row: {
+          active: boolean
+          client_keeps: boolean
+          code: string
+          description: string | null
+          id: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          client_keeps?: boolean
+          code: string
+          description?: string | null
+          id?: string
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          active?: boolean
+          client_keeps?: boolean
+          code?: string
+          description?: string | null
+          id?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: []
       }
       tasks: {
         Row: {
@@ -4288,6 +4351,8 @@ export type Database = {
         Row: {
           agent_paused_at: string | null
           agent_paused_reason: string | null
+          agent_power_error: string | null
+          agent_power_failures: number | null
           builder_hours_extra: number | null
           contract_id: string | null
           contract_status: string | null
@@ -4408,6 +4473,15 @@ export type Database = {
         Args: { p_equipe_id: string; p_estimated?: number; p_pool?: string }
         Returns: Json
       }
+      contracts_ending_trial: {
+        Args: never
+        Returns: {
+          contract_id: string
+          equipe_id: string
+          monthly: number
+          trial_ends_at: string
+        }[]
+      }
       credit_balance: {
         Args: { p_equipe_id: string; p_pool?: string }
         Returns: number
@@ -4480,6 +4554,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_usable_agent: { Args: { p_agent_id: string }; Returns: boolean }
       increment_conversation_unread_count: {
         Args: { conv_id: string }
         Returns: undefined
@@ -4510,6 +4585,10 @@ export type Database = {
         Args: { p_equipe_id: string; p_pool?: string }
         Returns: number
       }
+      prorated_amount: {
+        Args: { p_from: string; p_monthly: number }
+        Returns: number
+      }
       provision_tenant_from_proposal: {
         Args: { p_proposal_id: string }
         Returns: Json
@@ -4525,6 +4604,10 @@ export type Database = {
       render_webhook_payload: {
         Args: { p_context: Json; p_template: Json }
         Returns: Json
+      }
+      reset_agent_power_error: {
+        Args: { p_equipe_id: string }
+        Returns: undefined
       }
       set_default_pipeline: { Args: { p_pipeline_id: string }; Returns: string }
       shape_pipeline: {
