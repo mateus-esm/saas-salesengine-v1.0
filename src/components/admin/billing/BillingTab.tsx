@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Receipt, Search, Settings2, AlertTriangle, PauseCircle } from "lucide-react";
+import { Receipt, Search, Settings2, AlertTriangle, PauseCircle, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatBRL, formatCredits, formatDate } from "@/hooks/useBilling";
 import { InvoiceStatusBadge } from "@/components/billing/InvoiceStatusBadge";
 import type { InvoiceStatus } from "@/hooks/useBilling";
 import { TeamBillingDialog, type TeamBillingRow } from "./TeamBillingDialog";
+import { InvoiceActions } from "./InvoiceActions";
+import { AdhocInvoiceDialog } from "./AdhocInvoiceDialog";
 
 const CONTRACT_STATUS: Record<string, { label: string; className: string }> = {
   none:      { label: "Sem plano",  className: "bg-muted text-muted-foreground" },
@@ -38,6 +40,7 @@ export function AdminBillingTab() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selected, setSelected] = useState<TeamBillingRow | null>(null);
   const [invoiceFilter, setInvoiceFilter] = useState<"all" | InvoiceStatus>("all");
+  const [adhocOpen, setAdhocOpen] = useState(false);
 
   const { data: teams, isLoading } = useQuery({
     queryKey: ["admin-team-billing"],
@@ -179,16 +182,21 @@ export function AdminBillingTab() {
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Faturas</CardTitle>
-          <Select value={invoiceFilter} onValueChange={(v) => setInvoiceFilter(v as typeof invoiceFilter)}>
-            <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="open">Em aberto</SelectItem>
-              <SelectItem value="overdue">Vencidas</SelectItem>
-              <SelectItem value="paid">Pagas</SelectItem>
-              <SelectItem value="void">Canceladas</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={invoiceFilter} onValueChange={(v) => setInvoiceFilter(v as typeof invoiceFilter)}>
+              <SelectTrigger className="w-[150px] h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="open">Em aberto</SelectItem>
+                <SelectItem value="overdue">Vencidas</SelectItem>
+                <SelectItem value="paid">Pagas</SelectItem>
+                <SelectItem value="void">Canceladas</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => setAdhocOpen(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Fatura avulsa
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {!invoiceRows.length ? (
@@ -211,9 +219,21 @@ export function AdminBillingTab() {
                         {equipe?.nome ?? "—"} · vence {formatDate(i.due_date as string)}
                       </p>
                     </div>
-                    <span className="text-sm font-semibold tabular-nums shrink-0">
-                      {formatBRL(i.total as number)}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-sm font-semibold tabular-nums">
+                        {formatBRL(i.total as number)}
+                      </span>
+                      <InvoiceActions
+                        invoice={{
+                          id: i.id as string,
+                          number: i.number as string,
+                          status: i.status as string,
+                          total: Number(i.total),
+                          due_date: (i.due_date as string) ?? null,
+                          kind: i.kind as string | undefined,
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -226,6 +246,12 @@ export function AdminBillingTab() {
         team={selected}
         open={selected !== null}
         onOpenChange={(o) => !o && setSelected(null)}
+      />
+
+      <AdhocInvoiceDialog
+        teams={(teams ?? []).map((t) => ({ equipe_id: t.equipe_id, nome: t.nome }))}
+        open={adhocOpen}
+        onOpenChange={setAdhocOpen}
       />
     </div>
   );

@@ -508,3 +508,50 @@ The whole app loses in-flight state because pages do full reloads. Symptoms:
       `Suporte.tsx` and `AuthContext` still select them, which is why the
       migration zeroed rather than dropped the columns. Cut those three readers
       over to `credit_balance(equipe_id, pool)`, then drop the columns.
+
+## Sprint 8.3 — Fixes 2, bloco A (entregue 24/08/2026)
+
+> Itens 6, 8, 9 e 10 do `sprint_8.1_billing_v1_fixes.md`. O item 7 já tinha sido
+> resolvido pela migration `20260824000200`. Migration `20260824000300` aplicada
+> em produção; `admin-billing-ops`, `asaas-webhook` e `billing-cron` no ar.
+
+- [x] **6 · Gerenciar e cancelar faturas.** Cancelar (`void`, com motivo, mantém
+      histórico) + apagar apenas rascunho sem cobrança + marcar paga na mão +
+      fatura avulsa + editar valor/vencimento. Toda ação cancela ou atualiza a
+      cobrança no Asaas junto — `cancelPayment`/`updatePayment` não existiam.
+      Cancelar a única fatura vencida de um contrato também tira o contrato de
+      `past_due`, senão o cliente seguia punido por uma cobrança que não existe
+      mais.
+- [x] **8 · Excluir proposta.** Permitido só enquanto a proposta não virou
+      equipe; depois disso ela é o documento de origem de um contrato vivo e o
+      servidor recusa.
+- [x] **9 · Retirar créditos.** Já funcionava (valor negativo grava
+      `adjustment`); o rótulo dizia só "Conceder" e escondia isso.
+- [x] **10 · O que o Provisionar faz.** Ele sempre criou equipe, perfil,
+      convite, contrato (em trial), itens e fatura de setup — e sempre devolveu
+      todos esses ids. O painel jogava fora e mostrava um toast. Agora mostra o
+      recibo do que foi criado.
+
+**Decisão de arquitetura que vale lembrar:** os efeitos de "fatura paga" saíram
+do `asaas-webhook` para `_shared/invoice-effects.ts`. Marcar paga na mão dispara
+exatamente o mesmo caminho do pagamento real — créditos do plano, renovação do
+período, religar o agente — e as chaves de idempotência são por fatura, então
+marcar na mão e depois receber a confirmação do Asaas credita uma vez só.
+
+**Armadilha resolvida:** `voidOrphanInvoices` cancelava toda fatura em aberto sem
+cobrança no gateway após 2h. Uma fatura avulsa para receber por PIX é
+indistinguível desse lixo — passou a ser marcada com `metadata.manual` e o cron
+a respeita.
+
+### Ainda aberto do Fixes 2
+
+- [ ] **11 · Notificações (bloco B).** O núcleo já existe: `notifications`,
+      `notification_deliveries` (in_app/email/whatsapp), `notification_types`
+      com matriz de canais, dispatcher com Resend e `sendViaSolo`. Falta o que
+      o founder pediu: instância Solo por finalidade (Comercial/Financeiro/
+      Suporte/Operação), tela para conectar por QR ou por nome, templates
+      editáveis (hoje o texto está escrito na mão em cada chamador), liga/desliga
+      por cliente, e o disparo "Proposta Gerada → cliente recebe no WhatsApp".
+      Precisa de desenho próprio antes de codar.
+- [ ] **12 · Revisão geral do billing/admin.** Não é tarefa isolada — é critério
+      de aceite a aplicar sobre os outros itens.

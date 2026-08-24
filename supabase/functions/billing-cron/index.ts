@@ -85,6 +85,11 @@ const JOBS: Record<string, (db: SupabaseClient) => Promise<unknown>> = {
  * An invoice created just before the gateway call failed has no
  * asaas_payment_id and can never be paid. Left alone it shows in the customer's
  * list forever as an unpayable balance. Void anything older than 2 hours.
+ *
+ * Sprint 8.3: EXCEPT the ones a human created on purpose. An ad-hoc invoice the
+ * founder raised for a customer who pays by PIX looks identical to that debris
+ * — no gateway charge, sitting open — and without this exclusion the admin
+ * panel's own output would be deleted two hours after it was created.
  */
 async function voidOrphanInvoices(db: SupabaseClient) {
   const cutoff = new Date(Date.now() - 2 * 3600_000).toISOString();
@@ -93,6 +98,7 @@ async function voidOrphanInvoices(db: SupabaseClient) {
     .update({ status: "void", metadata: { voided_reason: "no_gateway_charge" } })
     .eq("status", "open")
     .is("asaas_payment_id", null)
+    .not("metadata", "cs", '{"manual": true}')
     .lt("created_at", cutoff)
     .select("id");
   return { voided: data?.length ?? 0 };

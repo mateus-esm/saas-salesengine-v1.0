@@ -297,7 +297,10 @@ export function TeamBillingDialog({
 
         {/* ── Grant credits ── */}
         <div className="rounded-lg border border-border p-4 space-y-3">
-          <p className="text-sm font-semibold">Conceder créditos</p>
+          {/* Sprint 8.3 (Fixes 2 item 9): subtracting always worked — a negative
+              amount books an adjustment — but the heading said "Conceder" and
+              nobody found it. The capability was there; the label hid it. */}
+          <p className="text-sm font-semibold">Conceder ou retirar créditos</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Carteira</Label>
@@ -323,7 +326,9 @@ export function TeamBillingDialog({
               Positivo credita e não expira. Negativo lança um ajuste — ambos ficam no extrato do cliente.
             </p>
             <Button size="sm" onClick={grant} disabled={busy !== null}>
-              {busy === "grant" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Conceder"}
+              {busy === "grant"
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : Number(credits) < 0 ? "Retirar" : "Conceder"}
             </Button>
           </div>
         </div>

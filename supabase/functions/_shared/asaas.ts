@@ -113,6 +113,42 @@ export async function createPayment(input: {
   });
 }
 
+/**
+ * Cancel a charge at the gateway.
+ *
+ * Sprint 8.3 — voiding an invoice on our side is only half the job: the boleto
+ * or PIX stays live at Asaas, so the customer keeps being asked to pay for
+ * something we already cancelled. That is the failure this exists to prevent.
+ *
+ * Returns false instead of throwing when the charge is already gone or was
+ * never created: the caller's intent ("stop asking for this money") is
+ * satisfied either way, and failing here would leave our invoice un-voided.
+ */
+export async function cancelPayment(paymentId: string): Promise<boolean> {
+  try {
+    await call<{ deleted?: boolean }>(`/payments/${paymentId}`, { method: "DELETE" });
+    return true;
+  } catch (e) {
+    console.error(`[asaas] cancelPayment(${paymentId}) failed:`, e);
+    return false;
+  }
+}
+
+/**
+ * Change value and/or due date of a charge that has not been paid.
+ *
+ * Asaas updates a payment through POST on the payment itself, not PUT.
+ */
+export async function updatePayment(
+  paymentId: string,
+  input: { value?: number; dueDate?: string; description?: string },
+): Promise<AsaasPayment> {
+  return await call<AsaasPayment>(`/payments/${paymentId}`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function getPixQrCode(paymentId: string): Promise<AsaasPixQr> {
   try {
     return await call<AsaasPixQr>(`/payments/${paymentId}/pixQrCode`);
