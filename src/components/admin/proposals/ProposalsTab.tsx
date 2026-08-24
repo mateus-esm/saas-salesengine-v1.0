@@ -6,10 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, ExternalLink, FileText, Loader2, Plus, Rocket, Search } from "lucide-react";
+import { Copy, ExternalLink, FileText, Loader2, Plus, Rocket, Search, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ProposalDialog } from "./ProposalDialog";
+import { ProvisionResultDialog, type ProvisionResult } from "./ProvisionResultDialog";
 import { formatBRL, formatDate } from "@/hooks/useBilling";
 
 const STATUS: Record<string, { label: string; className: string }> = {
@@ -56,6 +61,10 @@ export function ProposalsTab() {
   const [status, setStatus] = useState<string>("all");
   const [editing, setEditing] = useState<ProposalRow | null | "new">(null);
   const [provisioning, setProvisioning] = useState<string | null>(null);
+  /** Sprint 8.3 item 10 — the receipt for what provisioning just created. */
+  const [provisionResult, setProvisionResult] = useState<ProvisionResult | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProposalRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -108,14 +117,11 @@ export function ProposalsTab() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      const warnings = (data?.warnings ?? []) as string[];
-      toast({
-        title: data?.already_provisioned ? "Ambiente já existia" : "Ambiente criado",
-        description: warnings.length
-          ? `Atenção: ${warnings.join(" · ")}`
-          : "Equipe, contrato e faturas criados. O cliente recebeu o convite.",
-        variant: warnings.length ? "destructive" : undefined,
-      });
+      // Sprint 8.3 item 10: the response always carried the full receipt — team,
+      // contract, trial end, setup invoice, invite. It used to be collapsed into
+      // one toast, which is why the button looked like it "only made a line in
+      // Faturamento". Show what actually happened instead.
+      setProvisionResult(data as ProvisionResult);
       qc.invalidateQueries({ queryKey: ["admin-proposals"] });
     } catch (e) {
       toast({
@@ -125,6 +131,37 @@ export function ProposalsTab() {
       });
     } finally {
       setProvisioning(null);
+    }
+  };
+
+  /**
+   * Sprint 8.3 (Fixes 2, item 8).
+   *
+   * A provisioned proposal is refused by the server — it is the origin document
+   * of a live contract. The button is hidden in that case too, but the refusal
+   * is what actually protects the data.
+   */
+  const remove = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-billing-ops", {
+        body: { action: "delete_proposal", proposal_id: deleteTarget.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message ?? data.error);
+
+      toast({ title: "Proposta excluída", description: `${deleteTarget.cliente_nome} · ${deleteTarget.codigo}` });
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ["admin-proposals"] });
+    } catch (e) {
+      toast({
+        title: "Não foi possível excluir",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -215,6 +252,18 @@ export function ProposalsTab() {
                           Provisionada
                         </Badge>
                       )}
+                      {/* Hidden once provisioned: at that point the proposal is
+                          the origin document of a live contract. */}
+                      {!p.equipe_id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Excluir proposta"
+                          onClick={() => setDeleteTarget(p)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -229,6 +278,35 @@ export function ProposalsTab() {
         open={editing !== null}
         onOpenChange={(o) => !o && setEditing(null)}
       />
+
+      <ProvisionResultDialog
+        result={provisionResult}
+        open={provisionResult !== null}
+        onOpenChange={(o) => !o && setProvisionResult(null)}
+      />
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta proposta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.cliente_nome} · {deleteTarget?.codigo}. A proposta e seus itens são
+              apagados de vez, e o link público <code>/proposta/{deleteTarget?.codigo}</code> para
+              de funcionar. Nenhuma equipe foi criada a partir dela, então nada mais é afetado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); remove(); }}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
