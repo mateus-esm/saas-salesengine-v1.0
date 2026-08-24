@@ -99,15 +99,38 @@ export async function resumeAgent(
   return { ok: true };
 }
 
+export interface SyncOptions {
+  /** Reconcile one team instead of the whole base. The cron passes nothing. */
+  equipeId?: string | null;
+  /**
+   * Resume even when our own records say the agent was never paused by us.
+   *
+   * Needed because the normal resume path only looks at teams WE switched off.
+   * An agent turned off inside GPT Maker by hand — or one whose pause failed
+   * after we had already written nothing — is invisible to it, and no amount of
+   * credit would ever bring it back. Never bypasses the credit or suspension
+   * checks; those live in SQL and stay there.
+   */
+  force?: boolean;
+}
+
 /**
- * Reconcile every agent against what the ledger and contracts say it should be.
+ * Reconcile agents against what the ledger and contracts say they should be.
  * Idempotent: the SQL only returns tenants whose provider state disagrees with
  * ours, so a second run in the same minute calls the provider zero times.
  */
-export async function syncAgentPower(db: SupabaseClient): Promise<{ paused: number; resumed: number; failed: number }> {
+export async function syncAgentPower(
+  db: SupabaseClient,
+  opts: SyncOptions = {},
+): Promise<{ paused: number; resumed: number; failed: number }> {
   const out = { paused: 0, resumed: 0, failed: 0 };
+  const target = opts.equipeId ?? null;
 
-  const { data: toPause } = await db.rpc("agents_to_pause");
+  // A forced run is an admin saying "turn this one ON". Pausing in the same
+  // pass would let the two halves fight over the same team in one request.
+  const { data: toPause } = opts.force
+    ? { data: [] }
+    : await db.rpc("agents_to_pause", { p_equipe_id: target });
   for (const row of (toPause ?? []) as Array<{ equipe_id: string; agent_id: string; reason: PauseReason }>) {
     const r = await pauseAgent(db, row.equipe_id, row.agent_id, row.reason);
     if (r.ok) {
@@ -123,7 +146,10 @@ export async function syncAgentPower(db: SupabaseClient): Promise<{ paused: numb
     } else out.failed++;
   }
 
-  const { data: toResume } = await db.rpc("agents_to_resume");
+  const { data: toResume } = await db.rpc("agents_to_resume", {
+    p_equipe_id: target,
+    p_force: opts.force ?? false,
+  });
   for (const row of (toResume ?? []) as Array<{ equipe_id: string; agent_id: string }>) {
     const r = await resumeAgent(db, row.equipe_id, row.agent_id);
     if (r.ok) {
