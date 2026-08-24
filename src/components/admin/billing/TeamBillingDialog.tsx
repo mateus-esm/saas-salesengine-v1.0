@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, MessageCircle, Sparkles, Radio, Wrench, Package } from "lucide-react";
+import { Loader2, MessageCircle, Sparkles, Radio, Wrench, Package, Power } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL, formatCredits, formatDate } from "@/hooks/useBilling";
@@ -27,8 +27,11 @@ export interface TeamBillingRow {
   builder_hours_extra: number;
   open_amount: number;
   current_period_end: string | null;
+  has_agent: boolean;
   agent_paused_at: string | null;
   agent_paused_reason: string | null;
+  agent_power_error: string | null;
+  agent_power_failures: number;
 }
 
 /**
@@ -40,11 +43,13 @@ export interface TeamBillingRow {
  * a manual grant lands in the ledger next to a purchased one and stays auditable.
  */
 export function TeamBillingDialog({
-  team, open, onOpenChange,
+  team, open, onOpenChange, onChanged,
 }: {
   team: TeamBillingRow | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** For callers that hold their rows in local state instead of react-query. */
+  onChanged?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -76,17 +81,29 @@ export function TeamBillingDialog({
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["admin-team-billing"] });
     qc.invalidateQueries({ queryKey: ["admin-contracts"] });
+    onChanged?.();
   };
 
   /**
-   * Reconcile the attendance agent immediately after a grant. The daily cron
-   * would do this eventually, but a client you just unblocked should not stay
-   * dark until tomorrow. Failure is non-fatal: the credits landed either way and
-   * the cron will catch up.
+   * Reconcile THIS team's attendance agent right now. The daily cron would get
+   * there eventually, but a client you just unblocked should not stay dark until
+   * tomorrow — and sweeping the whole base to fix one team means a provider call
+   * per tenant and a result that says nothing about the one you care about.
+   *
+   * Returns what actually happened so the toast can say it. Reporting "o agente
+   * é religado automaticamente" without checking is how you end up believing a
+   * customer is answering when they are not.
    */
-  const syncAgentPower = async () => {
-    const { error } = await supabase.functions.invoke("agent-power-sync", { body: {} });
-    if (error) console.error("[admin] agent power sync failed:", error.message);
+  const syncAgentPower = async (force = false): Promise<{ resumed: number; failed: number } | null> => {
+    if (!team) return null;
+    const { data, error } = await supabase.functions.invoke("agent-power-sync", {
+      body: { equipe_id: team.equipe_id, force },
+    });
+    if (error) {
+      console.error("[admin] agent power sync failed:", error.message);
+      return null;
+    }
+    return data as { resumed: number; failed: number };
   };
 
   const grant = async () => {
@@ -106,14 +123,29 @@ export function TeamBillingDialog({
         p_expires_at: null,
       });
       if (error) throw error;
-      if (pool === "whatsapp" && n > 0) await syncAgentPower();
+
+      const result = data as { balance?: number; agent_should_resume?: boolean };
+      const balance = result?.balance ?? 0;
+
+      // Only call the provider when the ledger says the agent is now eligible.
+      let agentNote = "";
+      if (pool === "whatsapp" && n > 0) {
+        if (result?.agent_should_resume) {
+          const sync = await syncAgentPower();
+          agentNote = sync?.resumed
+            ? " Agente religado no GPT Maker."
+            : " Não consegui religar o agente — use “Ativar agente agora”.";
+        } else if (team.agent_paused_reason === "manual") {
+          agentNote = " O agente segue pausado manualmente — religue à mão se quiser.";
+        }
+      }
+
       refresh();
-      const balance = (data as { balance?: number })?.balance ?? 0;
       toast({
         title: n > 0 ? "Créditos concedidos" : "Ajuste aplicado",
         description:
           `Novo saldo de ${pool === "whatsapp" ? "Atendimento" : "Copiloto"}: ${formatCredits(balance)}.`
-          + (pool === "whatsapp" && n > 0 ? " O agente é religado automaticamente." : ""),
+          + agentNote,
       });
       setReason("");
     } catch (e) {
@@ -127,19 +159,66 @@ export function TeamBillingDialog({
     }
   };
 
+  /**
+   * Force the agent on at the provider.
+   *
+   * The automatic path only resumes agents WE paused. One switched off inside
+   * GPT Maker by hand — or one whose pause failed before we recorded it — is
+   * invisible to it, so no amount of credit brings it back. This is the manual
+   * override for that. The credit and suspension checks still apply in SQL.
+   */
+  const forceResume = async () => {
+    if (!team) return;
+    setBusy("power");
+    try {
+      const sync = await syncAgentPower(true);
+      refresh();
+      if (sync?.resumed) {
+        toast({ title: "Agente ativado", description: "O agente voltou a responder no GPT Maker." });
+      } else if (team.whatsapp_balance <= 0) {
+        toast({
+          title: "Sem crédito de Atendimento",
+          description: "Conceda créditos na carteira Atendimento antes de ativar o agente.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Não foi possível ativar",
+          description: "O provedor recusou a chamada. Confira o ID do agente no GPT Maker.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const setItem = async (code: string, quantity: number, label: string) => {
     if (!team) return;
     setBusy(code);
     try {
-      const { error } = await supabase.rpc("admin_set_contract_item", {
+      const { data, error } = await supabase.rpc("admin_set_contract_item", {
         p_equipe_id: team.equipe_id,
         p_product_code: code,
         p_quantity: quantity,
         p_unit_price: null,
+        // Entitlements ignore draft contracts, so staging one would grant the
+        // team nothing — the same dead end the credits had.
+        p_activate: true,
       });
       if (error) throw error;
       refresh();
-      toast({ title: `${label} atualizado`, description: "Entra na próxima fatura recorrente." });
+
+      const res = data as { contract_status?: string; credits_whatsapp?: number };
+      toast({
+        title: `${label} atualizado`,
+        description: quantity > 0
+          ? `Contrato ${res?.contract_status ?? "atualizado"}. Entra na próxima fatura recorrente.`
+            + (res?.credits_whatsapp
+                ? ` O plano inclui ${formatCredits(res.credits_whatsapp)} créditos de Atendimento por período — conceda-os acima para liberar agora.`
+                : "")
+          : "Adicional removido do contrato.",
+      });
     } catch (e) {
       toast({
         title: "Não foi possível atualizar",
@@ -176,13 +255,45 @@ export function TeamBillingDialog({
           />
         </div>
 
-        {team.agent_paused_at && (
-          <div className="rounded-md border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-xs">
-            <span className="font-medium">Agente de atendimento pausado</span> desde{" "}
-            {formatDate(team.agent_paused_at)} — motivo: {team.agent_paused_reason}.
-            Ele volta sozinho quando houver crédito de Atendimento e o contrato não estiver suspenso.
+        {/* ── Agente de atendimento ── */}
+        <div className="rounded-lg border border-border p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm font-semibold flex items-center gap-1.5">
+              <Power className="w-3.5 h-3.5" /> Agente de atendimento
+            </p>
+            <Button
+              size="sm" variant="outline"
+              disabled={busy !== null || !team.has_agent}
+              onClick={forceResume}
+            >
+              {busy === "power" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Ativar agente agora"}
+            </Button>
           </div>
-        )}
+
+          {!team.has_agent ? (
+            <p className="text-[11px] text-muted-foreground">
+              Esta equipe não tem <code>gpt_maker_agent_id</code> configurado — não há o que ligar.
+            </p>
+          ) : team.agent_paused_at ? (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              <span className="font-medium">Pausado</span> desde {formatDate(team.agent_paused_at)} — motivo:{" "}
+              {team.agent_paused_reason}. Volta sozinho quando houver crédito de Atendimento e o
+              contrato não estiver suspenso.
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Nossos registros dizem que está ativo. Se no GPT Maker aparecer desligado, use
+              “Ativar agente agora” — o religamento automático só alcança o que nós pausamos.
+            </p>
+          )}
+
+          {team.agent_power_error && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400">
+              Última falha no provedor ({team.agent_power_failures}x): {team.agent_power_error}
+              {team.agent_power_failures >= 5 && " — novas tentativas automáticas estão suspensas até um crédito ou uma ativação manual."}
+            </p>
+          )}
+        </div>
 
         {/* ── Grant credits ── */}
         <div className="rounded-lg border border-border p-4 space-y-3">
@@ -247,7 +358,9 @@ export function TeamBillingDialog({
           </div>
           <p className="text-[11px] text-muted-foreground">
             Trocar de plano substitui o anterior — nunca acumula, senão a equipe pagaria os dois.
-            Os créditos do plano entram quando a fatura recorrente for paga.
+            Aplicar um plano <strong>ativa o contrato</strong>: é o que libera módulos, assentos e
+            instâncias para o cliente. Os <strong>créditos</strong> do plano entram na virada do
+            período (ou quando a fatura for paga) — para liberar agora, use “Conceder créditos”.
           </p>
         </div>
 

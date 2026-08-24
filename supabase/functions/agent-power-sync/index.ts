@@ -54,9 +54,26 @@ serve(async (req) => {
 
   if (!viaCron && !viaAdmin) return json({ error: "forbidden" }, 403);
 
+  // The cron posts nothing at all and the admin panel posts `{}`, so an absent
+  // or unparseable body is the normal case, not an error: it means "sweep
+  // everything", which is exactly what the cron wants.
+  let equipeId: string | null = null;
+  let force = false;
   try {
-    const result = await syncAgentPower(db);
-    return json({ ok: true, ...result });
+    const body = await req.json();
+    if (body && typeof body === "object") {
+      equipeId = typeof body.equipe_id === "string" ? body.equipe_id : null;
+      force = body.force === true;
+    }
+  } catch { /* no body */ }
+
+  // Forcing an agent on is an override of our own bookkeeping. The cron must
+  // never do it — only a human looking at a specific team.
+  if (force && !viaAdmin) return json({ error: "force_requires_admin" }, 403);
+
+  try {
+    const result = await syncAgentPower(db, { equipeId, force });
+    return json({ ok: true, equipe_id: equipeId, force, ...result });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[agent-power-sync]", message);

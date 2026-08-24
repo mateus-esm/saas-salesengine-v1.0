@@ -459,3 +459,52 @@ The whole app loses in-flight state because pages do full reloads. Symptoms:
       workers in this environment; tests must run with `--no-file-parallelism`.
       Investigate (jsdom env setup ~80s/file) or pin the flag in the test
       script.
+
+## Surfaced while verifying Sprint 8.2 in production (24/08/2026)
+
+> Found tracing why granted credits never reached a balance. The credit path
+> itself is fixed (migrations `20260824000100` + `20260824000200`); these are the
+> loose ends that trace turned up.
+
+- [ ] **Sprint 9 signup OVERWRITES an existing profile instead of refusing.**
+      Accepting a proposal moves the accepting user's `profiles.equipe_id` to
+      the newly provisioned team and resets `role` to `owner` — it does not
+      check whether that user already belongs to one. Reproduced live on
+      2026-08-24: testing the go-live flow with `mateussmaia95@gmail.com`
+      (super_admin) silently made it `owner` of the new team "Solo Teste", off
+      its previous team. **A real customer who is already a user and accepts a
+      second proposal is moved out of their current team the same way**, losing
+      access to everything scoped to it. Decide the intended behaviour first —
+      refuse with "this e-mail already has an account", provision under a
+      different e-mail, or support one user in several teams (a schema change:
+      `profiles` is one row per user today). See
+      `supabase/migrations/20260821000500_sprint9_provision_with_trial.sql`.
+
+- [ ] **A tenant on trial has no credits, so its agent is paused as
+      `no_credits`.** Credits only enter `credit_ledger` when an invoice is
+      paid, and a trial issues none. **This is the founder's decision as of
+      24/08, not a bug**: the trial exists to configure the product, and credit
+      is granted by hand from Faturamento when a team should go live. Recorded
+      here so nobody "fixes" it by auto-granting at provisioning. Revisit only
+      if trials start needing a working agent unattended.
+
+- [ ] **A proposal with no plan produces a contract that bills but entitles
+      nothing.** When `proposals.chosen_plan_code` is null and no proposal line
+      maps to a `billing_products` row, provisioning falls back to inserting a
+      `contract_items` line with `product_id = NULL` carrying the headline
+      monthly price ("a proposal with neither a chosen plan nor line items still
+      sells its headline monthly price"). MRR is right — the admin view sums
+      `unit_price * quantity` regardless of product — but **every entitlement
+      number joins `billing_products`**, so seat_limit, agent_limit, included
+      credits, instance_limit and builder_hours all come back null/0. Live case:
+      "Solo Teste" (proposal `73F74E2BB4F1`) holds exactly one item,
+      `product_id NULL` at R$200/month, and reads as entitled to nothing.
+      Decide whether a productless line should be rejected at acceptance, map to
+      a default plan, or carry its own entitlement metadata. See
+      `20260821000500_sprint9_provision_with_trial.sql` §4.
+
+- [ ] **`equipes.creditos_avulsos` / `limite_creditos` still have live readers.**
+      Both are deprecated and pinned at 0 (Sprint 8.2), but `fetch-gpt-credits`,
+      `Suporte.tsx` and `AuthContext` still select them, which is why the
+      migration zeroed rather than dropped the columns. Cut those three readers
+      over to `credit_balance(equipe_id, pool)`, then drop the columns.

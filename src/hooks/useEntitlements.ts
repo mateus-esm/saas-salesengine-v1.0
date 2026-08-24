@@ -12,9 +12,10 @@ import { useAuth } from "@/contexts/AuthContext";
 export interface Entitlements {
   equipeId: string;
   contractId: string | null;
-  contractStatus: "none" | "draft" | "active" | "past_due" | "suspended" | "cancelled";
+  contractStatus: "none" | "draft" | "trialing" | "active" | "past_due" | "suspended" | "cancelled";
   /** Dunning end state: data visible, AI and outbound stopped. */
   isReadOnly: boolean;
+  /** Sprint 9: `trialing` counts as live — the trial exists to be used. */
   isLive: boolean;
   modules: string[];
   seatLimit: number | null;

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
 import { ProposalsTab } from "@/components/admin/proposals/ProposalsTab";
 import { AdminBillingTab } from "@/components/admin/billing/BillingTab";
+import { TeamBillingDialog, type TeamBillingRow } from "@/components/admin/billing/TeamBillingDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,10 +123,18 @@ const Admin = () => {
   const [isNewEquipe, setIsNewEquipe] = useState(false);
   const [deleteEquipeTarget, setDeleteEquipeTarget] = useState<Equipe | null>(null);
 
-  // ── Credits dialog state
-  const [creditsDialog, setCreditsDialog] = useState(false);
-  const [creditsEquipe, setCreditsEquipe] = useState<Equipe | null>(null);
-  const [creditsToAdd, setCreditsToAdd] = useState("");
+  // ── Credits / billing dialog state (Sprint 8.2)
+  //
+  // The coin button used to open a dialog of its own that wrote
+  // equipes.creditos_avulsos — a column no Billing v1 code path reads. Credits
+  // went in and nothing moved: not the client's balance, not the agent. It now
+  // opens the SAME dialog as the Faturamento tab, so there is one way to grant
+  // credits and it is the one that reaches the ledger.
+  const [billingDialog, setBillingDialog] = useState(false);
+  const [billingTeam, setBillingTeam] = useState<TeamBillingRow | null>(null);
+  const [loadingBillingId, setLoadingBillingId] = useState<string | null>(null);
+  /** equipe_id -> billing row, so the table can show the REAL balances. */
+  const [billingByEquipe, setBillingByEquipe] = useState<Record<string, TeamBillingRow>>({});
 
   // ── Members sheet state
   const [membersSheet, setMembersSheet] = useState(false);
@@ -164,16 +173,25 @@ const Admin = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [nichesRes, equipesRes, profilesRes, rolesRes, wppRes] = await Promise.all([
+      const [nichesRes, equipesRes, profilesRes, rolesRes, wppRes, billingRes] = await Promise.all([
         supabase.from("niches" as any).select("*").order("nome"),
         supabase.from("equipes").select("*").order("nome"),
         supabase.from("profiles").select("id, user_id, email, nome_completo, equipe_id, cargo").order("email"),
         supabase.from("user_roles").select("*"),
         supabase.from("wpp_instances").select("*, equipes(id, nome)").order("created_at", { ascending: false }),
+        // The only source of a real balance. equipes.creditos_avulsos is a
+        // deprecated column pinned at 0 and must never be shown as one.
+        supabase.from("v_admin_team_billing").select("*"),
       ]);
 
       if (nichesRes.data) setNiches(nichesRes.data as unknown as Niche[]);
       if (equipesRes.data) setEquipes(equipesRes.data as Equipe[]);
+
+      setBillingByEquipe(
+        Object.fromEntries(
+          ((billingRes.data ?? []) as TeamBillingRow[]).map((row) => [row.equipe_id, row]),
+        ),
+      );
 
       const roles = (rolesRes.data || []) as UserRole[];
       setUserRoles(roles);
@@ -368,19 +386,32 @@ const Admin = () => {
     setEditingEquipe((prev) => prev ? { ...prev, webhook_secret: newSecret } : prev);
   };
 
-  const handleAddCredits = async () => {
-    if (!creditsEquipe || !creditsToAdd) return;
+  /**
+   * Open the billing panel for one team, straight from the Equipes table.
+   *
+   * The row is re-fetched rather than taken from `billingByEquipe` so the dialog
+   * opens on current numbers — the table may have been sitting on screen for a
+   * while, and a stale balance is what makes someone grant twice.
+   */
+  const openTeamBilling = async (equipe: Equipe) => {
+    setLoadingBillingId(equipe.id);
     try {
-      const newTotal = creditsEquipe.creditos_avulsos + parseInt(creditsToAdd);
-      const { error } = await supabase.from("equipes").update({ creditos_avulsos: newTotal } as any).eq("id", creditsEquipe.id);
+      const { data, error } = await supabase
+        .from("v_admin_team_billing")
+        .select("*")
+        .eq("equipe_id", equipe.id)
+        .maybeSingle();
       if (error) throw error;
-      setEquipes((prev) => prev.map((e) => e.id === creditsEquipe.id ? { ...e, creditos_avulsos: newTotal } : e));
-      toast.success(`${creditsToAdd} créditos adicionados!`);
-      setCreditsDialog(false);
-      setCreditsEquipe(null);
-      setCreditsToAdd("");
-    } catch {
-      toast.error("Erro ao adicionar créditos");
+      if (!data) {
+        toast.error("Faturamento indisponível para esta equipe");
+        return;
+      }
+      setBillingTeam(data as TeamBillingRow);
+      setBillingDialog(true);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao abrir faturamento");
+    } finally {
+      setLoadingBillingId(null);
     }
   };
 
@@ -782,7 +813,7 @@ const Admin = () => {
                 </TableHeader>
                 <TableBody>
                   {equipes.map((equipe) => {
-                    const totalCredits = equipe.limite_creditos + equipe.creditos_avulsos;
+                    const billing = billingByEquipe[equipe.id];
                     return (
                       <TableRow key={equipe.id}>
                         <TableCell className="font-medium">{equipe.nome}</TableCell>
@@ -796,8 +827,26 @@ const Admin = () => {
                             {equipe.workspace_id ? equipe.workspace_id.slice(0, 14) + "…" : "-"}
                           </code>
                         </TableCell>
+                        {/* Two pools, never a single number: Copilot credits do
+                            not keep the WhatsApp agent alive, so summing them
+                            would hide the one that matters. */}
                         <TableCell>
-                          <Badge variant="secondary">{totalCredits.toLocaleString()}</Badge>
+                          {billing ? (
+                            <div className="flex flex-col gap-0.5 text-xs">
+                              <span className="flex items-center gap-1">
+                                <Badge variant={billing.whatsapp_balance > 0 ? "secondary" : "destructive"}>
+                                  {billing.whatsapp_balance.toLocaleString()}
+                                </Badge>
+                                <span className="text-muted-foreground">atend.</span>
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Badge variant="outline">{billing.copilot_balance.toLocaleString()}</Badge>
+                                <span className="text-muted-foreground">copiloto</span>
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={statusBadgeVariant(equipe.subscription_status)}>
@@ -811,9 +860,21 @@ const Admin = () => {
                           <Button variant="ghost" size="sm" title="Membros" onClick={() => openMembersSheet(equipe)}>
                             <UserCog className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" title="Créditos" onClick={() => { setCreditsEquipe(equipe); setCreditsDialog(true); }}>
-                            <Coins className="h-4 w-4" />
+                          <Button
+                            variant="ghost" size="sm"
+                            title="Créditos, plano e adicionais"
+                            disabled={loadingBillingId !== null}
+                            onClick={() => openTeamBilling(equipe)}
+                          >
+                            {loadingBillingId === equipe.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Coins className="h-4 w-4" />}
                           </Button>
+                          {billing?.agent_paused_at && (
+                            <Badge variant="destructive" className="align-middle text-[10px]">
+                              agente off
+                            </Badge>
+                          )}
                           <Button variant="ghost" size="sm" title="Excluir equipe" className="text-destructive hover:text-destructive"
                             onClick={() => setDeleteEquipeTarget(equipe)}>
                             <Trash2 className="h-4 w-4" />
@@ -1208,22 +1269,21 @@ const Admin = () => {
 
                 <Separator />
 
-                {/* ── Créditos */}
+                {/* ── Créditos
+                    No editable number here on purpose. `limite_creditos` is a
+                    pre-billing column that grants nothing: the allowance comes
+                    from the plan on the contract, and any manual credit has to
+                    go through the ledger or the client never sees it. */}
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" /> Créditos do Plano
+                    <CreditCard className="h-4 w-4" /> Créditos e Plano
                   </h3>
-                  <div className="space-y-2">
-                    <Label>Limite mensal de créditos</Label>
-                    <Input
-                      type="number"
-                      value={editingEquipe.limite_creditos ?? 1000}
-                      onChange={(e) => setEditingEquipe({ ...editingEquipe, limite_creditos: parseInt(e.target.value) || 0 })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Créditos avulsos são gerenciados pelo botão <Coins className="inline h-3 w-3" /> na tabela.
-                    </p>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Gerenciados pelo botão <Coins className="inline h-3 w-3" /> na tabela de equipes
+                    (ou pela aba Faturamento): carteira de Atendimento, carteira de Copiloto,
+                    plano e adicionais. É o único caminho que chega no extrato do cliente e
+                    religa o agente.
+                  </p>
                 </div>
 
                 <Separator />
@@ -1417,44 +1477,18 @@ const Admin = () => {
       </Sheet>
 
       {/* ════════════════════════════════════════════════════════════════════════
-          DIALOG: CRÉDITOS
+          DIALOG: CRÉDITOS, PLANO E ADICIONAIS (Sprint 8.2)
+
+          The very same component the Faturamento tab opens. Two dialogs meant
+          two code paths, and the one that was easier to reach wrote to a dead
+          column — so there is now exactly one.
       ════════════════════════════════════════════════════════════════════════ */}
-      <Dialog open={creditsDialog} onOpenChange={(o) => { setCreditsDialog(o); if (!o) { setCreditsEquipe(null); setCreditsToAdd(""); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Adicionar Créditos</DialogTitle>
-            <DialogDescription>
-              Adicione créditos avulsos para <strong>{creditsEquipe?.nome}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Créditos atuais</Label>
-              <p className="text-3xl font-bold tabular-nums">
-                {creditsEquipe ? (creditsEquipe.limite_creditos + creditsEquipe.creditos_avulsos).toLocaleString() : 0}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Plano: {creditsEquipe?.limite_creditos.toLocaleString()} + Avulsos: {creditsEquipe?.creditos_avulsos.toLocaleString()}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Quantidade a adicionar</Label>
-              <Input
-                type="number"
-                value={creditsToAdd}
-                onChange={(e) => setCreditsToAdd(e.target.value)}
-                placeholder="Ex: 500"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreditsDialog(false)}>Cancelar</Button>
-            <Button onClick={handleAddCredits} disabled={!creditsToAdd || parseInt(creditsToAdd) <= 0}>
-              <Coins className="h-4 w-4 mr-2" /> Adicionar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TeamBillingDialog
+        team={billingTeam}
+        open={billingDialog}
+        onOpenChange={(o) => { setBillingDialog(o); if (!o) setBillingTeam(null); }}
+        onChanged={fetchData}
+      />
 
       {/* ════════════════════════════════════════════════════════════════════════
           DIALOG: ADD MEMBER (Sprint 5.5 EPIC 4)

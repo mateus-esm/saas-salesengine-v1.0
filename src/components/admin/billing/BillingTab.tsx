@@ -16,6 +16,9 @@ import { TeamBillingDialog, type TeamBillingRow } from "./TeamBillingDialog";
 const CONTRACT_STATUS: Record<string, { label: string; className: string }> = {
   none:      { label: "Sem plano",  className: "bg-muted text-muted-foreground" },
   draft:     { label: "Rascunho",   className: "bg-muted text-muted-foreground" },
+  // Sprint 9: a trial is live and unpaid. Blue, not green — it is not revenue
+  // yet, and without its own entry it fell back to "Sem plano".
+  trialing:  { label: "Em teste",   className: "bg-blue-500/10 text-blue-700 dark:text-blue-300" },
   active:    { label: "Ativo",      className: "bg-green-500/10 text-green-700 dark:text-green-300" },
   past_due:  { label: "Em atraso",  className: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
   suspended: { label: "Suspenso",   className: "bg-red-500/10 text-red-700 dark:text-red-300" },
