@@ -69,6 +69,40 @@ serve(async (req) => {
     // PROVIDER credits as reported upstream; converted to billed below.
     let totalSpentProvider = 0;
 
+    // ── Sprint 8.5: só o que pertence a ESTE cliente sob a cobrança atual ────
+    //
+    // O provider responde pelo agente desde sempre. O nosso ledger começa no dia
+    // em que a equipe passou a ser medida. Mostrar os dois lado a lado sem
+    // recortar produz a tela que o founder viu: "saldo 1500, gastou 7000" — dois
+    // números calculados sobre janelas diferentes, onde o gasto inclui dias em
+    // que ninguém estava cobrando nada.
+    //
+    // Diferente do `credits-reconcile`, aqui dá para recortar direito: a resposta
+    // vem com quebra por DIA, então o corte é exato em vez de um rateio chutado.
+    const { data: firstLedgerEntry } = await supabaseClient
+      .from('credit_ledger')
+      .select('created_at')
+      .eq('equipe_id', profile.equipe_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    const meteringSince = firstLedgerEntry?.created_at
+      ? new Date(firstLedgerEntry.created_at as string)
+      : null;
+
+    /** Descarta o que foi consumido antes de a cobrança desta equipe existir. */
+    const sinceMetering = (rows: any[]): any[] => {
+      if (!meteringSince) return rows;
+      return rows.filter((d) => {
+        if (!d?.year || !d?.month || !d?.day) return true; // sem data, não dá para excluir
+        // Fim do dia: o consumo do dia em que a medição começou conta inteiro,
+        // porque é o dia em que o cliente virou cliente.
+        const end = new Date(Date.UTC(d.year, d.month - 1, d.day, 23, 59, 59));
+        return end >= meteringSince;
+      });
+    };
+
     if (period === 'year') {
       // Fetch all 12 months in parallel for yearly view
       const monthFetches = Array.from({ length: 12 }, (_, i) => i + 1).map(async (m) => {
@@ -85,7 +119,7 @@ serve(async (req) => {
       });
 
       const monthResults = await Promise.all(monthFetches);
-      allDetails = monthResults.flat();
+      allDetails = sinceMetering(monthResults.flat());
       totalSpentProvider = allDetails.reduce((sum: number, d: any) => sum + (d.credits || 0), 0);
     } else {
       // Single month fetch
@@ -104,9 +138,12 @@ serve(async (req) => {
       const spentData = await spentRes.json();
       console.log('AI Engine credits-spent:', JSON.stringify(spentData).slice(0, 200));
 
-      totalSpentProvider = spentData.total || 0;
       // Live API returns the per-model breakdown under `data`, NOT `details`.
-      allDetails = spentData.data || [];
+      allDetails = sinceMetering(spentData.data || []);
+      // O total tem de vir da MESMA lista que a tela desenha. Usar
+      // `spentData.total` aqui deixaria o número grande no topo brigando com o
+      // gráfico recortado logo abaixo.
+      totalSpentProvider = allDetails.reduce((sum: number, d: any) => sum + (d.credits || 0), 0);
 
       // Cache to DB
       const periodKey = `${year}-${month.toString().padStart(2, '0')}`;
@@ -218,6 +255,10 @@ serve(async (req) => {
       period,
       year,
       month: period === 'month' ? month : null,
+      // Sprint 8.5: desde quando este consumo é desta equipe. A tela precisa
+      // poder dizer isso — um número recortado sem explicação parece um número
+      // errado.
+      meteringSince: meteringSince ? meteringSince.toISOString() : null,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {

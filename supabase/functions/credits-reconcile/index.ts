@@ -62,11 +62,57 @@ serve(async (req) => {
     .not("gpt_maker_agent_id", "is", null);
   if (error) return json({ error: error.message }, 500);
 
-  const report = { checked: 0, adjusted: 0, skipped: 0, drift: [] as unknown[] };
+  const report = {
+    checked: 0, adjusted: 0, skipped: 0,
+    drift: [] as unknown[],
+    // Reported rather than silent: "we skipped your tenant" is something
+    // the founder needs to see, or a month of real usage goes unbilled
+    // and nobody notices until the next audit.
+    notMeteredAllMonth: [] as unknown[],
+  };
 
   for (const equipe of equipes ?? []) {
     report.checked++;
     const agentId = String(equipe.gpt_maker_agent_id).trim();
+
+    // ── Sprint 8.5: never reconcile a month we were not metering all of ──
+    //
+    // The provider answers for a CALENDAR MONTH and nothing finer. Our ledger
+    // starts when the tenant began being metered. If that happened mid-month,
+    // the two numbers describe different windows and their difference is not
+    // drift — it is the consumption from before we were counting.
+    //
+    // On 2026-08-25 this booked -8040 against Casa Flow and -7000 against Solo
+    // Energia: a whole month of provider usage against a ledger one day old.
+    // Because credit_balance is greatest(0, sum), those holes silently swallowed
+    // every top-up the founder made afterwards — the balance stayed at zero and
+    // nothing in the panel said why.
+    //
+    // Skipping is the only honest option: a partial month cannot be compared,
+    // and inventing a pro-rata split of the provider's total would be a guess
+    // billed to a customer.
+    const { data: firstEntry } = await db
+      .from("credit_ledger")
+      .select("created_at")
+      .eq("equipe_id", equipe.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!firstEntry) {
+      // Never metered at all: there is no ledger to reconcile against.
+      report.skipped++;
+      continue;
+    }
+    if (new Date(firstEntry.created_at as string) > new Date(periodStart)) {
+      report.skipped++;
+      report.notMeteredAllMonth.push({
+        equipe: equipe.nome,
+        metering_since: firstEntry.created_at,
+        period: periodKey,
+      });
+      continue;
+    }
 
     let providerSpent = 0;
     try {

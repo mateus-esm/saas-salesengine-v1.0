@@ -205,7 +205,11 @@ function SendersPanel() {
                   onBlur={(e) => e.target.value !== (s.email_from ?? "") && save(s.purpose, { email: e.target.value })}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  O domínio precisa estar verificado na Resend, senão o envio volta como recusado.
+                  O domínio precisa estar verificado na Resend, senão todo envio volta 403.
+                  <strong> Subdomínio conta como domínio separado:</strong> com
+                  {" "}<code>comercial.soloenergia.com.br</code> verificado, um endereço
+                  {" "}<code>@soloenergia.com.br</code> é recusado. Deixe vazio para usar o
+                  remetente padrão da plataforma.
                 </p>
               </div>
             </div>

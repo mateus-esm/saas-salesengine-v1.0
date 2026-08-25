@@ -116,6 +116,15 @@ export function AIUsageDashboard() {
   // Sprint 7.5 W2: the plan allotment, in billed credits — a real denominator
   // at last, so the saldo can be shown as "restante / total do plano".
   const [creditAllowance, setCreditAllowance] = useState<number | null>(null);
+  /**
+   * Sprint 8.5 — a partir de quando este consumo pertence a esta equipe.
+   *
+   * O provider responde pelo agente desde sempre; a cobrança desta equipe
+   * comecou num dia especifico. Sem dizer isso, um total recortado parece um
+   * total errado — e um total NAO recortado parece o consumo de outra pessoa,
+   * que foi exatamente a reclamacao.
+   */
+  const [meteringSince, setMeteringSince] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogModel[]>([]);
 
   // T10 Step 3: label lookup via the catalog; unknown keys render as the raw
@@ -155,6 +164,7 @@ export function AIUsageDashboard() {
       setCreditsBalance(typeof data.balance === 'number' ? data.balance : null);
       setCreditAllowance(typeof data.allowance === 'number' ? data.allowance : null);
       setDetails(data.details || []);
+      setMeteringSince(typeof data.meteringSince === 'string' ? data.meteringSince : null);
 
       if (!catalogRes.error && Array.isArray(catalogRes.data?.models)) {
         setCatalog(catalogRes.data.models);
@@ -320,6 +330,13 @@ export function AIUsageDashboard() {
                     Saldo: {balanceDisplay}{allowanceDisplay ? ` / ${allowanceDisplay}` : ""} cr
                   </span>
                 </div>
+                {meteringSince && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Conta só o consumo desta equipe a partir de{" "}
+                    {new Date(meteringSince).toLocaleDateString("pt-BR")}, quando a cobrança dela
+                    começou. O que o agente gastou antes disso não é cobrado aqui.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
