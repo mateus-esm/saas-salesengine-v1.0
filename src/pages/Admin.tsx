@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
 import { ProposalsTab } from "@/components/admin/proposals/ProposalsTab";
 import { AdminBillingTab } from "@/components/admin/billing/BillingTab";
+import { NotificationsTab } from "@/components/admin/notifications/NotificationsTab";
 import { TeamBillingDialog, type TeamBillingRow } from "@/components/admin/billing/TeamBillingDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import {
   Radio,
   FileText,
   Receipt,
+  Bell,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -709,6 +711,10 @@ const Admin = () => {
             <Receipt className="h-4 w-4" />
             Faturamento
           </TabsTrigger>
+          <TabsTrigger value="notificacoes" className="flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            Notificações
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="propostas" className="mt-4">
@@ -717,6 +723,10 @@ const Admin = () => {
 
         <TabsContent value="faturamento" className="mt-4">
           <AdminBillingTab />
+        </TabsContent>
+
+        <TabsContent value="notificacoes" className="mt-4">
+          <NotificationsTab />
         </TabsContent>
 
         {/* ══════════════════════════════════════════════════════════════════════

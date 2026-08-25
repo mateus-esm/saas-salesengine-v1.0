@@ -555,3 +555,45 @@ a respeita.
       Precisa de desenho próprio antes de codar.
 - [ ] **12 · Revisão geral do billing/admin.** Não é tarefa isolada — é critério
       de aceite a aplicar sobre os outros itens.
+
+## Sprint 8.4 — Fixes 2, bloco B: notificações (entregue 25/08/2026)
+
+> Item 11 do `sprint_8.1_billing_v1_fixes.md`. Migration `20260824000400`
+> aplicada em produção; `admin-notifications` criada, `notification-dispatcher`
+> redeployado. Nova aba **Notificações** no admin.
+
+- [x] **Instância por finalidade.** `notification_senders` com Comercial,
+      Financeiro, Suporte e Operação. Antes existia UMA instância para tudo,
+      num env var — cobrança e follow-up de venda saíam da mesma linha. Pode
+      escolher uma instância conectada no produto ou digitar o nome de uma que
+      já existe na VPS. Botão de teste envia de verdade sem gravar histórico.
+- [x] **Templates editáveis.** O texto de cada notificação estava escrito na mão
+      dentro das edge functions — mudar uma palavra exigia deploy. Agora vive em
+      `notification_types.template_*` com `{{variáveis}}`; quando existe, vence o
+      texto do código. Variável não fornecida some, o cliente nunca vê `{{x}}`.
+- [x] **Liga/desliga por cliente.** `notification_policies`: por cliente e por
+      tipo, decide se envia, por quais canais, se é automático e para qual
+      número/e-mail. É distinto de `notification_preferences`, que é do cliente
+      e só consegue reduzir. A política é o teto; a preferência do cliente
+      abaixa mais. Ninguém opta por receber o que a plataforma não liberou.
+- [x] **Proposta no WhatsApp do cliente.** Era impossível: `notifications.
+      equipe_id` era NOT NULL e quem recebe proposta ainda não é tenant. Agora é
+      anulável com `proposal_id` e contatos próprios — e a RLS continua fechada
+      porque todo filtro usa `equipe_id IN (...)`, que NULL nunca satisfaz.
+- [x] **Chave da Resend no painel.** `system_settings`, só super admin, e o
+      valor nunca volta para a tela. Vazio = usa a variável de ambiente.
+
+**Removido de propósito:** o dispatcher só mandava WhatsApp para severidade
+`warn`+, hardcoded. Isso tornava o resto inalcançável — um tipo podia declarar
+whatsapp e nunca enviar. Quem decide agora é `notify()`, a partir do tipo
+estreitado pela política do cliente.
+
+### Falta configurar (não é código)
+
+- [ ] **Escolher a instância de cada finalidade** na aba Notificações. Todas
+      estão vazias hoje, então caem na instância padrão da plataforma
+      (`SOLO_PLATFORM_INSTANCE_ID`); se esse env var não estiver setado, o canal
+      WhatsApp é pulado e só e-mail e in-app saem.
+- [ ] **Agendar o cron do `notification-dispatcher`** (segue na lista de crons
+      pendentes do Sprint 8). Sem ele, as entregas só saem quando alguém dispara
+      uma proposta pelo painel, que drena a fila na hora.
