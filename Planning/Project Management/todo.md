@@ -594,6 +594,14 @@ estreitado pela política do cliente.
       estão vazias hoje, então caem na instância padrão da plataforma
       (`SOLO_PLATFORM_INSTANCE_ID`); se esse env var não estiver setado, o canal
       WhatsApp é pulado e só e-mail e in-app saem.
-- [ ] **Agendar o cron do `notification-dispatcher`** (segue na lista de crons
-      pendentes do Sprint 8). Sem ele, as entregas só saem quando alguém dispara
-      uma proposta pelo painel, que drena a fila na hora.
+- [x] **Agendar o cron do `notification-dispatcher`** — feito em 25/08. Os três
+      jobs (`sprint8_billing_tick`, `sprint8_dispatch_tick`,
+      `sprint8_reconcile_tick`) estão ativos; o dispatcher roda de minuto em
+      minuto e drenou na primeira execução a fila parada desde 24/08.
+
+- [ ] **Verificar o domínio na Resend.** É o único ponto que sobrou do canal de
+      e-mail: as 11 entregas falharam com `403: The soloventures.com.br domain
+      is not verified`. WhatsApp e in-app saem normalmente. Verificar em
+      https://resend.com/domains — precisa de acesso ao DNS, ninguém mais faz
+      isso. O código já avisava disso: o comentário em `brandFor` conta que a
+      produção recusou os domínios por nicho pelo mesmo motivo.

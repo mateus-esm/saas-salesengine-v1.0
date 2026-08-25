@@ -8,11 +8,31 @@
 > | 11 migrations em produção | ✅ feito — **todas as asserções passaram contra o banco real** |
 > | 10 edge functions | ✅ feito |
 > | `public-proposal` respondendo | ✅ verificado em produção |
-> | **Secrets** | ❌ **FALTAM 2 — veja abaixo** |
-> | Crons (`pg_cron`) | ❌ pendente (depende do secret) |
+> | **Secrets** | ✅ feito — verificado em 25/08: as três functions de cron devolvem `401` para token errado, e não `500 not_configured`, o que só acontece quando o secret existe |
+> | Crons (`pg_cron`) | ✅ feito em 25/08 — ver §6 |
 > | Rotacionar chave Asaas | ❌ pendente — **só você pode fazer** |
+> | Verificar domínio na Resend | ❌ pendente — **só você pode fazer**, ver abaixo |
 >
-> ### O que falta, e por que só você pode fazer
+> ### Atualização 25/08/2026 — crons no ar
+>
+> `pg_cron 1.6.4` e `pg_net 0.19.5` já estavam instalados. Os três jobs foram
+> agendados e o `sprint8_dispatch_tick` drenou na primeira execução a fila de 11
+> entregas que estava parada desde 24/08:
+>
+> | Job | Frequência | Alvo |
+> |---|---|---|
+> | `sprint8_billing_tick` | `0 12 * * *` | `billing-cron` |
+> | `sprint8_dispatch_tick` | `* * * * *` | `notification-dispatcher` |
+> | `sprint8_reconcile_tick` | `30 4 * * *` | `credits-reconcile` |
+>
+> **O que sobrou, e é só uma coisa:** os 11 e-mails da fila falharam, todos com
+> a mesma resposta da Resend — `403: The soloventures.com.br domain is not
+> verified`. WhatsApp e in-app saíram normalmente. Não é bug: o domínio do
+> remetente precisa ser verificado em https://resend.com/domains, e só você tem
+> acesso ao DNS. Enquanto isso, o canal e-mail continua falhando e sendo
+> re-tentado; os outros dois canais entregam.
+>
+> ### O que faltava antes (mantido como registro)
 >
 > As functions estão no ar mas devolvem `{"error":"not_configured"}` porque
 > faltam dois secrets. **Isso é o fail-safe funcionando** — o webhook recusa
