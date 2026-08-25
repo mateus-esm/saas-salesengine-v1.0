@@ -45,3 +45,12 @@ Fixes 2:
     aligned, clean, precise, trustfull and really effective, this 2 need to be
     very precise because this is the core of the confidence of the client,we
     cannot commit mistakes here.
+
+    Fixes 3>
+
+    13. When i click to send the message like test not arrive the message in
+        wpp.
+    14. Need to be posible edit, create and delete templates also define if i
+        wqnt to send via wpp, email, in-app, all,nothing, etc.
+    15. When i try to send an proposal after create one appear an error and not
+        send, sayib that nor founs the resend connection.

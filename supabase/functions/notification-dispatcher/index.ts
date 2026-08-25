@@ -18,6 +18,9 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { safeEqual } from "../_shared/asaas.ts";
 import { sendViaSolo } from "../_shared/solo-sender.ts";
 import { renderEmail } from "../_shared/email-templates.ts";
+// Sprint 8.5: the ONE normalizer. A local digit-strip lived here and silently
+// dropped the country code off every human-typed number.
+import { normalizePhone } from "../_shared/phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,7 +224,20 @@ async function deliverEmail(db: SupabaseClient, d: Delivery, r: Routing): Promis
     }),
   });
 
-  if (!res.ok) return { status: "failed", error: `resend ${res.status}: ${await res.text()}` };
+  if (!res.ok) {
+    const raw = await res.text();
+    // Sprint 8.5 (Fixes 3, item 15): the domain-verification refusal is the one
+    // Resend error that is a setup task, not a transient fault, and it was
+    // reaching the panel as a wall of JSON. Say what to do about it instead.
+    if (res.status === 403 && raw.includes("domain is not verified")) {
+      const from = (raw.match(/The ([^\s]+) domain is not verified/) ?? [])[1] ?? "do remetente";
+      return {
+        status: "failed",
+        error: `Domínio ${from} não verificado na Resend — verifique em resend.com/domains antes de enviar por e-mail.`,
+      };
+    }
+    return { status: "failed", error: `resend ${res.status}: ${raw}` };
+  }
   const body = await res.json().catch(() => ({}));
   return { status: "sent", providerId: (body as { id?: string }).id };
 }
@@ -312,37 +328,56 @@ async function recipientEmails(db: SupabaseClient, d: Delivery): Promise<string[
   return [...set];
 }
 
+/**
+ * Sprint 8.5 (Fixes 3, item 13) — every number here goes through the SHARED
+ * normalizer, not a local digit strip.
+ *
+ * The bug this fixes: these phones are typed by a human ("85996487923"), unlike
+ * lead phones which arrive from the webhook already normalized. Stripping
+ * non-digits left them without the country code, the Solo API accepted them and
+ * returned a message key, we recorded `sent` — and nothing ever arrived,
+ * because the JID does not exist.
+ *
+ * normalizePhone() has handled this correctly since Sprint 5.5. It was simply
+ * never imported here.
+ */
 async function recipientPhones(db: SupabaseClient, d: Delivery): Promise<string[]> {
   const n = d.notifications;
   const set = new Set<string>();
 
+  const add = (raw: string | null | undefined) => {
+    const p = normalizePhone(raw);
+    if (p) set.add(p);
+  };
+
   // Same rule as e-mail: an explicit number is the answer, and a message to a
   // proposal recipient has no team to fall back to.
   if (n.recipient_phone) {
-    const only = digits(n.recipient_phone);
-    return only.length >= 10 ? [only] : [];
+    const only = normalizePhone(n.recipient_phone);
+    return only ? [only] : [];
   }
   if (!n.equipe_id) return [];
 
   const { data: account } = await db
     .from("billing_accounts").select("phone").eq("equipe_id", n.equipe_id).maybeSingle();
-  if (account?.phone) set.add(digits(account.phone));
+  add(account?.phone);
 
   if (!set.size) {
     const { data: admins } = await db
       .from("profiles").select("telefone, role, cargo").eq("equipe_id", n.equipe_id);
     for (const p of admins ?? []) {
       if (p.telefone && (["owner", "admin"].includes(p.role ?? "") || p.cargo === "owner")) {
-        set.add(digits(p.telefone));
+        add(p.telefone);
       }
     }
   }
 
   const founderPhone = Deno.env.get("PLATFORM_FOUNDER_PHONE");
   if (founderPhone && (n.type.startsWith("proposal.") || n.severity === "critical")) {
-    set.add(digits(founderPhone));
+    add(founderPhone);
   }
-  return [...set].filter((p) => p.length >= 10);
+  // normalizePhone already rejects anything too short to be a number.
+  return [...set];
 }
 
 interface Brand { name: string; color: string; from: string; appUrl: string }

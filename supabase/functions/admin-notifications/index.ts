@@ -19,6 +19,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendViaSolo } from "../_shared/solo-sender.ts";
+import { normalizePhone } from "../_shared/phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +34,9 @@ const GUARDS: Record<string, { status: number; message: string }> = {
   unknown_notification_type: { status: 404, message: "Tipo de notificação desconhecido." },
   unknown_setting:           { status: 404, message: "Configuração desconhecida." },
   proposal_not_found:        { status: 404, message: "Proposta não encontrada." },
+  builtin_template:          { status: 409, message: "Este modelo é do sistema: há código que o dispara, e apagá-lo quebraria esse envio. Deixe-o sem canal nenhum para silenciá-lo." },
+  template_already_exists:   { status: 409, message: "Já existe um modelo com esse nome." },
+  invalid_channel:           { status: 400, message: "Canal inválido. Só existem no app, e-mail e WhatsApp." },
 };
 
 serve(async (req) => {
@@ -71,7 +75,28 @@ serve(async (req) => {
       case "save_template":
         return json(await rpc(asUser, "admin_set_notification_template", {
           p_type: body.type, p_title: body.title ?? "", p_body: body.body ?? "",
+          // undefined (field absent) leaves channels alone; an array — including
+          // an empty one, which means "record but never deliver" — sets them.
+          p_channels: body.channels ?? null,
         }));
+
+      case "create_template":
+        return json(await rpc(asUser, "admin_create_notification_template", {
+          p_type: body.type ?? null,
+          p_description: body.description,
+          p_purpose: body.purpose ?? "operacao",
+          p_channels: body.channels ?? ["in_app"],
+          p_title: body.title ?? null,
+          p_body: body.body ?? null,
+          p_severity: body.severity ?? "info",
+        }));
+
+      case "delete_template":
+        return json(await rpc(asUser, "admin_delete_notification_template", {
+          p_type: body.type,
+        }));
+
+      case "send_template":   return json(await sendTemplate(db, asUser, body));
 
       case "save_policy":
         return json(await rpc(asUser, "admin_set_notification_policy", {
@@ -123,8 +148,11 @@ async function testSend(db: SupabaseClient, body: Record<string, unknown>) {
   const instance = sender.whatsapp_instance ?? Deno.env.get("SOLO_PLATFORM_INSTANCE_ID");
   if (!instance) return { ok: false, error: "Nenhuma instância configurada para esta finalidade." };
 
-  const phone = String(body.phone ?? "").replace(/\D/g, "");
-  if (phone.length < 10) return { ok: false, error: "Informe um número válido com DDD." };
+  // Sprint 8.5 (Fixes 3, item 13): the shared normalizer, not a digit strip.
+  // Typing "85996487923" here used to send a number with no country code — the
+  // API returned a message key, we reported success, and nothing arrived.
+  const phone = normalizePhone(String(body.phone ?? ""));
+  if (!phone) return { ok: false, error: "Informe um número válido com DDD." };
 
   const r = await sendViaSolo({
     supabase: db,
@@ -137,6 +165,55 @@ async function testSend(db: SupabaseClient, body: Record<string, unknown>) {
   return r.ok
     ? { ok: true, instance }
     : { ok: false, instance, error: r.error ?? "Falha desconhecida ao enviar." };
+}
+
+/**
+ * Fire a template at one client, by hand.
+ *
+ * Sprint 8.5 (Fixes 3, item 14): a template nobody can send is dead weight, and
+ * a custom type is emitted by no code at all — this is the only thing that makes
+ * one useful. It goes through notify() like everything else, so the client's
+ * policy still applies: a type they have switched off stays off even when the
+ * send was deliberate.
+ */
+async function sendTemplate(db: SupabaseClient, asUser: SupabaseClient, body: Record<string, unknown>) {
+  const equipeId = String(body.equipe_id ?? "");
+
+  // What a manual template can interpolate. Read here rather than in SQL so the
+  // variable list stays next to the one place that documents it.
+  const { data: team } = await db
+    .from("v_admin_team_billing")
+    .select("nome, whatsapp_balance, copilot_balance")
+    .eq("equipe_id", equipeId).maybeSingle();
+
+  const id = await rpc<string | null>(asUser, "notify", {
+    p_equipe_id: equipeId,
+    p_type: body.type,
+    // The template wins when there is one; these are the fallback for a type
+    // whose wording was cleared.
+    p_title: body.title ?? "Aviso",
+    p_body: body.body ?? null,
+    p_action_url: body.action_url ?? "/",
+    p_data: {
+      equipe_nome: team?.nome ?? "",
+      saldo_whatsapp: String(team?.whatsapp_balance ?? 0),
+      saldo_copilot: String(team?.copilot_balance ?? 0),
+    },
+    p_dedup_key: `manual_${Date.now()}`,
+  });
+
+  if (!id) {
+    return { ok: false, blocked: true,
+      message: "Este cliente está com esta notificação desligada nas regras dele." };
+  }
+
+  await drain(db);
+  const { data: deliveries } = await db
+    .from("notification_deliveries")
+    .select("channel, status, last_error")
+    .eq("notification_id", id);
+
+  return { ok: true, notification_id: id, deliveries: deliveries ?? [] };
 }
 
 /**

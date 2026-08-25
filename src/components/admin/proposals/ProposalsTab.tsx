@@ -157,16 +157,29 @@ export function ProposalsTab() {
         return;
       }
 
-      // Report per channel: a green toast over a failed WhatsApp send is how you
-      // find out a week later that the client never got the proposal.
-      const failed = (data?.deliveries ?? []).filter((d: { status: string }) => d.status !== "sent");
+      // Sprint 8.5 (Fixes 3, item 15): say what DID go out before what did not.
+      //
+      // This used to title itself "Enviada com falhas" in red whenever any
+      // channel failed — and e-mail always fails while the Resend domain is
+      // unverified. The founder read that as "a proposta não foi enviada" when
+      // the WhatsApp message had in fact gone out. Naming the successful channel
+      // first is the difference between a warning and a false alarm.
+      type D = { channel: string; status: string; last_error: string | null };
+      const all = (data?.deliveries ?? []) as D[];
+      const label: Record<string, string> = { whatsapp: "WhatsApp", email: "e-mail", in_app: "no app" };
+      const sent = all.filter((d) => d.status === "sent");
+      const failed = all.filter((d) => d.status !== "sent");
+
       toast({
-        title: failed.length ? "Enviada com falhas" : "Proposta enviada ao cliente",
+        title: sent.length
+          ? `Proposta enviada por ${sent.map((d) => label[d.channel] ?? d.channel).join(" e ")}`
+          : "Não foi enviada por nenhum canal",
         description: failed.length
-          ? failed.map((d: { channel: string; last_error: string | null }) =>
-              `${d.channel}: ${d.last_error ?? "falhou"}`).join(" · ")
-          : `${p.cliente_nome} recebeu no WhatsApp e por e-mail.`,
-        variant: failed.length ? "destructive" : undefined,
+          ? `Não saiu por ${failed.map((d) => label[d.channel] ?? d.channel).join(", ")}: `
+            + (failed[0].last_error ?? "motivo não informado")
+          : `${p.cliente_nome} recebeu.`,
+        // Only red when nothing at all reached the client.
+        variant: sent.length ? undefined : "destructive",
       });
     } catch (e) {
       toast({
