@@ -50,7 +50,10 @@ serve(async (req) => {
     .from("notification_deliveries")
     .select(`
       id, channel, attempts, status,
-      notifications!inner ( id, equipe_id, user_id, type, severity, title, body, action_url, created_at )
+      notifications!inner (
+        id, equipe_id, user_id, type, severity, title, body, action_url, created_at,
+        proposal_id, recipient_phone, recipient_email
+      )
     `)
     .in("status", ["pending", "failed"])
     .lt("attempts", MAX_ATTEMPTS)
@@ -58,6 +61,11 @@ serve(async (req) => {
     .limit(limit ?? 100);
 
   if (error) return json({ error: error.message }, 500);
+
+  // Sprint 8.4: routing is read once per run, not per delivery. There are four
+  // senders and a handful of types; re-reading them for every message would turn
+  // a 100-message drain into 300 round trips.
+  const routing = await loadRouting(db);
 
   const result = { sent: 0, failed: 0, skipped: 0, deferred: 0 };
 
@@ -72,7 +80,7 @@ serve(async (req) => {
     }
 
     try {
-      const outcome = await deliver(db, d);
+      const outcome = await deliver(db, d, routing);
       await db.from("notification_deliveries").update({
         status: outcome.status,
         provider_id: outcome.providerId ?? null,
@@ -103,35 +111,93 @@ interface Delivery {
   attempts: number;
   status: string;
   notifications: {
-    id: string; equipe_id: string; user_id: string | null; type: string;
+    id: string;
+    /** NULL when the recipient is not a tenant — a proposal recipient. */
+    equipe_id: string | null;
+    user_id: string | null; type: string;
     severity: string; title: string; body: string | null; action_url: string | null;
     created_at: string;
+    proposal_id: string | null;
+    /** Set by the per-client policy, or by the proposal itself. Wins over
+        anything derived from the team. */
+    recipient_phone: string | null;
+    recipient_email: string | null;
   };
+}
+
+interface Sender {
+  purpose: string;
+  whatsapp_instance: string | null;
+  email_from: string | null;
+  active: boolean;
+}
+
+/** Senders by purpose, purpose by notification type, and platform settings. */
+interface Routing {
+  senders: Map<string, Sender>;
+  purposeOf: Map<string, string>;
+  settings: Map<string, string>;
+}
+
+async function loadRouting(db: SupabaseClient): Promise<Routing> {
+  const [{ data: senders }, { data: types }, { data: settings }] = await Promise.all([
+    db.from("notification_senders").select("purpose, whatsapp_instance, email_from, active"),
+    db.from("notification_types").select("type, purpose"),
+    db.from("system_settings").select("key, value"),
+  ]);
+
+  return {
+    senders: new Map((senders ?? []).map((s) => [s.purpose as string, s as Sender])),
+    purposeOf: new Map((types ?? []).map((t) => [t.type as string, t.purpose as string])),
+    settings: new Map(
+      (settings ?? [])
+        .filter((s) => s.value)
+        .map((s) => [s.key as string, s.value as string]),
+    ),
+  };
+}
+
+/**
+ * The sender for a message, or null when that purpose is switched off.
+ *
+ * A missing sender row is not the same as an inactive one: missing means nobody
+ * configured this purpose yet and the platform default should carry the message,
+ * whereas `active = false` is a deliberate "stop sending as this voice".
+ */
+function senderFor(r: Routing, type: string): Sender | null {
+  const purpose = r.purposeOf.get(type) ?? "operacao";
+  const sender = r.senders.get(purpose);
+  if (sender && !sender.active) return null;
+  return sender ?? null;
 }
 
 interface Outcome { status: "sent" | "failed" | "skipped"; providerId?: string; error?: string }
 
-async function deliver(db: SupabaseClient, d: Delivery): Promise<Outcome> {
+async function deliver(db: SupabaseClient, d: Delivery, r: Routing): Promise<Outcome> {
   switch (d.channel) {
     // The row IS the delivery — the UI reads the notifications table directly.
     case "in_app":
       return { status: "sent" };
     case "email":
-      return await deliverEmail(db, d);
+      return await deliverEmail(db, d, r);
     case "whatsapp":
-      return await deliverWhatsApp(db, d);
+      return await deliverWhatsApp(db, d, r);
     default:
       return { status: "skipped", error: `unknown channel ${d.channel}` };
   }
 }
 
-async function deliverEmail(db: SupabaseClient, d: Delivery): Promise<Outcome> {
-  const apiKey = Deno.env.get("RESEND_API_KEY");
+async function deliverEmail(db: SupabaseClient, d: Delivery, r: Routing): Promise<Outcome> {
+  // Sprint 8.4: the panel's value wins so the key can be rotated without a
+  // redeploy; the env var stays the fallback so clearing the row cannot take
+  // e-mail down.
+  const apiKey = r.settings.get("RESEND_API_KEY") ?? Deno.env.get("RESEND_API_KEY");
   if (!apiKey) return { status: "skipped", error: "RESEND_API_KEY not configured" };
 
   const recipients = await recipientEmails(db, d);
   if (!recipients.length) return { status: "skipped", error: "no recipient email" };
 
+  const sender = senderFor(r, d.notifications.type);
   const brand = await brandFor(db, d.notifications.equipe_id);
   const { subject, html } = renderEmail({
     title: d.notifications.title,
@@ -145,7 +211,14 @@ async function deliverEmail(db: SupabaseClient, d: Delivery): Promise<Outcome> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: brand.from, to: recipients, subject, html }),
+    // The purpose's address when one is set — its domain must be verified at
+    // Resend, which is why the brand address remains the fallback.
+    body: JSON.stringify({
+      from: sender?.email_from ?? r.settings.get("NOTIFICATION_FROM_EMAIL") ?? brand.from,
+      to: recipients,
+      subject,
+      html,
+    }),
   });
 
   if (!res.ok) return { status: "failed", error: `resend ${res.status}: ${await res.text()}` };
@@ -157,14 +230,24 @@ async function deliverEmail(db: SupabaseClient, d: Delivery): Promise<Outcome> {
  * WhatsApp goes out through a PLATFORM-owned instance, never the tenant's own.
  * The tenant's number is their commercial channel; mixing our billing alerts
  * into it confuses their customers and risks the number they depend on.
+ *
+ * Sprint 8.4: WHICH platform instance now depends on who is speaking. A payment
+ * reminder leaves from Financeiro, a proposal from Comercial — so the client can
+ * tell them apart, and so can we when they reply.
+ *
+ * The old severity gate is gone. It hardcoded "warn and above" for every tenant
+ * alike, which made the per-type and per-client switchboard unreachable: a type
+ * could declare whatsapp and still never send. What may go out is now decided by
+ * notify(), from the type's channels narrowed by the client's policy.
  */
-async function deliverWhatsApp(db: SupabaseClient, d: Delivery): Promise<Outcome> {
-  const instance = Deno.env.get("SOLO_PLATFORM_INSTANCE_ID");
-  if (!instance) return { status: "skipped", error: "SOLO_PLATFORM_INSTANCE_ID not configured" };
-
-  // Alerts only. Routine notices stay in-app and email.
-  if (!["warn", "critical"].includes(d.notifications.severity)) {
-    return { status: "skipped", error: "severity below whatsapp threshold" };
+async function deliverWhatsApp(db: SupabaseClient, d: Delivery, r: Routing): Promise<Outcome> {
+  const sender = senderFor(r, d.notifications.type);
+  if (sender === null && r.senders.has(r.purposeOf.get(d.notifications.type) ?? "operacao")) {
+    return { status: "skipped", error: "sender for this purpose is inactive" };
+  }
+  const instance = sender?.whatsapp_instance ?? Deno.env.get("SOLO_PLATFORM_INSTANCE_ID");
+  if (!instance) {
+    return { status: "skipped", error: "no whatsapp instance configured for this purpose" };
   }
 
   const phones = await recipientPhones(db, d);
@@ -198,6 +281,13 @@ async function deliverWhatsApp(db: SupabaseClient, d: Delivery): Promise<Outcome
 /** Targeted at one person, or every admin/owner of the team. */
 async function recipientEmails(db: SupabaseClient, d: Delivery): Promise<string[]> {
   const n = d.notifications;
+
+  // Sprint 8.4 — an explicit address settles it: either the founder pointed this
+  // client's mail somewhere specific, or there is no team to derive it from
+  // because the recipient is a proposal recipient.
+  if (n.recipient_email) return [n.recipient_email];
+  if (!n.equipe_id) return [];
+
   if (n.user_id) {
     const { data } = await db.from("profiles").select("email").eq("user_id", n.user_id).maybeSingle();
     return data?.email ? [data.email] : [];
@@ -225,6 +315,14 @@ async function recipientEmails(db: SupabaseClient, d: Delivery): Promise<string[
 async function recipientPhones(db: SupabaseClient, d: Delivery): Promise<string[]> {
   const n = d.notifications;
   const set = new Set<string>();
+
+  // Same rule as e-mail: an explicit number is the answer, and a message to a
+  // proposal recipient has no team to fall back to.
+  if (n.recipient_phone) {
+    const only = digits(n.recipient_phone);
+    return only.length >= 10 ? [only] : [];
+  }
+  if (!n.equipe_id) return [];
 
   const { data: account } = await db
     .from("billing_accounts").select("phone").eq("equipe_id", n.equipe_id).maybeSingle();
@@ -255,13 +353,18 @@ function senderAddress(): string {
 }
 
 /** White-label per niche, so the email is not a generic gateway notice. */
-async function brandFor(db: SupabaseClient, equipeId: string): Promise<Brand> {
+async function brandFor(db: SupabaseClient, equipeId: string | null): Promise<Brand> {
   const fallback: Brand = {
     name: Deno.env.get("PLATFORM_NAME") ?? "Sales Engine",
     color: "#2563eb",
     from: `${Deno.env.get("PLATFORM_NAME") ?? "Sales Engine"} <${senderAddress()}>`,
     appUrl: Deno.env.get("APP_BASE_URL") ?? "",
   };
+
+  // A proposal recipient has no team, so there is no niche to white-label with:
+  // they hear from the platform itself, which is correct — they are not a
+  // customer of any niche yet.
+  if (!equipeId) return fallback;
 
   const { data: equipe } = await db.from("equipes").select("niche").eq("id", equipeId).maybeSingle();
   if (!equipe?.niche) return fallback;

@@ -82,7 +82,12 @@ function guessMimetype(mediaUrl: string | undefined, mediaType: string): string 
 
 export interface SendViaSoloArgs {
   supabase: SupabaseClient   // service-role client
-  equipeId: string
+  /**
+   * Carried for context only — nothing in here reads it; the instance name is
+   * what selects the line. Nullable since Sprint 8.4, when the platform started
+   * messaging people who are not in a team yet (a proposal recipient).
+   */
+  equipeId: string | null
   instanceName: string
   phone: string              // digits only (already normalized by caller)
   content?: string

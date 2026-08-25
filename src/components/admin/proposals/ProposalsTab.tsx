@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, ExternalLink, FileText, Loader2, Plus, Rocket, Search, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FileText, Loader2, MessageCircle, Plus, Rocket, Search, Trash2 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -65,6 +65,7 @@ export function ProposalsTab() {
   const [provisionResult, setProvisionResult] = useState<ProvisionResult | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProposalRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -131,6 +132,50 @@ export function ProposalsTab() {
       });
     } finally {
       setProvisioning(null);
+    }
+  };
+
+  /**
+   * Sprint 8.4 (Fixes 2, item 11) — "Proposta Gerada, cliente recebe a proposta
+   * no WhatsApp através do número da Solo".
+   *
+   * Goes out through the Comercial line, using the editable template. The client
+   * is not a tenant yet, which is why this path exists at all: notifications
+   * were tied to a team, and a proposal recipient has none.
+   */
+  const sendProposal = async (p: ProposalRow, resend = false) => {
+    setSending(p.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-notifications", {
+        body: { action: "send_proposal", proposal_id: p.id, resend },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.message ?? data.error);
+
+      if (data?.already_sent) {
+        toast({ title: "Já enviada", description: data.message });
+        return;
+      }
+
+      // Report per channel: a green toast over a failed WhatsApp send is how you
+      // find out a week later that the client never got the proposal.
+      const failed = (data?.deliveries ?? []).filter((d: { status: string }) => d.status !== "sent");
+      toast({
+        title: failed.length ? "Enviada com falhas" : "Proposta enviada ao cliente",
+        description: failed.length
+          ? failed.map((d: { channel: string; last_error: string | null }) =>
+              `${d.channel}: ${d.last_error ?? "falhou"}`).join(" · ")
+          : `${p.cliente_nome} recebeu no WhatsApp e por e-mail.`,
+        variant: failed.length ? "destructive" : undefined,
+      });
+    } catch (e) {
+      toast({
+        title: "Não foi possível enviar",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSending(null);
     }
   };
 
@@ -239,6 +284,22 @@ export function ProposalsTab() {
                         <a href={`/proposta/${p.codigo}`} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="w-3.5 h-3.5" />
                         </a>
+                      </Button>
+                      {/* Disabled without a number: the WhatsApp half is the
+                          point, and a silent e-mail-only send would look like
+                          success. */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title={p.cliente_whatsapp
+                          ? "Enviar a proposta ao cliente"
+                          : "Sem WhatsApp cadastrado nesta proposta"}
+                        disabled={sending !== null || !p.cliente_whatsapp}
+                        onClick={() => sendProposal(p, p.status !== "rascunho")}
+                      >
+                        {sending === p.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <MessageCircle className="w-3.5 h-3.5" />}
                       </Button>
                       {p.status === "aceita" && !p.equipe_id && (
                         <Button size="sm" disabled={provisioning !== null} onClick={() => provision(p)}>
