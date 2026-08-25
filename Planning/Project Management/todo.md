@@ -658,3 +658,55 @@ estreitado pela política do cliente.
       55 enquanto nenhum dos que falham tem), mas **a chegada só quem confirma é
       quem tem o aparelho**. Reprocessei a entrega da proposta às 03:53 com o
       número corrigido.
+
+## Sprint 8.5 — três problemas de produção (25/08/2026)
+
+> Reportados juntos: recarga que não muda nada, e-mail recusado, e consumo do
+> Studio AI parecendo de outro cliente. Os dois primeiros tinham a MESMA causa
+> de fundo: comparar janelas de tempo diferentes como se fossem a mesma.
+
+- [x] **Recarga de crédito não mudava nada.** Os créditos ENTRAVAM (500 às
+      05:20, 500 às 05:21). O que os engolia era um lançamento de **−7000** que
+      o `credits-reconcile` fez às 04:30, na primeira execução depois que agendei
+      o cron. Ele pergunta ao GPT Maker o gasto do **mês calendário** e compara
+      com o que o nosso ledger registrou — só que o primeiro lançamento do
+      `credit_ledger` é de 24/08 16:06. Comparou 24 dias de provider contra 1 dia
+      de ledger e cobrou a diferença.
+
+      Como `credit_balance` é `greatest(0, soma)`, o buraco ficava **invisível**:
+      o saldo mostrava 0 e cada recarga nova desaparecia dentro dele sem deixar
+      rastro na tela. Casa Flow −8040, Solo Energia −7000, Walter Inglez −20.
+
+      Reparo em `20260825000200` (estorno com lançamento positivo, não delete —
+      o ledger é append-only e o cliente tem direito de ver o erro e a correção).
+      Causa corrigida: um mês em que a medição começou no meio é **pulado**, e o
+      relatório do job diz quais equipes pulou. Pular é a única saída honesta —
+      a API do provider só responde por mês fechado e ratear seria um palpite
+      cobrado do cliente.
+
+- [x] **E-mail recusado pela Resend.** O domínio verificado é
+      `comercial.soloenergia.com.br`, um **subdomínio**; o remetente configurado
+      era `comercial@soloenergia.com.br`, o apex. Para a Resend são domínios
+      diferentes. Remetente da plataforma passou a
+      `nao-responda@comercial.soloenergia.com.br` e as 15 entregas que estavam
+      falhando saíram todas. O aviso na tela agora diz explicitamente que
+      subdomínio conta como domínio separado.
+
+- [x] **Studio AI mostrando consumo que não é daquele cliente.** O endpoint já
+      era por agente (verificado contra a API: Solo Energia 3500, Walter Inglez
+      10 no mesmo workspace). O problema era a JANELA: mostrava o mês inteiro do
+      agente ao lado do saldo do ledger, que começa no dia em que a equipe passou
+      a ser cobrada. "Saldo 1500, gastou 7000" — dois números sobre períodos
+      incompatíveis. Como a resposta do provider tem quebra **por dia**, aqui deu
+      para recortar exato, e a tela explica desde quando está contando.
+
+### Falta
+
+- [ ] **Confirmar que a leitura do Studio AI ficou como você esperava.**
+      Interpretei "mostra o consumo dos workspaces" como "mostra consumo de
+      antes deste cliente existir" — que era um erro real e está corrigido. Se
+      você via outra coisa (um número somando várias equipes), me diga em qual
+      tela, porque a origem dos dados é comprovadamente por agente.
+- [ ] **`workspace_id` com `\n` no fim** em Rema Digital e Be My Guest. O código
+      faz `.trim()` nos pontos que importam, mas o valor sujo no banco vai
+      morder alguma consulta futura. Limpar.
