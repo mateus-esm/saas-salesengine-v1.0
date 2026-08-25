@@ -605,3 +605,56 @@ estreitado pela política do cliente.
       https://resend.com/domains — precisa de acesso ao DNS, ninguém mais faz
       isso. O código já avisava disso: o comentário em `brandFor` conta que a
       produção recusou os domínios por nicho pelo mesmo motivo.
+
+## Sprint 8.5 — Fixes 3 (entregue 25/08/2026)
+
+> Itens 13, 14 e 15 do `sprint_8.1_billing_v1_fixes.md`. Migration
+> `20260825000100` aplicada; `admin-notifications` e `notification-dispatcher`
+> redeployados.
+
+- [x] **13 · Mensagem de teste não chegava no WhatsApp.** Causa raiz: os
+      caminhos de SAÍDA (dispatcher e teste do painel) cada um refez sua própria
+      normalização de telefone, que só tirava não-dígitos. Um número digitado à
+      mão — `85996487923` — ia para a Solo API **sem o código do país**. A API
+      aceita, devolve `key.id`, gravamos `sent`, e nada chega: o JID não existe.
+      Sucesso silencioso é o pior modo de falha possível num sistema de
+      notificação.
+
+      O `_shared/phone.ts` já resolvia isso desde o Sprint 5.5 (prepende 55,
+      insere o nono dígito, e não confunde DDD 55 do RS com código de país) —
+      **só os webhooks de ENTRADA o importavam**. Por isso o chat sempre
+      funcionou: os telefones dele vêm de leads, já normalizados na entrada.
+      Agora os dois caminhos de saída usam o mesmo normalizador, com
+      `phone.test.ts` fixando o contrato (6 testes).
+
+- [x] **14 · CRUD de modelos + escolha de canal.** Criar, editar, apagar e
+      decidir por onde sai (app, e-mail, WhatsApp, todos, nenhum). Nenhum canal
+      marcado = a notificação é registrada e não entregue, que é como se
+      silencia um aviso do sistema. Modelos criados à mão viram tipos
+      `custom.*` e ganham "enviar agora" para um cliente — sem isso um modelo
+      que nenhum código dispara seria peso morto.
+
+      **Modelo do sistema não pode ser apagado.** Cada um é emitido por uma
+      chamada de `notify()` dentro de uma edge function, e `notify()` levanta
+      `unknown_notification_type` quando o tipo some — apagar transformaria
+      "removi um modelo" em "a confirmação de pagamento passou a estourar".
+
+- [x] **15 · Erro ao enviar proposta.** Duas coisas, uma delas não era bug: a
+      proposta **foi enviada** (WhatsApp `sent`), só o e-mail falhou. O toast
+      dizia "Enviada com falhas" em vermelho sempre que qualquer canal falhasse
+      — e o e-mail sempre falha enquanto o domínio não estiver verificado. Agora
+      o aviso nomeia primeiro o canal que deu certo, e só fica vermelho quando
+      nada chegou ao cliente. O erro cru da Resend também virou frase
+      acionável em vez de JSON.
+
+### Falta, e não é código
+
+- [ ] **Verificar o domínio na Resend.** Continua sendo o único motivo do canal
+      de e-mail falhar — agora em `soloenergia.com.br`, que foi configurado como
+      remetente do Comercial. Verificar em https://resend.com/domains.
+- [ ] **Confirmar que a mensagem de teste chega.** A causa raiz está corrigida e
+      provada por duas evidências independentes (a referência da API documenta
+      `"number": "5511999999999"`, e todo telefone que funciona no banco tem o
+      55 enquanto nenhum dos que falham tem), mas **a chegada só quem confirma é
+      quem tem o aparelho**. Reprocessei a entrega da proposta às 03:53 com o
+      número corrigido.
