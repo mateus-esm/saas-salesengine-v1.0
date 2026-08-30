@@ -81,34 +81,58 @@ begin
   -- both paths agree on the same answer rather than disagreeing quietly.
   insert into public.funnel_events
     (equipe_id, opportunity_id, lead_id, pipeline_id, stage_id, event,
-     occurred_at, source, actor, actor_type)
+     occurred_at, source, actor, actor_type, source_row_id)
   select h.equipe_id, h.opportunity_id, o.lead_id, o.pipeline_id, h.to_stage_id,
          e.funnel_event, h.changed_at, 'stage_change', h.changed_by,
-         coalesce(nullif(h.changed_by_type, ''), 'team')
+         coalesce(nullif(h.changed_by_type, ''), 'team'), h.id
     from public.opportunity_stage_history h
     join public.opportunities o        on o.id = h.opportunity_id
     join public.v_stage_funnel_event e on e.stage_id = h.to_stage_id
    where o.pipeline_id = p_pipeline_id
      and o.deleted_at is null
      and e.funnel_event is not null
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing;
+  on conflict do nothing;
 
   -- --- 2) opportunities born already meaning something ------------------------
   --
   -- The history trigger only fires on UPDATE, so a deal created directly in
   -- "Proposta Enviada" — which the webhook importer and AssignToPipelineDialog
   -- both do — leaves no trace in the ledger and would be invisible forever.
+  --
+  -- THE BIRTH STAGE IS NOT THE CURRENT STAGE. The first version of this query
+  -- joined on o.stage_id, which is where the deal is NOW. For a deal created in
+  -- March and won in August that wrote a `won` event dated March — every win
+  -- back-dated to the day its deal was created, silently wrecking every
+  -- historical series and every daily report that had already been sent. The
+  -- wave's test caught it; it is the reason this reads from the ledger instead.
+  --
+  -- Where the deal started is recoverable exactly: it is the from_stage_id of
+  -- its earliest transition, or — for a deal that never moved — its current
+  -- stage. A NULL from_stage_id means it started nowhere and gets no event,
+  -- which is also the right answer.
   insert into public.funnel_events
     (equipe_id, opportunity_id, lead_id, pipeline_id, stage_id, event,
      occurred_at, source, actor, actor_type)
-  select o.equipe_id, o.id, o.lead_id, o.pipeline_id, o.stage_id,
+  select o.equipe_id, o.id, o.lead_id, o.pipeline_id, b.birth_stage_id,
          e.funnel_event, o.created_at, 'opportunity_created', null, 'system'
     from public.opportunities o
-    join public.v_stage_funnel_event e on e.stage_id = o.stage_id
+    cross join lateral (
+      select case
+               when exists (select 1 from public.opportunity_stage_history h
+                             where h.opportunity_id = o.id)
+               then (select h2.from_stage_id
+                       from public.opportunity_stage_history h2
+                      where h2.opportunity_id = o.id
+                      order by h2.changed_at asc, h2.id asc
+                      limit 1)
+               else o.stage_id
+             end as birth_stage_id
+    ) b
+    join public.v_stage_funnel_event e on e.stage_id = b.birth_stage_id
    where o.pipeline_id = p_pipeline_id
      and o.deleted_at is null
      and e.funnel_event is not null
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing;
+  on conflict do nothing;
 
   -- --- 3) closes that predate the event log -----------------------------------
   --
@@ -140,7 +164,7 @@ begin
         where fe.opportunity_id = o.id
           and fe.event in ('won', 'lost')
      )
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing;
+  on conflict do nothing;
 
   select count(*) into v_after
     from public.funnel_events where pipeline_id = p_pipeline_id;

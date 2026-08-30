@@ -201,15 +201,34 @@ create table if not exists public.funnel_events (
   actor_type     text not null default 'team' check (actor_type in (
                    'team', 'copilot', 'automation', 'import', 'system'
                  )),
-  created_at     timestamptz not null default now(),
-
-  -- The duplicate guard. Two different proposals to the same deal are two rows
-  -- and must stay two rows, so the key includes the timestamp: it stops a
-  -- replay from doubling history without pretending an event can only happen
-  -- once.
-  constraint funnel_events_no_exact_duplicate
-    unique (opportunity_id, event, occurred_at)
+  -- The opportunity_stage_history row this event was derived from. This is the
+  -- idempotency key for the replay, and it is deliberately NOT the timestamp.
+  --
+  -- The first version of this table keyed duplicates on
+  -- (opportunity_id, event, occurred_at), which looks reasonable and is wrong:
+  -- now() is fixed for the whole transaction, so a deal moved Proposta ->
+  -- Reunião -> Proposta inside one transaction (an import, an automation, a
+  -- copilot batch) produced three history rows carrying one identical
+  -- timestamp, and two of the three events were silently swallowed as
+  -- "duplicates". The wave's own test caught it.
+  --
+  -- Keying on the source fact instead means a replay can never double an event
+  -- (one history row -> one event, forever) while two genuine transitions at
+  -- the same instant both survive. NULL for events with no ledger row behind
+  -- them; Postgres allows many NULLs in a unique constraint, which is exactly
+  -- the behaviour wanted here.
+  source_row_id  bigint unique,
+  created_at     timestamptz not null default now()
 );
+
+-- One birth event per opportunity, and one recovered close per opportunity.
+-- Partial unique indexes rather than constraints because both only apply to a
+-- single source; a manual no-show may legitimately repeat.
+create unique index if not exists funnel_events_one_birth_per_opportunity
+  on public.funnel_events (opportunity_id) where source = 'opportunity_created';
+
+create unique index if not exists funnel_events_one_recovery_per_opportunity
+  on public.funnel_events (opportunity_id) where source = 'recompute';
 
 comment on table public.funnel_events is
   'Sprint 9: append-only log of what happened in the commercial funnel. Written by triggers off stage transitions, by record_funnel_event() for events that are not stage moves, and by recompute_funnel_events() when a client (re)maps their stages. Metrics read THIS, never the current stage.';
@@ -295,12 +314,12 @@ begin
 
   insert into public.funnel_events
     (equipe_id, opportunity_id, lead_id, pipeline_id, stage_id, event,
-     occurred_at, source, actor, actor_type)
+     occurred_at, source, actor, actor_type, source_row_id)
   values
     (new.equipe_id, new.opportunity_id, v_lead_id, v_pipeline, new.to_stage_id,
      v_event, new.changed_at, 'stage_change', new.changed_by,
-     coalesce(nullif(new.changed_by_type, ''), 'team'))
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing;
+     coalesce(nullif(new.changed_by_type, ''), 'team'), new.id)
+  on conflict do nothing;
 
   return new;
 end;
@@ -344,7 +363,7 @@ begin
     (new.equipe_id, new.id, new.lead_id, new.pipeline_id, new.stage_id,
      v_event, new.created_at, 'opportunity_created', auth.uid(),
      case when auth.uid() is null then 'system' else 'team' end)
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing;
+  on conflict do nothing;
 
   return new;
 end;
@@ -380,7 +399,7 @@ begin
     (new.equipe_id, new.id, new.lead_id, new.pipeline_id, new.stage_id,
      v_event, coalesce(new.closed_at, now()), 'status_change', auth.uid(),
      case when auth.uid() is null then 'system' else 'team' end)
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing;
+  on conflict do nothing;
 
   return new;
 end;
@@ -457,7 +476,7 @@ begin
   values
     (v_opp.equipe_id, v_opp.id, v_opp.lead_id, v_opp.pipeline_id, v_opp.stage_id,
      p_event, p_occurred_at, 'manual', auth.uid(), 'team')
-  on conflict on constraint funnel_events_no_exact_duplicate do nothing
+  on conflict do nothing
   returning id into v_id;
 
   return v_id;

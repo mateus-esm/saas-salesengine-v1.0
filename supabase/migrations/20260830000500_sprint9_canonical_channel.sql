@@ -44,6 +44,20 @@
 --   4. 'Não informado' — never NULL. A null in a group-by silently drops the
 --      row from the chart and the totals stop adding up to the header number,
 --      which is the single fastest way to lose a client's trust in a dashboard.
+--
+-- A COLUMN DEFAULT IS NOT AN ASSERTION
+--
+-- leads.source and leads.origem both DEFAULT to 'manual'; leads.channel
+-- DEFAULTS to 'whatsapp'. So every lead ever created already "has" a source,
+-- and a naive precedence chain reports one enormous "manual" bucket that
+-- outranks and hides whatever the client actually recorded. Steps 2 and 3 above
+-- therefore read 'manual' as absent.
+--
+-- contact_channel keeps its default, deliberately: for this product WhatsApp
+-- really is the channel for almost every conversation, so 'whatsapp' is
+-- usually true rather than merely unset. It is still a default, which is why
+-- the dashboard leads with acquisition_channel — the dimension that separates
+-- clients from each other — and offers contact_channel as a secondary cut.
 
 begin;
 
@@ -148,6 +162,13 @@ select
   l.created_at,
 
   -- 1 → 2 → 3 → 4, as documented in the header.
+  --
+  -- source and origem both DEFAULT to 'manual' in the leads table, and channel
+  -- defaults to 'whatsapp'. That is the trap this view exists to survive: a
+  -- column default is not an assertion. Every lead ever created carries
+  -- source='manual' whether or not a human chose it, so treating it as data
+  -- fills the client's acquisition chart with one giant "manual" bucket that
+  -- outranks the real answer and hides it. Defaults are read as absent.
   coalesce(
     public.origin_category_label(l.origin_category),
     (select t.label
@@ -157,13 +178,16 @@ select
         and t.kind = 'origem'
         and lower(t.label) = lower(trim(coalesce(
               nullif(trim(l.origin),  ''),
-              nullif(trim(l.source),  ''),
-              nullif(trim(l.origem),  '')
+              nullif(lower(trim(l.source)), 'manual'),
+              nullif(lower(trim(l.origem)), 'manual')
             )))
       limit 1),
     nullif(trim(l.origin), ''),
-    nullif(trim(l.source), ''),
-    nullif(trim(l.origem), ''),
+    -- Displayed as typed; only the "is this a default?" test is case-folded.
+    case when lower(trim(coalesce(l.source, ''))) in ('manual', '') then null
+         else trim(l.source) end,
+    case when lower(trim(coalesce(l.origem, ''))) in ('manual', '') then null
+         else trim(l.origem) end,
     'Não informado'
   ) as acquisition_channel,
 
