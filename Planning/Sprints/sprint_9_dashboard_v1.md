@@ -269,7 +269,7 @@ T6. `Planning/Workflow/billing.md` recebe uma linha por tarefa — no merge,
 - [x] T5 · Hooks de dashboard — L
 - [x] T6 · Shell + sub-rotas + KPI hero + funil — XL
 - [x] T7 · Quebras pipeline/responsável/canal — L
-- [ ] T8 · Layouts + catálogo de widgets — L
+- [x] T8 · Layouts + catálogo de widgets — L
 - [ ] T9 · Widgets sobre campo custom — L
 - [ ] T10 · UI de motivo de perda — M
 - [ ] T11 · Página pública do relatório — L
