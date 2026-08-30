@@ -16,7 +16,11 @@ import CRM from "./pages/CRM";
 import PipelineSettings from "./pages/PipelineSettings";
 import Webhooks from "./pages/Webhooks";
 import Suporte from "./pages/Suporte";
-import Dashboard from "./pages/Dashboard";
+import DashboardLayout from "./pages/dashboard/DashboardLayout";
+import DashboardOverviewPage from "./pages/dashboard/OverviewPage";
+import DashboardFunnelPage from "./pages/dashboard/FunnelPage";
+import DashboardTeamPage from "./pages/dashboard/TeamPage";
+import DashboardChannelsPage from "./pages/dashboard/ChannelsPage";
 import BillingLayout from "./pages/billing/BillingLayout";
 import BillingOverviewPage from "./pages/billing/OverviewPage";
 import BillingInvoicesPage from "./pages/billing/InvoicesPage";
@@ -78,7 +82,15 @@ const App = () => (
                   }
                 >
                   <Route path="/home" element={<Home />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  {/* Sprint 9 — the BI area. Sub-routes share one filter
+                      state held by the layout, so switching tabs keeps the
+                      period and pipeline you had chosen. */}
+                  <Route path="/dashboard" element={<DashboardLayout />}>
+                    <Route path="visao-geral" element={<DashboardOverviewPage />} />
+                    <Route path="funil" element={<DashboardFunnelPage />} />
+                    <Route path="time" element={<DashboardTeamPage />} />
+                    <Route path="canais" element={<DashboardChannelsPage />} />
+                  </Route>
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/crm" element={<CRM />} />
                   <Route path="/copiloto" element={<CopilotCockpit />} />
