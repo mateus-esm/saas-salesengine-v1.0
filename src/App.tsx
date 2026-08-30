@@ -21,6 +21,7 @@ import DashboardOverviewPage from "./pages/dashboard/OverviewPage";
 import DashboardFunnelPage from "./pages/dashboard/FunnelPage";
 import DashboardTeamPage from "./pages/dashboard/TeamPage";
 import DashboardChannelsPage from "./pages/dashboard/ChannelsPage";
+import DashboardReportsPage from "./pages/dashboard/ReportsPage";
 import BillingLayout from "./pages/billing/BillingLayout";
 import BillingOverviewPage from "./pages/billing/OverviewPage";
 import BillingInvoicesPage from "./pages/billing/InvoicesPage";
@@ -95,6 +96,7 @@ const App = () => (
                     <Route path="funil" element={<DashboardFunnelPage />} />
                     <Route path="time" element={<DashboardTeamPage />} />
                     <Route path="canais" element={<DashboardChannelsPage />} />
+                    <Route path="relatorios" element={<DashboardReportsPage />} />
                   </Route>
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/crm" element={<CRM />} />

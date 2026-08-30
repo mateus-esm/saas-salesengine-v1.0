@@ -13,7 +13,7 @@
  */
 import { useMemo, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useOutletContext } from "react-router-dom";
-import { BarChart3, Filter, Radio, Users } from "lucide-react";
+import { BarChart3, Filter, Radio, Send, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -30,8 +30,7 @@ const NAV = [
   { to: "/dashboard/funil", label: "Funil", icon: Filter },
   { to: "/dashboard/time", label: "Time", icon: Users },
   { to: "/dashboard/canais", label: "Canais", icon: Radio },
-  // "Relatórios" is added by T14, together with the page behind it — a nav
-  // entry that leads nowhere is worse than a missing one.
+  { to: "/dashboard/relatorios", label: "Relatórios", icon: Send },
 ] as const;
 
 export interface DashboardContext {
