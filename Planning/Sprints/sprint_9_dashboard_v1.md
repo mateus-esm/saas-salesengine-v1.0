@@ -276,4 +276,4 @@ T6. `Planning/Workflow/billing.md` recebe uma linha por tarefa — no merge,
 - [x] T12 · Tabelas de relatório + snapshot — XL
 - [x] T13 · `reports-cron` + templates + cron inerte — L
 - [x] T14 · UI de agendamento — L
-- [ ] T15 · Runbook + docs — S
+- [x] T15 · Runbook + docs — S
