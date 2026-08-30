@@ -21,6 +21,7 @@ import DashboardOverviewPage from "./pages/dashboard/OverviewPage";
 import DashboardFunnelPage from "./pages/dashboard/FunnelPage";
 import DashboardTeamPage from "./pages/dashboard/TeamPage";
 import DashboardChannelsPage from "./pages/dashboard/ChannelsPage";
+import DashboardReportsPage from "./pages/dashboard/ReportsPage";
 import BillingLayout from "./pages/billing/BillingLayout";
 import BillingOverviewPage from "./pages/billing/OverviewPage";
 import BillingInvoicesPage from "./pages/billing/InvoicesPage";
@@ -28,6 +29,7 @@ import BillingCreditsPage from "./pages/billing/CreditsPage";
 import BillingPlanPage from "./pages/billing/PlanPage";
 import BillingDataPage from "./pages/billing/BillingDataPage";
 import PublicProposal from "./pages/PublicProposal";
+import PublicReport from "./pages/PublicReport";
 import NotificationsPage from "./pages/NotificationsPage";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
@@ -72,6 +74,10 @@ const App = () => (
                 {/* Alias for proposta.soloventures.com.br/sales-engine/:codigo -
                     DNS points here and the path stays readable in the link. */}
                 <Route path="/sales-engine/:codigo" element={<PublicProposal />} />
+                {/* Sprint 9 — the full report behind the WhatsApp link. Public
+                    on purpose: whoever opens it just tapped a message and is
+                    not logged in. The token is the whole authorisation. */}
+                <Route path="/relatorio/:token" element={<PublicReport />} />
 
                 {/* Authenticated shell — mounted once; children swap via <Outlet/> */}
                 <Route
@@ -90,6 +96,7 @@ const App = () => (
                     <Route path="funil" element={<DashboardFunnelPage />} />
                     <Route path="time" element={<DashboardTeamPage />} />
                     <Route path="canais" element={<DashboardChannelsPage />} />
+                    <Route path="relatorios" element={<DashboardReportsPage />} />
                   </Route>
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/crm" element={<CRM />} />

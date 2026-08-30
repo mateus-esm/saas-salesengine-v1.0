@@ -118,3 +118,8 @@ verify_jwt = true
 # the cron secret; "daily" is the wrong latency for resuming a paying customer.
 [functions.agent-power-sync]
 verify_jwt = false
+
+# Sprint 9 T11 — public report page. No JWT: whoever opens the link from a
+# WhatsApp message is not a logged-in user. The token is the authorisation.
+[functions.report-snapshot]
+verify_jwt = false
