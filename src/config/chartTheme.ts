@@ -99,7 +99,7 @@ export const statusColor = (
  * things and starts producing colours the eye cannot tell apart, which is worse
  * than an honest bucket. Callers pass the value that decides rank.
  */
-export function groupTail<T extends Record<string, unknown>>(
+export function groupTail<T extends object>(
   rows: T[],
   keep: number,
   labelKey: keyof T,
@@ -110,10 +110,16 @@ export function groupTail<T extends Record<string, unknown>>(
   const head = rows.slice(0, keep);
   const tail = rows.slice(keep);
 
-  const other = { ...tail[0], [labelKey]: `Outros (${tail.length})` } as T;
+  // Built from the first tail row so every field the table reads still exists;
+  // the label and the summed measures are then overwritten. Anything not summed
+  // (a rate, say) is deliberately left as that row's value rather than being
+  // averaged into a number that means nothing.
+  const other = { ...tail[0] } as T;
+  (other as Record<string, unknown>)[labelKey as string] = `Outros (${tail.length})`;
+
   for (const k of sumKeys) {
     (other as Record<string, unknown>)[k as string] = tail.reduce(
-      (sum, r) => sum + (Number(r[k]) || 0),
+      (sum, r) => sum + (Number((r as Record<string, unknown>)[k as string]) || 0),
       0,
     );
   }

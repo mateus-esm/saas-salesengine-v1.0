@@ -253,3 +253,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-30 | 9 W1 | T3 Canal canônico (v_lead_channel) | Claude / Sonnet 5 | M | R$ 12 |
 | 2026-08-30 | 9 W2 | T4 RPCs de métrica com escopo por papel | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-08-30 | 9 W2 | T5 Hooks de dashboard + paleta de gráficos validada | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-30 | 9 W2 | T6 Shell + sub-rotas + KPI hero + funil | Claude / Opus 5 (PM) | XL | R$ 28 |
