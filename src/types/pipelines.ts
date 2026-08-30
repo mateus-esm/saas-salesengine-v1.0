@@ -139,6 +139,8 @@ export interface Opportunity {
   custom_data: Record<string, unknown>;
   stage_entered_at: string;
   closed_at: string | null;
+  /** Sprint 9: why this deal was lost, when it was. */
+  lost_reason: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -223,6 +225,8 @@ export interface UpdateOpportunityData {
   position?: number;
   custom_data?: Record<string, unknown>;
   closed_at?: string | null;
+  /** Sprint 9: why a deal was lost. Chosen from pipelines.loss_reasons. */
+  lost_reason?: string | null;
 }
 
 // ───────────────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ interface OpportunityRow {
   custom_data: Record<string, unknown> | null;
   stage_entered_at: string;
   closed_at: string | null;
+  lost_reason: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -48,6 +49,7 @@ const normalize = (row: OpportunityRow): Opportunity => ({
   custom_data: (row.custom_data as Record<string, unknown>) || {},
   stage_entered_at: row.stage_entered_at,
   closed_at: row.closed_at ?? null,
+  lost_reason: row.lost_reason ?? null,
   created_at: row.created_at,
   updated_at: row.updated_at,
   deleted_at: row.deleted_at ?? null,
