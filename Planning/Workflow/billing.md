@@ -259,3 +259,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-30 | 9 W3 | T9 Widgets sobre campo custom com whitelist jsonb | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-30 | 9 W3 | T10 UI de motivo de perda + mapa semântico de etapas | Claude / Sonnet 5 | M | R$ 12 |
 | 2026-08-30 | 9 W4 | T12 Tabelas de relatório + snapshot + next_run_at | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-08-30 | 9 W4 | T13 reports-cron + templates + cron inerte | Claude / Opus 5 (PM) | L | R$ 20 |
