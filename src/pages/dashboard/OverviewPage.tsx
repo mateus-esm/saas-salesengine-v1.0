@@ -28,6 +28,7 @@ import { FunnelChart } from "@/components/dashboard/FunnelChart";
 import { RevenueTrendChart, TrendChart } from "@/components/dashboard/TrendChart";
 import { BreakdownView } from "@/components/dashboard/BreakdownView";
 import { CustomizeDashboardSheet } from "@/components/dashboard/CustomizeDashboardSheet";
+import { CustomFieldWidget } from "@/components/dashboard/CustomFieldWidget";
 import {
   ChartCard,
   EmptyChart,
@@ -78,7 +79,6 @@ export default function OverviewPage() {
   }
 
   const o = overview;
-  const on = (id: string) => layout.find((w) => w.id === id)?.visible ?? false;
 
   // Ordered by the saved layout, then split by kind so the KPI grid stays a
   // grid instead of interleaving full-width panels into it.
@@ -275,6 +275,12 @@ export default function OverviewPage() {
           >
             <BreakdownView rows={byChannel ?? []} metric="won_value" />
           </ChartCard>
+        );
+      case "panel_custom_field":
+        return (
+          <div key={id} className="lg:col-span-2">
+            <CustomFieldWidget filters={filters} />
+          </div>
         );
       case "panel_by_responsible":
         return (
