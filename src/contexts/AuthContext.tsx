@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { User, Session, AuthError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -46,7 +46,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [equipe, setEquipe] = useState<Equipe | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
+  // useCallback com [] : só usa setters de state, que o React garante estáveis.
+  // Precisa ser estável porque o efeito que registra o listener de auth roda
+  // uma vez só — recriar a função a cada render faria ele resubscrever sempre.
+  const fetchProfile = useCallback(async (userId: string) => {
     setLoading(true);
     try {
       // Try fetching by user_id first (new schema), then by id (old schema)
@@ -92,40 +95,67 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // De quem é a sessão que já foi resolvida. É ref e não state porque quem lê
+  // isto é o próprio callback do onAuthStateChange, que precisa do valor atual
+  // e não do que existia quando ele foi registrado.
+  const resolvedUserId = useRef<string | null>(null);
+
+  /**
+   * O ponto único por onde uma sessão entra — e a razão de ele existir.
+   *
+   * Voltar para o app depois de trocar de aba dispara TOKEN_REFRESHED. Antes,
+   * TODO evento chamava fetchProfile(), que liga `loading`; e o ProtectedRoute
+   * troca a árvore inteira por "Carregando..." enquanto `loading` for true.
+   * Ou seja: React desmontava a página toda, o estado de cada componente
+   * morria junto, e voltar montava tudo do zero. Era indistinguível de um
+   * reload — porque na prática era um.
+   *
+   * O token mudou; o usuário não. Se o id é o mesmo, não há nada a rebuscar e
+   * nada a desmontar.
+   */
+  const applySession = useCallback((session: Session | null) => {
+    setSession(session);
+
+    const nextId = session?.user?.id ?? null;
+
+    // Identidade estável enquanto for a mesma pessoa: um objeto User novo a
+    // cada refresh reexecuta todo useEffect que tem `user` nas dependências,
+    // e a tela recarrega em cascata mesmo sem passar pelo spinner.
+    setUser((prev) => (prev && prev.id === nextId ? prev : session?.user ?? null));
+
+    if (!nextId) {
+      resolvedUserId.current = null;
+      setProfile(null);
+      setEquipe(null);
+      setLoading(false);
+      return;
+    }
+
+    // Mesma pessoa de antes: só o token girou. Sair daqui sem mexer em
+    // `loading` é o que mantém a página de pé.
+    if (resolvedUserId.current === nextId) return;
+
+    resolvedUserId.current = nextId;
+    fetchProfile(nextId);
+  }, [fetchProfile]);
 
   useEffect(() => {
     // Setup auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-          }, 0);
-        } else {
-          setProfile(null);
-          setEquipe(null);
-        }
+      (_event, session) => {
+        // Fora do callback: chamar o cliente do Supabase de dentro dele pode
+        // travar no lock interno.
+        setTimeout(() => applySession(session), 0);
       }
     );
 
     // Check existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => applySession(session));
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [applySession]);
 
   const signIn = async (email: string, password: string): Promise<{ error: AuthError | null }> => {
     const { error } = await supabase.auth.signInWithPassword({
