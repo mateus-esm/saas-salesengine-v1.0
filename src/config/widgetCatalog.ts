@@ -178,6 +178,15 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     span: 2,
   },
   {
+    id: "panel_custom_field",
+    label: "Seus campos personalizados",
+    description: "Receita agrupada por um campo que você mesmo criou no pipeline.",
+    kind: "panel",
+    group: "Análise",
+    defaultOn: false,
+    span: 2,
+  },
+  {
     id: "panel_by_responsible",
     label: "Por responsável",
     description: "Quem trouxe receita no período.",
