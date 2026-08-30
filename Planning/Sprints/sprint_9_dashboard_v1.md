@@ -266,7 +266,7 @@ T6. `Planning/Workflow/billing.md` recebe uma linha por tarefa — no merge,
 - [x] T2 · `recompute_funnel_events()` + backfill — L
 - [x] T3 · Canal canônico — M
 - [x] T4 · RPCs de métrica com escopo por papel — XL
-- [ ] T5 · Hooks de dashboard — L
+- [x] T5 · Hooks de dashboard — L
 - [ ] T6 · Shell + sub-rotas + KPI hero + funil — XL
 - [ ] T7 · Quebras pipeline/responsável/canal — L
 - [ ] T8 · Layouts + catálogo de widgets — L
