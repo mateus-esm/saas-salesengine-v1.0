@@ -255,3 +255,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-30 | 9 W2 | T5 Hooks de dashboard + paleta de gráficos validada | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-08-30 | 9 W2 | T6 Shell + sub-rotas + KPI hero + funil | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-08-30 | 9 W2 | T7 Quebras por pipeline, responsável e canal | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-08-30 | 9 W3 | T8 dashboard_layouts + catálogo de widgets | Claude / Opus 5 (PM) | L | R$ 20 |
