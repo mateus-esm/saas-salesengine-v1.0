@@ -147,7 +147,10 @@ export function ProposalsTab() {
     setSending(p.id);
     try {
       const { data, error } = await supabase.functions.invoke("admin-notifications", {
-        body: { action: "send_proposal", proposal_id: p.id, resend },
+        // The origin travels with the request: the database has no idea which
+        // domain the app is published on, and without it the message went out
+        // inviting the client to open nothing.
+        body: { action: "send_proposal", proposal_id: p.id, resend, link: window.location.origin },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.message ?? data.error);

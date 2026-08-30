@@ -34,6 +34,7 @@ const GUARDS: Record<string, { status: number; message: string }> = {
   unknown_notification_type: { status: 404, message: "Tipo de notificação desconhecido." },
   unknown_setting:           { status: 404, message: "Configuração desconhecida." },
   proposal_not_found:        { status: 404, message: "Proposta não encontrada." },
+  proposal_link_missing:     { status: 400, message: "Não consegui montar o link público da proposta, então não enviei — uma mensagem sem link é pior que nenhuma. Recarregue o painel e tente de novo." },
   builtin_template:          { status: 409, message: "Este modelo é do sistema: há código que o dispara, e apagá-lo quebraria esse envio. Deixe-o sem canal nenhum para silenciá-lo." },
   template_already_exists:   { status: 409, message: "Já existe um modelo com esse nome." },
   invalid_channel:           { status: 400, message: "Canal inválido. Só existem no app, e-mail e WhatsApp." },
@@ -231,10 +232,17 @@ async function sendProposal(db: SupabaseClient, asUser: SupabaseClient, body: Re
   // client's number is a legitimate act, and a fixed key would swallow it.
   const dedup = (body.resend === true) ? `sent_${Date.now()}` : "sent";
 
+  // The public link. The database cannot build it — it does not know which
+  // domain the app is served from — so it has to arrive from here, and until
+  // now nobody sent it: the client got "acesse por aqui:" and nothing after.
+  // The panel supplies its own origin; PUBLIC_APP_URL covers any caller that
+  // has no browser to ask.
+  const link = await proposalLink(db, proposalId, body.link);
+
   const id = await rpc<string | null>(asUser, "notify_prospect", {
     p_proposal_id: proposalId,
     p_type: "proposal.sent",
-    p_data: {},
+    p_data: { link },
     p_dedup_key: dedup,
   });
 
@@ -250,7 +258,29 @@ async function sendProposal(db: SupabaseClient, asUser: SupabaseClient, body: Re
     .select("channel, status, last_error")
     .eq("notification_id", id);
 
-  return { ok: true, notification_id: id, drained, deliveries: deliveries ?? [] };
+  return { ok: true, notification_id: id, link, drained, deliveries: deliveries ?? [] };
+}
+
+/**
+ * The absolute /proposta/:codigo URL, or "" when there is no honest way to build
+ * one — notify_prospect refuses the send in that case, which is the point.
+ *
+ * Only the origin is taken from the caller; the path is rebuilt here from the
+ * proposal's own codigo, so a wrong or stale body cannot point a client at
+ * someone else's proposal.
+ */
+async function proposalLink(db: SupabaseClient, proposalId: string, raw: unknown): Promise<string> {
+  let origin = "";
+  const candidate = typeof raw === "string" ? raw.trim() : "";
+  for (const source of [candidate, Deno.env.get("PUBLIC_APP_URL") ?? ""]) {
+    if (!source) continue;
+    try { origin = new URL(source).origin; break; } catch { /* next */ }
+  }
+  if (!origin) return "";
+
+  const { data } = await db
+    .from("proposals").select("codigo").eq("id", proposalId).maybeSingle();
+  return data?.codigo ? `${origin}/proposta/${data.codigo}` : "";
 }
 
 /**
