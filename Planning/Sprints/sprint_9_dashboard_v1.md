@@ -262,7 +262,7 @@ T6. `Planning/Workflow/billing.md` recebe uma linha por tarefa — no merge,
 
 ## 9. 📊 Ledger da sprint
 
-- [ ] T1 · `funnel_events` + mapa semântico + motivo de perda — XL
+- [x] T1 · `funnel_events` + mapa semântico + motivo de perda — XL
 - [ ] T2 · `recompute_funnel_events()` + backfill — L
 - [ ] T3 · Canal canônico — M
 - [ ] T4 · RPCs de métrica com escopo por papel — XL
