@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
 import { ProposalsTab } from "@/components/admin/proposals/ProposalsTab";
@@ -98,10 +98,36 @@ const statusBadgeVariant = (status: string | null): "default" | "secondary" | "d
   return "secondary";
 };
 
+// Os valores válidos de ?tab=. Uma lista fechada porque a URL é digitável, e
+// um valor inventado não pode deixar a página sem nenhuma aba selecionada.
+const ADMIN_TABS = [
+  "nichos", "equipes", "usuarios", "solo-instances",
+  "propostas", "faturamento", "notificacoes",
+];
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 const Admin = () => {
   const navigate = useNavigate();
+
+  // ─── Aba ativa: mora na URL, não em useState ────────────────────────────────
+  //
+  // No celular, sair do navegador e voltar não é uma pausa: o sistema descarta
+  // a aba e o app roda de novo do zero. Com `defaultValue` isso jogava você em
+  // "Nichos" toda vez, e o passo em que você estava sumia.
+  //
+  // A URL sobrevive a esse recarregamento — e de quebra o link fica
+  // compartilhável e o botão voltar do celular sai do Admin em vez de
+  // percorrer as sete abas.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") ?? "";
+  const activeTab = ADMIN_TABS.includes(tabParam) ? tabParam : "nichos";
+  const setActiveTab = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", value);
+    // replace: trocar de aba não é navegação — não deve empilhar histórico.
+    setSearchParams(next, { replace: true });
+  };
   const { role, isSuperAdmin, loadingRole } = useRole();
 
   // ── Data state
@@ -670,12 +696,12 @@ const Admin = () => {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Shield className="h-8 w-8" />
+          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+            <Shield className="h-6 w-6 md:h-8 md:w-8" />
             Admin Panel
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -684,7 +710,7 @@ const Admin = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="nichos">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="nichos" className="flex items-center gap-2">
             <LayoutGrid className="h-4 w-4" />

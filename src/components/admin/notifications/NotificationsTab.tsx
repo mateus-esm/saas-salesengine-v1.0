@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,9 +54,22 @@ interface MatrixRow {
  *   2. What do we say?   (the wording, editable without a deploy)
  *   3. Who hears it?     (per client, per type)
  */
+const SUB_TABS = ["remetentes", "templates", "clientes"];
+
 export function NotificationsTab() {
+  // Mesma razão do ?tab= do Admin: no celular o app recomeça do zero quando
+  // você volta pra ele, e sem isto a sub-aba voltava sempre para "Remetentes".
+  const [searchParams, setSearchParams] = useSearchParams();
+  const subParam = searchParams.get("sub") ?? "";
+  const sub = SUB_TABS.includes(subParam) ? subParam : "remetentes";
+  const setSub = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("sub", value);
+    setSearchParams(next, { replace: true });
+  };
+
   return (
-    <Tabs defaultValue="remetentes">
+    <Tabs value={sub} onValueChange={setSub}>
       <TabsList>
         <TabsTrigger value="remetentes" className="gap-2">
           <MessageSquare className="h-4 w-4" /> Remetentes
