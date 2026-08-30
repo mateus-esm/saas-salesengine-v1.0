@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { useLeads } from "@/hooks/useLeads";
+import { LossReasonDialog, type LossReasonOption } from "./LossReasonDialog";
 import { useLeadScores } from "@/hooks/useLeadScores";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -225,6 +226,15 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     setActiveId(String(e.active.id));
   };
 
+  // Sprint 9: a deal dropped into a lost stage is asked why. Held here between
+  // the drop (which already moved the card) and the answer.
+  const [pendingLoss, setPendingLoss] = useState<{ id: string; leadName?: string } | null>(null);
+
+  const lossReasons: LossReasonOption[] = useMemo(() => {
+    const raw = (pipeline as { loss_reasons?: unknown })?.loss_reasons;
+    return Array.isArray(raw) ? (raw as LossReasonOption[]) : [];
+  }, [pipeline]);
+
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     setActiveId(null);
@@ -258,6 +268,16 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         onError: () => {
           // Rollback — mutation already toasts. Reset to server state by re-applying source data.
           setLocalOpps(opportunities);
+        },
+        onSuccess: () => {
+          // Ask for the motive only after the move actually landed, so a failed
+          // save never leaves a dialog asking about something that did not
+          // happen.
+          const target = orderedStages.find((s) => s.id === targetStageId);
+          if (target?.stage_type === "lost") {
+            const lead = leads.find((l) => l.id === opp.lead_id);
+            setPendingLoss({ id: opp.id, leadName: lead?.name });
+          }
         },
       },
     );
@@ -367,6 +387,20 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
             )}
           </DragOverlay>
         </DndContext>
+
+        {/* Sprint 9 — the motive, asked at the moment it is known. */}
+        <LossReasonDialog
+          open={!!pendingLoss}
+          onOpenChange={(o) => { if (!o) setPendingLoss(null); }}
+          reasons={lossReasons}
+          leadName={pendingLoss?.leadName}
+          onConfirm={(reason) => {
+            if (pendingLoss && reason) {
+              updateOpportunity.mutate({ id: pendingLoss.id, lost_reason: reason });
+            }
+            setPendingLoss(null);
+          }}
+        />
       </div>
 
       <OpportunityDetailModal
