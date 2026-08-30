@@ -273,7 +273,7 @@ T6. `Planning/Workflow/billing.md` recebe uma linha por tarefa — no merge,
 - [x] T9 · Widgets sobre campo custom — L
 - [x] T10 · UI de motivo de perda + mapa de etapas — M
 - [ ] T11 · Página pública do relatório — L
-- [ ] T12 · Tabelas de relatório + snapshot — XL
+- [x] T12 · Tabelas de relatório + snapshot — XL
 - [ ] T13 · `reports-cron` + templates + cron inerte — L
 - [ ] T14 · UI de agendamento — L
 - [ ] T15 · Runbook + docs — S
