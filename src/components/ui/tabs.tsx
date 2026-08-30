@@ -5,19 +5,49 @@ import { cn } from "@/lib/utils";
 
 const Tabs = TabsPrimitive.Root;
 
+/**
+ * A barra rola na horizontal.
+ *
+ * Sem isto, uma lista `inline-flex` mais larga que a tela simplesmente
+ * transborda: no celular as abas da direita do Admin (são sete) ficavam
+ * inalcançáveis — dava para vê-las cortadas na borda e não havia como chegar
+ * nelas. A barra de rolagem fica escondida porque num toque ela é ruído; o
+ * gesto continua lá.
+ */
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const scroller = React.useRef<HTMLDivElement>(null);
+
+  // Traz a aba ativa para dentro do campo de visão ao montar. Importa quando a
+  // aba veio da URL depois de um reload: restaurar "Notificações" e deixar a
+  // barra parada em "Nichos" é o mesmo que não ter restaurado nada.
+  // `block: "nearest"` para não arrastar a página na vertical junto.
+  React.useEffect(() => {
+    const active = scroller.current?.querySelector<HTMLElement>('[data-state="active"]');
+    active?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, []);
+
+  return (
+    // max-w-full sem w-full de propósito: em bloco (Admin) o div já ocupa a
+    // linha inteira e o excesso vira rolagem; num flex (CRM, PipelineWorkspace)
+    // ele encolhe para o tamanho das abas e não empurra o que está ao lado.
+    <div
+      ref={scroller}
+      className="max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      <TabsPrimitive.List
+        ref={ref}
+        className={cn(
+          "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  );
+});
 TabsList.displayName = TabsPrimitive.List.displayName;
 
 const TabsTrigger = React.forwardRef<

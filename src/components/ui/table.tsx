@@ -2,9 +2,12 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+// overflow-x, não overflow-auto: com os dois eixos livres a tabela ganhava um
+// scroll vertical próprio dentro da página, e no celular o dedo nunca sabia
+// qual dos dois ia mexer.
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+    <div className="relative w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
       <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   ),
