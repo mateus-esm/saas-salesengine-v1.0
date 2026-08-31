@@ -208,9 +208,9 @@ commit;
 --   1. pg_cron and pg_net enabled (Dashboard > Database > Extensions).
 --   2. Edge secret BILLING_CRON_SECRET set (the reports tick reuses it —
 --      one operational secret, not four).
---   3. Edge secret PUBLIC_APP_URL set to the app's public origin, e.g.
---      https://app.soloventures.com.br — without it the WhatsApp message goes
---      out with the numbers but no "ver relatório completo" link.
+--   3. No extra secret for the link: the report URL is resolved PER TENANT from
+--      equipes.niche -> niches.domain by tenant_public_origin() (added in
+--      20260830001100). Each client gets a link on their own white-label domain.
 --   4. Function deployed:
 --        supabase functions deploy reports-cron --project-ref egxzsivzqlqadoqpgfby
 --
