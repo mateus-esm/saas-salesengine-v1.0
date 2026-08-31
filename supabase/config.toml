@@ -119,6 +119,12 @@ verify_jwt = true
 [functions.agent-power-sync]
 verify_jwt = false
 
+# Sprint 9 T13 — o tique de relatório. Autentica por x-cron-secret, igual aos
+# crons da Sprint 8: o pg_net não manda Authorization, então exigir JWT faria o
+# job falhar de hora em hora com UNAUTHORIZED_NO_AUTH_HEADER.
+[functions.reports-cron]
+verify_jwt = false
+
 # Sprint 9 T11 — public report page. No JWT: whoever opens the link from a
 # WhatsApp message is not a logged-in user. The token is the authorisation.
 [functions.report-snapshot]

@@ -64,12 +64,23 @@ export function normalizePhoneBR(raw: string): string | null {
   const digits = (raw || "").replace(/\D/g, "");
   if (!digits) return null;
 
-  // Already carries a country code.
-  if (digits.length >= 12 && digits.length <= 15) return digits;
+  // 55 + DDD (2) + assinante (9 celular | 8 fixo).
+  const BR = /^55[1-9][0-9](9[0-9]{8}|[2-5][0-9]{7})$/;
 
-  // 10 or 11 digits = a local number with area code; assume Brazil.
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  if (BR.test(digits)) return digits;
 
+  // Local, sem DDI: DDD + assinante. Prefixa o 55 e revalida — nunca devolve
+  // um palpite que não passe na mesma regra do banco.
+  if (digits.length === 10 || digits.length === 11) {
+    const withDDI = `55${digits}`;
+    return BR.test(withDDI) ? withDDI : null;
+  }
+
+  // Tudo mais é recusado, inclusive o caso que motivou esta função: um número
+  // brasileiro sem o 55 cujo comprimento por acaso parece ter DDI
+  // (859999939862 = DDD 85 grudado no celular). A versão anterior aceitava
+  // qualquer coisa entre 12 e 15 dígitos, o que fazia a mensagem ser "enviada"
+  // para um país que não existe e desaparecer sem erro nenhum.
   return null;
 }
 
