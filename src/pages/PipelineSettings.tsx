@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PipelineFunnelSettings } from "@/components/crm/PipelineFunnelSettings";
 import {
   Card,
   CardContent,
@@ -204,16 +203,11 @@ const PipelineSettings = () => {
         {/* Right pane: editor */}
         <main className="overflow-auto p-6 space-y-6">
           {selected ? (
-            <>
-              <PipelineEditor
-                key={selected.id}
-                pipeline={selected}
-                onSave={(patch) => updatePipeline.mutate({ id: selected.id, ...patch })}
-              />
-              {/* Sprint 9 — what the stages MEAN, and why deals are lost. The
-                  BI area is empty until this is filled in. */}
-              <PipelineFunnelSettings key={`funnel-${selected.id}`} pipeline={selected} />
-            </>
+            <PipelineEditor
+              key={selected.id}
+              pipeline={selected}
+              onSave={(patch) => updatePipeline.mutate({ id: selected.id, ...patch })}
+            />
           ) : (
             <EmptyEditorState onCreate={() => setCreatingOpen(true)} />
           )}
