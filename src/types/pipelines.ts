@@ -114,6 +114,8 @@ export interface PipelineStageV2 {
   cadence_unit: 'hours' | 'days' | null;
   /** Sprint 5.3 T8 — webhooks to fire on stage cadence/lifecycle events. */
   webhook_triggers: StageWebhookTrigger[];
+  /** Sprint 9 — o que ATINGIR esta etapa significa no funil canônico. NULL = sem significado. */
+  funnel_event?: string | null;
   /** Sprint 6.4 W2 — human description read by Copilot triage to know when a deal belongs here. */
   description?: string;
   /** Sprint 6.8 W6 — days before a ciclo stage auto-returns the lead to cycle_target_stage_id. */
@@ -205,6 +207,8 @@ export interface UpdateStageV2Data {
   webhook_triggers?: StageWebhookTrigger[];
   /** Sprint 6.4 W2 — human description read by Copilot triage. */
   description?: string;
+  /** Sprint 9 — significado da etapa no funil. */
+  funnel_event?: string | null;
 }
 
 export interface CreateOpportunityData {

@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   DndContext,
   closestCenter,
@@ -16,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, GripVertical, MessageSquare, Plus, RefreshCw, Repeat, Trash2, Webhook } from "lucide-react";
+import { Clock, GripVertical, Loader2, MessageSquare, Plus, RefreshCw, Repeat, Trash2, Webhook, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +36,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { supabase } from "@/integrations/supabase/client";
+import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
+import { FUNNEL_EVENT_LABELS, MAPPABLE_FUNNEL_EVENTS } from "@/types/dashboard";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import type {
   PipelineStageV2,
@@ -43,12 +48,23 @@ import type {
   StageWebhookTrigger,
 } from "@/types/pipelines";
 
+interface LossReason {
+  label: string;
+  color?: string;
+}
+
 interface StagesEditorProps {
   pipelineId: string;
 }
 
 // Internal value stays English; the label is PT-BR (standard i18n: stable codes,
 // translated display). Matches the DB CHECK ('open','won','lost','ciclo').
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
+
+/** Radix não aceita SelectItem com value="" — daí o sentinela. */
+const NO_EVENT = "__none__";
+
 const STAGE_TYPES: Array<{ value: StageType; label: string }> = [
   { value: "open", label: "Aberto" },
   { value: "won", label: "Ganho" },
@@ -74,8 +90,60 @@ const parsePositiveIntOrNull = (value: string) => {
 export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
   const { stages, isLoading, createStage, updateStage, deleteStage, reorderStages } =
     usePipelineStagesV2(pipelineId);
+  const { pipelines, updatePipeline } = usePipelines();
+  const qc = useQueryClient();
 
   const [newName, setNewName] = useState("");
+
+  const pipeline = pipelines.find((p) => p.id === pipelineId);
+
+  // -- motivos de perda ------------------------------------------------------
+  const initialReasons = useMemo<LossReason[]>(() => {
+    const raw = (pipeline as unknown as { loss_reasons?: unknown })?.loss_reasons;
+    return Array.isArray(raw) ? (raw as LossReason[]) : [];
+  }, [pipeline]);
+
+  const [reasons, setReasons] = useState<LossReason[]>(initialReasons);
+  const [newReason, setNewReason] = useState("");
+  useEffect(() => setReasons(initialReasons), [initialReasons]);
+
+  const reasonsDirty =
+    JSON.stringify(reasons.map((r) => r.label)) !==
+    JSON.stringify(initialReasons.map((r) => r.label));
+
+  const addReason = () => {
+    const label = newReason.trim();
+    if (!label) return;
+    if (reasons.some((r) => r.label.toLowerCase() === label.toLowerCase())) {
+      toast.error("Esse motivo ja esta na lista");
+      return;
+    }
+    setReasons((r) => [...r, { label }]);
+    setNewReason("");
+  };
+
+  // -- reprocessar historico -------------------------------------------------
+  const recompute = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await sb.rpc("recompute_funnel_events", {
+        p_pipeline_id: pipelineId,
+      });
+      if (error) throw error;
+      return data as { net_events_change: number };
+    },
+    onSuccess: (r) => {
+      for (const k of ["funnel_overview", "funnel_series", "funnel_breakdown", "funnel_map_status"]) {
+        qc.invalidateQueries({ queryKey: [k] });
+      }
+      const n = r?.net_events_change ?? 0;
+      toast.success("Historico reprocessado (" + (n >= 0 ? "+" : "") + n + " eventos)");
+    },
+    onError: (e: Error) => toast.error(e.message ?? "Nao foi possivel reprocessar"),
+  });
+
+  const mapped = stages.filter(
+    (s) => s.stage_type === "won" || s.stage_type === "lost" || !!s.funnel_event,
+  ).length;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -144,6 +212,125 @@ export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
           <Plus className="h-4 w-4 mr-1" /> Adicionar
         </Button>
       </div>
+
+      {/* Cobertura do mapa + reprocessar. Reprocessar e botao, nao efeito
+          colateral de mexer num dropdown: a reconstrucao reescreve todo numero
+          que a equipe olha no dashboard. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <p className="text-xs text-muted-foreground">
+          {mapped} de {stages.length} etapas com significado definido.{" "}
+          {mapped === 0 && (
+            <span className="text-amber-600 dark:text-amber-400">
+              Sem isso o dashboard nao tem como calcular o funil.
+            </span>
+          )}
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1.5 text-xs"
+          disabled={recompute.isPending}
+          onClick={() => recompute.mutate()}
+        >
+          {recompute.isPending ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3" />
+          )}
+          Reprocessar historico
+        </Button>
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Reprocessar rele todas as movimentacoes ja registradas e reconstroi os numeros do
+        dashboard com o mapa atual &mdash; inclusive para tras. Seguro rodar quantas vezes
+        quiser: rodar duas vezes seguidas nao muda nada.
+      </p>
+
+      {/* Motivos de perda */}
+      <div className="space-y-2 border-t border-border pt-3">
+        <div>
+          <Label className="text-xs font-medium">Motivos de perda</Label>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Oferecidos quando um negocio entra numa etapa do tipo Perdido. Lista curta e lida;
+            lista de vinte vira &ldquo;outro&rdquo;.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {reasons.map((r) => (
+            <span
+              key={r.label}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs"
+            >
+              {r.color && (
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: r.color }} />
+              )}
+              {r.label}
+              <button
+                type="button"
+                onClick={() => setReasons((list) => list.filter((x) => x.label !== r.label))}
+                className="text-muted-foreground hover:text-destructive"
+                aria-label={"Remover " + r.label}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {reasons.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Nenhum motivo configurado &mdash; a equipe podera digitar texto livre.
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Input
+            value={newReason}
+            onChange={(e) => setNewReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addReason();
+              }
+            }}
+            placeholder="Adicionar motivo (ex.: Prazo de entrega)"
+            className="h-8 text-xs"
+            maxLength={40}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 gap-1 text-xs"
+            onClick={addReason}
+          >
+            <Plus className="h-3 w-3" /> Adicionar
+          </Button>
+        </div>
+
+        {reasonsDirty && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() =>
+                updatePipeline.mutate({ id: pipelineId, loss_reasons: reasons } as never, {
+                  onSuccess: () => toast.success("Motivos de perda salvos"),
+                })
+              }
+            >
+              Salvar motivos
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-muted-foreground"
+              onClick={() => setReasons(initialReasons)}
+            >
+              Descartar
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -158,6 +345,7 @@ interface SortableStageRowProps {
         | "name"
         | "color"
         | "stage_type"
+        | "funnel_event"
         | "max_idle_hours"
         | "max_interactions"
         | "cadence_value"
@@ -183,7 +371,7 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const stageTypeLabel = STAGE_TYPES.find((t) => t.value === stage.stage_type)?.label ?? stage.stage_type;
+  const isTerminal = stage.stage_type === "won" || stage.stage_type === "lost";
 
   return (
     <div
@@ -214,9 +402,64 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
           className="flex-1 h-8 font-medium"
         />
 
-        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
-          {stageTypeLabel}
-        </span>
+        {/* Sprint 9: era um <span> só de leitura. STAGE_TYPES existia no arquivo
+            desde sempre e nunca virou controle, então NINGUÉM conseguia marcar
+            qual etapa significa Ganho ou Perdido — cinco dos sete pipelines em
+            produção estavam sem nenhuma das duas, e por isso o dashboard não
+            tinha como calcular receita nem taxa de ganho. */}
+        <Select
+          value={stage.stage_type}
+          onValueChange={(v) => onChange({ stage_type: v as StageType })}
+        >
+          <SelectTrigger
+            className="h-8 w-[104px] shrink-0 text-xs"
+            title="O que esta etapa representa. Ganho e Perdido fecham o negócio e alimentam receita e taxa de ganho no dashboard."
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STAGE_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value} className="text-xs">
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* O que ATINGIR esta etapa significa no funil — ao lado do tipo, na
+            mesma linha, porque as duas respondem à mesma pergunta sobre a
+            mesma etapa. Terminal não é editável: stage_type já decidiu, e um
+            segundo controle dizendo a mesma coisa divergiria. */}
+        {isTerminal ? (
+          <span
+            className="w-[172px] shrink-0 truncate rounded bg-muted px-2 py-1.5 text-center text-[11px] text-muted-foreground"
+            title="Ganho e Perdido vêm do tipo da etapa, ao lado."
+          >
+            {stage.stage_type === "won" ? "Ganho" : "Perdido"} · pelo tipo
+          </span>
+        ) : (
+          <Select
+            value={stage.funnel_event ?? NO_EVENT}
+            onValueChange={(v) => onChange({ funnel_event: v === NO_EVENT ? null : v })}
+          >
+            <SelectTrigger
+              className="h-8 w-[172px] shrink-0 text-xs"
+              title="O que chegar nesta etapa significa no funil. Sem isso o dashboard não sabe qual coluna é 'proposta enviada'."
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_EVENT} className="text-xs text-muted-foreground">
+                Sem significado
+              </SelectItem>
+              {MAPPABLE_FUNNEL_EVENTS.map((ev) => (
+                <SelectItem key={ev} value={ev} className="text-xs">
+                  {FUNNEL_EVENT_LABELS[ev]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         <Button
           variant="ghost"
