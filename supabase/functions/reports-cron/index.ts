@@ -75,11 +75,6 @@ serve(async (req) => {
     force?: boolean;
   };
 
-  // The public base URL for report links. Without it the message still goes
-  // out, just without the "ver completo" line — a report with numbers and no
-  // link beats no report.
-  const publicBase = (Deno.env.get("PUBLIC_APP_URL") ?? "").replace(/\/+$/, "");
-
   let q = db
     .from("report_schedules")
     .select("id, equipe_id, name, frequency, send_hour, weekday, monthday, timezone, sections, filters, next_run_at")
@@ -102,7 +97,7 @@ serve(async (req) => {
   for (const row of (due ?? []) as Schedule[]) {
     result.processed++;
     try {
-      const outcome = await runSchedule(db, row, publicBase, !!body.force);
+      const outcome = await runSchedule(db, row, !!body.force);
       if (outcome.status === "sent") result.sent++;
       else if (outcome.status === "skipped") result.skipped++;
       result.details.push({ schedule: row.id, ...outcome });
@@ -121,7 +116,6 @@ serve(async (req) => {
 async function runSchedule(
   db: SupabaseClient,
   s: Schedule,
-  publicBase: string,
   force: boolean,
 ): Promise<{ status: string; run_id?: string; recipients?: number; reason?: string }> {
   // 1. the window
@@ -171,7 +165,17 @@ async function runSchedule(
   }
 
   // 4. render and enqueue
-  const link = publicBase ? `${publicBase}/relatorio/${run.public_token}` : null;
+  //
+  // The origin is resolved PER TENANT, not from a global secret. Each client
+  // reaches the app on their own white-label domain (casaflow.soloventures…,
+  // solon.soloventures…), so one shared base URL would send Casa Flow a link
+  // that opens a competitor's branding. The domain already lives in the
+  // database — equipes.niche -> niches.domain — so there is no secret to set.
+  const { data: origin } = await db.rpc("tenant_public_origin", {
+    p_equipe_id: s.equipe_id,
+  });
+  const base = typeof origin === "string" ? origin.replace(/\/+$/, "") : "";
+  const link = base ? `${base}/relatorio/${run.public_token}` : null;
   const text = renderReportText({
     snapshot: snapshot as ReportSnapshot,
     frequency: s.frequency,

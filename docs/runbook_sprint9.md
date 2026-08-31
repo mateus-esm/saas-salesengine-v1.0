@@ -42,7 +42,7 @@ que 0600 criou.
 supabase db push --project-ref egxzsivzqlqadoqpgfby
 ```
 
-As oito da sprint, em ordem:
+As nove da sprint, em ordem:
 
 | Arquivo | O que faz |
 | :------ | :-------- |
@@ -54,6 +54,7 @@ As oito da sprint, em ordem:
 | `20260830000800_sprint9_custom_field_metrics.sql` | gráficos sobre campo custom, com whitelist |
 | `20260830000900_sprint9_report_schedules.sql` | agendas, destinatários, runs, `_core` + snapshot |
 | `20260830001000_sprint9_report_cron.sql` | tipos de notificação, `notify_report()`, cron **inerte** |
+| `20260830001100_sprint9_tenant_report_link.sql` | `tenant_public_origin()` — link do relatório por domínio do cliente |
 
 > ⚠️ **Nunca use `db push --include-all`.** Há migrations aplicadas à mão que
 > não estão no histórico; `--include-all` tenta reaplicar tudo.
@@ -84,17 +85,24 @@ o link do WhatsApp não está logado.
 
 ## 3. Secrets
 
-Um novo, um reaproveitado:
+**Nenhum secret novo.** O tique de relatório reaproveita o `BILLING_CRON_SECRET`
+que já existe — um segredo operacional, não quatro.
 
-| Secret | Novo? | Para quê |
-| :----- | :---- | :------- |
-| `PUBLIC_APP_URL` | **SIM** | Origem pública do app, ex.: `https://app.soloventures.com.br`. Sem ela a mensagem sai com os números mas **sem o link** "ver relatório completo". |
-| `BILLING_CRON_SECRET` | não | O tique de relatório reaproveita o segredo de cobrança. Um segredo operacional, não quatro. |
+O link do relatório **não** vem de secret: cada cliente acessa o app pelo próprio
+domínio, e o domínio certo já está no banco (`equipes.niche` → `niches.domain`).
+`tenant_public_origin()` resolve por equipe, então a Casa Flow recebe um link
+`casaflow.soloventures.com.br` e a Solo Energia um `solon.soloventures.com.br`.
 
-```bash
-supabase secrets set PUBLIC_APP_URL=https://app.soloventures.com.br \
-  --project-ref egxzsivzqlqadoqpgfby
+Conferir que todo cliente tem domínio resolvível:
+
+```sql
+select e.nome, coalesce(public.tenant_public_origin(e.id), '<SEM LINK>') as origem
+  from equipes e order by 2, 1;
 ```
+
+Equipe sem `niche` cai no domínio do niche `default`. Se nem esse existir, o
+relatório sai com os números e **sem** a linha do link — de propósito: os números
+são o conteúdo, o link é complemento.
 
 ---
 
@@ -219,7 +227,8 @@ Roteiro, um minuto por cliente:
 | Ganhos zerados também | Backfill não rodou | `select recompute_funnel_events(null);` como admin da equipe. |
 | Números não batem com o kanban | Backfill defasado | Reprocessar. É idempotente — rodar duas vezes não muda nada. |
 | Relatório não chega | `sprint8_dispatch_tick` parado | `select * from cron.job;` e verificar a fila em `notification_deliveries`. |
-| Chega sem link | `PUBLIC_APP_URL` não setada | Setar o secret e redeployar `reports-cron`. |
+| Chega sem link | Equipe sem `niche`, ou niche `default` inativo | `select nome, niche from equipes where niche is null;` e corrigir o cadastro. Sem redeploy. |
+| Link abre a marca de outro cliente | `niches.domain` errado para aquele niche | Corrigir `niches.domain`. O link é resolvido no envio, então vale já no próximo. |
 | Chega duas vezes | Não deveria ser possível | `unique (schedule_id, period_start)` impede. Se acontecer, guardar os dois `report_runs.id` — é bug de verdade. |
 | Link do relatório dá 404 | Rota `/relatorio/:token` fora do build | Confirmar que o deploy do front subiu. |
 | Link dá 410 | Run com mais de 90 dias | Esperado. `expires_at` é proposital. |
