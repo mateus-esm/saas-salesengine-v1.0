@@ -28,6 +28,7 @@ interface StageRow {
   cadence_value: number | null;
   cadence_unit: string | null;
   webhook_triggers: PipelineStageV2["webhook_triggers"] | null;
+  funnel_event: string | null;
   description: string | null;
   created_at: string;
   deleted_at: string | null;
@@ -46,6 +47,11 @@ const normalize = (row: StageRow): PipelineStageV2 => ({
   cadence_value: row.cadence_value ?? null,
   cadence_unit: (row.cadence_unit as PipelineStageV2["cadence_unit"]) ?? null,
   webhook_triggers: row.webhook_triggers ?? [],
+  // Sprint 9: sem esta linha o valor era gravado no banco e descartado na
+  // leitura — o select voltava para "sem significado" a cada refetch e a tela
+  // parecia não salvar nada. normalize() monta o objeto campo a campo, então
+  // toda coluna nova precisa ser adicionada aqui explicitamente.
+  funnel_event: row.funnel_event ?? null,
   description: row.description ?? undefined,
   created_at: row.created_at,
   deleted_at: row.deleted_at ?? null,

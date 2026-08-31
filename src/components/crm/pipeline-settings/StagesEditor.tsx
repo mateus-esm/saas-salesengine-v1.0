@@ -183,8 +183,6 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const stageTypeLabel = STAGE_TYPES.find((t) => t.value === stage.stage_type)?.label ?? stage.stage_type;
-
   return (
     <div
       ref={setNodeRef}
@@ -214,9 +212,29 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
           className="flex-1 h-8 font-medium"
         />
 
-        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
-          {stageTypeLabel}
-        </span>
+        {/* Sprint 9: era um <span> só de leitura. STAGE_TYPES existia no arquivo
+            desde sempre e nunca virou controle, então NINGUÉM conseguia marcar
+            qual etapa significa Ganho ou Perdido — cinco dos sete pipelines em
+            produção estavam sem nenhuma das duas, e por isso o dashboard não
+            tinha como calcular receita nem taxa de ganho. */}
+        <Select
+          value={stage.stage_type}
+          onValueChange={(v) => onChange({ stage_type: v as StageType })}
+        >
+          <SelectTrigger
+            className="h-8 w-[104px] shrink-0 text-xs"
+            title="O que esta etapa representa. Ganho e Perdido fecham o negócio e alimentam receita e taxa de ganho no dashboard."
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STAGE_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value} className="text-xs">
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Button
           variant="ghost"

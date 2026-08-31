@@ -265,3 +265,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-30 | 9 W4 | T15 Runbook de deploy + docs | Claude / Haiku 4.5 | S | R$ 5 |
 | 2026-08-30 | 9 W4 | T13 fix Link do relatório por domínio do cliente | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-08-31 | 9 fix | Validação de telefone BR + verify_jwt do reports-cron | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-08-31 | 9 fix | stage_type editável + funnel_event no normalize | Claude / Opus 5 (PM) | M | R$ 12 |

@@ -94,7 +94,7 @@ export function PipelineFunnelSettings({ pipeline }: { pipeline: Pipeline }) {
 
   const liveStages = (stages ?? []).filter((s) => !s.deleted_at);
   const mappedCount = liveStages.filter(
-    (s) => s.stage_type === "won" || s.stage_type === "lost" || !!(s as { funnel_event?: string }).funnel_event,
+    (s) => s.stage_type === "won" || s.stage_type === "lost" || !!s.funnel_event,
   ).length;
 
   return (
@@ -144,9 +144,8 @@ export function PipelineFunnelSettings({ pipeline }: { pipeline: Pipeline }) {
                         onValueChange={(v) =>
                           updateStage.mutate({
                             id: stage.id,
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             funnel_event: v === NONE ? null : v,
-                          } as any)
+                          })
                         }
                       >
                         <SelectTrigger className="h-8 w-[190px] shrink-0 text-xs">
