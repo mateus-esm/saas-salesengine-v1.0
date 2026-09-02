@@ -10,6 +10,13 @@ verdade — e o banco volta exatamente ao que era.
     python supabase/scripts/run_sql.py <arquivo.sql>            # ensaio (rollback)
     python supabase/scripts/run_sql.py <arquivo.sql> --commit   # aplica de vez
 
+Para um script que já traz o próprio `begin;`/`commit;` — como o de limpeza de
+produção — use --rehearse: ele remove os dois antes de envolver em rollback.
+Sem isso o `commit;` de dentro encerraria a transação e a cirurgia ficaria
+PERMANENTE no meio de um "ensaio".
+
+    python supabase/scripts/run_sql.py <script.sql> --rehearse
+
 O ensaio é o modo padrão de propósito. Aplicar tem que ser uma escolha digitada.
 """
 import json
@@ -58,8 +65,19 @@ def main() -> None:
 
     path = sys.argv[1]
     commit = "--commit" in sys.argv
+    rehearse = "--rehearse" in sys.argv
+    if commit and rehearse:
+        raise SystemExit("--commit e --rehearse são opostos; escolha um")
     with open(path, encoding="utf-8") as fh:
         body = fh.read()
+
+    if rehearse:
+        # O `commit;` do próprio script encerraria a transação do ensaio e
+        # tornaria tudo permanente. Some antes de qualquer coisa.
+        body = re.sub(r"^\s*begin\s*;\s*$",  "-- [ensaio] begin removido",  body, flags=re.M | re.I)
+        body = re.sub(r"^\s*commit\s*;\s*$", "-- [ensaio] commit removido", body, flags=re.M | re.I)
+        if re.search(r"^\s*commit\s*;", body, flags=re.M | re.I):
+            raise SystemExit("ABORTADO: sobrou um `commit;` que eu não soube remover")
 
     # `raise notice` não volta pela API. Vira uma linha de resultado para que o
     # "asserções passaram" da migration seja visível em vez de silencioso.

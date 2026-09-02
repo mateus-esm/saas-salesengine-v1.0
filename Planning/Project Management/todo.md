@@ -82,6 +82,67 @@ View of Project Manager: Mateus
 
 18. Landing Pages.
 
+# TODO — vindo do Sprint 8.2 (onboarding)
+
+## Segurança: duas fontes de verdade para "quem é admin" — URGENTE
+
+`is_super_admin()` lê `profiles.role`. `useRole()` no frontend lê
+`user_roles.role`. São tabelas diferentes, e elas discordam hoje em produção.
+
+Consequência real, encontrada em 02/09: `wi@walteringlezadv.com.br` — um cliente
+— estava com `profiles.role = 'super_admin'`, o que libera o RLS de `proposals`,
+`proposal_items`, `proposal_acceptances`, `system_settings` e
+`notification_senders`. Pela API, esse login lia a proposta de todos os outros
+clientes, com preço negociado e aceite. A interface nunca mostrou o painel para
+ele, porque lê a outra tabela — e foi justamente isso que escondeu o problema.
+
+O bloco C de `supabase/scripts/2026-09-02_producao_limpeza.sql` estanca o caso.
+Falta a correção estrutural:
+
+- [ ] Escolher UMA fonte de verdade (`user_roles` é a certa: existe uma linha por
+      papel, e é a tabela que o resto do RBAC usa)
+- [ ] `is_super_admin()` passa a ler de lá
+- [ ] Um CHECK ou trigger que impeça `profiles.role = 'super_admin'` quando
+      `equipe_id is not null` — um super admin nunca pertence à equipe de um cliente
+- [ ] Uma tela no admin que mostre os dois papéis lado a lado, para o
+      descasamento ficar visível em vez de silencioso
+- [ ] Auditar o que esse login acessou (Supabase → Logs → PostgREST)
+
+## Onboarding — o que ficou de fora do 8.2
+
+- [ ] **Portal do cliente**: ele acompanha o próprio onboarding, vê em que etapa
+      está e o que falta dele. Hoje o quadro é só interno.
+- [ ] **Calendly de verdade**: ler o agendamento pela API e mover o card de
+      Boas-vindas para Discovery sozinho. Depende de OAuth do Calendly.
+      Hoje o link é enviado e a data é anotada à mão.
+- [ ] **Checklist por etapa**: as entregas concretas da implantação (treinar
+      agente, conectar canal, montar pipeline, n8n dos anúncios) como itens
+      marcáveis que bloqueiam o go-live enquanto não estiverem prontos.
+- [ ] **Templates de implantação por nicho**: o checklist acima, pré-preenchido
+      por vertical. Só faz sentido com mais volume.
+- [ ] **Assinatura eletrônica do contrato** no aceite da proposta.
+- [ ] **Coletar CPF/CNPJ dos clientes legados** — Casa Flow, Jornada do R1,
+      Cinemas Benficas, Lucas Castelo, Be My Guest e WI estão todos sem
+      `doc_number`, então nenhuma cobrança pode ser aberta para eles. É operação
+      comercial, não código, mas trava o faturamento.
+- [ ] **Logo em SVG no e-mail**: hoje o cabeçalho é o wordmark em texto sobre a
+      faixa laranja. Um SVG inline ficaria melhor, mas depende de um arquivo de
+      design que não existe no repositório.
+
+## Dívida técnica encontrada no caminho
+
+- [ ] `src/integrations/supabase/types.ts` está desatualizado desde o sprint 8.4:
+      não conhece `system_settings`, `notification_senders` nem
+      `v_admin_notification_matrix`, e isso deixa **7 erros de typecheck** no
+      `main` desde antes do 8.2. Regenerar (passo 4 do `docs/runbook_sprint82.md`)
+      e trocar os `supabase as any` de `useOnboarding.ts` e `ProposalsTab.tsx`
+      pelo cliente tipado.
+- [ ] `billing-cron` anula fatura sem cobrança depois de 2h. Com a fatura de
+      implantação agora nascendo no provisionamento e só sendo cobrada no
+      go-live (`on_golive`), essa regra pode anular uma fatura legítima que está
+      apenas esperando. **Conferir antes de o primeiro cliente `on_golive`
+      passar de 2h em implantação.**
+
 # TODO — do later
 
 ## Security: rotate exposed keys

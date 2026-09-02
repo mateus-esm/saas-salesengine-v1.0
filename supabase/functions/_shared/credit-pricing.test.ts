@@ -28,7 +28,7 @@ Deno.test("the provider's own price never leaves the function", () => {
   };
   const pub = toPublicModel(model);
   assertEquals(pub.creditsPerMessage, 28);
-  assertEquals((pub as Record<string, unknown>).providerCredits, undefined);
+  assertEquals((pub as unknown as Record<string, unknown>).providerCredits, undefined);
 });
 
 Deno.test("optional flags are carried through, absent when unset", () => {

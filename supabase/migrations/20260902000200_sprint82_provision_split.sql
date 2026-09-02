@@ -308,11 +308,23 @@ begin
   v_setup_total := case when v_p.setup_waived then 0 else coalesce(v_p.setup_price, 0) end;
 
   if v_setup_total > 0 then
+    -- `awaiting_golive` existe por causa do billing-cron.
+    --
+    -- voidOrphanInvoices() anula toda fatura ABERTA e SEM cobrança com mais de
+    -- 2 horas, porque isso normalmente é entulho de uma chamada ao gateway que
+    -- falhou. Só que uma fatura de implantação 'on_golive' é exatamente isso
+    -- por semanas — de propósito. Sem esta marca, o cron (que roda todo dia às
+    -- 12h UTC e está ativo) apagaria a fatura no dia seguinte ao aceite.
+    --
+    -- É a mesma saída que o sprint 8.3 usou para a fatura avulsa criada à mão.
     insert into public.invoices (
-      equipe_id, contract_id, kind, status, subtotal, total, due_date, issued_at
+      equipe_id, contract_id, kind, status, subtotal, total, due_date, issued_at, metadata
     ) values (
       v_equipe, v_contract, 'setup', 'open',
-      v_setup_total, v_setup_total, v_previsto, now()
+      v_setup_total, v_setup_total, v_previsto, now(),
+      case when v_p.setup_charge_timing = 'on_golive'
+           then '{"awaiting_golive": true}'::jsonb
+           else '{}'::jsonb end
     ) returning id into v_setup_inv;
 
     insert into public.invoice_items (invoice_id, description, quantity, unit_price, total)
@@ -462,6 +474,13 @@ begin
     if not v_charged and v_due < current_date + 3 then
       update public.invoices set due_date = current_date + 3 where id = v_setup_inv;
     end if;
+
+    -- A espera acabou. Daqui em diante ela é uma fatura comum, e se a cobrança
+    -- falhar o billing-cron deve mesmo anulá-la e reemitir — que é o
+    -- comportamento correto para entulho de gateway.
+    update public.invoices
+       set metadata = metadata - 'awaiting_golive'
+     where id = v_setup_inv;
   end if;
 
   if v_card is not null then
@@ -543,6 +562,13 @@ begin
   assert (v_r->>'charge_now')::boolean = false,
     'ASSERT FAILED: uma proposta on_golive mandou cobrar no provisionamento';
 
+  -- ...e a fatura tem que sobreviver ao billing-cron, que anula fatura aberta
+  -- sem cobrança com mais de 2h. Sem esta marca a implantação da Rema (R$700)
+  -- some sozinha no dia seguinte.
+  assert (select metadata->>'awaiting_golive' from public.invoices
+           where id = (v_r->>'setup_invoice_id')::uuid) = 'true',
+    'ASSERT FAILED: a fatura on_golive não está protegida do voidOrphanInvoices';
+
   -- o card nasceu em boas-vindas, com a previsão
   select stage_id, golive_previsto into v_txt, v_date from public.onboardings
    where id = (v_r->>'onboarding_id')::uuid;
@@ -567,6 +593,10 @@ begin
            join public.onboardings o on o.stage_id = s.id
           where o.equipe_id = v_eq) = 'ativo',
     'ASSERT FAILED: o card não foi para Ativo no go-live';
+
+  assert (select metadata->>'awaiting_golive' from public.invoices
+           where id = (v_g->>'setup_invoice_id')::uuid) is null,
+    'ASSERT FAILED: a fatura continuou marcada como esperando go-live depois do go-live';
 
   v_g := public.go_live_contract((v_r->>'contract_id')::uuid);
   assert (v_g->>'already_live')::boolean, 'ASSERT FAILED: go-live duas vezes não foi idempotente';
