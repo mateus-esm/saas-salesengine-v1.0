@@ -69,6 +69,12 @@ create table if not exists backup_20260902_opportunities as
   select * from public.opportunities where equipe_id = '33b33ec5-2325-4e34-aa2d-2070e964f4de';
 create table if not exists backup_20260902_conversations as
   select * from public.conversations where equipe_id = '33b33ec5-2325-4e34-aa2d-2070e964f4de';
+create table if not exists backup_20260902_stage_history as
+  select * from public.opportunity_stage_history where equipe_id in (
+    'e5bda77f-cec0-485e-8d52-404b4fb11ac6',
+    '33b33ec5-2325-4e34-aa2d-2070e964f4de',
+    'c39a6d83-9f13-4232-9f3c-f9c8cc6d8f7b',
+    '57b34902-fad3-4e31-a401-b6858027ba21');
 
 -- Os legados: o histórico que o bloco B zera.
 create table if not exists backup_20260902_agent_action_ledger as
@@ -164,7 +170,19 @@ begin
   -- 7. Instâncias de WhatsApp e webhooks, que também são configuração e não dado.
   update public.wpp_instances set equipe_id = p_keep where equipe_id = p_drop;
 
-  -- 8. A VERIFICAÇÃO. Nada que importe pode continuar apontando para a equipe
+  -- 8. O histórico de etapas do funil precisa sair ANTES, e por um motivo
+  --    torto: `opportunity_stage_history.to_stage_id` referencia
+  --    `pipeline_stages_v2` com ON DELETE SET NULL, mas a coluna é NOT NULL.
+  --    Apagar a equipe cascateia nos estágios, o cascade tenta anular essa
+  --    coluna, e o NOT NULL rejeita — o delete inteiro aborta com uma mensagem
+  --    que não menciona equipes em lugar nenhum.
+  --
+  --    O ensaio pegou isto. Sem ele, a limpeza teria falhado no meio, em
+  --    produção, com um erro ilegível. (A causa raiz — FK SET NULL apontando
+  --    para coluna NOT NULL — está no todo.md.)
+  delete from public.opportunity_stage_history where equipe_id = p_drop;
+
+  -- 9. A VERIFICAÇÃO. Nada que importe pode continuar apontando para a equipe
   --    condenada, ou o cascade leva junto.
   select
     (select count(*) from public.profiles   where equipe_id = p_drop) +
@@ -230,6 +248,57 @@ update public.proposals set equipe_id = null, target_equipe_id = null
     or target_equipe_id = '57b34902-fad3-4e31-a401-b6858027ba21';
 delete from public.onboardings where equipe_id = '57b34902-fad3-4e31-a401-b6858027ba21';
 delete from public.equipes where id = '57b34902-fad3-4e31-a401-b6858027ba21';
+
+-- ============================================================================
+-- 2.5. BLOCO A' — QUEM NÃO ESTÁ NO AR NÃO PODE ESTAR EM TRIAL
+--
+-- O provisionamento ANTIGO preenchia `went_live_at = now()` e iniciava o trial
+-- no mesmo clique que criava a equipe. WI Advogados e Rema Digital foram
+-- provisionados assim hoje, 02/09: os contratos dizem `trialing`, com trial
+-- terminando em 17/09 — e os dois estão em Implantação, sem agente treinado,
+-- sem canais conectados e sem CRM montado.
+--
+-- Ou seja: o trial dos dois está sendo gasto exatamente do jeito que esta
+-- sprint existe para impedir — julgando um produto meio construído. E, como o
+-- contrato se diz vivo, o botão "Colocar no ar" responderia `already_live` e
+-- não faria nada.
+--
+-- A regra aqui é semântica, não uma data: **um contrato cujo card não está numa
+-- etapa terminal não está no ar.** O relógio recomeça no go-live de verdade.
+--
+-- Isto também é o que faz a proteção da fatura, logo abaixo, funcionar: ela
+-- depende de `went_live_at is null`.
+-- ============================================================================
+
+update public.contracts c
+   set status               = 'onboarding',
+       went_live_at         = null,
+       trial_ends_at        = null,
+       current_period_start = null,
+       current_period_end   = null
+  from public.onboardings o
+  join public.onboarding_stages s on s.id = o.stage_id
+ where o.equipe_id = c.equipe_id
+   and not s.is_terminal
+   and c.status in ('trialing', 'active');
+
+-- Agora sim a fatura de implantação pendente pode ser protegida do
+-- voidOrphanInvoices(), que anula fatura aberta sem cobrança com mais de 2h e
+-- roda todo dia às 12h UTC. Em produção isto é a FAT-2026-000018 da Rema
+-- (R$700), que sem esta linha some na próxima execução do cron.
+--
+-- O vencimento passa a ser a data prevista de conclusão — o modelo novo, em que
+-- o cliente vê como prazo o dia da entrega prometida.
+update public.invoices i
+   set metadata = i.metadata || '{"awaiting_golive": true}'::jsonb,
+       due_date = coalesce(o.golive_previsto, i.due_date)
+  from public.contracts c
+  left join public.onboardings o on o.equipe_id = c.equipe_id
+ where i.contract_id = c.id
+   and i.kind = 'setup'
+   and i.status = 'open'
+   and i.asaas_payment_id is null
+   and c.went_live_at is null;
 
 -- ============================================================================
 -- 3. BLOCO B — RESET DOS CLIENTES LEGADOS
@@ -391,6 +460,31 @@ begin
   -- (i) o backup existe de verdade antes de a transação fechar
   assert (select count(*) from backup_20260902_agent_action_ledger) > 2000,
     'ASSERT FAILED: o backup do histórico dos legados está vazio ou incompleto';
+
+  -- (j) NENHUMA fatura de implantação aberta e sem cobrança está exposta ao
+  --     billing-cron. Escrito de propósito SEM o filtro `went_live_at is null`
+  --     que o update usa: a versão anterior desta asserção repetia o mesmo
+  --     predicado do update e por isso passou sem verificar nada, deixando a
+  --     fatura da Rema desprotegida. Uma asserção que só olha as linhas que o
+  --     update já escolheu não é uma asserção.
+  select count(*) into v_cnt
+    from public.invoices i
+   where i.kind = 'setup'
+     and i.status = 'open'
+     and i.asaas_payment_id is null
+     and coalesce(i.metadata->>'awaiting_golive', 'false') <> 'true';
+  assert v_cnt = 0,
+    format('ASSERT FAILED: %s fatura(s) de implantação seriam anuladas pelo billing-cron', v_cnt);
+
+  -- (k) ninguém está em trial sem estar no ar
+  select count(*) into v_cnt
+    from public.contracts c
+    join public.onboardings o on o.equipe_id = c.equipe_id
+    join public.onboarding_stages s on s.id = o.stage_id
+   where not s.is_terminal
+     and (c.status in ('trialing', 'active') or c.went_live_at is not null);
+  assert v_cnt = 0,
+    format('ASSERT FAILED: %s cliente(s) em implantação com o trial correndo', v_cnt);
 
   raise notice 'Limpeza de produção 02/09: todas as verificações passaram';
 end $$;

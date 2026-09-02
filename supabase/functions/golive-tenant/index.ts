@@ -172,6 +172,9 @@ async function contractFromOnboarding(
 async function sendGoLive(db: SupabaseClient, r: GoLiveResult) {
   const { data: settings } = await db
     .from("system_settings").select("key, value").eq("key", "APP_BASE_URL");
+  // White-label por domínio: um link global levaria o cliente para a marca de
+  // outro. tenant_public_origin() resolve o domínio desta equipe.
+  const { data: origin } = await db.rpc("tenant_public_origin", { p_equipe_id: r.equipe_id });
 
   const { data: items } = await db
     .from("contract_items").select("quantity, unit_price, period").eq("contract_id", r.contract_id);
@@ -182,7 +185,7 @@ async function sendGoLive(db: SupabaseClient, r: GoLiveResult) {
 
   await notify(db, r.equipe_id, "onboarding.golive", "Seu ambiente está no ar", "", "/home", {
     cliente_nome: await teamName(db, r.equipe_id),
-    link_app: (settings ?? [])[0]?.value ?? "",
+    link_app: (typeof origin === "string" && origin) || (settings ?? [])[0]?.value || "",
     trial_dias: String(r.trial_days ?? 0),
     trial_fim: formatDateBR(r.trial_ends_at),
     valor_mensal: monthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 }),

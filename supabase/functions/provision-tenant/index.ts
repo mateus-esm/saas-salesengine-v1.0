@@ -185,9 +185,27 @@ async function sendWelcome(db: SupabaseClient, r: ProvisionResult, clienteNome: 
   await notify(db, r.equipe_id, "onboarding.welcome", "Bem-vindo!", "", "/home", {
     cliente_nome: clienteNome,
     link_agenda: get("ONBOARDING_CALENDLY_URL"),
-    link_app: get("APP_BASE_URL"),
+    link_app: await appOrigin(db, r.equipe_id, get("APP_BASE_URL")),
     golive_previsto: formatDateBR(r.golive_previsto),
   }, `welcome_${r.contract_id}`);
+}
+
+/**
+ * O endereço do app PARA ESTE CLIENTE.
+ *
+ * O produto é white-label por domínio: o cliente da Rema entra por
+ * rema.soloventures.com.br, o da Casa Flow por outro. Um APP_BASE_URL global
+ * mandaria a pessoa para a marca de outro cliente logo na mensagem de
+ * boas-vindas — que é o primeiro contato depois de assinar.
+ *
+ * `tenant_public_origin()` (sprint 9) já resolve isso e cai no domínio
+ * institucional quando a equipe não tem nicho. O ajuste manual é o último
+ * recurso, e uma string vazia é melhor que um link errado: o template some com
+ * a variável em vez de mostrar um endereço de outra marca.
+ */
+async function appOrigin(db: SupabaseClient, equipeId: string, fallback: string): Promise<string> {
+  const { data } = await db.rpc("tenant_public_origin", { p_equipe_id: equipeId });
+  return (typeof data === "string" && data) || fallback || "";
 }
 
 /** dd/mm/aaaa — o cliente lê a data, não o ISO. */

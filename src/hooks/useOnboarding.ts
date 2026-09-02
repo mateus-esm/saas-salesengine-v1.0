@@ -1,13 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// As tabelas de onboarding ainda não estão em src/integrations/supabase/types.ts,
-// que é gerado a partir do banco e só se atualiza depois do deploy da migration.
-// É o mesmo caminho que useCompanies, useAgendaEvents e os outros hooks deste
-// diretório seguem. Os tipos de retorno abaixo são explícitos, então quem
-// consome o hook continua tipado — o `any` para no limite da consulta.
-const sb = supabase as any;
 
 /**
  * Sprint 8.2 — o quadro de onboarding.
@@ -66,7 +59,7 @@ export function useOnboardingStages() {
   return useQuery({
     queryKey: STAGES_KEY,
     queryFn: async (): Promise<OnboardingStage[]> => {
-      const { data, error } = await sb
+      const { data, error } = await supabase
         .from("onboarding_stages")
         .select("*")
         .eq("active", true)
@@ -83,7 +76,7 @@ export function useOnboardings() {
   return useQuery({
     queryKey: CARDS_KEY,
     queryFn: async (): Promise<OnboardingRow[]> => {
-      const { data, error } = await sb
+      const { data, error } = await supabase
         .from("onboardings")
         .select(`
           id, proposal_id, equipe_id, stage_id, cliente_nome, golive_previsto,
@@ -120,7 +113,7 @@ export function useOnboardingEvents(onboardingId: string | null) {
     queryKey: ["onboarding-events", onboardingId],
     enabled: !!onboardingId,
     queryFn: async (): Promise<OnboardingEvent[]> => {
-      const { data, error } = await sb
+      const { data, error } = await supabase
         .from("onboarding_events")
         .select("id, from_stage, to_stage, note, created_at")
         .eq("onboarding_id", onboardingId!)
@@ -142,7 +135,7 @@ export function useMoveStage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, stageId }: { id: string; stageId: string }) => {
-      const { error } = await sb
+      const { error } = await supabase
         .from("onboardings").update({ stage_id: stageId }).eq("id", id);
       if (error) throw error;
     },
@@ -171,7 +164,7 @@ export function useUpdateOnboarding() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<OnboardingRow> & { id: string }) => {
-      const { error } = await sb.from("onboardings").update(patch).eq("id", id);
+      const { error } = await supabase.from("onboardings").update(patch).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
