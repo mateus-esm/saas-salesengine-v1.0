@@ -133,7 +133,7 @@ export function TeamBillingDialog({
         if (result?.agent_should_resume) {
           const sync = await syncAgentPower();
           agentNote = sync?.resumed
-            ? " Agente religado no GPT Maker."
+            ? " Agente religado no provedor."
             : " Não consegui religar o agente — use “Ativar agente agora”.";
         } else if (team.agent_paused_reason === "manual") {
           agentNote = " O agente segue pausado manualmente — religue à mão se quiser.";
@@ -163,7 +163,8 @@ export function TeamBillingDialog({
    * Force the agent on at the provider.
    *
    * The automatic path only resumes agents WE paused. One switched off inside
-   * GPT Maker by hand — or one whose pause failed before we recorded it — is
+   * the provider's own console by hand — or one whose pause failed before we
+   * recorded it — is
    * invisible to it, so no amount of credit brings it back. This is the manual
    * override for that. The credit and suspension checks still apply in SQL.
    */
@@ -174,7 +175,7 @@ export function TeamBillingDialog({
       const sync = await syncAgentPower(true);
       refresh();
       if (sync?.resumed) {
-        toast({ title: "Agente ativado", description: "O agente voltou a responder no GPT Maker." });
+        toast({ title: "Agente ativado", description: "O agente voltou a responder." });
       } else if (team.whatsapp_balance <= 0) {
         toast({
           title: "Sem crédito de Atendimento",
@@ -184,7 +185,7 @@ export function TeamBillingDialog({
       } else {
         toast({
           title: "Não foi possível ativar",
-          description: "O provedor recusou a chamada. Confira o ID do agente no GPT Maker.",
+          description: "O provedor recusou a chamada. Confira o ID do agente da equipe.",
           variant: "destructive",
         });
       }
@@ -282,7 +283,7 @@ export function TeamBillingDialog({
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              Nossos registros dizem que está ativo. Se no GPT Maker aparecer desligado, use
+              Nossos registros dizem que está ativo. Se no provedor aparecer desligado, use
               “Ativar agente agora” — o religamento automático só alcança o que nós pausamos.
             </p>
           )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidCNPJ, isValidCPF, maskCNPJ, maskCPF, onlyDigits } from "@/lib/br-doc";
+import { isValidBrDoc, isValidCNPJ, isValidCPF, maskCNPJ, maskCPF, onlyDigits } from "@/lib/br-doc";
 
 /**
  * Sprint 8 T13. These matter because an invalid document is otherwise rejected by
@@ -60,5 +60,28 @@ describe("masks", () => {
   it("never exceeds the document length", () => {
     expect(onlyDigits(maskCPF("529982247259999"))).toHaveLength(11);
     expect(onlyDigits(maskCNPJ("112223330001819999"))).toHaveLength(14);
+  });
+});
+
+/**
+ * Sprint 8.2. O campo de CPF/CNPJ da página de aceite dizia "Opcional" e o
+ * servidor gravava o que viesse: as quatro aceitações em produção têm
+ * accepted_doc = "". Sem documento, billing_accounts.doc_number fica nulo, o
+ * Asaas não abre a cobrança, e a fatura fica aberta sem ninguém pedir o dinheiro.
+ */
+describe("isValidBrDoc", () => {
+  it("aceita CPF e CNPJ válidos, com ou sem máscara", () => {
+    expect(isValidBrDoc("529.982.247-25")).toBe(true);
+    expect(isValidBrDoc("11222333000181")).toBe(true);
+  });
+
+  it("recusa o vazio, que é o estado real das aceitações em produção", () => {
+    expect(isValidBrDoc("")).toBe(false);
+    expect(isValidBrDoc("   ")).toBe(false);
+  });
+
+  it("recusa tamanho intermediário e dígito verificador errado", () => {
+    expect(isValidBrDoc("123456789")).toBe(false);
+    expect(isValidBrDoc("11222333000182")).toBe(false);
   });
 });

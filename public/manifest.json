@@ -1,11 +1,11 @@
 {
-  "name": "Solo Ventures - Máquina de Vendas",
-  "short_name": "SoloAI",
-  "description": "Máquina de Vendas Automatizada - Solo Ventures",
+  "name": "Solo Rev — Motor de Receita",
+  "short_name": "Solo Rev",
+  "description": "Anúncio, agente, CRM e automação num lugar só. Um produto da Solo Ventures.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#f97316",
+  "theme_color": "#FF7700",
   "orientation": "portrait-primary",
   "icons": [
     {

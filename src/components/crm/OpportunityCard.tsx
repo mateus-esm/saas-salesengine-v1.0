@@ -28,6 +28,7 @@ import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
 import { LeadScoreBadge, type LeadScoreBreakdown } from "./LeadScoreBadge";
 import { RelationChip } from "./grid/RelationChip";
+import { BRAND } from "@/config/brand";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -325,7 +326,7 @@ function CardQuickActions({ leadId }: { leadId: string }) {
         type="button"
         onClick={() => navigate(`/chat?contact=${leadId}`)}
         className="min-w-0 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
-        title="Abrir conversa no Sales Engine"
+        title={`Abrir conversa no ${BRAND.product}`}
       >
         <MessageSquareText className="h-3 w-3 shrink-0" />
         <span className="truncate">Chat</span>

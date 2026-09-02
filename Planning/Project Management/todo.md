@@ -710,3 +710,113 @@ estreitado pela política do cliente.
 - [ ] **`workspace_id` com `\n` no fim** em Rema Digital e Be My Guest. O código
       faz `.trim()` nos pontos que importam, mas o valor sujo no banco vai
       morder alguma consulta futura. Limpar.
+
+## Resíduo dos sprints 8.2–8.5 — o que ficou para trás
+
+> Levantado contra produção em 25/08/2026, não de memória. Cada item abaixo foi
+> conferido no banco ou no código.
+
+### Duas verdades sobre crédito convivendo
+
+- [ ] **`agent_credits_balance` (Sprint 6.1) ainda é lido, em paralelo ao
+      `credit_ledger` (Sprint 8).** Tem 7 linhas e é a fonte do
+      `CreditBalanceBadge` e do `useCopilotCredits` — ou seja, o badge de
+      Copiloto no CRM mostra um número que **não vem do ledger**. É exatamente a
+      classe de bug que o 8.2 gastou uma sessão consertando: dois lugares
+      dizendo saldo, e o cliente vendo o que não é cobrado. Migrar os dois
+      consumidores para `credit_balance(equipe_id, 'copilot')` e aposentar a
+      tabela.
+
+- [ ] **`equipes.creditos_avulsos` / `limite_creditos` têm mais leitores do que
+      a migration do 8.2 registrou.** Ela citou três; são seis:
+      `AuthContext.tsx`, `Admin.tsx`, `Billing.tsx`, `Suporte.tsx`,
+      `asaas-buy-credits` e `fetch-gpt-credits`. As colunas estão fixadas em 0,
+      então hoje ninguém mente — mas enquanto forem lidas alguém vai voltar a
+      escrever nelas. Cortar os seis e dropar as colunas.
+
+- [ ] **`consumo_creditos` virou cache órfão.** 9 linhas, escrito só pelo
+      `fetch-gpt-credits` e lido por ninguém. Pior: guarda os números de ANTES
+      do recorte por início de medição do 8.5, então discorda da tela que o
+      cliente vê. Ou passa a ser lido de verdade, ou some.
+
+### Sujeira de dados observada
+
+- [ ] **`workspace_id` com `\n` no fim** em Be My Guest e Rema Digital. O código
+      faz `.trim()` nos pontos que importam hoje; o valor sujo continua lá
+      esperando a próxima consulta que esquecer.
+
+- [ ] **Artefatos de teste em produção:** a equipe `Solo Teste` (criada 24/08,
+      zero leads, um contrato `trialing` com uma linha de R$200 sem produto), a
+      proposta `41FB0F2CCC3A` (PlanLog, rascunho) e a instância
+      `se-a44...-teste` (desconectada, pendurada na Jornada do R1). A proposta
+      `73F74E2BB4F1` está provisionada e por isso o servidor recusa apagá-la —
+      remover a equipe primeiro é o caminho.
+
+- [ ] **`send-chat-message` tem sua própria cópia de `normalizePhone`** que só
+      tira não-dígitos — a mesma armadilha do item 13, ainda armada. Não morde
+      hoje porque os telefones dele vêm de leads já normalizados na entrada.
+
+### Cópia de segurança que a tela não mostra
+
+- [ ] **Notificações do dispatcher não têm tela de histórico no admin.** Há 15
+      notificações e 40 entregas no banco, com status e `last_error` por canal,
+      e nada disso é visível. Quando um envio falha, hoje só se descobre por
+      SQL. A aba Notificações precisa de um quarto painel: o log.
+
+---
+
+## FULL RESET — voltar o sistema para o zero
+
+> Pedido do founder em 25/08. **Ainda é possível fazer isso sem destruir nada
+> financeiro, e essa janela vai fechar.**
+
+**Por que agora é o momento:** o banco tem hoje **1 fatura, nenhuma paga, 1
+contrato (o de teste) e 16 lançamentos no ledger** — nenhum deles referente a
+dinheiro que entrou de verdade. Enquanto isso for verdade, apagar o histórico
+financeiro não apaga registro contábil de ninguém. **Depois da primeira fatura
+paga, esta opção deixa de existir** e o reset vira "estornar", que é outra
+coisa e muito mais cara.
+
+**O que NÃO pode ser tocado, em hipótese alguma:** os 8 clientes reais e seus
+dados operacionais. São **1.653 leads** acumulados desde dezembro/2025 — Casa
+Flow 487, Solo Energia 444, Cinemas Benficas 334, Walter Inglez 246, Jornada do
+R1 118, Be My Guest 16, Rema Digital 4, Lucas Castelo 4 — além de conversas,
+mensagens, oportunidades e configuração de agente. Isso é o produto deles
+funcionando; um "reset" que encoste nisso é perda de cliente, não limpeza.
+
+**Escopo, em três níveis separados** — cada um decidido de propósito, não um
+botão só:
+
+1. **Limpar artefatos de teste.** Equipe `Solo Teste` e tudo pendurado nela,
+   propostas de teste, instância de teste, notificações de teste. Não toca em
+   cliente real.
+
+2. **Zerar o estado de cobrança, mantendo os clientes.** Apagar
+   `credit_ledger`, `invoices`, `invoice_items`, `contracts`, `contract_items`,
+   `payment_events`, `consumo_creditos`, `notification_deliveries`,
+   `notifications` — e então **recomeçar deliberadamente**: anexar o plano de
+   cada cliente real com `admin_set_contract_item` e conceder o crédito inicial
+   com `admin_grant_credits`. Hoje os 8 clientes reais estão todos com
+   `contract_status = none`; nenhum tem plano. Isto é menos "limpeza" e mais
+   "finalmente começar a cobrar".
+
+3. **Reset de fábrica.** Só faz sentido num ambiente de staging. Em produção,
+   nunca.
+
+**Guardas que o script precisa ter, ou não deve existir:**
+- Recusar-se a rodar se existir **qualquer fatura com `status = 'paid'`** — é o
+  gatilho que diz "a janela fechou".
+- Rodar em modo simulação por padrão, listando o que apagaria e contando linhas,
+  e só executar com uma confirmação explícita.
+- Receber a lista de equipes a preservar **por id**, não por heurística de nome.
+- Rodar dentro de uma transação, para que um erro no meio não deixe metade do
+  sistema num estado que ninguém desenhou.
+- Nunca mexer em `auth.users`: apagar um usuário é irreversível e não é
+  necessário para nenhum dos três níveis.
+- Registrar o que fez numa migration, não num script solto — o reset é um evento
+  do histórico do sistema.
+
+**Antes de rodar qualquer nível:** desligar os três crons
+(`sprint8_billing_tick`, `sprint8_dispatch_tick`, `sprint8_reconcile_tick`) e
+religar depois. Um reset com o reconciliador rodando no meio recria exatamente o
+buraco que o 8.5 acabou de tapar.
