@@ -47,6 +47,8 @@ export interface ProposalRow {
   chosen_plan_code: string | null;
   setup_waived: boolean;
   setup_charge_timing: "on_accept" | "on_golive";
+  /** Sprint 8.2 — equipe existente a anexar. Nulo = criar ambiente novo. */
+  target_equipe_id: string | null;
   trial_days: number;
 }
 
@@ -72,9 +74,12 @@ export function ProposalsTab() {
   const { data: proposals, isLoading } = useQuery({
     queryKey: ["admin-proposals"],
     queryFn: async (): Promise<ProposalRow[]> => {
-      const { data, error } = await supabase
+      // `as any` na consulta: target_equipe_id é do sprint 8.2 e ainda não está
+      // em types.ts, que é gerado do banco depois do deploy da migration.
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const { data, error } = await (supabase as any)
         .from("proposals")
-        .select("id, codigo, cliente_nome, cliente_email, cliente_whatsapp, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, equipe_id, created_at, allow_plan_choice, recommended_plan_code, chosen_plan_code, setup_waived, setup_charge_timing, trial_days")
+        .select("id, codigo, cliente_nome, cliente_email, cliente_whatsapp, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, equipe_id, created_at, allow_plan_choice, recommended_plan_code, chosen_plan_code, setup_waived, setup_charge_timing, trial_days, target_equipe_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ProposalRow[];

@@ -51,11 +51,29 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
       return data ?? [];
     },
   });
+  /**
+   * Sprint 8.2 — as equipes que já existem.
+   *
+   * Sem isto, provisionar a proposta de um cliente que já opera aqui criava uma
+   * SEGUNDA equipe, vazia, e o contrato ia parar nela. Foi o que aconteceu com
+   * Solo Energia, Rema Digital e WI Advogados: a Solo Energia ficou com o
+   * contrato ativo numa equipe sem nenhum dos seus 456 leads.
+   */
+  const { data: equipes } = useQuery({
+    queryKey: ["admin-equipes-simples"],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("equipes").select("id, nome").order("nome");
+      return data ?? [];
+    },
+  });
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     cliente_nome: "", cliente_email: "", cliente_whatsapp: "", cliente_doc: "",
+    target_equipe_id: "", 
     setup_price: "0", list_monthly_price: "", term_months: "12",
     valid_until: "", status: "rascunho" as string, notes: "",
     // Sprint 9 — the offer terms
@@ -75,6 +93,7 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         cliente_email: proposal.cliente_email ?? "",
         cliente_whatsapp: proposal.cliente_whatsapp ?? "",
         cliente_doc: proposal.cliente_doc ?? "",
+        target_equipe_id: proposal.target_equipe_id ?? "",
         setup_price: String(proposal.setup_price ?? 0),
         list_monthly_price: proposal.list_monthly_price != null ? String(proposal.list_monthly_price) : "",
         term_months: proposal.term_months != null ? String(proposal.term_months) : "",
@@ -91,6 +110,7 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
     } else {
       setForm({
         cliente_nome: "", cliente_email: "", cliente_whatsapp: "", cliente_doc: "",
+        target_equipe_id: "",
         setup_price: "0", list_monthly_price: "", term_months: "12",
         valid_until: defaultValidity(), status: "rascunho", notes: "",
         allow_plan_choice: true, recommended_plan_code: "", setup_waived: false,
@@ -140,6 +160,9 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         cliente_email: form.cliente_email || null,
         cliente_whatsapp: form.cliente_whatsapp || null,
         cliente_doc: form.cliente_doc || null,
+        // Vazio = cliente novo, provisionar cria o ambiente. Preenchido = o
+        // contrato é anexado ao ambiente que já existe.
+        target_equipe_id: form.target_equipe_id || null,
         setup_price: Number(form.setup_price) || 0,
         monthly_price: monthlyTotal,
         list_monthly_price: form.list_monthly_price ? Number(form.list_monthly_price) : null,
@@ -213,6 +236,33 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
             <Field label="E-mail" value={form.cliente_email} onChange={set("cliente_email")} type="email" />
             <Field label="WhatsApp" value={form.cliente_whatsapp} onChange={set("cliente_whatsapp")} />
             <Field label="CPF / CNPJ" value={form.cliente_doc} onChange={set("cliente_doc")} />
+          </div>
+
+          {/* Cliente novo ou cliente que já está aqui. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="target-equipe" className="text-xs">Ambiente</Label>
+            <Select
+              value={form.target_equipe_id || "novo"}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, target_equipe_id: v === "novo" ? "" : v }))}
+            >
+              <SelectTrigger id="target-equipe">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="novo">Criar um ambiente novo</SelectItem>
+                {(equipes ?? []).map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    Usar o ambiente de {e.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {form.target_equipe_id
+                ? "O contrato será anexado a esse ambiente. Nenhuma equipe nova é criada, e os dados existentes ficam intactos."
+                : "Para um cliente que já usa o software, escolha o ambiente dele — senão o provisionamento cria uma equipe duplicada e vazia."}
+            </p>
           </div>
 
           {/* ── Items ── */}

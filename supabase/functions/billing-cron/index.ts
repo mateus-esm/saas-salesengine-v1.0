@@ -90,6 +90,14 @@ const JOBS: Record<string, (db: SupabaseClient) => Promise<unknown>> = {
  * founder raised for a customer who pays by PIX looks identical to that debris
  * — no gateway charge, sitting open — and without this exclusion the admin
  * panel's own output would be deleted two hours after it was created.
+ *
+ * Sprint 8.2: AND except the implementation invoice that is waiting for go-live.
+ * It is raised at provisioning so the client sees the commitment and its due
+ * date, but an `on_golive` deal is only charged when the founder clicks "put it
+ * live" — which is weeks later. It looks exactly like debris and is not. Without
+ * this, every deferred implementation invoice would be voided the day after the
+ * proposal was accepted. `go_live_contract()` clears the flag, so a charge that
+ * fails AT go-live goes back to being ordinary debris and is re-issued normally.
  */
 async function voidOrphanInvoices(db: SupabaseClient) {
   const cutoff = new Date(Date.now() - 2 * 3600_000).toISOString();
@@ -99,6 +107,7 @@ async function voidOrphanInvoices(db: SupabaseClient) {
     .eq("status", "open")
     .is("asaas_payment_id", null)
     .not("metadata", "cs", '{"manual": true}')
+    .not("metadata", "cs", '{"awaiting_golive": true}')
     .lt("created_at", cutoff)
     .select("id");
   return { voided: data?.length ?? 0 };

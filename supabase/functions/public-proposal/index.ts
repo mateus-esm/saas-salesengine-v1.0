@@ -16,6 +16,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { docType, isPlausibleEmail, isValidBrDoc, onlyDigits } from "../_shared/br-doc.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +44,7 @@ serve(async (req) => {
 
     const { data: proposal, error } = await db
       .from("proposals")
-      .select("id, codigo, cliente_nome, cliente_email, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, first_viewed_at, allow_plan_choice, recommended_plan_code, setup_waived, setup_charge_timing, trial_days, chosen_plan_code")
+      .select("id, codigo, cliente_nome, cliente_email, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, first_viewed_at, allow_plan_choice, recommended_plan_code, setup_waived, setup_charge_timing, trial_days, chosen_plan_code")
       .eq("codigo", codigo)
       .maybeSingle();
 
@@ -105,6 +106,8 @@ serve(async (req) => {
         setup_waived: proposal.setup_waived === true,
         setup_charge_timing: proposal.setup_charge_timing ?? "on_accept",
         trial_days: proposal.trial_days ?? 15,
+        // A página só mostra o campo de e-mail quando a proposta não traz um.
+        needs_email: !proposal.cliente_email,
         plans: plans ?? [],
         deliverables: deliverables ?? [],
       });
@@ -117,10 +120,46 @@ serve(async (req) => {
         return json({ error: "not_acceptable" }, 409);
       }
 
-      const { accepted_name, accepted_doc, chosen_plan_code } = body as {
-        accepted_name?: string; accepted_doc?: string; chosen_plan_code?: string;
+      const { accepted_name, accepted_doc, accepted_email, chosen_plan_code } = body as {
+        accepted_name?: string; accepted_doc?: string;
+        accepted_email?: string; chosen_plan_code?: string;
       };
       if (!accepted_name?.trim()) return json({ error: "name_required" }, 400);
+
+      // ── CPF/CNPJ e e-mail: obrigatórios, conferidos AQUI ────────────────────
+      //
+      // Sprint 8.2. O campo do documento dizia "Opcional" na página e esta
+      // função gravava o que viesse. As quatro aceitações que existem em
+      // produção têm accepted_doc = "", e a partir daí:
+      //
+      //     accepted_doc = "" → billing_accounts.doc_number = null
+      //       → o Asaas não abre cobrança sem documento
+      //         → a fatura existe e o dinheiro nunca é pedido
+      //
+      // É por isso que a FAT-2026-000018 da Rema (R$700) está aberta sem
+      // cobrança. E sem e-mail o convite de acesso não sai: WI Advogados e
+      // Jornada do R1 foram provisionados sem nenhum, e o cliente nunca
+      // recebeu login.
+      //
+      // A conferência é no SERVIDOR e não no navegador porque este endpoint é
+      // público e chamável direto — a validação da página é conveniência, não
+      // defesa.
+      const chargeable =
+        Number(proposal.setup_price ?? 0) > 0 ||
+        Number(proposal.monthly_price ?? 0) > 0 ||
+        proposal.allow_plan_choice !== false ||
+        proposal.chosen_plan_code != null;
+
+      if (chargeable && !isValidBrDoc(accepted_doc ?? "")) {
+        return json({ error: "doc_invalid" }, 400);
+      }
+
+      // Um e-mail já negociado na proposta serve; o do formulário completa
+      // quando a proposta não tem nenhum — que é o caso da metade delas.
+      const email = (accepted_email ?? "").trim() || (proposal.cliente_email ?? "").trim();
+      if (!isPlausibleEmail(email)) {
+        return json({ error: "email_required" }, 400);
+      }
 
       // Validate the choice against the catalogue rather than trusting the
       // browser: a forged code would otherwise become the signed contract.
@@ -146,6 +185,8 @@ serve(async (req) => {
         setup_waived: proposal.setup_waived === true,
         setup_charge_timing: proposal.setup_charge_timing ?? "on_accept",
         trial_days: proposal.trial_days ?? 15,
+        // A página só mostra o campo de e-mail quando a proposta não traz um.
+        needs_email: !proposal.cliente_email,
         // The tier they actually picked, at the price shown when they picked it.
         chosen_plan: chosenPlan ? { code: chosenPlan.code, name: chosenPlan.name, price: chosenPlan.list_price } : null,
         monthly_price: chosenPlan ? Number(chosenPlan.list_price) : Number(proposal.monthly_price ?? 0),
@@ -153,6 +194,7 @@ serve(async (req) => {
         term_months: proposal.term_months,
         items: items ?? [],
         deliverables: deliverables ?? [],
+        doc_type: docType(accepted_doc ?? ""),
         captured_at: new Date().toISOString(),
       };
 
@@ -163,7 +205,9 @@ serve(async (req) => {
         ip,
         user_agent: req.headers.get("user-agent"),
         accepted_name: accepted_name.trim(),
-        accepted_doc: accepted_doc?.trim() ?? null,
+        // Só dígitos: é o formato que o gateway espera, e guardar a máscara
+        // significa normalizar de novo em todo lugar que lê.
+        accepted_doc: onlyDigits(accepted_doc ?? "") || null,
         terms_snapshot: snapshot,
       });
       // 23505 = a second click on Accept. Not an error worth showing.
@@ -173,6 +217,10 @@ serve(async (req) => {
         status: "aceita",
         chosen_plan_code: planCode,
         monthly_price: chosenPlan ? chosenPlan.list_price : proposal.monthly_price,
+        // O e-mail do aceite vira o e-mail da proposta quando ela não tinha um.
+        // Sem isto o provisionamento não tem para onde mandar o convite.
+        cliente_email: proposal.cliente_email ?? email,
+        cliente_doc: proposal.cliente_doc ?? (onlyDigits(accepted_doc ?? "") || null),
       }).eq("id", proposal.id);
 
       await notifyFounder(db, "proposal.accepted", "Proposta aceita! 🎉",

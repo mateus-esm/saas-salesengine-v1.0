@@ -236,7 +236,7 @@ export const ContactDetailsModal = ({
         <DialogHeader className="p-6 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             Detalhes do Contato
-            {/* T15 — Sales Engine Chat Route: jump to this contact's native thread */}
+            {/* T15 — rota de chat do produto: abre a conversa nativa deste contato */}
             {lead?.id && (
               <Button
                 variant="outline"

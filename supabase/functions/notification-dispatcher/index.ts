@@ -18,6 +18,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { safeEqual } from "../_shared/asaas.ts";
 import { sendViaSolo } from "../_shared/solo-sender.ts";
 import { renderEmail } from "../_shared/email-templates.ts";
+import { BRAND, platformName } from "../_shared/brand.ts";
 // Sprint 8.5: the ONE normalizer. A local digit-strip lived here and silently
 // dropped the country code off every human-typed number.
 import { normalizePhone } from "../_shared/phone.ts";
@@ -201,7 +202,7 @@ async function deliverEmail(db: SupabaseClient, d: Delivery, r: Routing): Promis
   if (!recipients.length) return { status: "skipped", error: "no recipient email" };
 
   const sender = senderFor(r, d.notifications.type);
-  const brand = await brandFor(db, d.notifications.equipe_id);
+  const brand = await brandFor(db, d.notifications.equipe_id, r.settings);
   const { subject, html } = renderEmail({
     title: d.notifications.title,
     body: d.notifications.body ?? "",
@@ -209,6 +210,7 @@ async function deliverEmail(db: SupabaseClient, d: Delivery, r: Routing): Promis
     severity: d.notifications.severity,
     brandName: brand.name,
     brandColor: brand.color,
+    companyName: BRAND.company,
   });
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -269,7 +271,7 @@ async function deliverWhatsApp(db: SupabaseClient, d: Delivery, r: Routing): Pro
   const phones = await recipientPhones(db, d);
   if (!phones.length) return { status: "skipped", error: "no recipient phone" };
 
-  const brand = await brandFor(db, d.notifications.equipe_id);
+  const brand = await brandFor(db, d.notifications.equipe_id, r.settings);
   const text = [
     `*${d.notifications.title}*`,
     d.notifications.body ?? "",
@@ -387,13 +389,25 @@ function senderAddress(): string {
   return Deno.env.get("NOTIFICATION_FROM_EMAIL") ?? "no-reply@soloventures.com.br";
 }
 
-/** White-label per niche, so the email is not a generic gateway notice. */
-async function brandFor(db: SupabaseClient, equipeId: string | null): Promise<Brand> {
+/**
+ * White-label per niche, so the email is not a generic gateway notice.
+ *
+ * Sprint 8.2: the platform's own name now comes from `settings` first — the
+ * panel's PLATFORM_NAME — and only then from the environment. Renaming the
+ * product should not require a redeploy of every function. The literal of last
+ * resort lives in _shared/brand.ts, not inline here, so there is one place to
+ * change it rather than two fallbacks that can drift apart.
+ */
+async function brandFor(
+  db: SupabaseClient, equipeId: string | null, settings?: Map<string, string>,
+): Promise<Brand> {
+  const name = platformName(settings);
   const fallback: Brand = {
-    name: Deno.env.get("PLATFORM_NAME") ?? "Sales Engine",
-    color: "#2563eb",
-    from: `${Deno.env.get("PLATFORM_NAME") ?? "Sales Engine"} <${senderAddress()}>`,
-    appUrl: Deno.env.get("APP_BASE_URL") ?? "",
+    name,
+    // The Solo orange, not a generic blue: this is the platform speaking.
+    color: BRAND.color,
+    from: `${name} <${senderAddress()}>`,
+    appUrl: settings?.get("APP_BASE_URL") || Deno.env.get("APP_BASE_URL") || "",
   };
 
   // A proposal recipient has no team, so there is no niche to white-label with:

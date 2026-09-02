@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
+import { BRAND } from "@/config/brand";
+import { isValidBrDoc, maskCNPJ, maskCPF, onlyDigits } from "@/lib/br-doc";
 
 interface Plan {
   code: string;
@@ -55,6 +57,8 @@ interface Proposal {
   setup_waived: boolean;
   setup_charge_timing: "on_accept" | "on_golive";
   trial_days: number;
+  /** Sprint 8.2 — a proposta não trouxe e-mail, então o aceite precisa pedir um. */
+  needs_email?: boolean;
   plans: Plan[];
   deliverables: Deliverable[];
 }
@@ -69,8 +73,8 @@ const num = (v: number) => new Intl.NumberFormat("pt-BR").format(v || 0);
  * The old page presented one pre-agreed number and asked for a yes. That works
  * for someone who already understands the product; it does nothing for someone
  * still deciding whether this kind of system is for them. This page has to do
- * both jobs: explain what a Sales Engine IS and what it takes to run one, then
- * let the client choose their own tier.
+ * both jobs: explain what a revenue engine IS and what it takes to run one,
+ * then let the client choose their own tier.
  *
  * The educational sections are not filler. Every deal stalls on the same two
  * questions — "what do I have to provide" and "why can't the agent just message
@@ -86,6 +90,7 @@ export default function PublicProposal() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [doc, setDoc] = useState("");
+  const [email, setEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -121,6 +126,23 @@ export default function PublicProposal() {
 
   const monthly = plan ? Number(plan.list_price) : Number(proposal?.monthly_price ?? 0);
   const setup = proposal?.setup_waived ? 0 : Number(proposal?.setup_price ?? 0);
+  // O documento é exigido sempre que o negócio tem valor — que é a mesma regra
+  // conferida no servidor, em public-proposal. Esta é a conveniência; a de lá é
+  // a defesa, porque a função é pública e chamável direto.
+  const cobravel =
+    (proposal?.setup_price ?? 0) > 0 ||
+    (proposal?.monthly_price ?? 0) > 0 ||
+    proposal?.allow_plan_choice === true ||
+    !!proposal?.chosen_plan_code;
+  const docOk = isValidBrDoc(doc);
+  const emailOk = !proposal?.needs_email || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const podeAceitar =
+    agreed &&
+    !!name.trim() &&
+    (!cobravel || docOk) &&
+    emailOk &&
+    !(proposal?.allow_plan_choice && !selectedPlan);
+
   const extras = (proposal?.items ?? []).filter((i) => i.period === "monthly");
   const extrasTotal = extras.reduce((s, i) => s + i.unit_price * i.quantity, 0);
 
@@ -134,6 +156,7 @@ export default function PublicProposal() {
           codigo,
           accepted_name: name,
           accepted_doc: doc,
+          accepted_email: email,
           chosen_plan_code: selectedPlan,
         },
       });
@@ -214,7 +237,7 @@ export default function PublicProposal() {
           Um ambiente de vendas completo, trabalhando enquanto seu time dorme
         </h1>
         <p className="text-base text-muted-foreground mt-4 max-w-2xl mx-auto leading-relaxed">
-          O Sales Engine junta o que hoje está espalhado: o anúncio que gera o lead, o agente que
+          O {BRAND.product} junta o que hoje está espalhado: o anúncio que gera o lead, o agente que
           atende na hora, o CRM que organiza e a automação que faz tudo conversar.
           Um lugar só, funcionando sozinho.
         </p>
@@ -585,9 +608,46 @@ export default function PublicProposal() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="doc" className="text-xs">CPF ou CNPJ</Label>
-                <Input id="doc" value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="Opcional" />
+                {/*
+                  Sprint 8.2. Este campo dizia "Opcional" e o servidor gravava o
+                  que viesse — as quatro aceitações que existem em produção têm
+                  documento vazio. Sem ele a cobrança não pode ser aberta, então
+                  a fatura fica em aberto e o dinheiro nunca é pedido. Pedir aqui
+                  é pedir uma vez; descobrir depois custa uma cobrança perdida.
+                */}
+                <Input
+                  id="doc"
+                  inputMode="numeric"
+                  value={onlyDigits(doc).length > 11 ? maskCNPJ(doc) : maskCPF(doc)}
+                  onChange={(e) => setDoc(onlyDigits(e.target.value).slice(0, 14))}
+                  placeholder="000.000.000-00"
+                  aria-invalid={doc.length > 0 && !docOk}
+                />
+                {doc.length > 0 && !docOk && (
+                  <p className="text-[11px] text-destructive">
+                    Confira o número — não bate com um CPF ou CNPJ válido.
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Só quando a proposta não trouxe um: sem e-mail o convite de
+                acesso não sai, e o cliente fica sem login depois de assinar. */}
+            {proposal.needs_email && (
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-xs">Seu melhor e-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@suaempresa.com.br"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  É para onde enviamos o acesso ao seu ambiente.
+                </p>
+              </div>
+            )}
 
             <div className="flex items-start gap-2.5">
               <Checkbox id="agree" checked={agreed} onCheckedChange={(v) => setAgreed(Boolean(v))} className="mt-0.5" />
@@ -600,6 +660,10 @@ export default function PublicProposal() {
               <p className="text-xs text-destructive">
                 {error === "plan_required"
                   ? "Escolha um plano antes de aceitar."
+                  : error === "doc_invalid"
+                  ? "Informe um CPF ou CNPJ válido — é ele que emite a cobrança."
+                  : error === "email_required"
+                  ? "Informe um e-mail válido — é para onde enviamos o seu acesso."
                   : "Não foi possível registrar o aceite. Tente novamente ou fale com a gente."}
               </p>
             )}
@@ -607,7 +671,7 @@ export default function PublicProposal() {
             <Button
               className="w-full"
               size="lg"
-              disabled={!agreed || !name.trim() || submitting || (proposal.allow_plan_choice && !selectedPlan)}
+              disabled={!podeAceitar || submitting}
               onClick={accept}
             >
               {submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}

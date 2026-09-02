@@ -56,6 +56,7 @@ import type {
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { useAgendaEvents } from "@/hooks/useAgendaEvents";
 import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
+import { BRAND } from "@/config/brand";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -560,7 +561,7 @@ function IdentityBlock({ lead }: { lead: Lead | undefined }) {
               size="sm"
               className="h-7 shrink-0 gap-1.5 px-2.5"
               onClick={() => navigate(`/chat?contact=${lead.id}`)}
-              title="Abrir conversa no Sales Engine"
+              title={`Abrir conversa no ${BRAND.product}`}
             >
               <MessageSquareText className="h-3.5 w-3.5 shrink-0" />
               Chat

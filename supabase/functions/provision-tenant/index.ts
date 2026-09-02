@@ -1,28 +1,34 @@
 // ============================================================================
-// Sprint 8 · T9 — provision a tenant from an accepted proposal.
+// Sprint 8 · T9 — provisionar um ambiente a partir de uma proposta aceita.
+// Sprint 8.2 — provisionar deixou de ser colocar no ar.
 //
-// The founder's flow (decision 6): the client accepts online, you get notified,
-// and ONE click in the admin panel creates everything. This is that click.
+// O que este clique faz AGORA: o ambiente passa a existir, o cliente ganha
+// acesso e recebe as boas-vindas com o link para agendar o discovery. O
+// compromisso financeiro fica visível (a fatura de implantação é emitida,
+// vencendo na data prevista de conclusão), mas o relógio do trial não corre e a
+// mensalidade não é cobrada.
 //
-// ORDER MATTERS — database first, external calls after:
-//   1. provision_tenant_from_proposal() does team + billing account + contract
-//      + items + invoices in ONE transaction. Either all of it exists or none.
-//   2. Gateway charges, which cannot be rolled back.
-//   3. The auth invite, last, because it is the most likely to fail (bad email)
-//      and the least damaging to retry.
+// O que ele NÃO faz mais: iniciar o trial, e dizer ao cliente que a primeira
+// fatura está disponível. Isso é o go-live, que é um clique separado — o
+// momento em que o cliente realmente tem um produto: agente treinado, canais
+// conectados, CRM montado.
 //
-// Re-running with the same proposal_id RESUMES: the SQL function returns the
-// existing ids instead of duplicating, and each external step is skipped if it
-// already happened. That is what makes a half-finished provisioning safe to fix
-// by clicking again, rather than leaving a team that exists but cannot be billed.
+// A ORDEM IMPORTA — banco primeiro, chamadas externas depois:
+//   1. provision_tenant_from_proposal() faz equipe + conta + contrato + itens +
+//      fatura + card do onboarding numa transação só. Ou existe tudo, ou nada.
+//   2. Cobrança no gateway, que não dá para desfazer, e SÓ quando o negócio
+//      combinou pagamento adiantado (setup_charge_timing = 'on_accept').
+//   3. O convite de acesso por último, porque é o mais provável de falhar
+//      (e-mail errado) e o menos danoso de repetir.
 //
-// Later, auto-provisioning on acceptance calls this same function from the
-// acceptance handler instead of from a button. No rewrite.
+// Reexecutar com o mesmo proposal_id RETOMA: a função SQL devolve os ids que já
+// existem em vez de duplicar, e cada passo externo é pulado se já aconteceu. É
+// o que torna seguro consertar um provisionamento pela metade clicando de novo.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createCustomer, createPayment, dueDateIn } from "../_shared/asaas.ts";
+import { BillingIncompleteError, ensureCharges } from "../_shared/billing-charges.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +37,19 @@ const corsHeaders = {
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+interface ProvisionResult {
+  already_provisioned: boolean;
+  attached: boolean;
+  equipe_id: string;
+  contract_id: string;
+  setup_invoice_id: string | null;
+  onboarding_id: string | null;
+  golive_previsto: string | null;
+  charge_now: boolean;
+  monthly_total?: number;
+  setup_total?: number;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -47,79 +66,101 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: "unauthorized" }, 401);
 
-    // Provisioning creates a billable customer — super admin only.
+    // Provisionar cria um cliente faturável — só super admin.
     const { data: me } = await db.from("profiles").select("role").eq("user_id", user.id).maybeSingle();
     if (me?.role !== "super_admin") return json({ error: "forbidden" }, 403);
 
-    const { proposal_id } = await req.json().catch(() => ({})) as { proposal_id?: string };
+    const { proposal_id, golive_previsto } = await req.json().catch(() => ({})) as {
+      proposal_id?: string;
+      golive_previsto?: string;
+    };
     if (!proposal_id) return json({ error: "proposal_id_required" }, 400);
 
-    // --- 1. the atomic part --------------------------------------------------
+    // --- 1. a parte atômica --------------------------------------------------
     const { data: result, error: provErr } = await db.rpc("provision_tenant_from_proposal", {
       p_proposal_id: proposal_id,
+      p_golive_previsto: golive_previsto ?? null,
     });
     if (provErr) {
-      const known = ["proposal_not_found", "proposal_not_accepted"];
+      const known = [
+        "proposal_not_found",
+        "proposal_not_accepted",
+        "target_equipe_not_found",
+        // A proposta aponta para uma equipe que já tem contrato vivo. Provisionar
+        // assim mesmo cobraria o cliente duas vezes.
+        "equipe_has_live_contract",
+      ];
       const code = known.find((k) => provErr.message.includes(k));
       return json({ error: code ?? provErr.message }, code ? 409 : 500);
     }
 
-    const r = result as {
-      already_provisioned: boolean;
-      equipe_id: string;
-      contract_id: string;
-      setup_invoice_id: string | null;
-      recurring_invoice_id: string | null;
-    };
-
+    const r = result as ProvisionResult;
     const warnings: string[] = [];
 
     const { data: proposal } = await db
       .from("proposals")
-      .select("cliente_nome, cliente_email, cliente_whatsapp")
+      .select("cliente_nome, cliente_email, cliente_whatsapp, setup_charge_timing")
       .eq("id", proposal_id).maybeSingle();
 
-    // --- 2. gateway ----------------------------------------------------------
-    // Non-fatal: the tenant exists and the invoices exist. billing-cron voids an
-    // un-charged invoice after 2h and the next attempt re-issues it, so a
-    // gateway outage delays billing instead of corrupting it.
-    try {
-      await ensureCharges(db, r);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      warnings.push(`gateway: ${msg}`);
-      console.error("[provision-tenant] gateway step failed:", msg);
+    // --- 2. gateway, SÓ se o pagamento é adiantado ---------------------------
+    //
+    // Com 'on_golive' a fatura existe e a cobrança espera o clique de "Colocar
+    // no ar". Cobrar aqui entregaria um boleto antes da reunião de discovery.
+    //
+    // Não é fatal: o ambiente e a fatura existem. O billing-cron anula uma
+    // fatura sem cobrança depois de 2h e a próxima tentativa a reemite, então
+    // uma queda do gateway atrasa a cobrança em vez de corromper o faturamento.
+    let charged = false;
+    if (r.charge_now && r.setup_invoice_id) {
+      try {
+        const out = await ensureCharges(db, {
+          equipe_id: r.equipe_id,
+          invoice_ids: [r.setup_invoice_id],
+          due_date: r.golive_previsto,
+        });
+        charged = out.charged.length > 0;
+      } catch (e) {
+        const msg = e instanceof BillingIncompleteError
+          // A causa concreta, não "erro no gateway": é isto que diz ao fundador
+          // qual campo preencher antes de tentar de novo.
+          ? `faltam dados de cobrança: ${e.missing.join(", ")}`
+          : e instanceof Error ? e.message : String(e);
+        warnings.push(`cobrança: ${msg}`);
+        console.error("[provision-tenant] gateway step failed:", msg);
+      }
     }
 
-    // --- 3. auth invite, last ------------------------------------------------
+    // --- 3. o convite, por último --------------------------------------------
     let invited = false;
     if (proposal?.cliente_email) {
       try {
         invited = await ensureInvite(db, proposal.cliente_email, r.equipe_id, proposal.cliente_nome);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        warnings.push(`invite: ${msg}`);
-        // Flag it on the contract so a half-finished tenant is visible in admin
-        // rather than looking complete.
+        warnings.push(`convite: ${msg}`);
+        // Marca no contrato para que um ambiente pela metade fique visível no
+        // painel em vez de parecer completo.
         await db.from("contracts").update({
           notes: `[${new Date().toISOString()}] convite de acesso falhou: ${msg}`,
         }).eq("id", r.contract_id);
-        await notify(db, r.equipe_id, "tenant.provisioned",
-          "Ambiente criado, convite pendente",
-          `O ambiente de ${proposal.cliente_nome} foi criado, mas o convite de acesso falhou. Reenvie pelo painel.`,
-          "/admin", `provfail_${r.contract_id}`);
       }
     } else {
-      warnings.push("invite: proposal has no client email");
+      warnings.push("convite: a proposta não tem e-mail do cliente");
     }
 
-    if (!r.already_provisioned && invited) {
-      await notify(db, r.equipe_id, "tenant.provisioned", "Bem-vindo!",
-        "Seu ambiente está pronto. A primeira fatura já está disponível em Faturamento.",
-        "/billing", `prov_${r.contract_id}`);
+    // --- 4. boas-vindas -------------------------------------------------------
+    //
+    // Substitui o antigo `tenant.provisioned`, cujo corpo era "A primeira fatura
+    // já está disponível em Faturamento" — cobrança como primeira frase depois
+    // da assinatura, antes de o cliente ter tido o discovery ou visto o agente.
+    //
+    // Só sai num provisionamento novo: reexecutar para consertar um convite não
+    // deve mandar boas-vindas de novo a quem já as recebeu.
+    if (!r.already_provisioned) {
+      await sendWelcome(db, r, proposal?.cliente_nome ?? "");
     }
 
-    return json({ success: true, ...r, invited, warnings });
+    return json({ success: true, ...r, invited, charged, warnings });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error("[provision-tenant] fatal:", message);
@@ -127,62 +168,40 @@ serve(async (req) => {
   }
 });
 
-/** Creates the Asaas customer and a charge per invoice that lacks one. */
-async function ensureCharges(
-  db: SupabaseClient,
-  r: { equipe_id: string; setup_invoice_id: string | null; recurring_invoice_id: string | null },
-) {
-  const { data: account } = await db
-    .from("billing_accounts")
-    .select("doc_number, legal_name, billing_email, phone, asaas_customer_id")
-    .eq("equipe_id", r.equipe_id).maybeSingle();
+/**
+ * Boas-vindas com o link do discovery.
+ *
+ * O texto vem do template editável em notification_types; o que esta função faz
+ * é montar as variáveis. O link de agendamento sai de system_settings porque
+ * uma URL de agenda muda mais do que o código.
+ */
+async function sendWelcome(db: SupabaseClient, r: ProvisionResult, clienteNome: string) {
+  const { data: settings } = await db
+    .from("system_settings").select("key, value")
+    .in("key", ["ONBOARDING_CALENDLY_URL", "APP_BASE_URL"]);
 
-  if (!account?.doc_number) {
-    throw new Error("billing_account_incomplete — cobranças não emitidas");
-  }
+  const get = (k: string) => (settings ?? []).find((s) => s.key === k)?.value ?? "";
 
-  let customerId = account.asaas_customer_id;
-  if (!customerId) {
-    const customer = await createCustomer({
-      name: account.legal_name ?? "Cliente",
-      email: account.billing_email,
-      cpfCnpj: account.doc_number,
-      phone: account.phone,
-    });
-    customerId = customer.id;
-    await db.from("billing_accounts").update({ asaas_customer_id: customerId }).eq("equipe_id", r.equipe_id);
-  }
-
-  for (const invoiceId of [r.setup_invoice_id, r.recurring_invoice_id]) {
-    if (!invoiceId) continue;
-
-    const { data: inv } = await db
-      .from("invoices").select("id, number, total, kind, asaas_payment_id")
-      .eq("id", invoiceId).maybeSingle();
-    // Already charged — this is a resumed run.
-    if (!inv || inv.asaas_payment_id) continue;
-
-    const payment = await createPayment({
-      customer: customerId!,
-      billingType: "UNDEFINED",
-      value: Number(inv.total),
-      dueDate: dueDateIn(3),
-      description: `${inv.kind === "setup" ? "Implantação" : "Assinatura"} — fatura ${inv.number}`,
-      externalReference: `invoice_${inv.id}`,
-    });
-
-    await db.from("invoices").update({
-      asaas_payment_id: payment.id,
-      asaas_invoice_url: payment.invoiceUrl ?? null,
-    }).eq("id", inv.id);
-  }
+  await notify(db, r.equipe_id, "onboarding.welcome", "Bem-vindo!", "", "/home", {
+    cliente_nome: clienteNome,
+    link_agenda: get("ONBOARDING_CALENDLY_URL"),
+    link_app: get("APP_BASE_URL"),
+    golive_previsto: formatDateBR(r.golive_previsto),
+  }, `welcome_${r.contract_id}`);
 }
 
-/** Invites the client and attaches their profile to the new team. */
+/** dd/mm/aaaa — o cliente lê a data, não o ISO. */
+function formatDateBR(iso: string | null): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return d && m && y ? `${d}/${m}/${y}` : "";
+}
+
+/** Convida o cliente e prende o perfil dele à equipe. */
 async function ensureInvite(
   db: SupabaseClient, email: string, equipeId: string, nome: string | null,
 ): Promise<boolean> {
-  // A resumed run must not re-invite someone who already accepted.
+  // Uma reexecução não pode reconvidar quem já aceitou.
   const { data: existing } = await db
     .from("profiles").select("user_id, equipe_id").eq("email", email).maybeSingle();
 
@@ -200,7 +219,7 @@ async function ensureInvite(
   });
   if (error) throw new Error(error.message);
 
-  // handle_new_user() creates the profile row; attach it to the team.
+  // handle_new_user() cria a linha de profile; aqui ela é ligada à equipe.
   if (data?.user?.id) {
     await db.from("profiles").update({
       equipe_id: equipeId, cargo: "owner", role: "owner", nome_completo: nome ?? null,
@@ -211,11 +230,12 @@ async function ensureInvite(
 
 async function notify(
   db: SupabaseClient, equipeId: string, type: string,
-  title: string, body: string, actionUrl: string, dedupKey: string,
+  title: string, body: string, actionUrl: string,
+  data: Record<string, string>, dedupKey: string,
 ) {
   const { error } = await db.rpc("notify", {
     p_equipe_id: equipeId, p_type: type, p_title: title, p_body: body,
-    p_action_url: actionUrl, p_data: {}, p_dedup_key: dedupKey,
+    p_action_url: actionUrl, p_data: data, p_dedup_key: dedupKey,
   });
   if (error) console.error(`[provision-tenant] notify(${type}):`, error.message);
 }

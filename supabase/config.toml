@@ -100,6 +100,12 @@ verify_jwt = false
 [functions.provision-tenant]
 verify_jwt = true
 
+# Sprint 8.2 — coloca o cliente no ar: inicia o trial e emite a cobrança da
+# implantação. Mesma exigência do provisionamento, e pelo mesmo motivo: começa
+# uma cobrança recorrente, então precisa saber quem clicou.
+[functions.golive-tenant]
+verify_jwt = true
+
 # Sprint 8 T11 — nightly reconciliation of the ledger against the provider.
 # Corrects the ledger; never becomes the source of truth.
 [functions.credits-reconcile]

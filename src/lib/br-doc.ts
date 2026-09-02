@@ -44,6 +44,19 @@ export function isValidCNPJ(value: string): boolean {
   return digit(12) === Number(cnpj[12]) && digit(13) === Number(cnpj[13]);
 }
 
+/**
+ * Aceita qualquer um dos dois. É o que o Asaas precisa para abrir uma cobrança,
+ * e é a pergunta que a tela de aceite e o diálogo de go-live realmente fazem —
+ * "dá para cobrar?", não "isto é um CPF?".
+ *
+ * Gêmeo de supabase/functions/_shared/br-doc.ts, que faz a mesma checagem no
+ * servidor. Esta aqui é conveniência; a de lá é a defesa.
+ */
+export function isValidBrDoc(value: string): boolean {
+  const d = onlyDigits(value);
+  return d.length === 11 ? isValidCPF(d) : d.length === 14 ? isValidCNPJ(d) : false;
+}
+
 export function maskCPF(value: string): string {
   const d = onlyDigits(value).slice(0, 11);
   return d

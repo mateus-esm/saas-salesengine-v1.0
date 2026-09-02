@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
 import { ProposalsTab } from "@/components/admin/proposals/ProposalsTab";
+import { OnboardingTab } from "@/components/admin/onboarding/OnboardingTab";
 import { AdminBillingTab } from "@/components/admin/billing/BillingTab";
 import { NotificationsTab } from "@/components/admin/notifications/NotificationsTab";
 import { TeamBillingDialog, type TeamBillingRow } from "@/components/admin/billing/TeamBillingDialog";
@@ -28,6 +29,7 @@ import {
   CreditCard, Bot, ChevronRight, UserMinus, UserPlus, Copy, RefreshCcw,
   Radio,
   FileText,
+  Rocket,
   Receipt,
   Bell,
 } from "lucide-react";
@@ -102,7 +104,7 @@ const statusBadgeVariant = (status: string | null): "default" | "secondary" | "d
 // um valor inventado não pode deixar a página sem nenhuma aba selecionada.
 const ADMIN_TABS = [
   "nichos", "equipes", "usuarios", "solo-instances",
-  "propostas", "faturamento", "notificacoes",
+  "propostas", "onboarding", "faturamento", "notificacoes",
 ];
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -733,6 +735,12 @@ const Admin = () => {
             <FileText className="h-4 w-4" />
             Propostas
           </TabsTrigger>
+          {/* Sprint 8.2 — fica ao lado de Propostas de propósito: um card nasce
+              exatamente onde uma proposta é provisionada. */}
+          <TabsTrigger value="onboarding" className="flex items-center gap-2">
+            <Rocket className="h-4 w-4" />
+            Onboarding
+          </TabsTrigger>
           <TabsTrigger value="faturamento" className="flex items-center gap-2">
             <Receipt className="h-4 w-4" />
             Faturamento
@@ -745,6 +753,10 @@ const Admin = () => {
 
         <TabsContent value="propostas" className="mt-4">
           <ProposalsTab />
+        </TabsContent>
+
+        <TabsContent value="onboarding" className="mt-4">
+          <OnboardingTab />
         </TabsContent>
 
         <TabsContent value="faturamento" className="mt-4">
