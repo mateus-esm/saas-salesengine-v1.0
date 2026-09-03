@@ -106,11 +106,55 @@ export async function createPayment(input: {
   dueDate: string; // YYYY-MM-DD
   description: string;
   externalReference: string;
+  /**
+   * Sprint 8.2 — cobra no cartão que o cliente já salvou, sem ação dele.
+   *
+   * É uma referência opaca do Asaas, nunca o número do cartão: nada de dado de
+   * cartão passa por este código. Com o token, `billingType` precisa ser
+   * CREDIT_CARD e o Asaas debita na hora em vez de emitir um boleto.
+   */
+  creditCardToken?: string | null;
 }): Promise<AsaasPayment> {
   return await call<AsaasPayment>("/payments", {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+/**
+ * Cobra no cartão salvo e, se ele recusar, emite a cobrança comum.
+ *
+ * O FALLBACK É O PONTO. Um cartão recusado — limite, validade vencida, banco
+ * bloqueando — não pode virar "o cliente ficou sem forma de pagar". Sem isto,
+ * `createPayment` lançaria, a fatura ficaria aberta sem cobrança nenhuma, e o
+ * cliente entraria em atraso por um cartão que ele nem sabe que falhou; sete
+ * dias depois o agente para. Emitir o boleto é a saída honesta: ele continua
+ * podendo pagar, agora sabendo que precisa.
+ *
+ * Devolve como foi cobrado, para quem chamou conseguir dizer ao cliente.
+ */
+export async function createPaymentPreferCard(
+  input: Parameters<typeof createPayment>[0] & { creditCardToken?: string | null },
+): Promise<{ payment: AsaasPayment; usedCard: boolean; cardError?: string }> {
+  const { creditCardToken, ...base } = input;
+
+  if (creditCardToken) {
+    try {
+      const payment = await createPayment({
+        ...base,
+        billingType: "CREDIT_CARD",
+        creditCardToken,
+      });
+      return { payment, usedCard: true };
+    } catch (e) {
+      const cardError = e instanceof Error ? e.message : String(e);
+      console.error("[asaas] cartão salvo recusado, emitindo cobrança comum:", cardError);
+      const payment = await createPayment({ ...base, billingType: "UNDEFINED" });
+      return { payment, usedCard: false, cardError };
+    }
+  }
+
+  return { payment: await createPayment(base), usedCard: false };
 }
 
 /**

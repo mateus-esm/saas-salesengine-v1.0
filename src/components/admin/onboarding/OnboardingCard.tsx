@@ -75,7 +75,20 @@ export function OnboardingCard({ card, stage, onOpen, onGoLive, showGoLive }: Pr
         className="cursor-grab active:cursor-grabbing"
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium leading-tight">{card.cliente_nome}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium leading-tight">{card.cliente_nome}</p>
+            {/* Sprint 8.2 — cliente que já operava antes deste processo existir.
+                Sem a marca, um card em "Ativo" parece ter passado por discovery
+                e implantação aqui, e não passou. */}
+            {card.is_legacy && (
+              <Badge
+                variant="outline"
+                className="mt-1 h-4 px-1 text-[9px] font-normal text-muted-foreground"
+              >
+                Legado
+              </Badge>
+            )}
+          </div>
           {card.monthly_value > 0 && (
             <span className="shrink-0 text-xs font-semibold text-muted-foreground">
               {formatBRL(card.monthly_value)}

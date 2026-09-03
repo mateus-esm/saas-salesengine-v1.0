@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { CreditCard, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useBillingAccount, useEquipeId } from "@/hooks/useBilling";
@@ -176,6 +177,8 @@ export default function BillingDataPage() {
         </CardContent>
       </Card>
 
+      <PaymentMethodCard account={account} onChanged={refetch} />
+
       <div className="flex justify-end">
         <Button onClick={save} disabled={saving || isLoading}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -183,6 +186,122 @@ export default function BillingDataPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Sprint 8.2 — o cartão salvo e a cobrança automática.
+ *
+ * POR QUE NÃO EXISTE UM FORMULÁRIO DE CARTÃO AQUI: o número do cartão nunca
+ * passa por este app. O cliente digita no checkout do próprio Asaas ao pagar
+ * uma fatura, e o que volta para nós é um token — uma referência opaca que só
+ * serve para cobrar esta conta. Guardar o número aqui traria PCI para dentro de
+ * um produto que não precisa dele.
+ *
+ * Então o cartão não é "cadastrado": ele é APRENDIDO na primeira fatura paga no
+ * cartão. Esta tela mostra o que foi aprendido e deixa o cliente desligar ou
+ * remover.
+ */
+function PaymentMethodCard({
+  account, onChanged,
+}: {
+  account: { asaas_card_token?: string | null; card_last4?: string | null;
+             card_brand?: string | null; autopay_enabled?: boolean | null } | null | undefined;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  const hasCard = !!account?.asaas_card_token;
+  const enabled = account?.autopay_enabled !== false;
+
+  const apply = async (nextEnabled: boolean, forget = false) => {
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("set_autopay", {
+        p_enabled: nextEnabled,
+        p_forget_card: forget,
+      });
+      if (error) throw error;
+      toast({
+        title: forget
+          ? "Cartão removido"
+          : nextEnabled ? "Cobrança automática ligada" : "Cobrança automática desligada",
+        description: forget || !nextEnabled
+          ? "As próximas faturas virão por boleto ou PIX."
+          : "A mensalidade do dia 1 será cobrada no cartão.",
+      });
+      onChanged();
+    } catch (e) {
+      toast({
+        title: "Não foi possível alterar",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Forma de pagamento</CardTitle>
+        <CardDescription>
+          A assinatura é cobrada todo dia 1. Com um cartão salvo, isso acontece sozinho.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {hasCard ? (
+          <>
+            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="text-sm">
+                  {account?.card_brand ?? "Cartão"}
+                  {account?.card_last4 ? ` · final ${account.card_last4}` : ""}
+                </span>
+              </div>
+              <Button
+                variant="ghost" size="sm" disabled={busy}
+                className="text-destructive hover:text-destructive"
+                onClick={() => apply(false, true)}
+              >
+                Remover
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="autopay" className="text-sm cursor-pointer">
+                  Cobrança automática
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {enabled
+                    ? "A fatura do dia 1 é debitada no cartão. Você continua recebendo o recibo."
+                    : "Desligada. Você recebe boleto ou PIX para pagar."}
+                </p>
+              </div>
+              <Switch
+                id="autopay" checked={enabled} disabled={busy}
+                onCheckedChange={(v) => apply(v)}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+            <p className="flex items-start gap-2">
+              <CreditCard className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Nenhum cartão salvo. Ao pagar a próxima fatura <strong>com cartão</strong>, ele
+                fica guardado com segurança no Asaas e as cobranças seguintes passam a ser
+                automáticas — sem você precisar lembrar do dia 1.
+              </span>
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

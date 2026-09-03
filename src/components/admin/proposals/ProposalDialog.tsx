@@ -380,7 +380,9 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-4">
-            <Field label="Setup (R$)" value={form.setup_price} onChange={set("setup_price")} type="number" />
+            {!form.setup_waived && (
+              <Field label="Setup (R$)" value={form.setup_price} onChange={set("setup_price")} type="number" />
+            )}
             <Field label="De (sem desconto)" value={form.list_monthly_price} onChange={set("list_monthly_price")} type="number" />
             <Field label="Prazo (meses)" value={form.term_months} onChange={set("term_months")} type="number" />
             <Field label="Válida até" value={form.valid_until} onChange={set("valid_until")} type="date" />
@@ -425,15 +427,23 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
 
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <Label htmlFor="sw" className="text-xs cursor-pointer">Implantacao como cortesia</Label>
+                <Label htmlFor="sw" className="text-xs cursor-pointer">
+                  Sem cobranca de implantacao
+                </Label>
                 <p className="text-[10px] text-muted-foreground">
-                  Voce absorve o setup. Combine com fidelidade: troque seu risco por compromisso, nao por esperanca.
+                  {form.setup_waived
+                    ? "Nenhuma fatura de implantacao sera emitida. Use tanto para cortesia (voce absorve o setup) quanto para um negocio que nao tem implantacao nenhuma."
+                    : "Cortesia ou negocio sem implantacao. Combine cortesia com fidelidade: troque seu risco por compromisso, nao por esperanca."}
                 </p>
               </div>
               <Switch
                 id="sw"
                 checked={form.setup_waived}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, setup_waived: v }))}
+                // Zera o valor junto: deixar "R$ 1.000" num campo que nao vai
+                // ser cobrado e a proposta dizendo duas coisas diferentes, e a
+                // primeira pessoa a reler nao sabe qual vale.
+                onCheckedChange={(v) =>
+                  setForm((f) => ({ ...f, setup_waived: v, setup_price: v ? "0" : f.setup_price }))}
               />
             </div>
 

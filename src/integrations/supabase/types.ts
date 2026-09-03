@@ -483,7 +483,11 @@ export type Database = {
           address_number: string | null
           address_state: string | null
           address_street: string | null
+          asaas_card_token: string | null
           asaas_customer_id: string | null
+          autopay_enabled: boolean
+          card_brand: string | null
+          card_last4: string | null
           auto_recharge_enabled: boolean
           auto_recharge_product_id: string | null
           auto_recharge_threshold: number | null
@@ -504,7 +508,11 @@ export type Database = {
           address_number?: string | null
           address_state?: string | null
           address_street?: string | null
+          asaas_card_token?: string | null
           asaas_customer_id?: string | null
+          autopay_enabled?: boolean
+          card_brand?: string | null
+          card_last4?: string | null
           auto_recharge_enabled?: boolean
           auto_recharge_product_id?: string | null
           auto_recharge_threshold?: number | null
@@ -525,7 +533,11 @@ export type Database = {
           address_number?: string | null
           address_state?: string | null
           address_street?: string | null
+          asaas_card_token?: string | null
           asaas_customer_id?: string | null
+          autopay_enabled?: boolean
+          card_brand?: string | null
+          card_last4?: string | null
           auto_recharge_enabled?: boolean
           auto_recharge_product_id?: string | null
           auto_recharge_threshold?: number | null
@@ -1871,6 +1883,7 @@ export type Database = {
           gpt_maker_agent_id: string | null
           home_explanation: string | null
           id: string
+          is_legacy: boolean
           is_crm_agent_enabled: boolean
           jestor_api_token: string | null
           limite_creditos: number | null
@@ -1900,6 +1913,7 @@ export type Database = {
           gpt_maker_agent_id?: string | null
           home_explanation?: string | null
           id?: string
+          is_legacy?: boolean
           is_crm_agent_enabled?: boolean
           jestor_api_token?: string | null
           limite_creditos?: number | null
@@ -1929,6 +1943,7 @@ export type Database = {
           gpt_maker_agent_id?: string | null
           home_explanation?: string | null
           id?: string
+          is_legacy?: boolean
           is_crm_agent_enabled?: boolean
           jestor_api_token?: string | null
           limite_creditos?: number | null
@@ -6310,6 +6325,10 @@ export type Database = {
       reset_dashboard_layout: { Args: { p_page?: string }; Returns: Json }
       save_dashboard_layout: {
         Args: { p_as_team?: boolean; p_page?: string; p_widgets: Json }
+        Returns: Json
+      }
+      set_autopay: {
+        Args: { p_enabled: boolean; p_forget_card?: boolean }
         Returns: Json
       }
       set_default_pipeline: { Args: { p_pipeline_id: string }; Returns: string }

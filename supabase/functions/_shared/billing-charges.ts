@@ -22,7 +22,7 @@
 // ============================================================================
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createCustomer, createPayment } from "./asaas.ts";
+import { createCustomer, createPaymentPreferCard } from "./asaas.ts";
 import { isValidBrDoc, isPlausibleEmail } from "./br-doc.ts";
 
 /** O que impede uma cobrança de existir. Nomes que a interface traduz em campos. */
@@ -37,6 +37,9 @@ export interface BillingReadiness {
     legal_name: string | null;
     phone?: string | null;
     asaas_customer_id?: string | null;
+    /** Sprint 8.2 — cartão salvo, quando o cliente optou por cobrança automática. */
+    asaas_card_token?: string | null;
+    autopay_enabled?: boolean | null;
   } | null;
 }
 
@@ -52,7 +55,7 @@ export async function checkBillingReadiness(
 ): Promise<BillingReadiness> {
   const { data: account } = await db
     .from("billing_accounts")
-    .select("doc_number, billing_email, legal_name, phone, asaas_customer_id")
+    .select("doc_number, billing_email, legal_name, phone, asaas_customer_id, asaas_card_token, autopay_enabled")
     .eq("equipe_id", equipeId)
     .maybeSingle();
 
@@ -86,6 +89,8 @@ export interface ChargeResult {
   charged: string[];
   skipped: string[];
   customer_id: string | null;
+  /** Faturas cujo cartão salvo recusou e viraram boleto/PIX. */
+  card_failures: string[];
 }
 
 /**
@@ -120,13 +125,14 @@ export async function ensureCharges(
 
   const charged: string[] = [];
   const skipped: string[] = [];
+  const cardFailures: string[] = [];
 
   for (const invoiceId of input.invoice_ids) {
     if (!invoiceId) continue;
 
     const { data: inv } = await db
       .from("invoices")
-      .select("id, number, total, kind, due_date, asaas_payment_id, status")
+      .select("id, number, total, kind, due_date, asaas_payment_id, status, metadata")
       .eq("id", invoiceId)
       .maybeSingle();
 
@@ -139,25 +145,39 @@ export async function ensureCharges(
 
     const due = chargeDueDate(input.due_date ?? inv.due_date ?? null);
 
-    const payment = await createPayment({
+    // Sprint 8.2 — cobra no cartão salvo quando o cliente pediu isso, e cai
+    // para boleto/PIX se o cartão recusar. Um cartão recusado não pode virar
+    // "sem forma de pagar": a fatura ficaria aberta sem cobrança e o cliente
+    // entraria em atraso por um problema que ninguém contou a ele.
+    const useCard = ready.account.autopay_enabled !== false
+      ? ready.account.asaas_card_token ?? null
+      : null;
+
+    const { payment, usedCard, cardError } = await createPaymentPreferCard({
       customer: customerId!,
       billingType: "UNDEFINED",
       value: Number(inv.total),
       dueDate: due,
       description: `${inv.kind === "setup" ? "Implantação" : "Assinatura"} — fatura ${inv.number}`,
       externalReference: `invoice_${inv.id}`,
+      creditCardToken: useCard,
     });
+
+    if (cardError) cardFailures.push(inv.number ?? invoiceId);
 
     await db.from("invoices").update({
       asaas_payment_id: payment.id,
       asaas_invoice_url: payment.invoiceUrl ?? null,
       due_date: due,
+      // Registra COMO foi cobrada. Sem isto, "por que este cliente recebeu
+      // boleto se tem cartão salvo?" não tem resposta no banco.
+      metadata: { ...(inv.metadata ?? {}), charged_via: usedCard ? "card" : "invoice" },
     }).eq("id", inv.id);
 
     charged.push(invoiceId);
   }
 
-  return { charged, skipped, customer_id: customerId };
+  return { charged, skipped, customer_id: customerId, card_failures: cardFailures };
 }
 
 /** Carrega O QUE falta, para que quem chamou consiga pedir o campo certo. */

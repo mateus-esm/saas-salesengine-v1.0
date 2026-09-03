@@ -120,6 +120,49 @@ interface ProcessResult {
   invoiceId?: string;
 }
 
+/**
+ * Guarda o cartão que o cliente acabou de usar, para a próxima cobrança sair
+ * sozinha.
+ *
+ * O QUE ENTRA AQUI: `creditCardToken`, uma referência opaca do Asaas, mais os
+ * quatro últimos dígitos e a bandeira — que servem só para a tela conseguir
+ * dizer "Mastercard final 4242". O número do cartão nunca chega a este código:
+ * o cliente digita no checkout do próprio Asaas.
+ *
+ * NÃO liga a cobrança automática por conta própria além do padrão da conta: se
+ * o cliente desligou `autopay_enabled`, pagar uma fatura no cartão não é
+ * consentimento para debitar todo mês, e reativar seria decidir por ele.
+ *
+ * Falhar aqui não pode derrubar a baixa do pagamento — o dinheiro entrou, e é
+ * isso que precisa ser registrado. Por isso o try/catch.
+ */
+async function rememberCard(
+  db: SupabaseClient, equipeId: string, event: AsaasWebhookEvent,
+): Promise<void> {
+  try {
+    const card = (event.payment as { creditCard?: {
+      creditCardToken?: string;
+      creditCardNumber?: string;
+      creditCardBrand?: string;
+    } } | undefined)?.creditCard;
+
+    const token = card?.creditCardToken;
+    if (!token) return;  // pagou por boleto ou PIX: não há cartão a guardar
+
+    const { error } = await db.from("billing_accounts").update({
+      asaas_card_token: token,
+      card_last4: card?.creditCardNumber ?? null,
+      card_brand: card?.creditCardBrand ?? null,
+    }).eq("equipe_id", equipeId);
+
+    if (error) throw new Error(error.message);
+    console.log(`[asaas-webhook] cartão salvo para a equipe ${equipeId}`);
+  } catch (e) {
+    console.error("[asaas-webhook] não consegui guardar o cartão:",
+      e instanceof Error ? e.message : String(e));
+  }
+}
+
 async function processEvent(db: SupabaseClient, event: AsaasWebhookEvent): Promise<ProcessResult> {
   const newStatus = mapEventToInvoiceStatus(event.event);
   if (!newStatus) {
@@ -151,6 +194,11 @@ async function processEvent(db: SupabaseClient, event: AsaasWebhookEvent): Promi
 
   switch (newStatus) {
     case "paid":
+      // Sprint 8.2 — pagou no cartão? Guarda o token para o dia 1 seguinte sair
+      // sozinho. É a ÚNICA porta por onde um cartão entra no sistema: o cliente
+      // digita no checkout do Asaas, e o que volta para cá é uma referência
+      // opaca. Nenhum dado de cartão passa por este código.
+      await rememberCard(db, invoice.equipe_id, event);
       await applyPaid(db, invoice);
       break;
     case "overdue":

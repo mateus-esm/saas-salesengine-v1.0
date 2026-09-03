@@ -15,7 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createPayment, dueDateIn, safeEqual } from "../_shared/asaas.ts";
+import { createPaymentPreferCard, dueDateIn, safeEqual } from "../_shared/asaas.ts";
 import { syncAgentPower } from "../_shared/agent-power.ts";
 
 const corsHeaders = {
@@ -273,22 +273,45 @@ async function endTrials(db: SupabaseClient) {
 /** Creates the gateway charge for an invoice that already exists. */
 async function chargeInvoice(
   db: SupabaseClient, equipeId: string, invoiceId: string, total: number, description: string,
+  dueDate?: string,
 ) {
   const { data: account } = await db
-    .from("billing_accounts").select("asaas_customer_id").eq("equipe_id", equipeId).maybeSingle();
+    .from("billing_accounts")
+    .select("asaas_customer_id, asaas_card_token, autopay_enabled")
+    .eq("equipe_id", equipeId).maybeSingle();
   if (!account?.asaas_customer_id) return;
+
+  // Sprint 8.2 — a mensalidade do dia 1 sai no cartão salvo, quando o cliente
+  // pediu isso. É o que impede o produto de parar por um clique que ninguém
+  // deu: sem cartão, a fatura vira boleto, o cliente esquece, vence, e sete
+  // dias depois o agente é suspenso por dunning — não por falta de dinheiro.
+  //
+  // `createPaymentPreferCard` cai para boleto/PIX se o cartão recusar, então
+  // um cartão vencido atrasa o pagamento em vez de deixar o cliente sem
+  // nenhuma forma de pagar.
+  const useCard = account.autopay_enabled !== false ? account.asaas_card_token ?? null : null;
+
   try {
-    const payment = await createPayment({
+    const { payment, usedCard, cardError } = await createPaymentPreferCard({
       customer: account.asaas_customer_id,
       billingType: "UNDEFINED",
       value: total,
-      dueDate: dueDateIn(5),
+      dueDate: dueDate ?? dueDateIn(5),
       description,
       externalReference: `invoice_${invoiceId}`,
+      creditCardToken: useCard,
     });
+
     await db.from("invoices")
       .update({ asaas_payment_id: payment.id, asaas_invoice_url: payment.invoiceUrl ?? null })
       .eq("id", invoiceId);
+
+    if (cardError) {
+      await notify(db, equipeId, "invoice.issued", "Não conseguimos usar seu cartão",
+        "A cobrança deste mês foi emitida em boleto/PIX. Atualize o cartão em Faturamento para voltar ao débito automático.",
+        "/billing/dados", `cardfail_${invoiceId}`);
+    }
+    return usedCard;
   } catch (e) {
     // voidOrphanInvoices clears it after 2h and the next run re-issues.
     console.error("[chargeInvoice] gateway failed:", e);
@@ -359,31 +382,21 @@ async function renewPeriods(db: SupabaseClient) {
       })),
     );
 
-    const { data: account } = await db
-      .from("billing_accounts").select("asaas_customer_id").eq("equipe_id", c.equipe_id).maybeSingle();
+    // Sprint 8.2 — passa pelo mesmo chargeInvoice do fim de trial, em vez de
+    // repetir a chamada ao gateway aqui. Eram duas cópias da mesma coisa, e
+    // quando o cartão salvo entrou em cena só UMA delas teria aprendido a
+    // usá-lo — a renovação do dia 1, justamente a que mais precisa.
+    const usedCard = await chargeInvoice(
+      db, c.equipe_id, invoice.id, total,
+      `Assinatura — fatura ${invoice.number}`,
+      dueDateIn(RENEW_LEAD_DAYS),
+    );
 
-    if (account?.asaas_customer_id) {
-      try {
-        const payment = await createPayment({
-          customer: account.asaas_customer_id,
-          billingType: "UNDEFINED",
-          value: total,
-          dueDate: dueDateIn(RENEW_LEAD_DAYS),
-          description: `Assinatura — fatura ${invoice.number}`,
-          externalReference: `invoice_${invoice.id}`,
-        });
-        await db.from("invoices")
-          .update({ asaas_payment_id: payment.id, asaas_invoice_url: payment.invoiceUrl ?? null })
-          .eq("id", invoice.id);
-      } catch (e) {
-        // The invoice stays open with no charge; voidOrphanInvoices cleans it up
-        // and the next run re-issues it.
-        console.error("[renewPeriods] gateway charge failed:", e);
-      }
-    }
-
-    await notify(db, c.equipe_id, "invoice.issued", "Nova fatura disponível",
-      `R$ ${money(total)} referente ao próximo período.`,
+    await notify(db, c.equipe_id, "invoice.issued",
+      usedCard ? "Assinatura renovada" : "Nova fatura disponível",
+      usedCard
+        ? `R$ ${money(total)} cobrados no seu cartão. Nada a fazer.`
+        : `R$ ${money(total)} referente ao próximo período.`,
       "/billing/faturas", `issued_${invoice.id}`);
     issued++;
   }

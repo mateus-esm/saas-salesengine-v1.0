@@ -42,6 +42,8 @@ export interface OnboardingRow {
   monthly_value: number;
   contract_id: string | null;
   contract_status: string | null;
+  /** Sprint 8.2 — cliente que já operava antes do onboarding existir. */
+  is_legacy: boolean;
 }
 
 export interface OnboardingEvent {
@@ -83,12 +85,13 @@ export function useOnboardings() {
           discovery_agendado_em, discovery_feito_em, went_live_at,
           health, blocked_reason, notes, entered_stage_at, created_at,
           proposals ( monthly_price ),
-          equipes ( contracts ( id, status, current_period_end ) )
+          equipes ( is_legacy, contracts ( id, status, current_period_end,
+                                           contract_items ( unit_price, quantity, period ) ) )
         `)
         .order("entered_stage_at");
       if (error) throw error;
 
-       
+
       return (data ?? []).map((row: any) => {
         // Um contrato cancelado não é o contrato "do" card: pegar o primeiro da
         // lista poria um contrato antigo no lugar do vivo depois de uma
@@ -96,14 +99,30 @@ export function useOnboardings() {
         const live = (row.equipes?.contracts ?? []).find((c: any) =>
           ["onboarding", "trialing", "active", "past_due", "suspended"].includes(c.status)
         );
+
+        // Sprint 8.2 — o valor vem do CONTRATO, não da proposta.
+        //
+        // A Solo Energia aparecia como R$ 0 no quadro apesar de pagar R$ 200:
+        // o card dela nasceu do backfill, sem `proposal_id`, e o valor era lido
+        // de `proposals.monthly_price` por um join que não existia. O contrato é
+        // a fonte honesta — é ele que diz o que está sendo cobrado hoje, e
+        // sobrevive a uma proposta editada depois de assinada.
+        //
+        // A proposta continua como fallback: um card que ainda não virou
+        // contrato (etapa 'aceite') só tem ela.
+        const fromContract = (live?.contract_items ?? [])
+          .filter((i: any) => i.period === "monthly")
+          .reduce((s: number, i: any) => s + Number(i.unit_price) * Number(i.quantity ?? 1), 0);
+
         return {
           ...row,
-          monthly_value: Number(row.proposals?.monthly_price ?? 0),
+          monthly_value: fromContract || Number(row.proposals?.monthly_price ?? 0),
           contract_id: live?.id ?? null,
           contract_status: live?.status ?? null,
+          is_legacy: row.equipes?.is_legacy === true,
         } as OnboardingRow;
       });
-       
+
     },
   });
 }
