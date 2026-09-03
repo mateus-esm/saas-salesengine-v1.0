@@ -26,6 +26,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { BillingIncompleteError, checkBillingReadiness, ensureCharges } from "../_shared/billing-charges.ts";
+import { docType, isPlausibleEmail, isValidBrDoc, onlyDigits } from "../_shared/br-doc.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,6 +71,13 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({})) as {
       contract_id?: string;
       onboarding_id?: string;
+      // Correções que o diálogo manda junto quando a conta de cobrança está
+      // incompleta. Chegam aqui e não vão direto do navegador para a tabela
+      // porque `billing_accounts` só tem política de SELECT: um update vindo do
+      // browser é bloqueado pelo RLS e o PostgREST devolve sucesso com zero
+      // linhas. O dado simplesmente não era gravado, sem erro nenhum.
+      doc?: string;
+      email?: string;
     };
 
     const contractId = body.contract_id ?? await contractFromOnboarding(db, body.onboarding_id);
@@ -78,6 +86,29 @@ serve(async (req) => {
     const { data: contract } = await db
       .from("contracts").select("equipe_id, status, went_live_at").eq("id", contractId).maybeSingle();
     if (!contract) return json({ error: "contract_not_found" }, 404);
+
+    // --- 0. o que o fundador corrigiu no diálogo ------------------------------
+    //
+    // Escrito com a service role, que é como todo o resto do faturamento é
+    // gravado (provisionamento, webhook do gateway). Validado aqui de novo: o
+    // navegador é conveniência, o servidor é a defesa.
+    if (body.doc || body.email) {
+      const patch: Record<string, string> = {};
+
+      if (body.doc) {
+        if (!isValidBrDoc(body.doc)) return json({ error: "doc_invalid" }, 400);
+        patch.doc_number = onlyDigits(body.doc);
+        patch.doc_type = docType(body.doc)!;
+      }
+      if (body.email) {
+        if (!isPlausibleEmail(body.email)) return json({ error: "email_invalid" }, 400);
+        patch.billing_email = body.email.trim();
+      }
+
+      const { error: upErr } = await db.from("billing_accounts")
+        .update(patch).eq("equipe_id", contract.equipe_id);
+      if (upErr) return json({ error: `billing_update_failed: ${upErr.message}` }, 500);
+    }
 
     // --- 1. a cobrança vai funcionar? ----------------------------------------
     //

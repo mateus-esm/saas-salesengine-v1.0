@@ -115,22 +115,17 @@ export function GoLiveDialog({ card, onClose }: Props) {
     if (!card) return;
     setSaving(true);
     try {
-      // Grava o que foi corrigido ANTES de chamar o go-live: a edge function
-      // recusa com 409 se a conta não estiver pronta, e é a mesma checagem.
-      if (precisaSalvar && card.equipe_id) {
-        const digits = onlyDigits(doc);
-        const { error } = await supabase.from("billing_accounts").update({
-          doc_number: digits,
-          doc_type: digits.length === 14 ? "CNPJ" : "CPF",
-          billing_email: email.trim(),
-        }).eq("equipe_id", card.equipe_id);
-        if (error) throw error;
-        await refetch();
-      }
-
+      // O que foi corrigido vai JUNTO com o pedido de go-live, e quem grava é a
+      // edge function com a service role.
+      //
+      // A versão anterior escrevia daqui, direto em `billing_accounts` — e essa
+      // tabela só tem política de SELECT. O RLS bloqueava o update, o PostgREST
+      // devolvia sucesso com zero linhas, e o CNPJ nunca era salvo: nenhum erro
+      // aparecia e o go-live falhava depois dizendo que faltava o documento.
       const res = await goLive.mutateAsync({
         contract_id: card.contract_id ?? undefined,
         onboarding_id: card.id,
+        ...(precisaSalvar ? { doc: onlyDigits(doc), email: email.trim() } : {}),
       });
 
       if (res.error === "billing_incomplete") {
@@ -141,7 +136,12 @@ export function GoLiveDialog({ card, onClose }: Props) {
         });
         return;
       }
+      if (res.error === "doc_invalid") {
+        toast({ title: "CPF/CNPJ inválido", description: "Confira o número digitado.", variant: "destructive" });
+        return;
+      }
       if (res.error) throw new Error(res.error);
+      await refetch();
 
       toast({
         title: res.already_live ? "Já estava no ar" : "No ar! 🚀",

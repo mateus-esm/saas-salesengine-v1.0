@@ -88,7 +88,7 @@ export function useOnboardings() {
         .order("entered_stage_at");
       if (error) throw error;
 
-      /* eslint-disable @typescript-eslint/no-explicit-any */
+       
       return (data ?? []).map((row: any) => {
         // Um contrato cancelado não é o contrato "do" card: pegar o primeiro da
         // lista poria um contrato antigo no lugar do vivo depois de uma
@@ -103,7 +103,7 @@ export function useOnboardings() {
           contract_status: live?.status ?? null,
         } as OnboardingRow;
       });
-      /* eslint-enable @typescript-eslint/no-explicit-any */
+       
     },
   });
 }
@@ -197,7 +197,13 @@ export interface GoLiveResponse {
 export function useGoLive() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { contract_id?: string; onboarding_id?: string }) => {
+    mutationFn: async (input: {
+      contract_id?: string;
+      onboarding_id?: string;
+      /** Correções da conta de cobrança. Gravadas pela função, não pelo navegador. */
+      doc?: string;
+      email?: string;
+    }) => {
       const { data, error } = await supabase.functions.invoke("golive-tenant", { body: input });
       if (error) throw error;
       return data as GoLiveResponse;
