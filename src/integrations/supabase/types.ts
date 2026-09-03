@@ -6327,6 +6327,27 @@ export type Database = {
         Args: { p_as_team?: boolean; p_page?: string; p_widgets: Json }
         Returns: Json
       }
+      save_auto_recharge: {
+        Args: { p_enabled: boolean; p_product_id?: string; p_threshold: number }
+        Returns: Json
+      }
+      save_billing_account: {
+        Args: {
+          p_address_city?: string
+          p_address_complement?: string
+          p_address_district?: string
+          p_address_number?: string
+          p_address_state?: string
+          p_address_street?: string
+          p_billing_email?: string
+          p_doc_number: string
+          p_doc_type: string
+          p_legal_name?: string
+          p_phone?: string
+          p_postal_code?: string
+        }
+        Returns: Json
+      }
       set_autopay: {
         Args: { p_enabled: boolean; p_forget_card?: boolean }
         Returns: Json

@@ -83,21 +83,31 @@ export default function BillingDataPage() {
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("billing_accounts").upsert({
-        equipe_id: equipeId,
-        doc_type: docType,
-        doc_number: digits,
-        legal_name: form.legal_name || null,
-        billing_email: form.billing_email || null,
-        phone: form.phone || null,
-        postal_code: form.postal_code || null,
-        address_street: form.address_street || null,
-        address_number: form.address_number || null,
-        address_complement: form.address_complement || null,
-        address_district: form.address_district || null,
-        address_city: form.address_city || null,
-        address_state: form.address_state || null,
-      }, { onConflict: "equipe_id" });
+      // Sprint 8.2 — a gravação vai por uma função, não por um upsert daqui.
+      //
+      // `billing_accounts` tem RLS com UMA política, de SELECT. O upsert direto
+      // que estava aqui falhava de dois jeitos: sem a linha, o INSERT batia no
+      // RLS e voltava 42501; com a linha, o UPDATE não casava com política
+      // nenhuma, afetava ZERO linhas e o PostgREST devolvia 200 — o cliente lia
+      // "Dados de cobrança salvos" e nada tinha sido salvo.
+      //
+      // A função é SECURITY DEFINER e aceita só os campos que o cliente pode
+      // mudar: `asaas_customer_id` e `asaas_card_token` não têm parâmetro, então
+      // não há como apontá-los para a conta de outra pessoa.
+      const { error } = await supabase.rpc("save_billing_account", {
+        p_doc_type: docType,
+        p_doc_number: digits,
+        p_legal_name: form.legal_name || null,
+        p_billing_email: form.billing_email || null,
+        p_phone: form.phone || null,
+        p_postal_code: form.postal_code || null,
+        p_address_street: form.address_street || null,
+        p_address_number: form.address_number || null,
+        p_address_complement: form.address_complement || null,
+        p_address_district: form.address_district || null,
+        p_address_city: form.address_city || null,
+        p_address_state: form.address_state || null,
+      });
       if (error) throw error;
       await refetch();
       toast({ title: "Dados de cobrança salvos" });

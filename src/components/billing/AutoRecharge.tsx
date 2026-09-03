@@ -41,14 +41,18 @@ export function AutoRecharge() {
     if (!equipeId) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("billing_accounts")
-        .update({
-          auto_recharge_enabled: enabled,
-          auto_recharge_threshold: Number(threshold) || 0,
-          auto_recharge_product_id: productId || null,
-        })
-        .eq("equipe_id", equipeId);
+      // Sprint 8.2 — pela função, não por update direto.
+      //
+      // `billing_accounts` só tem política de SELECT no RLS. O update que
+      // estava aqui não casava com política nenhuma: afetava ZERO linhas, o
+      // PostgREST devolvia 200, e o toast dizia "Preferência salva". A recarga
+      // automática nunca chegou a ser ligada por ninguém — o cliente marcava,
+      // lia que salvou, e o saldo acabava assim mesmo.
+      const { error } = await supabase.rpc("save_auto_recharge", {
+        p_enabled: enabled,
+        p_threshold: Number(threshold) || 0,
+        p_product_id: productId || null,
+      });
       if (error) throw error;
       await refetch();
       toast({ title: "Preferência salva" });
