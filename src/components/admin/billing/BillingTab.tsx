@@ -59,7 +59,7 @@ export function AdminBillingTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
-        .select("id, number, kind, status, total, due_date, paid_at, equipes(nome)")
+        .select("id, number, kind, status, total, due_date, paid_at, asaas_payment_id, equipes(nome)")
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;

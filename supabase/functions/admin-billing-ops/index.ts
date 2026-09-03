@@ -22,6 +22,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cancelPayment, createPayment, updatePayment } from "../_shared/asaas.ts";
 import { applyPaid, notify, type Invoice } from "../_shared/invoice-effects.ts";
+import { BillingIncompleteError, ensureCharges } from "../_shared/billing-charges.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,10 +91,20 @@ serve(async (req) => {
       case "update_invoice":    return json(await updateInvoice(asUser, body));
       case "delete_proposal":   return json(await rpc(asUser, "admin_delete_proposal", { p_proposal_id: body.proposal_id }));
       case "delete_team":       return json(await rpc(asUser, "admin_delete_equipe", { p_equipe_id: body.equipe_id }));
+      case "charge_invoice":    return json(await chargeInvoice(db, asUser, body));
       default:
         return json({ error: "unknown_action", action }, 400);
     }
   } catch (e) {
+    // O que falta para cobrar é uma resposta útil, não um erro genérico: o
+    // painel consegue pedir o campo certo em vez de mandar o fundador adivinhar.
+    if (e instanceof BillingIncompleteError) {
+      return json({
+        error: "billing_incomplete",
+        missing: e.missing,
+        message: `Faltam dados de cobrança: ${e.missing.join(", ")}. Preencha em Faturamento → Dados.`,
+      }, 409);
+    }
     const message = e instanceof Error ? e.message : String(e);
     const guard = Object.keys(GUARDS).find((k) => message.includes(k));
     if (guard) return json({ error: guard, message: GUARDS[guard].message }, GUARDS[guard].status);
@@ -110,6 +121,58 @@ async function rpc<T = Record<string, unknown>>(
   const { data, error } = await client.rpc(fn, args);
   if (error) throw new Error(error.message);
   return data as T;
+}
+
+/**
+ * Emitir a cobrança de uma fatura que já existe.
+ *
+ * POR QUE ISTO PRECISOU EXISTIR: até aqui, a única forma de uma fatura ganhar
+ * cobrança no gateway era nascer junto com ela — no provisionamento ou no
+ * go-live. Uma fatura criada por qualquer outro caminho (o `create_adhoc`
+ * quando o gateway estava fora do ar, uma correção feita à mão, a primeira
+ * mensalidade de um contrato que entrou no ar antes desta sprint) ficava
+ * `open` para sempre, visível para o cliente e impossível de pagar. Não havia
+ * botão nenhum que resolvesse isso.
+ *
+ * Usa o mesmo `ensureCharges` do provisionamento e do go-live, então é
+ * idempotente do mesmo jeito: uma fatura que já tem `asaas_payment_id` é
+ * pulada em vez de cobrada de novo.
+ */
+async function chargeInvoice(db: SupabaseClient, asUser: SupabaseClient, body: Record<string, unknown>) {
+  const invoiceId = String(body.invoice_id ?? "");
+  if (!invoiceId) throw new Error("invoice_not_found");
+
+  // Lido como o USUÁRIO: é o RLS de invoices que garante que um super admin
+  // está mesmo autorizado a mexer nesta fatura, e não a service role.
+  const { data: inv } = await asUser
+    .from("invoices").select("id, equipe_id, status, asaas_payment_id, due_date, metadata")
+    .eq("id", invoiceId).maybeSingle();
+  if (!inv) throw new Error("invoice_not_found");
+  if (inv.status === "paid") throw new Error("invoice_already_paid");
+  if (inv.status === "void") throw new Error("invoice_void");
+
+  const out = await ensureCharges(db, {
+    equipe_id: inv.equipe_id,
+    invoice_ids: [invoiceId],
+    due_date: inv.due_date,
+  });
+
+  // Cobrada de verdade: deixa de ser "criada à mão" e volta a ser uma fatura
+  // comum. A marca `manual` só existe para o billing-cron não anular uma
+  // fatura que espera cobrança de propósito; agora que ela tem cobrança, a
+  // proteção deixa de fazer sentido e mantê-la esconderia entulho de verdade.
+  if (out.charged.length) {
+    const meta = { ...((inv.metadata ?? {}) as Record<string, unknown>) };
+    delete meta.manual;
+    await db.from("invoices").update({ metadata: meta }).eq("id", invoiceId);
+  }
+
+  return {
+    ok: true,
+    invoice_id: invoiceId,
+    charged: out.charged.length > 0,
+    already_charged: out.skipped.includes(invoiceId),
+  };
 }
 
 /**

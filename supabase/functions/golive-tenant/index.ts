@@ -45,7 +45,17 @@ interface GoLiveResult {
   trial_days?: number;
   setup_invoice_id: string | null;
   setup_total?: number;
+  /** Sprint 8.2 — a primeira mensalidade, quando o contrato não tem trial. */
+  first_invoice_id?: string | null;
+  first_total?: number;
+  monthly_total?: number;
   onboarding_id: string | null;
+  /**
+   * Tudo o que precisa de cobrança no gateway. A transação decide o que entra:
+   * a implantação ainda sem cobrança e, quando não há trial, a mensalidade
+   * proporcional emitida agora mesmo.
+   */
+  charge_invoice_ids?: string[];
   charge_now: boolean;
 }
 
@@ -145,11 +155,19 @@ serve(async (req) => {
     // depois de a transação ter passado não pode desfazer o go-live — seria
     // tirar do ar um ambiente que já funciona por causa do gateway.
     let charged = false;
-    if (r.charge_now && r.setup_invoice_id) {
+    // A transação diz o que cobrar. Antes esta função só conhecia a fatura de
+    // implantação; um contrato sem trial passou a emitir também a primeira
+    // mensalidade no mesmo instante, e cobrar só o setup deixaria a
+    // mensalidade aberta sem nunca pedir o dinheiro.
+    const toCharge = r.charge_invoice_ids?.length
+      ? r.charge_invoice_ids
+      : [r.setup_invoice_id].filter((x): x is string => !!x);
+
+    if (r.charge_now && toCharge.length) {
       try {
         const out = await ensureCharges(db, {
           equipe_id: r.equipe_id,
-          invoice_ids: [r.setup_invoice_id],
+          invoice_ids: toCharge,
         });
         charged = out.charged.length > 0;
       } catch (e) {
@@ -219,9 +237,45 @@ async function sendGoLive(db: SupabaseClient, r: GoLiveResult) {
     link_app: (typeof origin === "string" && origin) || (settings ?? [])[0]?.value || "",
     trial_dias: String(r.trial_days ?? 0),
     trial_fim: formatDateBR(r.trial_ends_at),
-    valor_mensal: monthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
+    valor_mensal: brl(monthly),
+    condicao_cobranca: billingSentence(r, monthly),
   }, `golive_${r.contract_id}`);
 }
+
+/**
+ * A frase sobre dinheiro, montada aqui porque o template não tem condicional.
+ *
+ * `render_template` é substituição pura de propósito — esses textos são
+ * editados à mão no painel, e uma linguagem com `if` viraria código que
+ * ninguém revisa. O custo disso é que uma frase que muda de forma tem que
+ * chegar pronta, e é o que esta função faz.
+ *
+ * Sem isto, um contrato sem trial recebia "você tem 0 dias de uso completo,
+ * até " — justamente o cliente que paga desde o primeiro dia.
+ */
+function billingSentence(r: GoLiveResult, monthly: number): string {
+  const trialDays = r.trial_days ?? 0;
+
+  if (trialDays > 0) {
+    return `A partir de agora você tem ${trialDays} dias de uso completo, até `
+      + `${formatDateBR(r.trial_ends_at)}. Depois desse período a assinatura de `
+      + `R$ ${brl(monthly)}/mês entra em vigor, cobrada proporcionalmente ao que restar do mês.`;
+  }
+
+  if (r.first_total && r.first_total > 0) {
+    return `Sua primeira fatura, de R$ ${brl(r.first_total)}, já está disponível — `
+      + `referente aos dias restantes deste mês. A partir do mês que vem a assinatura de `
+      + `R$ ${brl(monthly)}/mês é cobrada todo dia 1.`;
+  }
+
+  if (monthly > 0) {
+    return `A assinatura de R$ ${brl(monthly)}/mês passa a valer a partir de agora.`;
+  }
+
+  return "Não há mensalidade contratada — nada será cobrado.";
+}
+
+const brl = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
 
 async function teamName(db: SupabaseClient, equipeId: string): Promise<string> {
   const { data } = await db.from("equipes").select("nome").eq("id", equipeId).maybeSingle();

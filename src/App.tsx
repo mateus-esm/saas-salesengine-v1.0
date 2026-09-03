@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthenticatedLayout } from "@/components/AuthenticatedLayout";
 import { PageRouteGuard } from "@/components/PageRouteGuard";
 import Login from "./pages/Login";
+import SetPassword from "./pages/SetPassword";
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import CRM from "./pages/CRM";
@@ -68,6 +69,10 @@ const App = () => (
                 {/* Public */}
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/login" element={<Login />} />
+                {/* Sprint 8.2 — o destino do convite e do link das boas-vindas.
+                    Público de propósito: quem chega aqui ainda não tem senha,
+                    então não pode passar por ProtectedRoute. */}
+                <Route path="/definir-senha" element={<SetPassword />} />
                 {/* Sprint 8 T17 — public, outside ProtectedRoute: the person
                     reading a proposal is not a user yet. */}
                 <Route path="/proposta/:codigo" element={<PublicProposal />} />

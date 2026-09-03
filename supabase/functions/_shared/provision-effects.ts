@@ -78,11 +78,19 @@ export async function runProvisionEffects(
     }
   }
 
+  // O endereço do app PARA ESTE CLIENTE, resolvido uma vez: o convite precisa
+  // dele para saber onde devolver a pessoa depois de clicar no e-mail, e as
+  // boas-vindas precisam dele para montar o link de definir senha. Duas
+  // resoluções separadas poderiam divergir e mandar a pessoa para marcas
+  // diferentes em cada mensagem.
+  const origin = await appOrigin(db, r.equipe_id);
+  const linkSenha = origin ? `${origin}/definir-senha` : "";
+
   // --- o convite, por último --------------------------------------------------
   let invited = false;
   if (proposal.cliente_email) {
     try {
-      invited = await ensureInvite(db, proposal.cliente_email, r.equipe_id, proposal.cliente_nome);
+      invited = await ensureInvite(db, proposal.cliente_email, r.equipe_id, proposal.cliente_nome, linkSenha);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       warnings.push(`convite: ${msg}`);
@@ -105,30 +113,39 @@ export async function runProvisionEffects(
   // Só sai num provisionamento novo: reexecutar para consertar um convite não
   // deve mandar boas-vindas de novo a quem já as recebeu.
   if (!r.already_provisioned) {
-    await sendWelcome(db, r, proposal.cliente_nome ?? "");
+    await sendWelcome(db, r, proposal.cliente_nome ?? "", origin, linkSenha);
   }
 
   return { charged, invited, warnings };
 }
 
 /**
- * Boas-vindas com o link do discovery.
+ * Boas-vindas: entrar no sistema, depois agendar o discovery.
  *
  * O texto vem do template editável em notification_types; o que esta função faz
  * é montar as variáveis. O link de agendamento sai de system_settings porque
  * uma URL de agenda muda mais do que o código.
+ *
+ * `link_senha` existe porque "o acesso foi enviado para o seu e-mail" deixava o
+ * cliente parado: a mensagem chega no WhatsApp e o e-mail pode estar no spam,
+ * ou não ter saído. Com o link, o próximo passo está na mão dele.
  */
-async function sendWelcome(db: SupabaseClient, r: ProvisionResult, clienteNome: string) {
+async function sendWelcome(
+  db: SupabaseClient, r: ProvisionResult, clienteNome: string,
+  origin: string, linkSenha: string,
+) {
   const { data: settings } = await db
     .from("system_settings").select("key, value")
     .in("key", ["ONBOARDING_CALENDLY_URL", "APP_BASE_URL"]);
 
   const get = (k: string) => (settings ?? []).find((s) => s.key === k)?.value ?? "";
+  const base = origin || get("APP_BASE_URL") || "";
 
   await notify(db, r.equipe_id, "onboarding.welcome", "Bem-vindo!", "", "/home", {
     cliente_nome: clienteNome,
     link_agenda: get("ONBOARDING_CALENDLY_URL"),
-    link_app: await appOrigin(db, r.equipe_id, get("APP_BASE_URL")),
+    link_app: base,
+    link_senha: linkSenha || (base ? `${base}/definir-senha` : ""),
     golive_previsto: formatDateBR(r.golive_previsto),
   }, `welcome_${r.contract_id}`);
 }
@@ -148,9 +165,9 @@ async function sendWelcome(db: SupabaseClient, r: ProvisionResult, clienteNome: 
  * string vazia é melhor que um link errado: o template some com a variável em
  * vez de mostrar um endereço de outra marca.
  */
-async function appOrigin(db: SupabaseClient, equipeId: string, fallback: string): Promise<string> {
+async function appOrigin(db: SupabaseClient, equipeId: string): Promise<string> {
   const { data } = await db.rpc("tenant_public_origin", { p_equipe_id: equipeId });
-  return (typeof data === "string" && data) || fallback || "";
+  return (typeof data === "string" && data) || "";
 }
 
 /** dd/mm/aaaa — o cliente lê a data, não o ISO. */
@@ -163,6 +180,7 @@ function formatDateBR(iso: string | null): string {
 /** Convida o cliente e prende o perfil dele à equipe. */
 async function ensureInvite(
   db: SupabaseClient, email: string, equipeId: string, nome: string | null,
+  redirectTo: string,
 ): Promise<boolean> {
   // Uma reexecução não pode reconvidar quem já aceitou.
   const { data: existing } = await db
@@ -179,6 +197,11 @@ async function ensureInvite(
 
   const { data, error } = await db.auth.admin.inviteUserByEmail(email, {
     data: { nome_completo: nome ?? undefined, equipe_id: equipeId },
+    // Sem isto o convite volta para a Site URL global do projeto — o domínio de
+    // outra marca, num produto white-label — e cai numa tela de login onde a
+    // pessoa ainda não tem senha. /definir-senha consome o token do link e pede
+    // a senha, que é o que o convite deveria ter feito desde sempre.
+    ...(redirectTo ? { redirectTo } : {}),
   });
   if (error) throw new Error(error.message);
 

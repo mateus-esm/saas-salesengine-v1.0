@@ -10,7 +10,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, Loader2, MoreHorizontal, Pencil, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, MoreHorizontal, Pencil, Send, Trash2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatBRL } from "@/hooks/useBilling";
@@ -22,6 +22,8 @@ export interface InvoiceRow {
   total: number;
   due_date: string | null;
   kind?: string;
+  /** Sprint 8.2 — nulo significa que o cliente não tem como pagar esta fatura. */
+  asaas_payment_id?: string | null;
 }
 
 type Op = "mark_paid" | "edit" | "void" | "delete";
@@ -55,6 +57,13 @@ export function InvoiceActions({ invoice }: { invoice: InvoiceRow }) {
   const canDelete = invoice.status === "draft";
   const canEdit = ["draft", "open", "overdue"].includes(invoice.status);
   const canVoid = !settled && invoice.status !== "void";
+  /**
+   * Sprint 8.2 — uma fatura aberta SEM cobrança no gateway é uma fatura que o
+   * cliente vê e não consegue pagar. Acontecia quando o Asaas falhava na hora
+   * de emitir, e não havia botão nenhum para tentar de novo: a fatura ficava
+   * aberta para sempre, ou o billing-cron a anulava e ninguém entendia por quê.
+   */
+  const canCharge = !settled && invoice.status !== "void" && !invoice.asaas_payment_id;
 
   const run = async (action: string, body: Record<string, unknown>, okTitle: string) => {
     setBusy(true);
@@ -105,6 +114,14 @@ export function InvoiceActions({ invoice }: { invoice: InvoiceRow }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
+          {canCharge && (
+            <DropdownMenuItem
+              disabled={busy}
+              onClick={() => run("charge_invoice", {}, "Cobrança emitida")}
+            >
+              <Send className="w-3.5 h-3.5 mr-2" /> Emitir cobrança no Asaas
+            </DropdownMenuItem>
+          )}
           {canVoid && (
             <DropdownMenuItem onClick={() => setOp("mark_paid")}>
               <CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Marcar como paga

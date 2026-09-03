@@ -92,14 +92,22 @@ export function ProposalsTab() {
     return p.cliente_nome.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q);
   });
 
-  // Funnel value counts what is still winnable — a lost deal is not pipeline.
+  // Sprint 8.2 — o funil mensal soma o que está em jogo E o que já foi
+  // fechado. Antes contava só `enviada`/`vista`, então uma proposta ACEITA
+  // sumia do número: fechar um negócio fazia o funil ENCOLHER, e o painel
+  // parecia piorar exatamente quando o mês melhorava. Um negócio perdido
+  // continua fora — isso não é receita nem promessa.
+  const mrr = (rows: ProposalRow[]) => rows.reduce((s, p) => s + Number(p.monthly_price ?? 0), 0);
+  const open = (proposals ?? []).filter((p) => ["enviada", "vista"].includes(p.status));
+  const won = (proposals ?? []).filter((p) => p.status === "aceita");
+
   const stats = {
     total: proposals?.length ?? 0,
-    sent: proposals?.filter((p) => ["enviada", "vista"].includes(p.status)).length ?? 0,
-    accepted: proposals?.filter((p) => p.status === "aceita").length ?? 0,
-    funnel: (proposals ?? [])
-      .filter((p) => ["enviada", "vista"].includes(p.status))
-      .reduce((s, p) => s + Number(p.monthly_price ?? 0), 0),
+    sent: open.length,
+    accepted: won.length,
+    openMrr: mrr(open),
+    wonMrr: mrr(won),
+    funnel: mrr(open) + mrr(won),
   };
   const conversion = stats.total ? Math.round((stats.accepted / stats.total) * 100) : 0;
 
@@ -235,11 +243,15 @@ export function ProposalsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Stat label="Propostas" value={String(stats.total)} />
-        <Stat label="Em aberto" value={String(stats.sent)} />
-        <Stat label="Conversão" value={`${conversion}%`} />
-        <Stat label="Funil mensal" value={formatBRL(stats.funnel)} />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Propostas" value={String(stats.total)} hint={`${stats.sent} em aberto`} />
+        <Stat label="Conversão" value={`${conversion}%`} hint={`${stats.accepted} aceitas`} />
+        <Stat label="Fechado / mês" value={formatBRL(stats.wonMrr)} hint="MRR das propostas aceitas" />
+        <Stat
+          label="Funil mensal"
+          value={formatBRL(stats.funnel)}
+          hint={`${formatBRL(stats.openMrr)} em aberto + ${formatBRL(stats.wonMrr)} fechado`}
+        />
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
@@ -395,12 +407,13 @@ export function ProposalsTab() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <Card>
       <CardContent className="py-4">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-xl font-bold mt-0.5">{value}</p>
+        {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
       </CardContent>
     </Card>
   );
