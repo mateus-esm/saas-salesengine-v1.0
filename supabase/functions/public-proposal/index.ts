@@ -224,6 +224,43 @@ serve(async (req) => {
         cliente_doc: proposal.cliente_doc ?? (onlyDigits(accepted_doc ?? "") || null),
       }).eq("id", proposal.id);
 
+      // ── o card nasce AQUI, na etapa 'aceite' ────────────────────────────────
+      //
+      // Antes, o card do quadro era criado por `provision_tenant_from_proposal`.
+      // Isso deixava dois buracos:
+      //
+      //   1. Se o provisionamento falhasse (o passo logo abaixo), a proposta
+      //      ficava `aceita` e o negócio não aparecia em LUGAR NENHUM do
+      //      quadro. Um cliente que assinou ficava invisível justamente no caso
+      //      em que alguém precisa agir.
+      //   2. A etapa 'aceite' — a primeira, marcada `is_initial` — nunca
+      //      recebia ninguém. Era uma coluna que não podia ter card.
+      //
+      // Criando aqui, 'aceite' passa a significar exatamente "assinou, o
+      // ambiente ainda não existe": ou o provisionamento o move para
+      // 'boas_vindas' em seguida, ou ele fica visível esperando o botão
+      // "Provisionar". A etapa deixa de ser decorativa e vira a fila de quem
+      // precisa de atenção.
+      //
+      // `on_conflict: proposal_id` porque um segundo clique em Aceitar não pode
+      // criar um segundo card — e `provision_tenant_from_proposal` já sabe
+      // reaproveitar um card que exista por proposal_id.
+      try {
+        const { data: aceiteStage } = await db.rpc("onboarding_stage_id", { p_code: "aceite" });
+        if (aceiteStage) {
+          await db.from("onboardings").upsert({
+            proposal_id: proposal.id,
+            stage_id: aceiteStage as string,
+            cliente_nome: proposal.cliente_nome,
+          }, { onConflict: "proposal_id", ignoreDuplicates: true });
+        }
+      } catch (e) {
+        // Não é fatal: o aceite já está gravado, e o provisionamento abaixo
+        // cria o card de qualquer jeito. Isto é a rede de segurança, não o
+        // caminho principal.
+        console.error("[public-proposal] card do onboarding:", e instanceof Error ? e.message : String(e));
+      }
+
       // ── o aceite já provisiona ──────────────────────────────────────────────
       //
       // Sprint 8.2 (03/09). Antes disto, o aceite só avisava o fundador — "clique

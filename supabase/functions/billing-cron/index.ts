@@ -96,8 +96,27 @@ const JOBS: Record<string, (db: SupabaseClient) => Promise<unknown>> = {
  * date, but an `on_golive` deal is only charged when the founder clicks "put it
  * live" — which is weeks later. It looks exactly like debris and is not. Without
  * this, every deferred implementation invoice would be voided the day after the
- * proposal was accepted. `go_live_contract()` clears the flag, so a charge that
- * fails AT go-live goes back to being ordinary debris and is re-issued normally.
+ * proposal was accepted.
+ *
+ * Sprint 8.2 (03/09): AND except any PRORATED invoice.
+ *
+ * THE RULE THIS ENCODES: an invoice may only be auto-voided if some job will
+ * re-create it. Voiding is for debris that gets re-issued on the next run —
+ * a recurring invoice comes back from renewPeriods, a setup invoice comes back
+ * from go_live_contract(). A prorated one comes back from NOWHERE:
+ *
+ *   * endTrials() bills the partial month and flips the contract to `active` in
+ *     the same pass. If the gateway then fails, endTrials will never see that
+ *     contract again (it filters `trialing`) and renewPeriods only issues for
+ *     `current_period_end` — a different period key.
+ *   * go_live_contract() bills the partial month for a trial_days = 0 contract.
+ *     Same dead end, for the same two reasons.
+ *
+ * So voiding one of these loses a month of delivered service permanently, with
+ * nothing in the system reporting it — which is the exact failure this sprint
+ * found on Solo Energia (30 days live, zero invoices) and fixed. Letting it sit
+ * open instead is the safe half: it stays visible in the panel and
+ * "Emitir cobrança no Asaas" (admin-billing-ops → charge_invoice) finishes it.
  */
 async function voidOrphanInvoices(db: SupabaseClient) {
   const cutoff = new Date(Date.now() - 2 * 3600_000).toISOString();
@@ -108,6 +127,7 @@ async function voidOrphanInvoices(db: SupabaseClient) {
     .is("asaas_payment_id", null)
     .not("metadata", "cs", '{"manual": true}')
     .not("metadata", "cs", '{"awaiting_golive": true}')
+    .not("metadata", "cs", '{"prorated": true}')
     .lt("created_at", cutoff)
     .select("id");
   return { voided: data?.length ?? 0 };
