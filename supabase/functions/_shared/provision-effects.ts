@@ -187,7 +187,28 @@ async function ensureInvite(
     .from("profiles").select("user_id, equipe_id").eq("email", email).maybeSingle();
 
   if (existing) {
-    if (existing.equipe_id !== equipeId) {
+    // Sprint 8.2 (03/09) — NUNCA mover um login que já pertence a outra equipe.
+    //
+    // Era esta linha que produzia "perdi todos os meus dados". Três vezes:
+    // Solo Energia e WI em 02/09, Casa Flow em 03/09. O cliente aceitava uma
+    // proposta, o provisionamento criava um ambiente novo, e aqui o perfil
+    // dele era ARRASTADO para o ambiente vazio — 532 conversas, 3 pipelines,
+    // 456 leads continuavam existindo e ficavam invisíveis para o dono.
+    //
+    // `provision_tenant_from_proposal` agora resolve o ambiente pelo e-mail,
+    // então o caso normal nem chega aqui. Isto é a segunda trava: se ainda
+    // assim o alvo for outra equipe, a mudança de dono é uma decisão que
+    // precisa de gente — não um efeito colateral de aceitar uma proposta.
+    if (existing.equipe_id && existing.equipe_id !== equipeId) {
+      throw new Error(
+        `o login ${email} já pertence a outro ambiente e NÃO foi movido. ` +
+        `Se o cliente deve mesmo mudar de ambiente, faça isso no painel — ` +
+        `mover aqui o faria perder o acesso aos dados que já tem.`,
+      );
+    }
+
+    // Sem equipe nenhuma (convite que nunca foi concluído): aí sim, prende.
+    if (!existing.equipe_id) {
       await db.from("profiles")
         .update({ equipe_id: equipeId, cargo: "owner", role: "owner" })
         .eq("user_id", existing.user_id);
