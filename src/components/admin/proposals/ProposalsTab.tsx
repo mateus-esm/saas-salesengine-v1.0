@@ -49,6 +49,8 @@ export interface ProposalRow {
   setup_charge_timing: "on_accept" | "on_golive";
   /** Sprint 8.2 — equipe existente a anexar. Nulo = criar ambiente novo. */
   target_equipe_id: string | null;
+  /** Sprint 8.2 — nicho/marca do link. Nulo = usa o da equipe (se houver) ou o institucional. */
+  niche_id: string | null;
   trial_days: number;
 }
 
@@ -76,7 +78,7 @@ export function ProposalsTab() {
     queryFn: async (): Promise<ProposalRow[]> => {
       const { data, error } = await supabase
         .from("proposals")
-        .select("id, codigo, cliente_nome, cliente_email, cliente_whatsapp, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, equipe_id, created_at, allow_plan_choice, recommended_plan_code, chosen_plan_code, setup_waived, setup_charge_timing, trial_days, target_equipe_id")
+        .select("id, codigo, cliente_nome, cliente_email, cliente_whatsapp, cliente_doc, setup_price, monthly_price, list_monthly_price, term_months, valid_until, status, equipe_id, created_at, allow_plan_choice, recommended_plan_code, chosen_plan_code, setup_waived, setup_charge_timing, trial_days, target_equipe_id, niche_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ProposalRow[];
@@ -101,8 +103,11 @@ export function ProposalsTab() {
   };
   const conversion = stats.total ? Math.round((stats.accepted / stats.total) * 100) : 0;
 
-  const copyLink = async (codigo: string) => {
-    const url = `${window.location.origin}/proposta/${codigo}`;
+  // Sprint 8.2 — o mesmo resolvedor por nicho que o envio de verdade usa
+  // (proposal_public_origin), não o domínio de quem tem o painel aberto.
+  const copyLink = async (p: ProposalRow) => {
+    const { data: origin } = await supabase.rpc("proposal_public_origin", { p_proposal_id: p.id });
+    const url = `${(origin as string | null) ?? window.location.origin}/proposta/${p.codigo}`;
     try {
       await navigator.clipboard.writeText(url);
       toast({ title: "Link copiado", description: url });
@@ -295,7 +300,7 @@ export function ProposalsTab() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <Button size="sm" variant="ghost" onClick={() => copyLink(p.codigo)} title="Copiar link">
+                      <Button size="sm" variant="ghost" onClick={() => copyLink(p)} title="Copiar link">
                         <Copy className="w-3.5 h-3.5" />
                       </Button>
                       <Button asChild size="sm" variant="ghost" title="Abrir proposta">

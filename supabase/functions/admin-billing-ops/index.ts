@@ -44,6 +44,8 @@ const GUARDS: Record<string, { status: number; message: string }> = {
   proposal_provisioned:      { status: 409, message: "Proposta já provisionada: ela é a origem de um contrato ativo." },
   invalid_amount:            { status: 400, message: "Valor precisa ser maior que zero." },
   description_required:      { status: 400, message: "Descrição é obrigatória." },
+  equipe_has_conversations:  { status: 409, message: "Esta equipe tem conversas reais. Excluir apagaria dado de atendimento que não se recria." },
+  equipe_has_live_contract:  { status: 409, message: "Esta equipe tem um contrato ativo, em atraso ou suspenso. Cancele o contrato antes de excluir." },
 };
 
 serve(async (req) => {
@@ -87,6 +89,7 @@ serve(async (req) => {
       case "create_adhoc":      return json(await createAdhoc(db, asUser, body));
       case "update_invoice":    return json(await updateInvoice(asUser, body));
       case "delete_proposal":   return json(await rpc(asUser, "admin_delete_proposal", { p_proposal_id: body.proposal_id }));
+      case "delete_team":       return json(await rpc(asUser, "admin_delete_equipe", { p_equipe_id: body.equipe_id }));
       default:
         return json({ error: "unknown_action", action }, 400);
     }

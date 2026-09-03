@@ -68,12 +68,27 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
       return data ?? [];
     },
   });
+  /**
+   * Sprint 8.2 — o nicho decide o domínio que o cliente vê no link. Sem
+   * escolha aqui, o link cai no domínio da equipe (se `target_equipe_id`) ou
+   * no institucional — nunca mais no navegador de quem está montando a
+   * proposta.
+   */
+  const { data: niches } = useQuery({
+    queryKey: ["admin-niches-simples"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("niches").select("id, nome, domain").eq("active", true).order("nome");
+      return data ?? [];
+    },
+  });
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     cliente_nome: "", cliente_email: "", cliente_whatsapp: "", cliente_doc: "",
-    target_equipe_id: "", 
+    target_equipe_id: "", niche_id: "",
     setup_price: "0", list_monthly_price: "", term_months: "12",
     valid_until: "", status: "rascunho" as string, notes: "",
     // Sprint 9 — the offer terms
@@ -94,6 +109,7 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         cliente_whatsapp: proposal.cliente_whatsapp ?? "",
         cliente_doc: proposal.cliente_doc ?? "",
         target_equipe_id: proposal.target_equipe_id ?? "",
+        niche_id: proposal.niche_id ?? "",
         setup_price: String(proposal.setup_price ?? 0),
         list_monthly_price: proposal.list_monthly_price != null ? String(proposal.list_monthly_price) : "",
         term_months: proposal.term_months != null ? String(proposal.term_months) : "",
@@ -110,7 +126,7 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
     } else {
       setForm({
         cliente_nome: "", cliente_email: "", cliente_whatsapp: "", cliente_doc: "",
-        target_equipe_id: "",
+        target_equipe_id: "", niche_id: "",
         setup_price: "0", list_monthly_price: "", term_months: "12",
         valid_until: defaultValidity(), status: "rascunho", notes: "",
         allow_plan_choice: true, recommended_plan_code: "", setup_waived: false,
@@ -163,6 +179,9 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
         // Vazio = cliente novo, provisionar cria o ambiente. Preenchido = o
         // contrato é anexado ao ambiente que já existe.
         target_equipe_id: form.target_equipe_id || null,
+        // Sem escolha, o link cai no nicho da equipe (se houver) ou no
+        // institucional — ver proposal_public_origin().
+        niche_id: form.niche_id || null,
         setup_price: Number(form.setup_price) || 0,
         monthly_price: monthlyTotal,
         list_monthly_price: form.list_monthly_price ? Number(form.list_monthly_price) : null,
@@ -218,7 +237,19 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
     }
   };
 
-  const link = proposal ? `${window.location.origin}/proposta/${proposal.codigo}` : null;
+  // Sprint 8.2 — a prévia do link usa o mesmo resolvedor por nicho que o envio
+  // de verdade usa (proposal_public_origin), não o domínio do navegador de
+  // quem está com o painel aberto. Cai para o domínio atual enquanto carrega.
+  const { data: linkOrigin } = useQuery({
+    queryKey: ["proposal-public-origin", proposal?.id],
+    enabled: !!proposal?.id,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase.rpc("proposal_public_origin", { p_proposal_id: proposal!.id });
+      return (data as string | null) ?? null;
+    },
+  });
+  const link = proposal ? `${linkOrigin ?? window.location.origin}/proposta/${proposal.codigo}` : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -263,6 +294,30 @@ export function ProposalDialog({ proposal, open, onOpenChange }: Props) {
                 ? "O contrato será anexado a esse ambiente. Nenhuma equipe nova é criada, e os dados existentes ficam intactos."
                 : "Para um cliente que já usa o software, escolha o ambiente dele — senão o provisionamento cria uma equipe duplicada e vazia."}
             </p>
+          </div>
+
+          {/* Sprint 8.2 — o link que o cliente recebe abre neste domínio. Sem
+              escolha, cai no nicho da equipe (se anexando a uma que já existe)
+              ou no institucional rev.soloventures.com.br. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="niche" className="text-xs">Nicho / marca do link</Label>
+            <Select
+              value={form.niche_id || "__default__"}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, niche_id: v === "__default__" ? "" : v }))}
+            >
+              <SelectTrigger id="niche">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">
+                  {form.target_equipe_id ? "Usar o nicho do ambiente escolhido acima" : "Padrão institucional (Solo Rev)"}
+                </SelectItem>
+                {(niches ?? []).map((n) => (
+                  <SelectItem key={n.id} value={n.id}>{n.nome} · {n.domain}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* ── Items ── */}

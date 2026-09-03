@@ -401,8 +401,15 @@ const Admin = () => {
   const handleDeleteEquipe = async () => {
     if (!deleteEquipeTarget) return;
     try {
-      const { error } = await supabase.from("equipes").delete().eq("id", deleteEquipeTarget.id);
+      // `equipes` só tem política de RLS para SELECT e UPDATE — um DELETE direto
+      // do navegador não bate com nenhuma política, afeta zero linhas e volta
+      // sucesso sem apagar nada. A função decide se é seguro apagar (sem
+      // conversas reais, sem contrato vivo) e faz o DELETE com service role.
+      const { data, error } = await supabase.functions.invoke("admin-billing-ops", {
+        body: { action: "delete_team", equipe_id: deleteEquipeTarget.id },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.message ?? data.error);
       toast.success("Equipe removida");
       setDeleteEquipeTarget(null);
       fetchData();

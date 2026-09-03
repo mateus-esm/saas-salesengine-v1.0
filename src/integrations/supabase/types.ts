@@ -4621,6 +4621,7 @@ export type Database = {
           id: string
           list_monthly_price: number | null
           monthly_price: number
+          niche_id: string | null
           notes: string | null
           recommended_plan_code: string | null
           sent_at: string | null
@@ -4649,6 +4650,7 @@ export type Database = {
           id?: string
           list_monthly_price?: number | null
           monthly_price?: number
+          niche_id?: string | null
           notes?: string | null
           recommended_plan_code?: string | null
           sent_at?: string | null
@@ -4677,6 +4679,7 @@ export type Database = {
           id?: string
           list_monthly_price?: number | null
           monthly_price?: number
+          niche_id?: string | null
           notes?: string | null
           recommended_plan_code?: string | null
           sent_at?: string | null
@@ -4760,6 +4763,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_entitlements"
             referencedColumns: ["equipe_id"]
+          },
+          {
+            foreignKeyName: "proposals_niche_id_fkey"
+            columns: ["niche_id"]
+            isOneToOne: false
+            referencedRelation: "niches"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -5923,6 +5933,7 @@ export type Database = {
         Args: { p_equipe_id: string; p_pool: string }
         Returns: number
       }
+      admin_delete_equipe: { Args: { p_equipe_id: string }; Returns: Json }
       admin_delete_invoice: { Args: { p_invoice_id: string }; Returns: Json }
       admin_delete_notification_template: {
         Args: { p_type: string }
@@ -6251,6 +6262,7 @@ export type Database = {
         Args: { p_from?: string; p_schedule_id: string; p_to?: string }
         Returns: Json
       }
+      proposal_public_origin: { Args: { p_proposal_id: string }; Returns: string }
       prorated_amount: {
         Args: { p_from: string; p_monthly: number }
         Returns: number

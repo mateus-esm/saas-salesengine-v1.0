@@ -265,22 +265,29 @@ async function sendProposal(db: SupabaseClient, asUser: SupabaseClient, body: Re
  * The absolute /proposta/:codigo URL, or "" when there is no honest way to build
  * one — notify_prospect refuses the send in that case, which is the point.
  *
- * Only the origin is taken from the caller; the path is rebuilt here from the
- * proposal's own codigo, so a wrong or stale body cannot point a client at
- * someone else's proposal.
+ * Sprint 8.2 — the domain is niche-aware now (`proposal_public_origin`, per
+ * the proposal's own niche, or the niche of the equipe it will attach to, or
+ * the institutional default). It used to be whatever domain the founder's own
+ * browser happened to be on — the client would open the proposal on the
+ * founder's brand instead of their own, on a product that is white-label by
+ * domain. The caller's own origin / PUBLIC_APP_URL is kept as the last resort,
+ * for when niches itself has nothing resolvable.
  */
 async function proposalLink(db: SupabaseClient, proposalId: string, raw: unknown): Promise<string> {
+  const { data } = await db
+    .from("proposals").select("codigo").eq("id", proposalId).maybeSingle();
+  if (!data?.codigo) return "";
+
+  const { data: nicheOrigin } = await db.rpc("proposal_public_origin", { p_proposal_id: proposalId });
+  if (typeof nicheOrigin === "string" && nicheOrigin) return `${nicheOrigin}/proposta/${data.codigo}`;
+
   let origin = "";
   const candidate = typeof raw === "string" ? raw.trim() : "";
   for (const source of [candidate, Deno.env.get("PUBLIC_APP_URL") ?? ""]) {
     if (!source) continue;
     try { origin = new URL(source).origin; break; } catch { /* next */ }
   }
-  if (!origin) return "";
-
-  const { data } = await db
-    .from("proposals").select("codigo").eq("id", proposalId).maybeSingle();
-  return data?.codigo ? `${origin}/proposta/${data.codigo}` : "";
+  return origin ? `${origin}/proposta/${data.codigo}` : "";
 }
 
 /**

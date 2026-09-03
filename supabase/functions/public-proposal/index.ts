@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { docType, isPlausibleEmail, isValidBrDoc, onlyDigits } from "../_shared/br-doc.ts";
+import { runProvisionEffects, type ProvisionResult } from "../_shared/provision-effects.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -223,10 +224,46 @@ serve(async (req) => {
         cliente_doc: proposal.cliente_doc ?? (onlyDigits(accepted_doc ?? "") || null),
       }).eq("id", proposal.id);
 
+      // ── o aceite já provisiona ──────────────────────────────────────────────
+      //
+      // Sprint 8.2 (03/09). Antes disto, o aceite só avisava o fundador — "clique
+      // em Provisionar" — e o cliente ficava sem acesso e sem a mensagem de
+      // boas-vindas até alguém abrir o painel. O CPF/CNPJ e o e-mail já foram
+      // validados acima, então não há motivo para esperar: o ambiente é criado,
+      // o convite de login sai para o e-mail que ele acabou de informar, e a
+      // mensagem de boas-vindas (com o link do discovery) vai junto — no domínio
+      // do nicho da proposta, se houver um escolhido.
+      //
+      // Uma falha aqui NÃO desfaz o aceite, que já está gravado. O botão
+      // "Provisionar" no painel continua existindo, é idempotente, e é o
+      // caminho manual para quando isto falhar ou para propostas aceitas antes
+      // deste deploy.
+      const provisionWarnings: string[] = [];
+      try {
+        const { data: provResult, error: provErr } = await db.rpc("provision_tenant_from_proposal", {
+          p_proposal_id: proposal.id,
+          p_golive_previsto: null,
+        });
+        if (provErr) throw new Error(provErr.message);
+
+        const r = provResult as ProvisionResult;
+        const { warnings } = await runProvisionEffects(db, r, {
+          cliente_nome: proposal.cliente_nome,
+          cliente_email: proposal.cliente_email ?? email,
+        });
+        provisionWarnings.push(...warnings);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[public-proposal] auto-provision failed:", msg);
+        provisionWarnings.push(`provisionamento automático falhou: ${msg}`);
+      }
+
       await notifyFounder(db, "proposal.accepted", "Proposta aceita! 🎉",
         `${proposal.cliente_nome} aceitou a proposta ${proposal.codigo}`
           + (chosenPlan ? ` no plano ${chosenPlan.name}` : "")
-          + ". Provisione o ambiente no painel.",
+          + (provisionWarnings.length
+            ? `. Provisionado com aviso: ${provisionWarnings.join("; ")}`
+            : ". Ambiente provisionado e boas-vindas enviadas automaticamente."),
         `accepted_${proposal.id}`, "/admin");
 
       return json({ success: true, accepted: true });
