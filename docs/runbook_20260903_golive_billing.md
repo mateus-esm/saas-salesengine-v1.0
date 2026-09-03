@@ -1,22 +1,30 @@
 # Runbook — 03/09/2026 · cobrança no go-live, exclusão de equipe e reset do WI
 
-Deploy é manual neste projeto (não há CI). O código está **commitado e no
-`main`** (`878bbca`); o Netlify publica o frontend a partir dele sozinho.
-
-O que **falta** são os passos abaixo. A ordem importa.
-
-> Estado quando este arquivo foi escrito: `golive-tenant` **já foi deployada**.
-> As migrations **não** foram aplicadas, e as outras três functions **não**
-> foram redeployadas — a permissão do agente foi negada no meio do processo.
-
-**Isso é seguro de deixar assim por enquanto.** A `golive-tenant` nova lê
-`charge_invoice_ids` e, quando o campo não existe (migration ainda não
-aplicada), cai no comportamento antigo — cobra só a fatura de implantação.
-Nada quebra; a primeira mensalidade só passa a sair depois do passo 1.
+> ## ✅ TUDO APLICADO EM 03/09/2026
+>
+> Migrations, edge functions, frontend e a cirurgia de dados: **todos no ar e
+> verificados em produção**. Este arquivo passa a ser o registro do que foi
+> feito e a referência de como refazer, não uma lista de pendências.
+>
+> | Etapa | Estado |
+> | :---- | :----- |
+> | Migrations `000500`, `000600`, `000700` | aplicadas · `db push` reporta *up to date* |
+> | `golive-tenant`, `admin-billing-ops`, `provision-tenant`, `public-proposal`, `billing-cron` | deployadas |
+> | Frontend (`main` → Netlify) | `afdc16b` |
+> | `2026-09-03_wi_reset_e_dedup.sql` | **aplicado** · backups em `backup_20260903_*` |
+>
+> Resultado conferido no banco: 8 equipes, **0 nomes duplicados**, **0 logins
+> órfãos**, 8 cards no quadro, e **nenhum contrato ativo sem fatura** — que era
+> o bug de origem.
+>
+> **O que ainda depende de você:** o passo 5 (emitir as duas cobranças no
+> Asaas). O passo 6.1 não é mais necessário — as boas-vindas saíram por
+> WhatsApp com sucesso (`whatsapp:sent`), então a instância de fallback está
+> configurada.
 
 ---
 
-## 1. Migrations
+## 1. Migrations — ✅ feito
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' .env | cut -d= -f2-)
@@ -44,7 +52,7 @@ python supabase/scripts/run_sql.py supabase/migrations/<arquivo>.sql
 
 ---
 
-## 2. Edge functions
+## 2. Edge functions — ✅ feito
 
 ```bash
 npx supabase functions deploy admin-billing-ops --project-ref egxzsivzqlqadoqpgfby
@@ -61,7 +69,7 @@ npx supabase functions deploy public-proposal   --project-ref egxzsivzqlqadoqpgf
 
 ---
 
-## 3. A cirurgia de dados
+## 3. A cirurgia de dados — ✅ feito
 
 **Só depois do passo 1.** O script depende do `cascade` que a `000700` cria.
 
@@ -109,7 +117,7 @@ Se essa asserção falhar, a transação inteira é desfeita.
 
 ---
 
-## 4. Confira
+## 4. Confira — ✅ conferido
 
 ```sql
 -- Nenhum nome de equipe duplicado, e o WI só com a equipe nova.
@@ -133,34 +141,44 @@ E no painel: `/admin?tab=onboarding`.
 
 ---
 
-## 5. Emitir as cobranças que ficaram pendentes
+## 5. Emitir as cobranças pendentes — ⬅️ FALTA VOCÊ FAZER
 
-O script cria faturas sem cobrança no gateway. Para cada uma:
+Há **duas** faturas abertas sem cobrança no gateway hoje:
+
+| Cliente | Fatura | Valor | O que é |
+| :------ | :----- | :---- | :------ |
+| Solo Energia | `FAT-2026-000036` | R$ 193,33 | a mensalidade proporcional (02/09 → 30/09) que o go-live não emitiu. **Cobrável agora** — a conta tem CPF e cliente Asaas. |
+| Rema Digital | `FAT-2026-000018` | R$ 700,00 | implantação `on_golive`. **Não cobre ainda:** ela sai sozinha quando você clicar "Colocar no ar". |
+
+Para a da Solo Energia:
 
 **Admin → Faturamento → menu da fatura → "Emitir cobrança no Asaas".**
 
-Esse item só aparece em fatura aberta **sem** `asaas_payment_id` — que é
-exatamente o caso. Ele usa o mesmo `ensureCharges` do provisionamento, então é
-idempotente: clicar duas vezes não cobra duas vezes.
+Esse item só aparece em fatura aberta **sem** `asaas_payment_id`. Usa o mesmo
+`ensureCharges` do provisionamento e do go-live, então é idempotente: clicar
+duas vezes não cobra duas vezes.
 
 Se aparecer **"Faltam dados de cobrança: doc"**, é o CPF/CNPJ da conta —
-preencha em Faturamento → Dados daquele cliente. A Rema e o WI estão sem
-documento hoje.
+preencha em Faturamento → Dados daquele cliente. **Rema e WI estão sem
+documento**, então o go-live deles vai pedir o número no próprio diálogo.
 
 ---
 
-## 6. Duas configurações que o produto pede
+## 6. Configuração
 
-### 6.1 A instância de WhatsApp — **as boas-vindas dependem disto**
+### 6.1 A instância de WhatsApp — ✅ funcionando, mas por fallback
 
-Conferido em 03/09: **os quatro remetentes** (`comercial`, `financeiro`,
-`operacao`, `suporte`) estão com `whatsapp_instance = NULL`. O dispatcher cai
-no secret `SOLO_PLATFORM_INSTANCE_ID`; se ele também não estiver definido, a
-entrega por WhatsApp é **pulada em silêncio** e só a notificação in-app fica.
+Os quatro remetentes (`comercial`, `financeiro`, `operacao`, `suporte`) estão
+com `whatsapp_instance = NULL`. Isso **não** impediu a entrega: o dispatcher cai
+no secret `SOLO_PLATFORM_INSTANCE_ID`, que está configurado — as boas-vindas de
+Rema e WI saíram com `whatsapp:sent` em 03/09.
 
-As boas-vindas que o passo 3 enfileira saem pelo remetente **comercial**.
+Fica registrado como fragilidade, não como pendência: com todos os remetentes
+apontando para a mesma instância de fallback, as quatro finalidades saem do
+**mesmo número**. O desenho da Sprint 8.4 era um número por finalidade
+(Comercial, Financeiro, Suporte, Operação). Quando quiser separá-los:
 
-> Admin → Notificações → Remetentes → conectar a instância do **comercial**.
+> Admin → Notificações → Remetentes → conectar a instância de cada finalidade.
 
 ### 6.2 `APP_BASE_URL` está vazio
 
