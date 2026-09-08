@@ -174,6 +174,12 @@ serve(async (req) => {
 
     let balance: number;
     let allowance: number;
+    // SE-BILL-001 · BUG 2 — the two pools are billed separately, so the AI Studio
+    // must show them separately instead of one combined "Saldo X / Y". null = we
+    // could not read the per-pool figures (legacy fallback path).
+    type PoolFigures = { whatsapp: number; copilot: number } | null;
+    let balances: PoolFigures = null;
+    let allowances: PoolFigures = null;
 
     if (balErr || ledgerBalance === null || ledgerBalance === undefined) {
       // Ledger unavailable: fall back to the Sprint 7.5 derivation rather than
@@ -202,24 +208,46 @@ serve(async (req) => {
       balance = Math.max(0, allowance - toBilledCredits(currentMonthSpentProvider));
     } else {
       balance = Number(ledgerBalance);
-      // The allowance is what the active grant was worth, so the UI can show
-      // "restante / total do plano" without inventing a denominator.
-      const { data: grant } = await supabaseClient
-        .from('credit_ledger')
-        .select('credits')
-        .eq('equipe_id', equipe.id ?? profile.equipe_id)
-        .eq('entry_type', 'grant')
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const { data: topups } = await supabaseClient
-        .from('credit_ledger')
-        .select('credits')
-        .eq('equipe_id', equipe.id ?? profile.equipe_id)
-        .eq('entry_type', 'topup');
-      const topupTotal = (topups ?? []).reduce((sum: number, r: any) => sum + (r.credits ?? 0), 0);
-      allowance = (grant?.credits ?? 0) + topupTotal;
+      const teamId = equipe.id ?? profile.equipe_id;
+
+      // Per-pool balance + allowance. The allowance for a pool is its active
+      // grant plus its never-expiring top-ups, so the UI can show
+      // "restante / total do plano" for that pool alone — never a denominator
+      // summed across pools (that combined figure is the workspace total BUG 2
+      // hides).
+      const poolBalances = { whatsapp: 0, copilot: 0 };
+      const poolAllowances = { whatsapp: 0, copilot: 0 };
+
+      for (const pool of ['whatsapp', 'copilot'] as const) {
+        const { data: poolBal } = await supabaseClient
+          .rpc('credit_balance', { p_equipe_id: teamId, p_pool: pool });
+        poolBalances[pool] = Number(poolBal ?? 0);
+
+        const { data: grant } = await supabaseClient
+          .from('credit_ledger')
+          .select('credits')
+          .eq('equipe_id', teamId)
+          .eq('entry_type', 'grant')
+          .eq('pool', pool)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const { data: poolTopups } = await supabaseClient
+          .from('credit_ledger')
+          .select('credits')
+          .eq('equipe_id', teamId)
+          .eq('entry_type', 'topup')
+          .eq('pool', pool);
+        const poolTopupTotal = (poolTopups ?? []).reduce((sum: number, r: any) => sum + (r.credits ?? 0), 0);
+        poolAllowances[pool] = (grant?.credits ?? 0) + poolTopupTotal;
+      }
+
+      balances = poolBalances;
+      allowances = poolAllowances;
+      // Kept for legacy callers (/billing, agent usage). NOT surfaced as a
+      // combined "X / Y" denominator in the AI Studio any more.
+      allowance = poolAllowances.whatsapp + poolAllowances.copilot;
     }
 
 
@@ -248,6 +276,11 @@ serve(async (req) => {
       details,
       // Context for the UI: what the allowance is and where it came from.
       allowance,
+      // SE-BILL-001 · BUG 2 — per-pool figures so the AI Studio can show the
+      // Rev account balance and the team pools separately, with no combined
+      // denominator. null on the legacy fallback path.
+      balances,
+      allowances,
       creditMarkup: CREDIT_MARKUP,
       // legacy aliases
       creditsSpent: totalBilled,

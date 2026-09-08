@@ -175,7 +175,7 @@ async function processEvent(db: SupabaseClient, event: AsaasWebhookEvent): Promi
 
   const { data: invoice, error } = await db
     .from("invoices")
-    .select("id, equipe_id, contract_id, kind, status, total, metadata")
+    .select("id, equipe_id, contract_id, kind, status, total, metadata, due_date, paid_at")
     .eq("asaas_payment_id", paymentId)
     .maybeSingle();
 
