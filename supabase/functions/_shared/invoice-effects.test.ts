@@ -252,3 +252,122 @@ Deno.test("contrato inexistente não concede créditos", async () => {
 
   assertEquals(f.grants().length, 0);
 });
+
+// ============================================================================
+// SE-BILL-003 — a fatura diz de QUAL período ela é. `rollContractPeriod` não lia.
+//
+// O caso real, reproduzido das linhas gravadas da Solo Energia:
+//
+//   fatura  period_key "2026-09-02"  first_period: true   paga em 07/09
+//   contrato  current_period_end 2026-10-01  (ainda no futuro)
+//
+// A regra antiga — "estende a partir de current_period_end quando ele está no
+// futuro" — está certa para a fatura de RENOVAÇÃO, que o `renewPeriods` emite 5
+// dias antes do fim do período: quem paga essa fatura está mesmo comprando o
+// período seguinte. Está errada para a fatura do PRIMEIRO período, que cobra o
+// período que está correndo AGORA.
+//
+// O que aconteceu na produção: o cliente pagou 02/09→01/10 e o sistema entregou
+// 01/10→01/11. Setembro ficou sem cota nenhuma (era exatamente a queixa: "os
+// créditos não voltaram para 2500"), a cota nasceu valendo 54 dias em vez de 30,
+// e o `renewPeriods` só voltaria a emitir por volta de 27/10 — um mês de receita
+// pulado.
+//
+// A correção não inventa uma regra nova: usa a que a própria fatura carrega.
+// ============================================================================
+
+/** Contrato cujo período corrente ainda está correndo (termina em 01/10). */
+function runningContract() {
+  return {
+    id: "c-1",
+    status: "active",
+    current_period_start: "2026-09-02T00:00:00.000Z",
+    current_period_end: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+/** A fatura do primeiro período da Solo Energia, como está gravada. */
+function firstPeriodInvoice(): Invoice {
+  return {
+    id: "inv-36",
+    equipe_id: "eq-1",
+    contract_id: "c-1",
+    kind: "recurring",
+    status: "open",
+    total: 200,
+    due_date: "2026-09-08",
+    paid_at: null,
+    metadata: { period_key: "2026-09-02", first_period: true } as any,
+  };
+}
+
+Deno.test("SE-BILL-003: a fatura do primeiro período concede a cota DESSE período", async () => {
+  const f = fakeDb({ contract: runningContract(), items: PLAN_ITEMS });
+
+  await applyPaid(f.db, firstPeriodInvoice());
+
+  // A cota tem de ser a de setembro, não a de outubro.
+  const chave = String(f.grantFor("whatsapp")?.args.p_idempotency_key);
+  assertEquals(chave, "period_c-1_2026-09-02_whatsapp");
+
+  // E tem de expirar no fim do período pago — 01/10, não 01/11.
+  assertEquals(f.grantFor("whatsapp")?.args.p_expires_at, "2026-10-01T00:00:00.000Z");
+  assertEquals(f.grantFor("copilot")?.args.p_expires_at, "2026-10-01T00:00:00.000Z");
+});
+
+Deno.test("SE-BILL-003: o contrato fica no período que foi pago", async () => {
+  const f = fakeDb({ contract: runningContract(), items: PLAN_ITEMS });
+
+  await applyPaid(f.db, firstPeriodInvoice());
+
+  const contrato = f.updates.find((u) => u.table === "contracts");
+  // Não pode pular para 01/10: esse período ainda não foi cobrado de ninguém.
+  assertEquals(contrato?.patch.current_period_start, "2026-09-02T00:00:00.000Z");
+  assertEquals(contrato?.patch.current_period_end, "2026-10-01T00:00:00.000Z");
+});
+
+Deno.test("SE-BILL-003: a renovação paga adiantada rola para o período seguinte", async () => {
+  // `renewPeriods` emite com period_key = current_period_end. Pagar essa fatura
+  // compra mesmo o próximo período — o comportamento que já existia.
+  const f = fakeDb({ contract: runningContract(), items: PLAN_ITEMS });
+  const renovacao = {
+    ...firstPeriodInvoice(),
+    id: "inv-40",
+    metadata: { period_key: "2026-10-01" } as any,
+  };
+
+  await applyPaid(f.db, renovacao);
+
+  assertEquals(
+    String(f.grantFor("whatsapp")?.args.p_idempotency_key),
+    "period_c-1_2026-10-01_whatsapp",
+  );
+  assertEquals(f.grantFor("whatsapp")?.args.p_expires_at, "2026-11-01T00:00:00.000Z");
+
+  const contrato = f.updates.find((u) => u.table === "contracts");
+  assertEquals(contrato?.patch.current_period_start, "2026-10-01T00:00:00.000Z");
+  assertEquals(contrato?.patch.current_period_end, "2026-11-01T00:00:00.000Z");
+});
+
+Deno.test("SE-BILL-003: o período sempre termina no dia 1º", async () => {
+  // `endTrials` fixa a âncora: "everything bills on the 1st from now on". Somar
+  // um mês a uma base no meio do mês jogaria o vencimento para o dia 02, e a
+  // cada pagamento atrasado a âncora andaria mais um pouco.
+  const f = fakeDb({ contract: runningContract(), items: PLAN_ITEMS });
+
+  await applyPaid(f.db, { ...firstPeriodInvoice(), metadata: { period_key: "2026-09-17" } as any });
+
+  assertEquals(f.grantFor("whatsapp")?.args.p_expires_at, "2026-10-01T00:00:00.000Z");
+});
+
+Deno.test("SE-BILL-003: fatura sem period_key mantém o comportamento antigo", async () => {
+  // Faturas legadas e cobranças marcadas à mão no admin não carregam a chave.
+  // Elas continuam caindo na regra anterior em vez de virarem um erro.
+  const f = fakeDb({ contract: closedContract(), items: PLAN_ITEMS });
+
+  await applyPaid(f.db, lateInvoice());
+
+  const contrato = f.updates.find((u) => u.table === "contracts");
+  const inicio = new Date(String(contrato?.patch.current_period_start)).getTime();
+  assert(Math.abs(inicio - Date.now()) < 60_000, "sem chave, a base continua sendo agora");
+});

@@ -35,8 +35,18 @@ export type Invoice = {
    */
   due_date?: string | null;
   paid_at?: string | null;
-  /** Carries the credit pool chosen at purchase (Sprint 8.1). */
-  metadata: { pool?: string; credits?: number; addon?: string } | null;
+  /**
+   * Carries the credit pool chosen at purchase (Sprint 8.1) and, on a recurring
+   * invoice, the period it bills (`period_key`, stamped by `endTrials` and
+   * `renewPeriods`). SE-BILL-003 rolls the contract from that key.
+   */
+  metadata: {
+    pool?: string;
+    credits?: number;
+    addon?: string;
+    period_key?: string;
+    first_period?: boolean;
+  } | null;
 };
 
 export async function notify(
@@ -173,13 +183,57 @@ async function rollContractPeriod(db: SupabaseClient, invoice: Invoice, paidAt: 
 
   const wasSuspended = contract.status === "suspended";
 
-  // Extend from the current period end when it is in the future, otherwise from
-  // now — so paying late does not silently grant a free extra month.
-  const base = contract.current_period_end && new Date(contract.current_period_end) > new Date()
+  // SE-BILL-003 — THE INVOICE SAYS WHICH PERIOD IT PAYS FOR. USE IT.
+  //
+  // `endTrials` and `renewPeriods` both stamp `metadata.period_key` with the
+  // start of the period being billed. Reading it is the difference between
+  // "which period did this money buy" and "which period comes next" — and those
+  // are not the same question when an invoice bills the period that is still
+  // running.
+  //
+  // The old rule extended from `current_period_end` whenever that was in the
+  // future. For the RENEWAL invoice that is right: `renewPeriods` issues it 5
+  // days early, so the current period really is still running and the payment
+  // really does buy the next one. For the FIRST-PERIOD invoice it is wrong —
+  // that invoice bills the period in progress, and treating it as a pre-payment
+  // skips a whole month.
+  //
+  // Solo Energia is what that cost, and the stored rows say it plainly:
+  //
+  //   invoice  period_key 2026-09-02  first_period: true   paid 07/09
+  //   contract current_period_end 2026-10-01  (still in the future)
+  //   -> rolled to 2026-10-01 .. 2026-11-01, grant valid 54 days
+  //
+  // They paid for September and were given October. September never got a
+  // grant, which is why the balance never "reset to the plan" — there was
+  // nothing to reset it to. And `renewPeriods` would not have issued again
+  // until ~27/10, so the month they actually paid for was never billed again.
+  const periodKey = invoice.metadata?.period_key ?? null;
+
+  const base = periodKey
+    ? new Date(`${periodKey}T00:00:00.000Z`)
+    : contract.current_period_end && new Date(contract.current_period_end) > new Date()
     ? new Date(contract.current_period_end)
     : new Date();
-  const nextEnd = new Date(base);
-  nextEnd.setMonth(nextEnd.getMonth() + 1);
+
+  // The anchor is the 1st: `endTrials` prorates the first period precisely so
+  // that "everything bills on the 1st from now on", and the renewal keys are
+  // already the 1st. Adding a month to a mid-month base (02/09 -> 02/10) would
+  // walk the anchor forward on every prorated start.
+  //
+  // Only for a keyed invoice. A legacy or hand-marked invoice carries no key
+  // and keeps the previous arithmetic rather than being silently shortened.
+  //
+  // UTC throughout: `setMonth` reads and writes LOCAL months, so on a machine
+  // behind UTC it turned a 2026-10-01T00:00Z base into 2026-10-31 — a period
+  // boundary that drifts with the server's timezone.
+  const nextEnd = periodKey
+    ? new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 1))
+    : (() => {
+        const d = new Date(base);
+        d.setUTCMonth(d.getUTCMonth() + 1);
+        return d;
+      })();
 
   await db
     .from("contracts")
@@ -234,7 +288,7 @@ async function rollContractPeriod(db: SupabaseClient, invoice: Invoice, paidAt: 
   // credits-reconcile/drift.ts). It read 0, granted the full allowance, and the
   // total still showed 2000. The defect was never in this grant — it was that
   // the consumption never reached the ledger. That is fixed in the reconciler.
-  const periodKey = base.toISOString().slice(0, 10);
+  const grantKey = base.toISOString().slice(0, 10);
   for (const [pool, granted] of [["whatsapp", whatsapp], ["copilot", copilot]] as const) {
     if (granted <= 0) continue;
 
@@ -246,7 +300,7 @@ async function rollContractPeriod(db: SupabaseClient, invoice: Invoice, paidAt: 
       p_expires_at: nextEnd.toISOString(),
       // Distinct keys per pool: one shared key would make the second grant look
       // like a replay of the first and silently skip it.
-      p_idempotency_key: `period_${contract.id}_${periodKey}_${pool}`,
+      p_idempotency_key: `period_${contract.id}_${grantKey}_${pool}`,
       p_entry_type: "grant",
       p_pool: pool,
     });

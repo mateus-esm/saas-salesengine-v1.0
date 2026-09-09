@@ -11,6 +11,48 @@ const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 // Everything the tenant sees is in BILLED credits (provider price x markup).
 import { toBilledCredits, CREDIT_MARKUP } from "../_shared/credit-pricing.ts";
 
+/**
+ * SE-BILL-003 — what one pool did with this billing cycle.
+ *
+ * `planTotal` is the cota the plan granted for the cycle, `planUsed` how much of
+ * it the agent has already spent, `planLeft` what is left of it, and `extra` the
+ * purchased/admin credits that survive the renewal. `planUsed + planLeft` is
+ * always `planTotal`, and `planLeft + extra` is always the pool's balance — so
+ * every number on the card can be checked against the one next to it, which is
+ * exactly what the old layout made impossible.
+ */
+interface PoolCycle {
+  planTotal: number;
+  planUsed: number;
+  planLeft: number;
+  extra: number;
+  balance: number;
+}
+
+type CycleFigures = {
+  start: string | null;
+  end: string | null;
+  pools: { whatsapp: PoolCycle; copilot: PoolCycle };
+} | null;
+
+const buildPoolCycle = (planTotal: number, rawPlanLeft: number, balance: number): PoolCycle => {
+  // O que resta da cota nunca pode passar do saldo do pool: consumo anterior ao
+  // grant (a cota nasce no pagamento, que pode ser depois do inicio do periodo)
+  // sai do saldo sem aparecer na janela da cota. Sem este teto, o card mostraria
+  // "restante 1.884" ao lado de "saldo 1.856" -- dois numeros do mesmo card se
+  // contradizendo, que e exatamente o que esta tela existia para parar de fazer.
+  const planLeft = Math.max(0, Math.min(rawPlanLeft, balance));
+  return {
+    planTotal,
+    // Never negative: an over-spent pool reads as "the whole cota is gone", and
+    // the debt it left behind shows up in `balance`, where it belongs.
+    planUsed: Math.max(0, planTotal - planLeft),
+    planLeft,
+    extra: Math.max(0, balance - planLeft),
+    balance,
+  };
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -180,6 +222,8 @@ serve(async (req) => {
     type PoolFigures = { whatsapp: number; copilot: number } | null;
     let balances: PoolFigures = null;
     let allowances: PoolFigures = null;
+    // SE-BILL-003 — the billing cycle, per pool. null on the legacy path.
+    let cycle: CycleFigures = null;
 
     if (balErr || ledgerBalance === null || ledgerBalance === undefined) {
       // Ledger unavailable: fall back to the Sprint 7.5 derivation rather than
@@ -217,6 +261,11 @@ serve(async (req) => {
       // hides).
       const poolBalances = { whatsapp: 0, copilot: 0 };
       const poolAllowances = { whatsapp: 0, copilot: 0 };
+      // SE-BILL-003 — the plan's cota for THIS cycle, on its own. Distinct from
+      // `poolAllowances`, which deliberately folds in every top-up ever bought:
+      // using that as the "do plano" denominator would show Solo Energia a plan
+      // of 4.000 (2.500 cota + 1.500 de saldo extra comprado em agosto).
+      const poolGrants = { whatsapp: 0, copilot: 0 };
 
       for (const pool of ['whatsapp', 'copilot'] as const) {
         const { data: poolBal } = await supabaseClient
@@ -240,7 +289,8 @@ serve(async (req) => {
           .eq('entry_type', 'topup')
           .eq('pool', pool);
         const poolTopupTotal = (poolTopups ?? []).reduce((sum: number, r: any) => sum + (r.credits ?? 0), 0);
-        poolAllowances[pool] = (grant?.credits ?? 0) + poolTopupTotal;
+        poolGrants[pool] = grant?.credits ?? 0;
+        poolAllowances[pool] = poolGrants[pool] + poolTopupTotal;
       }
 
       balances = poolBalances;
@@ -248,6 +298,50 @@ serve(async (req) => {
       // Kept for legacy callers (/billing, agent usage). NOT surfaced as a
       // combined "X / Y" denominator in the AI Studio any more.
       allowance = poolAllowances.whatsapp + poolAllowances.copilot;
+
+      // ── SE-BILL-003 · o ciclo, que é a única janela que explica o saldo ────
+      //
+      // O AI Studio mostrava quatro números soltos: o consumo do período
+      // escolhido, o mesmo consumo repetido, um "Créditos da conta Rev" que na
+      // verdade era a soma dos dois pools DESTA equipe, e os dois pools
+      // separados logo abaixo. O mesmo dinheiro três vezes, um deles com nome
+      // de outra conta.
+      //
+      // O que o cliente precisa é uma coisa só, por pool: quanto o plano deu
+      // neste ciclo, quanto o agente já gastou dele, quanto sobrou e quando
+      // renova. Tudo em créditos faturados e tudo derivado do ledger — a mesma
+      // fonte de /billing/creditos, para as duas telas nunca discordarem.
+      const { data: cycleRow } = await supabaseClient
+        .from("contracts")
+        .select("current_period_start, current_period_end, status")
+        .eq("equipe_id", teamId)
+        .in("status", ["active", "past_due", "trialing"])
+        .order("current_period_start", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // `expiring` é o que resta DA COTA DO PLANO; `total` inclui os avulsos,
+      // que sobrevivem à renovação. Somar os dois num denominador só foi o que
+      // produziu o "Saldo X / Y" que ninguém conseguia conferir.
+      const { data: view } = await supabaseClient
+        .from("v_credit_balance")
+        .select("whatsapp_total, copilot_total, whatsapp_expiring, copilot_expiring, grant_expires_at")
+        .eq("equipe_id", teamId)
+        .maybeSingle();
+
+      const planRemaining = {
+        whatsapp: Number((view as any)?.whatsapp_expiring ?? 0),
+        copilot: Number((view as any)?.copilot_expiring ?? 0),
+      };
+
+      cycle = {
+        start: (cycleRow as any)?.current_period_start ?? null,
+        end: (cycleRow as any)?.current_period_end ?? (view as any)?.grant_expires_at ?? null,
+        pools: {
+          whatsapp: buildPoolCycle(poolGrants.whatsapp, planRemaining.whatsapp, poolBalances.whatsapp),
+          copilot: buildPoolCycle(poolGrants.copilot, planRemaining.copilot, poolBalances.copilot),
+        },
+      };
     }
 
 
@@ -281,6 +375,9 @@ serve(async (req) => {
       // denominator. null on the legacy fallback path.
       balances,
       allowances,
+      // SE-BILL-003 — the cycle view the AI Studio renders: per pool, what the
+      // plan gave, what the agent spent, what is left, and when it renews.
+      cycle,
       creditMarkup: CREDIT_MARKUP,
       // legacy aliases
       creditsSpent: totalBilled,
