@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from agno.agent import Agent
-from app.llm import build_chat_model, parse_model_output
+from app.llm import build_chat_model, parse_model_output, structured_output_kwargs
 
 from app.schemas import RouteDecision
 from app.security import TenantContext
@@ -92,12 +92,12 @@ async def classify_and_route(
     """
     agent = Agent(
         model=build_chat_model(model_id),
-        output_schema=RouteDecision,
         system_message=_SYSTEM_PT,
         telemetry=False,
-        # JSON mode (parse-based) instead of OpenAI strict structured outputs,
-        # which rejects free-form dict fields (extracted) and optional fields.
-        use_json_mode=True,
+        # JSON mode (parse-based) rather than OpenAI strict structured outputs,
+        # which rejects free-form dict fields (extracted) and optional fields —
+        # and omitted when the provider's plan has no structured output at all.
+        **structured_output_kwargs(RouteDecision),
     )
     message = _build_user_message(conversation, lead, pipelines)
     response = await agent.arun(message)

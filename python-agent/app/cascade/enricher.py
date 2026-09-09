@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from agno.agent import Agent
-from app.llm import build_chat_model
+from app.llm import build_chat_model, structured_output_kwargs
 
 from app.config import get_settings
 from app.schemas import ActionPlan, PlannedAction
@@ -143,10 +143,9 @@ def _build_agent(*, model_id: str, lead_id: str, system_prompt: str) -> Agent:
     """Build an Agno Agent with optional Lead Memory wiring."""
     agent_kwargs: dict[str, Any] = {
         "model": build_chat_model(model_id),
-        "output_schema": ActionPlan,
         "system_message": system_prompt,
         "telemetry": False,
-        "use_json_mode": True,
+        **structured_output_kwargs(ActionPlan),
     }
 
     storage = _get_storage()

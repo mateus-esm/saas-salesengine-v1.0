@@ -50,6 +50,40 @@ class ModelProviderError(RuntimeError):
     """
 
 
+def structured_output_kwargs(schema: type[BaseModel]) -> dict[str, Any]:
+    """Agent kwargs that ask the provider to coerce the reply into ``schema``.
+
+    Structured output is a PLAN FEATURE, not something every OpenAI-compatible
+    endpoint has. The Verboo router answers this account with::
+
+        403 {"code": "structured_output_not_enabled",
+             "error": "structured output is not enabled for this plan"}
+
+    and because all five agents asked for it, every Copilot call died there —
+    creating a pipeline and syncing alike.
+
+    Dropping it is safe: each agent's system prompt already carries the contract
+    on its own ("Responda APENAS com o JSON do schema X — sem texto adicional",
+    followed by a SCHEMA DE SAIDA block), and ``parse_model_output`` accepts JSON
+    that arrives as text. Verified against the live router: the model returns a
+    clean JSON object that validates with no provider coercion at all.
+
+    Default follows the same reasoning as ``role_map`` above — a custom base_url
+    means an unknown router, so assume the conservative thing — and
+    ``LLM_STRUCTURED_OUTPUT`` overrides it either way for a provider that does
+    support it.
+    """
+    raw = os.getenv("LLM_STRUCTURED_OUTPUT")
+    if raw is not None:
+        enabled = raw.strip().lower() not in {"0", "false", "no", "off", ""}
+    else:
+        enabled = not os.getenv("LLM_BASE_URL")
+
+    if not enabled:
+        return {}
+    return {"output_schema": schema, "use_json_mode": True}
+
+
 def parse_model_output(content: Any, schema: type[ModelT]) -> ModelT:
     """Turn an Agno run's ``content`` into ``schema``, or say who actually failed.
 
