@@ -17,6 +17,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { safeEqual } from "../_shared/asaas.ts";
 import { toBilledCredits } from "../_shared/credit-pricing.ts";
+import { planAdjustment } from "./drift.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,13 +27,6 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const AI_ENGINE_BASE = "https://api.gptmaker.ai/v2";
-
-/**
- * Differences smaller than this are ignored. Provider rounding and our markup
- * conversion will never agree to the credit, and booking a 1-credit adjustment
- * every night would bury a real discrepancy in noise.
- */
-const NOISE_FLOOR = 5;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -136,60 +130,38 @@ serve(async (req) => {
     // Copilot debits would book the Copilot's usage as "drift" every night.
     const { data: rows } = await db
       .from("credit_ledger")
-      .select("credits, source, entry_type, metadata")
+      .select("credits, source, entry_type")
       .eq("equipe_id", equipe.id)
       .eq("pool", "whatsapp")
       .in("entry_type", ["debit", "adjustment"])
       .gte("created_at", periodStart);
 
-    // Debits are negative and adjustments booked here are negative too, so the
-    // recorded consumption is the negated sum of everything that moved credits.
-    //
-    // SE-BILL-001 — the `late_payment` markers move no credits (credits = 0):
-    // that deduction already went into a reduced plan grant in
-    // invoice-effects.ts, which reconcile cannot see. The consumption they stand
-    // for IS inside the provider's monthly total, so it has to be counted as
-    // recorded here or it looks like drift and gets debited a second time.
-    //
-    // Capped at the outstanding positive drift: the marker can only pull drift
-    // toward zero, never past it into a phantom refund (which would happen when
-    // part of the window already sits in `recorded` as real debit rows).
-    let recorded = 0;
-    let latePaymentWindow = 0;
-    for (const r of rows ?? []) {
-      const row = r as { credits: number; source: string; metadata: { window_consumption?: number } | null };
-      recorded -= Number(row.credits ?? 0);
-      if (row.source === "late_payment") {
-        latePaymentWindow += Number(row.metadata?.window_consumption ?? 0);
-      }
-    }
-    const latePaymentAccounted = Math.max(0, Math.min(latePaymentWindow, providerBilled - recorded));
-    recorded += latePaymentAccounted;
-    const diff = providerBilled - recorded;
+    // SE-BILL-002 — the drift, and the key it gets booked under, are decided in
+    // drift.ts. The key is the RUN DATE: it used to be the period, which capped
+    // this job at one adjustment per tenant per MONTH and left the rest of each
+    // month's provider usage uncharged. See reconcileIdempotencyKey().
+    const plan = planAdjustment({ providerBilled, ledgerRows: rows ?? [], runDate: now });
+    if (!plan.book) continue;
 
-    if (Math.abs(diff) < NOISE_FLOOR) continue;
-
-    // One adjustment per tenant per month: re-running the job re-books nothing,
-    // it corrects the same row's worth of drift only once.
-    const key = `reconcile_${periodKey}`;
+    const { recorded, drift: diff } = plan;
     const { error: insErr } = await db.from("credit_ledger").insert({
       equipe_id: equipe.id,
       entry_type: "adjustment",
-      credits: -diff, // provider says we spent more -> book a further debit
+      credits: plan.credits,
       source: "reconcile",
       pool: "whatsapp",
-      idempotency_key: key,
+      idempotency_key: plan.idempotencyKey,
       metadata: {
         period: periodKey,
+        run_date: plan.idempotencyKey.slice("reconcile_".length),
         provider_credits: providerSpent,
         provider_billed: providerBilled,
         ledger_recorded: recorded,
-        late_payment_accounted: latePaymentAccounted,
         drift: diff,
       },
     });
 
-    // 23505 = already reconciled this month.
+    // 23505 = this run date is already booked, i.e. the job ran twice tonight.
     if (insErr && insErr.code !== "23505") {
       console.error(`[reconcile] insert failed for ${equipe.id}:`, insErr.message);
       continue;
