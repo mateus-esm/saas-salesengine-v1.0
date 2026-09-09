@@ -6,7 +6,7 @@
 | Tarefa | SE-BILL-001 |
 | Origem | Discord #solo-dev (2026-09-08) |
 | Agentes | Verboo (estudo) → Claude (implementação) |
-| Status | ✅ PR #6 aberto |
+| Status | ✅ PR #6 merged (2026-09-09) |
 | PR | https://github.com/mateus-esm/saas-salesengine-v1.0/pull/6 |
 
 ## Artefatos por agente
