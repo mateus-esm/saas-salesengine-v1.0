@@ -171,7 +171,9 @@ as $fn$
       -- de fatura.
       or (l.entry_type = 'adjustment' and l.credits < 0 and l.source <> 'invoice')
     )
-    -- SE-BILL-003: e nunca um débito que já foi desfeito.
+    -- SE-BILL-003: nem a linha que desfaz outra, nem a linha desfeita. Um
+    -- estorno é correção de saldo, não uso do agente — dos dois lados do par.
+    and not (l.metadata ? 'undoes')
     and not exists (
       select 1 from public.credit_ledger u
       where u.equipe_id = l.equipe_id
@@ -180,7 +182,7 @@ as $fn$
 $fn$;
 
 comment on function public.credits_consumed_in_window(uuid, timestamptz, timestamptz, text) is
-  'Créditos consumidos num pool dentro de uma janela. Conta `debit` medidos E os `adjustment` negativos que o credits-reconcile lança pelo consumo do agente de atendimento (SE-BILL-002) — o pool WhatsApp não tem caminho de débito, e só com débitos a janela lê "nada foi usado" e a expiração remove a cota uma segunda vez. Exclui ajustes positivos (reparos/créditos administrativos), ajustes de `invoice` (estorno, amarrado à própria cota por ref_id) e débitos que foram explicitamente desfeitos por outra linha (SE-BILL-003, `metadata->>''undoes''`).';
+  'Créditos consumidos num pool dentro de uma janela. Conta `debit` medidos E os `adjustment` negativos que o credits-reconcile lança pelo consumo do agente de atendimento (SE-BILL-002) — o pool WhatsApp não tem caminho de débito, e só com débitos a janela lê "nada foi usado" e a expiração remove a cota uma segunda vez. Exclui ajustes positivos (reparos/créditos administrativos), ajustes de `invoice` (estorno, amarrado à própria cota por ref_id) e os dois lados de um estorno — a linha que declara `metadata->>''undoes''` e a linha que ela desfaz (SE-BILL-003).';
 
 -- O cache é derivado: sem isto o painel continua mostrando o número anterior.
 select public.recompute_credit_balance(equipe_id)

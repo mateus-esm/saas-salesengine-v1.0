@@ -35,15 +35,23 @@ type CycleFigures = {
   pools: { whatsapp: PoolCycle; copilot: PoolCycle };
 } | null;
 
-const buildPoolCycle = (planTotal: number, planLeft: number, balance: number): PoolCycle => ({
-  planTotal,
-  // Never negative: an over-spent pool reads as "the whole cota is gone", and
-  // the debt it left behind shows up in `balance`, where it belongs.
-  planUsed: Math.max(0, planTotal - planLeft),
-  planLeft,
-  extra: Math.max(0, balance - planLeft),
-  balance,
-});
+const buildPoolCycle = (planTotal: number, rawPlanLeft: number, balance: number): PoolCycle => {
+  // O que resta da cota nunca pode passar do saldo do pool: consumo anterior ao
+  // grant (a cota nasce no pagamento, que pode ser depois do inicio do periodo)
+  // sai do saldo sem aparecer na janela da cota. Sem este teto, o card mostraria
+  // "restante 1.884" ao lado de "saldo 1.856" -- dois numeros do mesmo card se
+  // contradizendo, que e exatamente o que esta tela existia para parar de fazer.
+  const planLeft = Math.max(0, Math.min(rawPlanLeft, balance));
+  return {
+    planTotal,
+    // Never negative: an over-spent pool reads as "the whole cota is gone", and
+    // the debt it left behind shows up in `balance`, where it belongs.
+    planUsed: Math.max(0, planTotal - planLeft),
+    planLeft,
+    extra: Math.max(0, balance - planLeft),
+    balance,
+  };
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
