@@ -14,9 +14,14 @@ class Settings(BaseSettings):
     agent_internal_token: str
 
     agno_schema: str = "agno"
-    doorman_model: str = "gpt-4o-mini"
-    worker_model: str = "gpt-4o"
-    shaper_model: str = "gpt-4o"
+    # Defaults follow LLM_BASE_URL, which points at the Verboo router in every
+    # deployed environment. They used to be OpenAI ids (gpt-4o-mini / gpt-4o):
+    # ids that Verboo does not serve, so any environment that set LLM_BASE_URL
+    # without also setting all three MODEL vars would fall back to a model the
+    # provider rejects.
+    doorman_model: str = "pro-old/deepseek-v4-flash-0731"
+    worker_model: str = "pro-old/deepseek-v4-flash-0731"
+    shaper_model: str = "pro-old/deepseek-v4-flash-0731"
     strategic_model: str = "o4-mini"
     copilot_workflow_enabled: bool = False
     ingest_enabled: bool = False
@@ -60,9 +65,14 @@ class Settings(BaseSettings):
         return value
 
 
-# Cheap model swaps documented for operators:
-# doorman_model: deepseek-chat, glm-4-flash, claude-haiku
-# worker_model / shaper_model: claude-sonnet-4-6, deepseek-reasoner
+# Model swaps documented for operators (ids must be valid for LLM_BASE_URL):
+# Verboo router:  pro-old/deepseek-v4-flash-0731 (default), deepseek-reasoner
+# Direct OpenAI:  gpt-4o-mini (doorman), gpt-4o (worker/shaper)
+#
+# NOTE: `strategic_model` is still an OpenAI id (o4-mini). It is only reached
+# through build_reasoning_model when copilot_workflow_enabled is on, which is
+# off by default -- but on Verboo it would be rejected, so set STRATEGIC_MODEL
+# before enabling that workflow.
 
 
 @lru_cache
