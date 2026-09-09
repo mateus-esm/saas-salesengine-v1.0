@@ -100,6 +100,94 @@ function buildPeriodConfig(preset: PeriodPreset, customRange?: DateRange): Perio
   }
 }
 
+// ── The billing cycle, per pool ───────────────────────────────────────────────
+// `planUsed + planLeft === planTotal`, and `planLeft + extra === balance`. Every
+// number on the card can be checked against the one beside it — which is exactly
+// what the old layout made impossible.
+interface PoolCycle {
+  planTotal: number;
+  planUsed: number;
+  planLeft: number;
+  extra: number;
+  balance: number;
+}
+type CycleFigures = {
+  start: string | null;
+  end: string | null;
+  pools: { whatsapp: PoolCycle; copilot: PoolCycle };
+} | null;
+
+const POOL_META = {
+  whatsapp: { label: 'Atendimento', hint: 'Gastos quando o agente responde seus clientes' },
+  copilot: { label: 'Copiloto', hint: 'Gastos pelas ações automáticas no CRM' },
+} as const;
+
+/**
+ * Severidade do pool. Nunca só pela cor: cada estado carrega o seu rótulo, para
+ * quem não distingue as cores ler a mesma coisa.
+ *
+ * A trilha é um passo mais claro da MESMA rampa do preenchimento, então o estado
+ * se lê na barra inteira e não só na parte cheia.
+ */
+function severityOf(left: number, total: number) {
+  const pct = total > 0 ? (left / total) * 100 : 0;
+  if (total > 0 && left <= 0) return { fill: 'bg-red-600', track: 'bg-red-600/15', text: 'text-red-600', note: 'Cota do plano esgotada' };
+  if (pct < 20) return { fill: 'bg-red-600', track: 'bg-red-600/15', text: 'text-red-600', note: 'Cota quase no fim' };
+  if (pct < 50) return { fill: 'bg-amber-500', track: 'bg-amber-500/15', text: 'text-amber-600', note: 'Menos da metade da cota' };
+  return { fill: 'bg-emerald-600', track: 'bg-emerald-600/15', text: 'text-emerald-700', note: 'Dentro da cota' };
+}
+
+/**
+ * Um pool, como MEDIDOR — uma razão contra um limite, não um gráfico.
+ * O limite é a cota DO PLANO (o grant do ciclo). Os avulsos aparecem ao lado,
+ * nunca somados ao denominador: eles não expiram e inflariam a cota.
+ */
+function PoolMeter({ pool, c }: { pool: keyof typeof POOL_META; c: PoolCycle }) {
+  const meta = POOL_META[pool];
+  const sev = severityOf(c.planLeft, c.planTotal);
+  const pct = c.planTotal > 0 ? Math.min(100, Math.max(0, (c.planLeft / c.planTotal) * 100)) : 0;
+  const fmt = (n: number) => n.toLocaleString('pt-BR');
+
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-foreground">{meta.label}</p>
+        <p className={cn('text-[11px] font-medium', sev.text)}>{sev.note}</p>
+      </div>
+
+      {/* Valor da stat tile: figuras proporcionais, não tabulares. */}
+      <p className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">
+        {fmt(c.planLeft)}
+        <span className="ml-1 text-xs font-normal text-muted-foreground">
+          de {fmt(c.planTotal)} cr do plano
+        </span>
+      </p>
+
+      {/* Medidor: trilha = passo mais claro da mesma rampa; ponta arredondada. */}
+      <div className={cn('mt-2 h-1.5 w-full overflow-hidden rounded-full', sev.track)}>
+        <div className={cn('h-full rounded-full transition-all', sev.fill)} style={{ width: `${pct}%` }} />
+      </div>
+
+      <dl className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
+        <div className="flex justify-between gap-2">
+          <dt>Usado neste ciclo</dt>
+          <dd className="tabular-nums text-foreground">{fmt(c.planUsed)} cr</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt>Avulsos — não expiram</dt>
+          <dd className="tabular-nums text-foreground">{fmt(c.extra)} cr</dd>
+        </div>
+        <div className="flex justify-between gap-2 border-t border-border/60 pt-0.5">
+          <dt className="font-medium">Saldo do pool</dt>
+          <dd className="tabular-nums font-medium text-foreground">{fmt(c.balance)} cr</dd>
+        </div>
+      </dl>
+
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{meta.hint}</p>
+    </div>
+  );
+}
+
 const PRESETS: { id: PeriodPreset; label: string }[] = [
   { id: 'day', label: 'Dia' },
   { id: 'week', label: 'Semana' },
@@ -112,12 +200,21 @@ const PRESETS: { id: PeriodPreset; label: string }[] = [
 export function AIUsageDashboard() {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<any[]>([]);
-  // SE-BILL-001 · BUG 2 — the AI Studio must NOT show a combined workspace
-  // "Saldo X / Y". creditsBalance is the Rev account's remaining credits (shown
-  // alone, no denominator); poolBalances is the per-pool breakdown (each pool on
-  // its own, never a summed denominator).
-  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
-  const [poolBalances, setPoolBalances] = useState<{ whatsapp: number; copilot: number } | null>(null);
+  /**
+   * SE-BILL-003 — o ciclo, que é a única janela que explica o saldo.
+   *
+   * O que estava aqui antes: `creditsBalance`, rotulado "Créditos da conta Rev".
+   * O `fetch-gpt-credits` devolve esse campo como `credit_balance(equipe_id)`
+   * SEM pool — ou seja, a soma dos dois pools DESTA equipe, não o saldo de outra
+   * conta. A tela mostrava esse total, repetia o consumo do período logo acima
+   * dele, e ainda listava os dois pools separados embaixo: o mesmo dinheiro três
+   * vezes, um deles com nome de uma conta que não era a do cliente.
+   *
+   * O cliente não precisa de quatro números soltos. Precisa de um por pool:
+   * quanto o plano deu neste ciclo, quanto o agente gastou, quanto sobrou e
+   * quando renova.
+   */
+  const [cycle, setCycle] = useState<CycleFigures>(null);
   /**
    * Sprint 8.5 — a partir de quando este consumo pertence a esta equipe.
    *
@@ -164,12 +261,7 @@ export function AIUsageDashboard() {
       const data = usageRes.data ?? {};
       // T3 shape: { balance, total, details: [{model, credits, ...}] }
       // SE-BILL-001: { balances: { whatsapp, copilot } } added for BUG 2.
-      setCreditsBalance(typeof data.balance === 'number' ? data.balance : null);
-      setPoolBalances(
-        data.balances && typeof data.balances.whatsapp === 'number' && typeof data.balances.copilot === 'number'
-          ? { whatsapp: data.balances.whatsapp, copilot: data.balances.copilot }
-          : null,
-      );
+      setCycle(data.cycle && data.cycle.pools ? (data.cycle as CycleFigures) : null);
       setDetails(data.details || []);
       setMeteringSince(typeof data.meteringSince === 'string' ? data.meteringSince : null);
 
@@ -239,12 +331,17 @@ export function AIUsageDashboard() {
     return { chartData: sorted, modelKeys: Array.from(modelsSet), totalFilteredSpent: total, modelBreakdown: breakdownArr };
   }, [details, periodCfg, activePreset, catalogById]);
 
-  // Sprint 7.5 W2: the balance is the TENANT's remaining plan credits, not the
-  // reseller's pooled workspace balance.
-  // SE-BILL-001 · BUG 2: shown ALONE — no "/ total" denominator, and no figure
-  // that sums the two pools into one workspace number.
-  const balanceDisplay = creditsBalance === null ? "—" : creditsBalance.toLocaleString('pt-BR');
   const fmt = (n: number) => n.toLocaleString('pt-BR');
+
+  // O ciclo por extenso: "02/09 – 01/10 · renova em 22 dias". Sem a data de
+  // renovação, "restam 1.856" não diz se é para dois dias ou para um mês.
+  const cycleLabel = (() => {
+    if (!cycle?.start || !cycle?.end) return null;
+    const start = new Date(cycle.start);
+    const end = new Date(cycle.end);
+    const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86_400_000));
+    return `${format(start, 'dd/MM')} – ${format(end, 'dd/MM')} · renova em ${days} ${days === 1 ? 'dia' : 'dias'}`;
+  })();
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -323,35 +420,22 @@ export function AIUsageDashboard() {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* A ÚNICA figura-herói da tela: o que o agente consumiu no
+                    período escolhido acima. O saldo não mora mais aqui — ele
+                    pertence ao ciclo de faturamento, que tem a sua própria
+                    janela e o seu próprio card. Repetir o mesmo número em três
+                    linhas com nomes diferentes era o que tornava esta tela
+                    impossível de conferir. */}
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-3xl font-bold font-mono text-foreground">
                     {totalFilteredSpent.toLocaleString('pt-BR')}
                   </span>
                   <span className="text-xs text-muted-foreground font-mono">cr</span>
                 </div>
-                {/* SE-BILL-001 · BUG 2 — the big number above is the period's
-                    consumption; below it the two credit figures are scoped, with
-                    NO combined workspace "Saldo X / Y" and no summed denominator:
-                    the Rev account's own remaining credits, then each team pool
-                    on its own. */}
-                <div className="mt-3 space-y-1 text-[11px] font-mono text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Consumo no período</span>
-                    <span className="text-foreground">{fmt(totalFilteredSpent)} cr</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Créditos da conta Rev</span>
-                    <span className="text-foreground">{balanceDisplay} cr</span>
-                  </div>
-                  {poolBalances && (
-                    <div className="flex justify-between">
-                      <span>Créditos da equipe</span>
-                      <span className="text-foreground">
-                        Atendimento {fmt(poolBalances.whatsapp)} · Copiloto {fmt(poolBalances.copilot)} cr
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Medido pelo provedor no período selecionado, já convertido para os
+                  créditos que você paga.
+                </p>
                 {meteringSince && (
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     Conta só o consumo desta equipe a partir de{" "}
@@ -398,6 +482,34 @@ export function AIUsageDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Ciclo de faturamento ────────────────────────────────────────
+              Um MEDIDOR por pool: uma razão contra um limite, não um gráfico.
+              O limite é a cota do plano deste ciclo; os avulsos ficam ao lado e
+              nunca entram no denominador — eles não expiram e inflariam a cota.
+              É a mesma fonte de /billing/creditos, para as duas telas nunca
+              discordarem. */}
+          {cycle && (
+            <Card className="border border-border bg-card">
+              <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="p-1.5 bg-primary/8 text-primary rounded border border-primary/15">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <CardTitle className="text-sm font-semibold">Ciclo de faturamento</CardTitle>
+                  {cycleLabel && (
+                    <span className="text-[11px] font-mono text-muted-foreground">{cycleLabel}</span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+                  <PoolMeter pool="whatsapp" c={cycle.pools.whatsapp} />
+                  <PoolMeter pool="copilot" c={cycle.pools.copilot} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Chart */}
           <Card className="border border-border bg-card">
