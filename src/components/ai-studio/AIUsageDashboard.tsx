@@ -112,10 +112,12 @@ const PRESETS: { id: PeriodPreset; label: string }[] = [
 export function AIUsageDashboard() {
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState<any[]>([]);
+  // SE-BILL-001 · BUG 2 — the AI Studio must NOT show a combined workspace
+  // "Saldo X / Y". creditsBalance is the Rev account's remaining credits (shown
+  // alone, no denominator); poolBalances is the per-pool breakdown (each pool on
+  // its own, never a summed denominator).
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
-  // Sprint 7.5 W2: the plan allotment, in billed credits — a real denominator
-  // at last, so the saldo can be shown as "restante / total do plano".
-  const [creditAllowance, setCreditAllowance] = useState<number | null>(null);
+  const [poolBalances, setPoolBalances] = useState<{ whatsapp: number; copilot: number } | null>(null);
   /**
    * Sprint 8.5 — a partir de quando este consumo pertence a esta equipe.
    *
@@ -161,8 +163,13 @@ export function AIUsageDashboard() {
       if (usageRes.error) throw usageRes.error;
       const data = usageRes.data ?? {};
       // T3 shape: { balance, total, details: [{model, credits, ...}] }
+      // SE-BILL-001: { balances: { whatsapp, copilot } } added for BUG 2.
       setCreditsBalance(typeof data.balance === 'number' ? data.balance : null);
-      setCreditAllowance(typeof data.allowance === 'number' ? data.allowance : null);
+      setPoolBalances(
+        data.balances && typeof data.balances.whatsapp === 'number' && typeof data.balances.copilot === 'number'
+          ? { whatsapp: data.balances.whatsapp, copilot: data.balances.copilot }
+          : null,
+      );
       setDetails(data.details || []);
       setMeteringSince(typeof data.meteringSince === 'string' ? data.meteringSince : null);
 
@@ -232,14 +239,12 @@ export function AIUsageDashboard() {
     return { chartData: sorted, modelKeys: Array.from(modelsSet), totalFilteredSpent: total, modelBreakdown: breakdownArr };
   }, [details, periodCfg, activePreset, catalogById]);
 
-  // Sprint 7.5 W2: the balance is now the TENANT's remaining plan credits, not
-  // the reseller's pooled workspace balance (which every tenant shared and any
-  // tenant's spending moved). The allotment gives a genuine denominator — still
-  // never fabricated: when it is missing we show the balance alone.
+  // Sprint 7.5 W2: the balance is the TENANT's remaining plan credits, not the
+  // reseller's pooled workspace balance.
+  // SE-BILL-001 · BUG 2: shown ALONE — no "/ total" denominator, and no figure
+  // that sums the two pools into one workspace number.
   const balanceDisplay = creditsBalance === null ? "—" : creditsBalance.toLocaleString('pt-BR');
-  const allowanceDisplay = creditAllowance === null || creditAllowance === 0
-    ? null
-    : creditAllowance.toLocaleString('pt-BR');
+  const fmt = (n: number) => n.toLocaleString('pt-BR');
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -324,11 +329,28 @@ export function AIUsageDashboard() {
                   </span>
                   <span className="text-xs text-muted-foreground font-mono">cr</span>
                 </div>
-                <div className="flex justify-between mt-3 text-[11px] font-mono text-muted-foreground">
-                  <span>Consumo no período</span>
-                  <span>
-                    Saldo: {balanceDisplay}{allowanceDisplay ? ` / ${allowanceDisplay}` : ""} cr
-                  </span>
+                {/* SE-BILL-001 · BUG 2 — the big number above is the period's
+                    consumption; below it the two credit figures are scoped, with
+                    NO combined workspace "Saldo X / Y" and no summed denominator:
+                    the Rev account's own remaining credits, then each team pool
+                    on its own. */}
+                <div className="mt-3 space-y-1 text-[11px] font-mono text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Consumo no período</span>
+                    <span className="text-foreground">{fmt(totalFilteredSpent)} cr</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Créditos da conta Rev</span>
+                    <span className="text-foreground">{balanceDisplay} cr</span>
+                  </div>
+                  {poolBalances && (
+                    <div className="flex justify-between">
+                      <span>Créditos da equipe</span>
+                      <span className="text-foreground">
+                        Atendimento {fmt(poolBalances.whatsapp)} · Copiloto {fmt(poolBalances.copilot)} cr
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {meteringSince && (
                   <p className="mt-2 text-[11px] text-muted-foreground">

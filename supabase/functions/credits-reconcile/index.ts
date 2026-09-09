@@ -136,15 +136,35 @@ serve(async (req) => {
     // Copilot debits would book the Copilot's usage as "drift" every night.
     const { data: rows } = await db
       .from("credit_ledger")
-      .select("credits, source")
+      .select("credits, source, entry_type, metadata")
       .eq("equipe_id", equipe.id)
       .eq("pool", "whatsapp")
       .in("entry_type", ["debit", "adjustment"])
       .gte("created_at", periodStart);
 
     // Debits are negative and adjustments booked here are negative too, so the
-    // recorded consumption is the negated sum.
-    const recorded = -(rows ?? []).reduce((s, r) => s + Number((r as { credits: number }).credits ?? 0), 0);
+    // recorded consumption is the negated sum of everything that moved credits.
+    //
+    // SE-BILL-001 — the `late_payment` markers move no credits (credits = 0):
+    // that deduction already went into a reduced plan grant in
+    // invoice-effects.ts, which reconcile cannot see. The consumption they stand
+    // for IS inside the provider's monthly total, so it has to be counted as
+    // recorded here or it looks like drift and gets debited a second time.
+    //
+    // Capped at the outstanding positive drift: the marker can only pull drift
+    // toward zero, never past it into a phantom refund (which would happen when
+    // part of the window already sits in `recorded` as real debit rows).
+    let recorded = 0;
+    let latePaymentWindow = 0;
+    for (const r of rows ?? []) {
+      const row = r as { credits: number; source: string; metadata: { window_consumption?: number } | null };
+      recorded -= Number(row.credits ?? 0);
+      if (row.source === "late_payment") {
+        latePaymentWindow += Number(row.metadata?.window_consumption ?? 0);
+      }
+    }
+    const latePaymentAccounted = Math.max(0, Math.min(latePaymentWindow, providerBilled - recorded));
+    recorded += latePaymentAccounted;
     const diff = providerBilled - recorded;
 
     if (Math.abs(diff) < NOISE_FLOOR) continue;
@@ -164,6 +184,7 @@ serve(async (req) => {
         provider_credits: providerSpent,
         provider_billed: providerBilled,
         ledger_recorded: recorded,
+        late_payment_accounted: latePaymentAccounted,
         drift: diff,
       },
     });

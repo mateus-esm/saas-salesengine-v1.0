@@ -27,6 +27,13 @@ export type Invoice = {
   kind: string;
   status: string;
   total: number;
+  /**
+   * SE-BILL-001 — the late-payment grace window is [due_date, paid_at]. The
+   * Asaas webhook projects both in its select; the admin RPC hands back a
+   * slimmer row, so rollContractPeriod re-reads due_date when it is absent.
+   */
+  due_date?: string | null;
+  paid_at?: string | null;
   /** Carries the credit pool chosen at purchase (Sprint 8.1). */
   metadata: { pool?: string; credits?: number; addon?: string } | null;
 };
@@ -126,7 +133,7 @@ export async function applyPaid(db: SupabaseClient, invoice: Invoice, opts: Paid
   }
 
   if (invoice.kind === "recurring" && invoice.contract_id) {
-    await rollContractPeriod(db, invoice);
+    await rollContractPeriod(db, invoice, paidAt);
   }
 
   if (invoice.kind === "setup" && invoice.contract_id) {
@@ -155,13 +162,30 @@ export async function applyPaid(db: SupabaseClient, invoice: Invoice, opts: Paid
   }
 }
 
-async function rollContractPeriod(db: SupabaseClient, invoice: Invoice) {
+async function rollContractPeriod(db: SupabaseClient, invoice: Invoice, paidAt: string) {
   const { data: contract } = await db
     .from("contracts")
     .select("id, status, current_period_start, current_period_end")
     .eq("id", invoice.contract_id!)
     .single();
   if (!contract) return;
+
+  // SE-BILL-001 — the grace window is [due_date, paid_at]. The Asaas webhook
+  // selects due_date onto the invoice; the admin RPC does not, so read it back
+  // here when it is missing rather than making the two callers behave differently.
+  let dueDate: string | null = invoice.due_date ?? null;
+  if (!dueDate) {
+    const { data: inv } = await db
+      .from("invoices")
+      .select("due_date")
+      .eq("id", invoice.id)
+      .single();
+    dueDate = (inv?.due_date as string | null) ?? null;
+  }
+  // Only a payment that landed AFTER the due date consumed the plan on credit.
+  const lateWindow = dueDate && new Date(paidAt).getTime() > new Date(dueDate).getTime()
+    ? { from: dueDate, to: paidAt }
+    : null;
 
   const wasSuspended = contract.status === "suspended";
 
@@ -205,9 +229,48 @@ async function rollContractPeriod(db: SupabaseClient, invoice: Invoice) {
   const periodKey = base.toISOString().slice(0, 10);
   for (const [pool, amount] of [["whatsapp", whatsapp], ["copilot", copilot]] as const) {
     if (amount <= 0) continue;
+
+    // SE-BILL-001 — reduce this period's grant by what was already spent on the
+    // pool while the invoice sat unpaid. Granting the full allowance now would
+    // reset the plan total as if the grace-window usage had been free.
+    const consumed = await windowConsumption(db, invoice.equipe_id, pool, lateWindow);
+    const granted = Math.max(0, amount - consumed);
+
+    if (lateWindow && consumed > 0) {
+      // Idempotent marker, booked BEFORE the grant. It moves no credits of its
+      // own — the deduction lives in the reduced grant above — but it records
+      // the window consumption so (a) replaying applyPaid is a no-op and
+      // (b) credits-reconcile can tell this slice of the provider's monthly
+      // total was already accounted for and must not be re-booked as drift.
+      const { error: markErr } = await db.from("credit_ledger").insert({
+        equipe_id: invoice.equipe_id,
+        entry_type: "adjustment",
+        credits: 0,
+        source: "late_payment",
+        pool,
+        ref_id: invoice.id,
+        idempotency_key: `late_payment_${invoice.id}_${pool}`,
+        metadata: {
+          reason: "late_payment_grant_reduction",
+          window_from: lateWindow.from,
+          window_to: lateWindow.to,
+          window_consumption: consumed,
+          full_allowance: amount,
+          granted,
+        },
+      });
+      // 23505 = this invoice's window is already marked (a replay). Any other
+      // error must not block the grant the customer just paid for.
+      if (markErr && markErr.code !== "23505") {
+        console.error(`[invoice-effects] late_payment marker (${pool}) failed:`, markErr.message);
+      }
+    }
+
+    if (granted <= 0) continue;
+
     const { error } = await db.rpc("grant_credits", {
       p_equipe_id: invoice.equipe_id,
-      p_credits: amount,
+      p_credits: granted,
       p_source: "plan_period",
       p_ref_id: invoice.id,
       p_expires_at: nextEnd.toISOString(),
@@ -225,6 +288,36 @@ async function rollContractPeriod(db: SupabaseClient, invoice: Invoice) {
       "Sua conta voltou ao normal. IA e envios estão religados.",
       "/billing", `react_${contract.id}_${base.toISOString().slice(0, 10)}`);
   }
+}
+
+/**
+ * SE-BILL-001 — credits consumed on one pool inside the late-payment grace
+ * window [due_date, paid_at].
+ *
+ * Both consumption paths count: `debit` rows (usage metered by our code) and the
+ * `adjustment` rows credits-reconcile books for the attendance agent's
+ * autonomous provider usage. Positive `adjustment` rows (refund reversals) are
+ * not consumption and are ignored — only the negative side is summed.
+ */
+async function windowConsumption(
+  db: SupabaseClient,
+  equipeId: string,
+  pool: "whatsapp" | "copilot",
+  window: { from: string; to: string } | null,
+): Promise<number> {
+  if (!window) return 0;
+  const { data: rows } = await db
+    .from("credit_ledger")
+    .select("credits")
+    .eq("equipe_id", equipeId)
+    .eq("pool", pool)
+    .in("entry_type", ["debit", "adjustment"])
+    .gte("created_at", window.from)
+    .lt("created_at", window.to);
+  return (rows ?? []).reduce((sum, r) => {
+    const c = Number((r as { credits: number }).credits ?? 0);
+    return c < 0 ? sum - c : sum;
+  }, 0);
 }
 
 export async function applyOverdue(db: SupabaseClient, invoice: Invoice) {
