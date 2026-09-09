@@ -18,10 +18,12 @@ CORS:
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
+from app.llm import ModelProviderError
 from app.routers import admin, approvals, cycle_pass, decisions, forecast, ingest, revenue, shape, sweep, sync
 
 # ---------------------------------------------------------------------------
@@ -33,6 +35,36 @@ app = FastAPI(
     version="0.1.0",
     description="Sprint 6 — Solo Copilot agent API.",
 )
+
+
+# ---------------------------------------------------------------------------
+# The model provider failing is not the caller's fault
+#
+# An OpenAI-compatible router answers a bad credential with
+# ``401 {"error": "invalid or expired token"}``, and Agno hands that string back
+# where model output belongs. Validating it against a schema used to produce a
+# 422 that said the caller's pipeline blueprint was invalid -- pointing the
+# diagnosis at the one place that was fine. 502 says who actually failed, and the
+# message names the credential so the next person does not have to guess.
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(ModelProviderError)
+async def _model_provider_error(_: Request, exc: ModelProviderError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        content={
+            "detail": {
+                "error": "model_provider_unavailable",
+                "message": (
+                    "O provedor de modelo recusou a chamada, entao o Copilot nao "
+                    "chegou a gerar nada. Verifique LLM_API_KEY / LLM_BASE_URL no "
+                    "servico do Copilot."
+                ),
+                "provider_said": str(exc),
+            }
+        },
+    )
 
 # ---------------------------------------------------------------------------
 # CORS

@@ -304,3 +304,57 @@ def test_admin_runs_with_token_returns_payload(monkeypatch) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert "run_events" in body and "ai_decisions" in body
+
+
+# ---------------------------------------------------------------------------
+# 4. Uma falha do provedor de modelo nao pode virar 422
+#
+# O Verboo responde uma chave expirada com 401 {"error":"invalid or expired
+# token"}; o Agno devolve esse texto em RunOutput.content, e validar isso contra
+# o schema produzia um 422 dizendo que o blueprint do cliente era invalido. A
+# tela mandava o founder revisar o pipeline dele enquanto o problema era a
+# credencial do provedor.
+#
+# Este teste usa o app REAL de main.py de proposito: registrar o handler faz
+# parte da correcao, e um app de mentira nao provaria que ele esta registrado.
+# ---------------------------------------------------------------------------
+
+
+def test_model_provider_error_returns_502_not_422() -> None:
+    from app.deps import get_tenant_context
+    from app.llm import ModelProviderError
+    from app.security import TenantContext
+
+    with patch("app.config.get_settings", return_value=FAKE_SETTINGS):
+        import importlib
+
+        import app.main as main_module
+
+        importlib.reload(main_module)
+        real_app = main_module.app
+
+    real_app.dependency_overrides[get_tenant_context] = lambda: TenantContext(
+        equipe_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        actor_user_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        role="admin",
+    )
+    try:
+        with patch(
+            "app.routers.shape.shape_track",
+            side_effect=ModelProviderError("invalid or expired token"),
+        ), patch("app.routers.shape.get_settings", return_value=FAKE_SETTINGS):
+            client = TestClient(real_app, raise_server_exceptions=False)
+            resp = client.post(
+                "/api/v1/shape/preview",
+                json={"prompt": "um pipeline de vendas", "locale": "pt-BR"},
+            )
+    finally:
+        real_app.dependency_overrides.clear()
+
+    assert resp.status_code == 502, resp.text
+    body = resp.json()["detail"]
+    assert body["error"] == "model_provider_unavailable"
+    # O texto do provedor tem de sobreviver: sem ele o operador nao sabe que a
+    # credencial expirou.
+    assert body["provider_said"] == "invalid or expired token"
+    assert "LLM_API_KEY" in body["message"]
