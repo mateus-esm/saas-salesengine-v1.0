@@ -200,3 +200,65 @@ async def test_locale_parameter_accepted() -> None:
         result = await shape_track(prompt="test process", locale="en-US", model_id="gpt-4o")
 
     assert isinstance(result, PipelineBlueprint)
+
+
+# ---------------------------------------------------------------------------
+# Provider failure is NOT bad model output
+#
+# O Verboo responde uma chave expirada com 401 {"error":"invalid or expired
+# token"}, e o Agno achata isso em ``response.content`` como string. Validar essa
+# string contra o PipelineBlueprint produzia:
+#
+#   422 {"detail":[{"type":"model_type","loc":[],
+#        "msg":"Input should be a valid dictionary or instance of PipelineBlueprint",
+#        "input":"invalid or expired token", ...}]}
+#
+# Ou seja: a tela dizia ao founder que o blueprint dele era inválido, quando o
+# serviço simplesmente não conseguiu autenticar no provedor. O diagnóstico ficava
+# apontando para o lugar errado — a mesma classe de erro do token do webhook do
+# Asaas, que devolvia 401 mudo.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_provider_error_is_not_reported_as_invalid_blueprint(story_a_prompt):
+    from app.llm import ModelProviderError
+
+    response = MagicMock()
+    response.content = "invalid or expired token"
+
+    with patch("app.cascade.track_shaper.Agent") as MockAgent:
+        MockAgent.return_value.arun = AsyncMock(return_value=response)
+
+        with pytest.raises(ModelProviderError, match="invalid or expired token"):
+            await shape_track(prompt=story_a_prompt, locale="pt-BR", model_id="m")
+
+
+@pytest.mark.asyncio
+async def test_model_returning_json_text_still_parses(story_a_prompt):
+    """Um provedor que devolve o JSON como TEXTO continua funcionando: só quem
+    não é JSON nenhum é falha de provedor."""
+    blueprint = _make_blueprint()
+    response = MagicMock()
+    response.content = blueprint.model_dump_json()
+
+    with patch("app.cascade.track_shaper.Agent") as MockAgent:
+        MockAgent.return_value.arun = AsyncMock(return_value=response)
+
+        result = await shape_track(prompt=story_a_prompt, locale="pt-BR", model_id="m")
+
+    assert result.pipeline_name == blueprint.pipeline_name
+
+
+@pytest.mark.asyncio
+async def test_genuinely_bad_model_output_still_raises_validation_error(story_a_prompt):
+    """A garantia que não pode ser perdida: JSON bem formado mas fora do schema
+    continua sendo erro de saída do modelo (422), não falha de provedor."""
+    response = MagicMock()
+    response.content = {"pipeline_name": "sem stages"}
+
+    with patch("app.cascade.track_shaper.Agent") as MockAgent:
+        MockAgent.return_value.arun = AsyncMock(return_value=response)
+
+        with pytest.raises(ValidationError):
+            await shape_track(prompt=story_a_prompt, locale="pt-BR", model_id="m")

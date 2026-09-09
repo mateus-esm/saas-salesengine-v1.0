@@ -6,7 +6,7 @@ import unicodedata
 from typing import Any
 
 from agno.agent import Agent
-from app.llm import build_chat_model
+from app.llm import build_chat_model, parse_model_output
 
 from app.schemas import ActionPlan, IntentDecision, PlannedAction
 from app.security import TenantContext
@@ -204,10 +204,7 @@ async def triage_intent(
     message = _build_user_message(conversation, opportunity, pipeline_rules, stage_guide)
     response = await _arun_agent(agent, message)
 
-    if isinstance(response.content, IntentDecision):
-        decision = response.content
-    else:
-        decision = IntentDecision.model_validate(response.content)
+    decision = parse_model_output(response.content, IntentDecision)
 
     # Guard: downgrade if the chosen skill is not active in this pipeline.
     if decision.skill is not None:
@@ -336,10 +333,7 @@ async def triage_plan(
     message = _build_user_message(conversation, opportunity, pipeline_rules, stage_guide)
     response = await _arun_agent(agent, message)
 
-    if isinstance(response.content, ActionPlan):
-        plan = response.content
-    else:
-        plan = ActionPlan.model_validate(response.content)
+    plan = parse_model_output(response.content, ActionPlan)
 
     _mark_confirmations(plan)
 

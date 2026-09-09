@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from agno.agent import Agent
-from app.llm import build_chat_model
+from app.llm import build_chat_model, parse_model_output
 
 from app.schemas import RouteDecision
 from app.security import TenantContext
@@ -102,10 +102,7 @@ async def classify_and_route(
     message = _build_user_message(conversation, lead, pipelines)
     response = await agent.arun(message)
 
-    if isinstance(response.content, RouteDecision):
-        decision = response.content
-    else:
-        decision = RouteDecision.model_validate(response.content)
+    decision = parse_model_output(response.content, RouteDecision)
 
     # Guard: LLM must only reference pipeline IDs from the supplied list.
     valid_ids = {str(p["id"]) for p in pipelines if p.get("id")}

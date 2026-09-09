@@ -1,7 +1,7 @@
 """JTBD 1 — Track Shaper: NL description → validated PipelineBlueprint via Agno."""
 
 from agno.agent import Agent
-from app.llm import build_chat_model
+from app.llm import build_chat_model, parse_model_output
 from pydantic import ValidationError
 
 from app.schemas import PipelineBlueprint
@@ -87,6 +87,4 @@ async def shape_track(
     # Agno with output_schema already validates; if the model returns garbage
     # that bypasses Agno's parse, validate explicitly so the caller always gets
     # a typed error rather than an arbitrary AttributeError.
-    if isinstance(response.content, PipelineBlueprint):
-        return response.content
-    return PipelineBlueprint.model_validate(response.content)
+    return parse_model_output(response.content, PipelineBlueprint)

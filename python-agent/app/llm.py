@@ -21,10 +21,62 @@ point it at the configured base_url/api_key.
 
 from __future__ import annotations
 
+import json
 import os
-from typing import Any
+from typing import Any, TypeVar
 
 from agno.models.openai import OpenAIChat
+from pydantic import BaseModel
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
+
+
+class ModelProviderError(RuntimeError):
+    """The provider failed and its message came back where model output belongs.
+
+    WHY THIS EXISTS: an OpenAI-compatible router answers a bad credential with
+    ``401 {"error": "invalid or expired token"}``, and Agno flattens that into
+    ``RunOutput.content`` as a plain string. Handing that string to
+    ``Schema.model_validate`` produced:
+
+        422 {"detail":[{"type":"model_type","loc":[],
+             "msg":"Input should be a valid dictionary or instance of
+                    PipelineBlueprint",
+             "input":"invalid or expired token"}]}
+
+    which told the founder his pipeline blueprint was invalid when the service
+    simply could not authenticate — and sent the diagnosis to the wrong place
+    entirely. The provider's failure has to be able to say so.
+    """
+
+
+def parse_model_output(content: Any, schema: type[ModelT]) -> ModelT:
+    """Turn an Agno run's ``content`` into ``schema``, or say who actually failed.
+
+    Three cases, deliberately kept apart:
+
+    * already the parsed model -> return it;
+    * a JSON object (or JSON text) -> validate it, so genuinely malformed model
+      output still raises ``ValidationError`` and still becomes a 422;
+    * anything else that is a bare string -> the provider talked to us instead of
+      the model. That is ``ModelProviderError``, never a validation error.
+    """
+    if isinstance(content, schema):
+        return content
+
+    if isinstance(content, str):
+        text = content.strip()
+        try:
+            decoded = json.loads(text)
+        except ValueError as exc:
+            # Not JSON at all: a provider/gateway message, not model output.
+            raise ModelProviderError(text) from exc
+        if not isinstance(decoded, dict):
+            # Valid JSON, but a scalar — still not something a schema describes.
+            raise ModelProviderError(text)
+        content = decoded
+
+    return schema.model_validate(content)
 
 
 def build_chat_model(model_id: str) -> OpenAIChat:
