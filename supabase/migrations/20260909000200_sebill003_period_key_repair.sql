@@ -138,6 +138,50 @@ select l.equipe_id,
    and l.created_at <  timestamptz '2026-09-08 00:00:00+00'
 on conflict (equipe_id, idempotency_key) do nothing;
 
+-- ============================================================================
+-- UM DÉBITO ESTORNADO NÃO É CONSUMO.
+--
+-- `credits_consumed_in_window` soma só linhas NEGATIVAS, então a linha positiva
+-- do estorno acima não cancela o débito que ela desfaz: a cota continuaria
+-- parecendo gasta. Na Solo Energia isso mostraria "0 de 2500 do plano" com 3.356
+-- de saldo — os dois números do mesmo card se contradizendo.
+--
+-- Somar as positivas junto NÃO é a saída: o SE-BILL-002 as exclui de propósito,
+-- para o crédito de reparo do Sprint 8.5 não fazer uma cota parecer menos usada
+-- do que foi. A regra certa é mais estreita — ignorar o débito que foi
+-- explicitamente desfeito, identificado pela linha que diz qual linha ela
+-- desfaz. As duas continuam no extrato: o cliente vê o erro E a correção.
+-- ============================================================================
+create or replace function public.credits_consumed_in_window(
+  p_equipe_id uuid, p_from timestamptz, p_to timestamptz, p_pool text default null
+) returns integer
+language sql stable
+set search_path = public
+as $fn$
+  select coalesce(-sum(l.credits), 0)::integer
+  from public.credit_ledger l
+  where l.equipe_id = p_equipe_id
+    and (p_pool is null or l.pool = p_pool)
+    and l.created_at >= p_from
+    and (p_to is null or l.created_at < p_to)
+    and (
+      l.entry_type = 'debit'
+      -- SE-BILL-002: o pool de atendimento é consumido do lado do provedor e
+      -- chega aqui como ajuste do reconciliador. Só negativos, e nunca estorno
+      -- de fatura.
+      or (l.entry_type = 'adjustment' and l.credits < 0 and l.source <> 'invoice')
+    )
+    -- SE-BILL-003: e nunca um débito que já foi desfeito.
+    and not exists (
+      select 1 from public.credit_ledger u
+      where u.equipe_id = l.equipe_id
+        and u.metadata->>'undoes' = l.id::text
+    );
+$fn$;
+
+comment on function public.credits_consumed_in_window(uuid, timestamptz, timestamptz, text) is
+  'Créditos consumidos num pool dentro de uma janela. Conta `debit` medidos E os `adjustment` negativos que o credits-reconcile lança pelo consumo do agente de atendimento (SE-BILL-002) — o pool WhatsApp não tem caminho de débito, e só com débitos a janela lê "nada foi usado" e a expiração remove a cota uma segunda vez. Exclui ajustes positivos (reparos/créditos administrativos), ajustes de `invoice` (estorno, amarrado à própria cota por ref_id) e débitos que foram explicitamente desfeitos por outra linha (SE-BILL-003, `metadata->>''undoes''`).';
+
 -- O cache é derivado: sem isto o painel continua mostrando o número anterior.
 select public.recompute_credit_balance(equipe_id)
   from (select distinct equipe_id from public.contracts) c;
@@ -175,6 +219,17 @@ begin
          || to_char(c.current_period_end at time zone 'UTC', 'YYYY-MM-DD') || '_' || l.pool;
   assert v_bad = 0,
     format('ASSERT FAILED: %s cota(s) com a chave do PROXIMO periodo', v_bad);
+
+  -- Um débito desfeito não pode continuar contando como cota gasta.
+  select count(*) into v_bad
+    from public.credit_ledger l
+    join public.credit_ledger u
+      on u.equipe_id = l.equipe_id and u.metadata->>'undoes' = l.id::text
+   where public.credits_consumed_in_window(
+           l.equipe_id, l.created_at - interval '1 second',
+           l.created_at + interval '1 second', l.pool) <> 0;
+  assert v_bad = 0,
+    format('ASSERT FAILED: %s debito(s) estornado(s) ainda contam como consumo', v_bad);
 
   raise notice 'SE-BILL-003 assertions passed';
 end $$;
