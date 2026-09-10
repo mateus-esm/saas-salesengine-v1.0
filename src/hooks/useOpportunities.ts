@@ -111,6 +111,36 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equipeId, pipelineId, leadId, queryClient]);
 
+  const mutations = useOpportunityMutations();
+
+  return {
+    opportunities: query.data || [],
+    isLoading: query.isLoading,
+    error: query.error,
+    ...mutations,
+    refetch: query.refetch,
+  };
+};
+
+/**
+ * Sprint 11 — the opportunity mutations without the list query.
+ *
+ * The detail modal used to call useOpportunities() only to get these, and it is
+ * mounted even while closed — with no pipelineId, so every Kanban visit loaded
+ * every opportunity of the team a second time. Anything that only edits should
+ * use this hook. Invalidates the Kanban board cache too, so an edit made in the
+ * modal shows up on the card.
+ */
+export const useOpportunityMutations = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const equipeId = profile?.equipe_id;
+
+  const invalidateLists = () => {
+    queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+  };
+
   const createOpportunity = useMutation({
     mutationFn: async (input: CreateOpportunityData): Promise<Opportunity> => {
       if (!equipeId) throw new Error("No equipe_id");
@@ -149,7 +179,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       return normalize(data as OpportunityRow);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
       toast.success("Lead criado!");
     },
     onError: (e: Error) => toast.error("Erro ao criar lead: " + e.message),
@@ -167,7 +197,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       return normalize(data as OpportunityRow);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
     },
     onError: (e: Error) => toast.error("Erro ao atualizar: " + e.message),
   });
@@ -181,7 +211,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
       toast.success("Lead removido");
     },
     onError: (e: Error) => toast.error("Erro ao remover: " + e.message),
@@ -225,18 +255,14 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       toast.success(`${n} lead${n > 1 ? "s removidos" : " removido"}`);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
     },
   });
 
   return {
-    opportunities: query.data || [],
-    isLoading: query.isLoading,
-    error: query.error,
     createOpportunity,
     updateOpportunity,
     deleteOpportunity,
     bulkDeleteOpportunities,
-    refetch: query.refetch,
   };
 };

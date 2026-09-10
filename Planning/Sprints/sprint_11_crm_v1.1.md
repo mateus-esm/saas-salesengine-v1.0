@@ -554,7 +554,7 @@ Execução solo e sequencial: T1, T2, T3, T4, T5, T6, T7, T8, T9, T10.
 - [x] T1 · Runner de teste SQL · S
 - [x] T2 · Responsável no negócio · M
 - [x] T3 · RPCs do quadro · L — na base real da Solo Energia: resumo 185 ms (conta os 1.259), página de 30 cards da maior coluna 114 ms
-- [ ] T4 · Kanban no quadro do servidor · L
+- [x] T4 · Kanban no quadro do servidor · L — código pronto (tsc, build, 22 testes de `lib/board` e `lib/debounce`); aceite ao vivo (1.259, <20 requisições) depende do deploy das RPCs → T10. Desvios do plano: `moveCardInPages` virou `removeCardFromPages` + `prependCardToPages` (as colunas são caches separados); `useOpportunityMutations`/`useLeadMutations` criados porque o modal de detalhe carregava a equipe inteira mesmo fechado; caixa de busca no cabeçalho do Kanban (antecipa o ponto 1 — o servidor já filtra)
 - [ ] T5 · Tabelas sem teto + score/touchpoints em uma chamada · M
 - [ ] T6 · Placar com números reais · S
 - [ ] T7 · Webhook deduplica pelo telefone normalizado · M

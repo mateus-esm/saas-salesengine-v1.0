@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useLogTouchpoint, type CreateTouchpointData } from "@/hooks/useTouchpoints";
 import { useCopilotApprovals } from "@/hooks/useCopilotApprovals";
-import type { Lead } from "@/types/crm";
+import type { CardLead } from "@/types/board";
 import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
@@ -58,7 +58,8 @@ export const DEFAULT_NATIVE_CARD_FLAGS: NativeCardFlags = {
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
-  lead: Lead | undefined;
+  /** Sprint 11: the slice the card draws. A full Lead fits too. */
+  lead: CardLead | null | undefined;
   stage: PipelineStageV2 | undefined;            // NEW
   cardFields: CustomFieldSchema[];   // schema entries whose field_id ∈ pipeline.card_field_ids (already filtered)
   touchpointCount: number;                       // NEW — supplied by parent (batched)

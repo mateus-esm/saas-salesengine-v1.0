@@ -174,3 +174,61 @@ export const useLeads = () => {
     refetch: leadsQuery.refetch,
   };
 };
+
+/**
+ * Sprint 11 — save / remove one contact without loading the whole contact base.
+ *
+ * The Kanban used useLeads() only to get these two mutations, which pulled every
+ * lead of the team (capped at 1,000 rows) into memory on every visit. Invalidates
+ * the single-lead cache and the board, so the card picks up the new name.
+ */
+export const useLeadMutations = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const equipeId = profile?.equipe_id;
+
+  const invalidate = (leadId?: string) => {
+    queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+    if (leadId) queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
+  };
+
+  const updateLead = useMutation({
+    mutationFn: async ({ id, ...updateData }: UpdateLeadData) => {
+      const { data, error } = await sb
+        .from("leads")
+        .update({ ...updateData, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, vars) => {
+      invalidate(vars.id);
+      toast.success("Contato atualizado!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao atualizar contato: " + error.message);
+    },
+  });
+
+  const deleteLead = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await sb
+        .from("leads")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, id) => {
+      invalidate(id);
+      toast.success("Contato removido!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao remover contato: " + error.message);
+    },
+  });
+
+  return { updateLead, deleteLead };
+};

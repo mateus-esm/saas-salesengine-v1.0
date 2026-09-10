@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
   DndContext,
   DragEndEvent,
@@ -11,9 +10,10 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Loader2, LayoutGrid, Settings2 } from "lucide-react";
+import { Loader2, LayoutGrid, Search, Settings2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -23,15 +23,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { useLeads } from "@/hooks/useLeads";
 import { LossReasonDialog, type LossReasonOption } from "./LossReasonDialog";
-import { useLeadScores } from "@/hooks/useLeadScores";
-import { useOpportunities } from "@/hooks/useOpportunities";
+import { useBoardRealtime, useBoardSummary, useMoveBoardCard } from "@/hooks/useBoard";
+import { useLead, useOpportunity } from "@/hooks/useLead";
+import { useLeadMutations } from "@/hooks/useLeads";
+import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
-import { useTouchpointCounts } from "@/hooks/useStageTelemetry";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import {
@@ -44,47 +42,78 @@ import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { CardFieldsPicker, NATIVE_CARD_FIELDS } from "./pipeline-settings/CardFieldsPicker";
 import { PipelineScoreboard } from "./revenue/PipelineScoreboard";
 
-import type { Lead } from "@/types/crm";
+import type { BoardCard } from "@/types/board";
+import type { CrmFilters } from "@/types/crmFilters";
 import type { Opportunity } from "@/types/pipelines";
 
 interface OpportunityKanbanProps {
   pipelineId: string;
 }
 
+const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * Sprint 11 — the Kanban reads from the server.
+ *
+ * Before: the whole pipeline and every lead of the team were loaded into the
+ * browser (both capped at 1,000 rows by the API, so 259 Solo Energia deals never
+ * showed), and two lead-score RPCs were fired per lead. Now each column loads its
+ * own cards 30 at a time (OpportunityKanbanColumn), the header counts come from
+ * crm_board_summary, and every card arrives with its lead, owner, touchpoints and
+ * score. The modals fetch the full lead only when opened.
+ */
 export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
-  const { profile } = useAuth();
   const { pipelines, updatePipeline } = usePipelines();
   const { stages, isLoading: stagesLoading } = usePipelineStagesV2(pipelineId);
-  const { opportunities, isLoading: oppsLoading, updateOpportunity } = useOpportunities({
-    pipelineId,
-  });
-  const { leads, updateLead, deleteLead } = useLeads();
-  const equipeId = profile?.equipe_id;
-
   const pipeline = pipelines.find((p) => p.id === pipelineId);
 
-  // Local optimistic snapshot so cross-stage drops feel instant; Realtime + query
-  // invalidation reconciles when the server confirms.
-  const [localOpps, setLocalOpps] = useState<Opportunity[]>(opportunities);
-  useEffect(() => setLocalOpps(opportunities), [opportunities]);
+  // Search runs on the server (crm_opp_matches: name, e-mail, or phone typed any
+  // way). Wave 2 replaces this box with the full filter bar on the same contract.
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+  const filters = useMemo<CrmFilters>(() => (search.trim() ? { search } : {}), [search]);
 
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const summaryQuery = useBoardSummary(pipelineId, filters);
+  const summaryByStage = useMemo(
+    () => Object.fromEntries((summaryQuery.data ?? []).map((s) => [s.stage_id, s])),
+    [summaryQuery.data],
+  );
+  const totalCount = useMemo(
+    () => (summaryQuery.data ?? []).reduce((sum, s) => sum + s.count, 0),
+    [summaryQuery.data],
+  );
+
+  useBoardRealtime(pipelineId);
+  const moveCard = useMoveBoardCard(pipelineId, filters);
+  const { updateOpportunity } = useOpportunityMutations();
+  const { updateLead, deleteLead } = useLeadMutations();
+
+  const [activeCard, setActiveCard] = useState<BoardCard | null>(null);
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
-  const [contactDrawerLead, setContactDrawerLead] = useState<Lead | null>(null);
+  const [siblings, setSiblings] = useState<Opportunity[]>([]);
+  const [contactLeadId, setContactLeadId] = useState<string | null>(null);
   const [showCardConfig, setShowCardConfig] = useState(false);
   const [cardFieldDraft, setCardFieldDraft] = useState<string[]>([]);
 
-  // Sprint 4 EPIC 2 §2.3 — deep-link `?opp=<id>` opens the matching card.
-  // Resolution waits for opportunities to load; when the user closes the modal
-  // we strip the param so reload doesn't re-open it.
+  // The cards carry a slice of the lead; the modals need the whole row.
+  const selectedLead = useLead(selectedOpp?.lead_id);
+  const contactLead = useLead(contactLeadId);
+
+  // Sprint 4 EPIC 2 §2.3 — deep-link `?opp=<id>` opens the matching card. The
+  // card may be on a page not loaded yet, so it is fetched by id.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkOppId = searchParams.get("opp");
-
+  const deepLinkOpp = useOpportunity(
+    deepLinkOppId && selectedOpp?.id !== deepLinkOppId ? deepLinkOppId : null,
+  );
   useEffect(() => {
-    if (!deepLinkOppId || selectedOpp?.id === deepLinkOppId) return;
-    const match = opportunities.find((o) => o.id === deepLinkOppId);
-    if (match) setSelectedOpp(match);
-  }, [deepLinkOppId, opportunities, selectedOpp?.id]);
+    const opp = deepLinkOpp.data;
+    if (opp && opp.pipeline_id === pipelineId) setSelectedOpp(opp);
+  }, [deepLinkOpp.data, pipelineId]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedOpp(null);
@@ -98,64 +127,6 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
-
-  const leadsById = useMemo(() => {
-    const map: Record<string, (typeof leads)[number]> = {};
-    for (const l of leads) map[l.id] = l;
-    return map;
-  }, [leads]);
-
-  const leadIdsForCounts = useMemo(() => Array.from(new Set(localOpps.map((o) => o.lead_id))), [localOpps]);
-  const touchpointCounts = useTouchpointCounts(leadIdsForCounts);
-  const { scores: leadScores } = useLeadScores(leadIdsForCounts);
-
-  // Sprint 6.7 — batch-fetch company links for all visible opportunities
-  const localOppIds = useMemo(() => localOpps.map((o) => o.id), [localOpps]);
-  const { data: companiesByOppId = {} } = useQuery({
-    queryKey: ["kanban-company-links", localOppIds, equipeId],
-    queryFn: async (): Promise<Record<string, { id: string; name: string }[]>> => {
-      if (!localOppIds.length || !equipeId) return {};
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any;
-
-      const { data: links } = await sb
-        .from("opportunity_links")
-        .select("opportunity_id, linked_id")
-        .in("opportunity_id", localOppIds)
-        .eq("linked_type", "company")
-        .eq("equipe_id", equipeId)
-        .is("deleted_at", null);
-
-      if (!links || links.length === 0) return {};
-
-      const companyIds = [...new Set((links as { linked_id: string }[]).map((l) => l.linked_id))];
-
-      const { data: companies } = await sb
-        .from("companies")
-        .select("id, name")
-        .in("id", companyIds)
-        .is("deleted_at", null);
-
-      const companyMap: Record<string, { id: string; name: string }> = {};
-      if (companies) {
-        for (const c of companies as { id: string; name: string }[]) {
-          companyMap[c.id] = c;
-        }
-      }
-
-      const result: Record<string, { id: string; name: string }[]> = {};
-      for (const link of links as { opportunity_id: string; linked_id: string }[]) {
-        const company = companyMap[link.linked_id];
-        if (!company) continue;
-        if (!result[link.opportunity_id]) result[link.opportunity_id] = [];
-        result[link.opportunity_id].push({ id: company.id, name: company.name });
-      }
-
-      return result;
-    },
-    enabled: localOppIds.length > 0 && !!equipeId,
-  });
 
   const cardFields = useMemo(() => {
     const cardFieldIds = pipeline?.card_field_ids ?? [];
@@ -195,35 +166,9 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     [stages],
   );
 
-  const oppsByStage = useMemo(() => {
-    const map: Record<string, Opportunity[]> = {};
-    orderedStages.forEach((s) => (map[s.id] = []));
-    for (const o of localOpps) {
-      // Sprint 6.8 T3.3 — attach combined lead score and breakdown for badge rendering
-      const s = leadScores[o.lead_id];
-      (o as unknown as Record<string, unknown>)._lead_score = s?.leadScore ?? null;
-      (o as unknown as Record<string, unknown>)._lead_breakdown = s
-        ? { icp: s.icpScore, velocity: s.velocity }
-        : undefined;
-      if (map[o.stage_id]) map[o.stage_id].push(o);
-    }
-    // Sort each column by position to keep visual order stable.
-    for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-    }
-    return map;
-  }, [localOpps, orderedStages, leadScores]);
-
-  // Sprint 5.1 §5.2 — paddle-shifter siblings: the open card's own column, in view order.
-  const siblingsForSelected = useMemo(
-    () => (selectedOpp ? oppsByStage[selectedOpp.stage_id] ?? [] : []),
-    [selectedOpp, oppsByStage],
-  );
-
-  const activeOpp = activeId ? localOpps.find((o) => o.id === activeId) ?? null : null;
-
   const handleDragStart = (e: DragStartEvent) => {
-    setActiveId(String(e.active.id));
+    const card = e.active.data.current?.opportunity as BoardCard | undefined;
+    setActiveCard(card ?? null);
   };
 
   // Sprint 9: a deal dropped into a lost stage is asked why. Held here between
@@ -237,46 +182,33 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
-    setActiveId(null);
+    setActiveCard(null);
     if (!over) return;
 
-    const opp = localOpps.find((o) => o.id === active.id);
-    if (!opp) return;
+    const card = active.data.current?.opportunity as BoardCard | undefined;
+    if (!card) return;
 
-    // Resolve target stage: dropped either on a column (stage.id) or on another card.
-    const overId = String(over.id);
-    const overData = over.data.current as { type?: string; stageId?: string } | undefined;
+    // Dropped either on a column (stage) or on another card (take its stage).
+    const overData = over.data.current as
+      | { type?: string; stageId?: string; opportunity?: BoardCard }
+      | undefined;
     let targetStageId: string | undefined;
+    if (overData?.type === "stage") targetStageId = overData.stageId;
+    else if (overData?.type === "opportunity") targetStageId = overData.opportunity?.stage_id;
+    else targetStageId = String(over.id);
 
-    if (overData?.type === "stage") {
-      targetStageId = overData.stageId;
-    } else {
-      const targetOpp = localOpps.find((o) => o.id === overId);
-      targetStageId = targetOpp?.stage_id ?? overId;
-    }
     if (!targetStageId || !orderedStages.some((s) => s.id === targetStageId)) return;
-    if (targetStageId === opp.stage_id) return; // no-op same-column drop
+    if (targetStageId === card.stage_id) return; // same-column drop
 
-    // Optimistic snapshot update
-    setLocalOpps((prev) =>
-      prev.map((o) => (o.id === opp.id ? { ...o, stage_id: targetStageId! } : o)),
-    );
-
-    updateOpportunity.mutate(
-      { id: opp.id, stage_id: targetStageId },
+    moveCard.mutate(
+      { card, toStageId: targetStageId },
       {
-        onError: () => {
-          // Rollback — mutation already toasts. Reset to server state by re-applying source data.
-          setLocalOpps(opportunities);
-        },
         onSuccess: () => {
           // Ask for the motive only after the move actually landed, so a failed
-          // save never leaves a dialog asking about something that did not
-          // happen.
+          // save never leaves a dialog asking about something that did not happen.
           const target = orderedStages.find((s) => s.id === targetStageId);
           if (target?.stage_type === "lost") {
-            const lead = leads.find((l) => l.id === opp.lead_id);
-            setPendingLoss({ id: opp.id, leadName: lead?.name });
+            setPendingLoss({ id: card.id, leadName: card.lead?.name });
           }
         },
       },
@@ -298,9 +230,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     );
   };
 
-  const isLoading = stagesLoading || oppsLoading;
-
-  if (isLoading && opportunities.length === 0 && stages.length === 0) {
+  if (stagesLoading && stages.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -324,16 +254,37 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b border-border bg-card">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-border bg-card">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-foreground truncate">
             {pipeline?.name ?? "Pipeline"}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {opportunities.length} leads · {orderedStages.length} etapas
+          <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+            {summaryQuery.isLoading ? "…" : totalCount} {search ? "encontrados" : "leads"} ·{" "}
+            {orderedStages.length} etapas
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Buscar nome, telefone ou e-mail"
+              className="h-9 w-64 pl-8 pr-8"
+              aria-label="Buscar no quadro"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar busca"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           <Button variant="outline" size="sm" onClick={openCardConfig} disabled={!pipeline}>
             <Settings2 className="h-4 w-4 mr-1.5" />
             Campos do card
@@ -354,35 +305,39 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
             {orderedStages.map((stage) => (
               <OpportunityKanbanColumn
                 key={stage.id}
+                pipelineId={pipelineId}
                 stage={stage}
-                opportunities={oppsByStage[stage.id] ?? []}
-                leadsById={leadsById}
+                filters={filters}
+                summary={summaryByStage[stage.id]}
                 cardFields={cardFields}
-                touchpointCounts={touchpointCounts}
                 nativeFlags={nativeFlags}
-                onCardClick={setSelectedOpp}
-                onOpenContact={(leadId) => {
-                  const target = leadsById[leadId];
-                  if (target) setContactDrawerLead(target);
+                onCardClick={(card, cards) => {
+                  setSelectedOpp(card);
+                  setSiblings(cards);
                 }}
-                companiesByOppId={companiesByOppId}
+                onOpenContact={(leadId) => setContactLeadId(leadId)}
               />
             ))}
           </div>
 
           <DragOverlay>
-            {activeOpp && (
+            {activeCard && (
               <OpportunityCard
-                opportunity={activeOpp}
-                lead={leadsById[activeOpp.lead_id]}
-                stage={orderedStages.find((s) => s.id === activeOpp.stage_id)}
+                opportunity={activeCard}
+                lead={activeCard.lead}
+                stage={orderedStages.find((s) => s.id === activeCard.stage_id)}
                 cardFields={cardFields}
-                touchpointCount={touchpointCounts[activeOpp.lead_id] ?? 0}
+                touchpointCount={activeCard.touchpoint_count}
                 nativeFlags={nativeFlags}
-                leadScore={(activeOpp as any)._lead_score ?? null}
-                leadScoreBreakdown={(activeOpp as any)._lead_breakdown}
+                leadScore={activeCard.lead_score}
+                leadScoreBreakdown={
+                  activeCard.lead_score !== null
+                    ? { icp: activeCard.icp_score, velocity: activeCard.velocity }
+                    : undefined
+                }
                 onClick={() => {}}
                 isDragOverlay
+                companies={activeCard.companies}
               />
             )}
           </DragOverlay>
@@ -408,30 +363,27 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         opportunity={selectedOpp}
         pipeline={pipeline}
         stages={orderedStages}
-        lead={selectedOpp ? leadsById[selectedOpp.lead_id] : undefined}
+        lead={selectedLead.data ?? undefined}
         onClose={handleCloseDetail}
-        onOpenContact={(contactId) => {
-          const target = leadsById[contactId];
-          if (target) setContactDrawerLead(target);
-        }}
-        siblings={siblingsForSelected}
+        onOpenContact={(contactId) => setContactLeadId(contactId)}
+        siblings={siblings}
         onNavigate={(id) => {
-          const next = localOpps.find((o) => o.id === id);
+          const next = siblings.find((o) => o.id === id);
           if (next) setSelectedOpp(next);
         }}
       />
 
       <ContactDetailsModal
-        lead={contactDrawerLead}
-        open={!!contactDrawerLead}
-        onClose={() => setContactDrawerLead(null)}
+        lead={contactLead.data ?? null}
+        open={!!contactLeadId && !!contactLead.data}
+        onClose={() => setContactLeadId(null)}
         onSave={(data) => {
           updateLead.mutate(data);
-          setContactDrawerLead(null);
+          setContactLeadId(null);
         }}
         onDelete={(id) => {
           deleteLead.mutate(id);
-          setContactDrawerLead(null);
+          setContactLeadId(null);
         }}
       />
 
