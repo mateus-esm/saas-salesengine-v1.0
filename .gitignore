@@ -49,3 +49,7 @@ vite.config.ts.timestamp-*
 Planning/Assets/*_migração_*_jestor.csv
 Planning/Assets/migration_solo_energia.sql
 Planning/Assets/migration_report_solo_energia.md
+
+# Sprint 11 — reparo da mesma base: o SQL gerado leva ids e nomes de clientes.
+Planning/Assets/repair_solo_energia_sprint11*.sql
+Planning/Assets/repair_report_solo_energia.md

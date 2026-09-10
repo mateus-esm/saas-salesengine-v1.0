@@ -126,11 +126,16 @@ def parse_dt(v: str | None) -> str | None:
     `Data de Envio da Proposta` vem DD/MM/YYYY enquanto `Data de Fechamento` vem
     YYYY/MM/DD. Ler os dois com o mesmo parser trocaria dia por mês em silêncio
     em todo dia <= 12.
+
+    Sprint 11: também aceita a PRÓPRIA saída (ISO com 'T'). merge() normaliza
+    `Data` para ISO e o gerador de SQL chama parse_dt de novo; sem este formato
+    voltava None, o gerador caía em now() e os 1.253 leads da Solo Energia
+    ficaram "criados" no dia da importação.
     """
     v = clean(v)
     if not v:
         return None
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d", "%Y-%m-%d", "%d/%m/%Y"):
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d", "%Y-%m-%d", "%d/%m/%Y"):
         try:
             return datetime.strptime(v, fmt).isoformat()
         except ValueError:
