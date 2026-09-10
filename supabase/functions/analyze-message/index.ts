@@ -323,7 +323,10 @@ serve(async (req) => {
         .eq('equipe_id', lead.equipe_id)
         .eq('pipeline_id', opp.pipeline_id)
         .is('deleted_at', null)
-        .eq('stage_type', 'aberto')
+        // Sprint 11: the database stores 'open' (Sprint 6.8 reverted the PT-BR
+        // rewrite and missed this line), so 'aberto' found no stage and the
+        // "interested → qualified" move never happened.
+        .eq('stage_type', 'open')
         .order('position', { ascending: true })
         .limit(1)
         .maybeSingle();

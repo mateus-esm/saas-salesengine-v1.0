@@ -172,6 +172,44 @@ function splitLeadAndOpportunityFields(updates: Partial<LeadPayload>) {
   return { leadUpdates, oppValue, oppMeetingScheduled, oppNextContact, oppCustomData };
 }
 
+interface ExistingLead {
+  id: string;
+  custom_fields: Record<string, unknown> | null;
+  tags: string[] | null;
+}
+
+/**
+ * Sprint 11: find a live lead of the team by phone, compared the way the
+ * UNIQUE (equipe_id, phone_normalized) index compares — not by raw digits.
+ *
+ * The old lookup was `phone = <digits only>`, but `phone` keeps what was typed:
+ * 897 of Solo Energia's 1,175 phones carry a mask. The lookup missed, the insert
+ * hit the UNIQUE index, and the webhook answered 500 — a returning lead from the
+ * Meta form or the landing page was simply lost.
+ *
+ * If the RPC fails (e.g. not deployed yet) this returns null and the caller
+ * behaves as before, instead of turning every webhook into an error.
+ */
+// deno-lint-ignore no-explicit-any
+async function findLeadByPhone(supabase: any, equipeId: string, phone: string): Promise<ExistingLead | null> {
+  const { data: leadId, error } = await supabase.rpc('crm_find_lead_by_phone', {
+    p_equipe_id: equipeId,
+    p_phone: phone,
+  });
+  if (error) {
+    console.error('[crm-webhook] crm_find_lead_by_phone falhou; seguindo sem deduplicar:', error);
+    return null;
+  }
+  if (!leadId) return null;
+
+  const { data } = await supabase
+    .from('leads')
+    .select('id, custom_fields, tags')
+    .eq('id', leadId)
+    .maybeSingle();
+  return (data as ExistingLead | null) ?? null;
+}
+
 if (import.meta.main) {
   serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -397,18 +435,13 @@ if (import.meta.main) {
         );
       }
 
-      // 4. Create or update lead (dedup by phone to avoid unique constraint crash)
+      // 4. Create or update lead (dedup by the NORMALIZED phone — Sprint 11)
       const checkPhone = leadData.phone ? String(leadData.phone).replace(/\D/g, '') : null;
       let leadId = '';
       let isNewLead = true;
 
       if (checkPhone) {
-        const { data: existingLead } = await supabase
-          .from('leads')
-          .select('id, custom_fields')
-          .eq('equipe_id', config.equipe_id)
-          .eq('phone', checkPhone)
-          .maybeSingle();
+        const existingLead = await findLeadByPhone(supabase, config.equipe_id, String(leadData.phone));
 
         if (existingLead) {
           leadId = existingLead.id;
@@ -478,6 +511,9 @@ if (import.meta.main) {
             equipe_id: config.equipe_id,
             lead_id: leadId,
             createIfMissing: true,
+            // Sprint 11: the pipeline this webhook is configured for — it used to
+            // be ignored, and the deal landed in the team's default pipeline.
+            pipeline_id: pipelineId,
           });
           opportunityId = opp?.opportunity_id ?? null;
 
@@ -584,18 +620,45 @@ if (import.meta.main) {
         custom_fields: payload.custom_fields || {},
       };
 
-      const { data: lead, error: leadError } = await supabase
-        .from('leads')
-        .insert(leadData)
-        .select()
-        .single();
+      // Sprint 11: a number the team already has is the SAME person coming back.
+      // Update them instead of inserting — the insert used to hit the UNIQUE
+      // phone index and answer 500, and the lead was lost.
+      const existingLead = payload.phone
+        ? await findLeadByPhone(supabase, equipe.id, String(payload.phone))
+        : null;
+      const isNewLead = !existingLead;
+      let lead: { id: string };
 
-      if (leadError) {
-        console.error('Error creating lead:', leadError);
-        return new Response(
-          JSON.stringify({ error: 'Failed to create lead', details: leadError.message }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      if (existingLead) {
+        const leadUpdate: Record<string, unknown> = {};
+        if (payload.email) leadUpdate.email = payload.email;
+        if (payload.observations) leadUpdate.observations = payload.observations;
+        if (payload.tags?.length) {
+          leadUpdate.tags = Array.from(new Set([...(existingLead.tags ?? []), ...payload.tags]));
+        }
+        if (payload.custom_fields && Object.keys(payload.custom_fields).length > 0) {
+          leadUpdate.custom_fields = { ...(existingLead.custom_fields ?? {}), ...payload.custom_fields };
+        }
+        if (Object.keys(leadUpdate).length > 0) {
+          const { error: updateErr } = await supabase.from('leads').update(leadUpdate).eq('id', existingLead.id);
+          if (updateErr) console.error('[crm-webhook] Error updating existing lead:', updateErr);
+        }
+        lead = { id: existingLead.id };
+      } else {
+        const { data: inserted, error: leadError } = await supabase
+          .from('leads')
+          .insert(leadData)
+          .select()
+          .single();
+
+        if (leadError) {
+          console.error('Error creating lead:', leadError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to create lead', details: leadError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        lead = inserted;
       }
 
       // Create opportunity if tenant has a default pipeline configured.
@@ -645,8 +708,8 @@ if (import.meta.main) {
       await supabase.from('lead_activities').insert({
         lead_id: lead.id,
         tipo: 'webhook',
-        descricao: 'Lead criado via webhook',
-        metadata: { source: payload.source || 'webhook', opportunity_id: opportunityId },
+        descricao: isNewLead ? 'Lead criado via webhook' : 'Lead voltou via webhook (atualizado)',
+        metadata: { source: payload.source || 'webhook', opportunity_id: opportunityId, is_new: isNewLead },
       });
 
       return new Response(
@@ -654,9 +717,10 @@ if (import.meta.main) {
           success: true,
           lead_id: lead.id,
           opportunity_id: opportunityId,
-          message: 'Lead created',
+          is_new: isNewLead,
+          message: isNewLead ? 'Lead created' : 'Lead updated',
         }),
-        { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: isNewLead ? 201 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } else if (action === 'update' || body.lead_id) {
