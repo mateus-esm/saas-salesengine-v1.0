@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
+import { uniqueKey } from "@/lib/customFieldKeys";
 
 export const TYPE_LABELS: Record<CustomFieldType, string> = {
   text: "Texto",
@@ -113,7 +114,9 @@ export const CustomFieldsEditor = ({
     if (!draftLabel.trim()) return;
     const field: CustomFieldSchema = {
       field_id: newFieldId(),
-      key: slugify(draftLabel) || `field_${visible.length + 1}`,
+      // Sprint 11: unique across the whole schema, deleted fields included, and
+      // fixed from here on — webhooks and the dashboard name the field by it.
+      key: uniqueKey(schema.map((f) => f.key), slugify(draftLabel)),
       label: draftLabel.trim(),
       type: draftType,
       required: false,
@@ -342,10 +345,15 @@ export const SortableFieldRow = ({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Chave</Label>
+          {/* Sprint 11: fixed once created. The value is stored by field_id; the
+              key is the field's public name for webhooks, the dashboard and
+              integrations, which break if it changes. Rename the label instead. */}
           <Input
             value={field.key}
-            onChange={(e) => onPatch({ key: e.target.value })}
-            className="h-8 text-xs font-mono"
+            readOnly
+            aria-readonly
+            title="A chave é fixa depois de criada: webhooks e integrações usam esse nome. Para renomear, mude o rótulo."
+            className="h-8 text-xs font-mono bg-muted/50 text-muted-foreground cursor-default"
           />
         </div>
         <div className="flex items-end gap-3">

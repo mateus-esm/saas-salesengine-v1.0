@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
+import { resolveCustomDataKeys, type SchemaField } from "../_shared/custom-fields.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -208,6 +209,32 @@ async function findLeadByPhone(supabase: any, equipeId: string, phone: string): 
     .eq('id', leadId)
     .maybeSingle();
   return (data as ExistingLead | null) ?? null;
+}
+
+/**
+ * Sprint 11 · T8: merge incoming custom data into an opportunity, stored under
+ * each field's field_id. The sender names fields by their readable key (or by
+ * field_id); the pipeline's schema says which is which. Undeclared names are
+ * kept as they arrived — never dropped — and returned so the caller can log
+ * them where a human will see it.
+ */
+async function mergeIntoCustomData(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  opportunityId: string,
+  pipelineId: string,
+  incoming: Record<string, unknown>,
+): Promise<{ custom_data: Record<string, unknown>; undeclared: string[] }> {
+  const [{ data: current }, { data: pipe }] = await Promise.all([
+    supabase.from('opportunities').select('custom_data').eq('id', opportunityId).maybeSingle(),
+    supabase.from('pipelines').select('custom_fields_schema').eq('id', pipelineId).maybeSingle(),
+  ]);
+  const schema = Array.isArray(pipe?.custom_fields_schema) ? (pipe.custom_fields_schema as SchemaField[]) : [];
+  const { resolved, undeclared } = resolveCustomDataKeys(schema, incoming);
+  if (undeclared.length > 0) {
+    console.warn('[crm-webhook] campos nao declarados no pipeline', pipelineId, undeclared);
+  }
+  return { custom_data: { ...(current?.custom_data || {}), ...resolved }, undeclared };
 }
 
 if (import.meta.main) {
@@ -505,6 +532,7 @@ if (import.meta.main) {
       }
 
       let opportunityId: string | null = null;
+      let undeclaredKeys: string[] = [];
       if (pipelineId) {
         try {
           const opp = await resolveActiveOpportunity(supabase, {
@@ -526,12 +554,9 @@ if (import.meta.main) {
             }
 
             if (Object.keys(oppCustomData).length > 0) {
-              const { data: current } = await supabase
-                .from('opportunities')
-                .select('custom_data')
-                .eq('id', opp.opportunity_id)
-                .maybeSingle();
-              oppUpdate.custom_data = { ...(current?.custom_data || {}), ...oppCustomData };
+              const merged = await mergeIntoCustomData(supabase, opp.opportunity_id, opp.pipeline_id, oppCustomData);
+              oppUpdate.custom_data = merged.custom_data;
+              undeclaredKeys = merged.undeclared;
             }
 
             if (Object.keys(oppUpdate).length > 0) {
@@ -548,7 +573,15 @@ if (import.meta.main) {
         lead_id: leadId,
         tipo: 'webhook_inbound',
         descricao: isNewLead ? 'Lead criado via inbound webhook' : 'Lead atualizado via inbound webhook',
-        metadata: { config_id: config.id, opportunity_id: opportunityId, is_new: isNewLead },
+        metadata: {
+          config_id: config.id,
+          opportunity_id: opportunityId,
+          is_new: isNewLead,
+          // Sprint 11: mapped fields the pipeline does not declare. Kept in
+          // custom_data under the name they came with — listed here so someone
+          // can declare them instead of the data sitting invisible.
+          ...(undeclaredKeys.length > 0 ? { undeclared_keys: undeclaredKeys } : {}),
+        },
       });
 
       return new Response(
@@ -688,12 +721,8 @@ if (import.meta.main) {
             }
 
             if (Object.keys(oppCustom).length > 0) {
-              const { data: current } = await supabase
-                .from('opportunities')
-                .select('custom_data')
-                .eq('id', opp.opportunity_id)
-                .maybeSingle();
-              oppPatch.custom_data = { ...(current?.custom_data || {}), ...oppCustom };
+              const merged = await mergeIntoCustomData(supabase, opp.opportunity_id, opp.pipeline_id, oppCustom);
+              oppPatch.custom_data = merged.custom_data;
             }
 
             if (Object.keys(oppPatch).length > 0) {
@@ -791,12 +820,8 @@ if (import.meta.main) {
           if (oppNextContact !== undefined) customPatch.next_contact = oppNextContact;
 
           if (Object.keys(customPatch).length > 0) {
-            const { data: current } = await supabase
-              .from('opportunities')
-              .select('custom_data')
-              .eq('id', opp.opportunity_id)
-              .maybeSingle();
-            oppPatch.custom_data = { ...(current?.custom_data || {}), ...customPatch };
+            const merged = await mergeIntoCustomData(supabase, opp.opportunity_id, opp.pipeline_id, customPatch);
+            oppPatch.custom_data = merged.custom_data;
           }
 
           if (Object.keys(oppPatch).length > 0) {
