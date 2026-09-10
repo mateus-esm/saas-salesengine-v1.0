@@ -182,6 +182,21 @@ dispara — nenhum código emite esse evento. As chaves soltas `tipo_telhado`,
 `city`/`cidade` etc. são do tenant Casa Flow, não da Solo Energia (corrigido também
 no estudo MCP).
 
+**11. (Achado durante a execução · segurança) As tabelas de backup estavam
+públicas.** Toda tabela criada em `public` recebe SELECT para `anon` e
+`authenticated`; sem RLS, a API entrega a tabela a quem tiver a chave anon — que
+vai no bundle do frontend. Os 19 backups das Sprints 3, 5.5, 8.2 e 10 (contatos,
+9.340 mensagens, cópias de `profiles`, `billing_accounts`, `contracts` e `equipes`)
+e o `epic1_merge_log` (telefones) estavam assim: conferido com a chave anon, só
+contagem, 200/206. **Fechado em 10/09** com aprovação do founder
+(`20260910000050_sprint11_lock_backup_tables.sql`: RLS sem política + revoke;
+conferido: 401, e zero tabela em `public` sem RLS legível por anon/authenticated).
+Os logs da API só guardam ~1 dia (desde 09/09 21:35 UTC): nesse período, os únicos
+acessos a essas tabelas foram os da própria conferência. Acesso anterior não pode
+ser descartado. Os `webhook_secret` expostos eram das equipes duplicadas apagadas em
+03/09 — nenhum está em uso. **Regra daqui em diante:** backup em `public` nasce com
+`enable row level security` na mesma transação.
+
 ### Decisão técnica revisada — o endereço dos campos personalizados (D1 do estudo MCP)
 
 O estudo recomendou `key` como endereço canônico. Com o código na mão, **revisei para
