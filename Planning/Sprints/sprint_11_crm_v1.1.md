@@ -552,7 +552,7 @@ Execução solo e sequencial: T1, T2, T3, T4, T5, T6, T7, T8, T9, T10.
 ## 📊 Ledger
 
 - [x] T1 · Runner de teste SQL · S
-- [ ] T2 · Responsável no negócio · M
+- [x] T2 · Responsável no negócio · M
 - [ ] T3 · RPCs do quadro · L
 - [ ] T4 · Kanban no quadro do servidor · L
 - [ ] T5 · Tabelas sem teto + score/touchpoints em uma chamada · M
