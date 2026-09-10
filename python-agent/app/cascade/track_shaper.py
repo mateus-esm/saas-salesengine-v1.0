@@ -1,7 +1,7 @@
 """JTBD 1 — Track Shaper: NL description → validated PipelineBlueprint via Agno."""
 
 from agno.agent import Agent
-from app.llm import build_chat_model, parse_model_output
+from app.llm import build_chat_model, parse_model_output, structured_output_kwargs
 from pydantic import ValidationError
 
 from app.schemas import PipelineBlueprint
@@ -76,12 +76,13 @@ async def shape_track(
     """
     agent = Agent(
         model=build_chat_model(model_id),
-        output_schema=PipelineBlueprint,
         system_message=_SYSTEM_PT,
         telemetry=False,
-        # JSON mode (parse-based) instead of OpenAI strict structured outputs,
-        # which rejects optional fields / open dicts in our blueprint schema.
-        use_json_mode=True,
+        # JSON mode (parse-based) rather than OpenAI strict structured outputs,
+        # which rejects optional fields / open dicts in our blueprint schema —
+        # and omitted entirely when the provider's plan has no structured output
+        # (the prompt already carries the contract). See structured_output_kwargs.
+        **structured_output_kwargs(PipelineBlueprint),
     )
     response = await agent.arun(prompt)
     # Agno with output_schema already validates; if the model returns garbage

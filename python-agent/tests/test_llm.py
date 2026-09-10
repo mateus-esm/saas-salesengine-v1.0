@@ -59,3 +59,60 @@ def test_build_reasoning_model_degrades_for_openai_compatible_router(monkeypatch
     assert model.api_key == "vbk_test"
     assert model.role_map is not None
     assert getattr(model, "reasoning_effort", None) is None
+
+
+# ---------------------------------------------------------------------------
+# Structured output is a PLAN feature, not a given
+#
+# O router do Verboo devolve, para o plano desta conta:
+#   403 {'code': 'structured_output_not_enabled',
+#        'error': 'structured output is not enabled for this plan'}
+#
+# Os cinco agentes pediam `output_schema` + `use_json_mode`, entao TODA chamada
+# do Copilot morria ali — criar pipeline e sync juntos. Os prompts, porem, ja
+# carregam o contrato por conta propria ("Responda APENAS com o JSON do schema
+# X — sem texto adicional", mais um bloco SCHEMA DE SAIDA), e o modelo devolve
+# JSON limpo sem nenhuma coercao do provedor (verificado contra o router real).
+#
+# Mesmo criterio que o `role_map` ja usa neste arquivo: base_url customizada =>
+# comportamento conservador, com escape por env para routers que suportam.
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel
+
+
+class _Shape(BaseModel):
+    name: str
+
+
+def test_structured_output_off_by_default_on_a_custom_router(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://code.verboo.ai/router/v1")
+    monkeypatch.delenv("LLM_STRUCTURED_OUTPUT", raising=False)
+    from app.llm import structured_output_kwargs
+
+    assert structured_output_kwargs(_Shape) == {}
+
+
+def test_structured_output_on_for_direct_openai(monkeypatch):
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_STRUCTURED_OUTPUT", raising=False)
+    from app.llm import structured_output_kwargs
+
+    kwargs = structured_output_kwargs(_Shape)
+    assert kwargs == {"output_schema": _Shape, "use_json_mode": True}
+
+
+def test_structured_output_can_be_forced_on_for_a_router_that_supports_it(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://code.verboo.ai/router/v1")
+    monkeypatch.setenv("LLM_STRUCTURED_OUTPUT", "true")
+    from app.llm import structured_output_kwargs
+
+    assert structured_output_kwargs(_Shape)["output_schema"] is _Shape
+
+
+def test_structured_output_can_be_forced_off_for_openai(monkeypatch):
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.setenv("LLM_STRUCTURED_OUTPUT", "0")
+    from app.llm import structured_output_kwargs
+
+    assert structured_output_kwargs(_Shape) == {}

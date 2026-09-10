@@ -6,7 +6,7 @@ import unicodedata
 from typing import Any
 
 from agno.agent import Agent
-from app.llm import build_chat_model, parse_model_output
+from app.llm import build_chat_model, parse_model_output, structured_output_kwargs
 
 from app.schemas import ActionPlan, IntentDecision, PlannedAction
 from app.security import TenantContext
@@ -194,12 +194,12 @@ async def triage_intent(
     """
     agent = Agent(
         model=build_chat_model(model_id),
-        output_schema=IntentDecision,
         system_message=_SYSTEM_PT,
         telemetry=False,
-        # JSON mode (parse-based) instead of OpenAI strict structured outputs,
-        # which rejects free-form dict fields (args) and optional fields.
-        use_json_mode=True,
+        # JSON mode (parse-based) rather than OpenAI strict structured outputs,
+        # which rejects free-form dict fields (args) and optional fields — and
+        # omitted when the provider's plan has no structured output at all.
+        **structured_output_kwargs(IntentDecision),
     )
     message = _build_user_message(conversation, opportunity, pipeline_rules, stage_guide)
     response = await _arun_agent(agent, message)
@@ -325,10 +325,9 @@ async def triage_plan(
     """
     agent = Agent(
         model=model if model is not None else build_chat_model(model_id),
-        output_schema=ActionPlan,
         system_message=_PLAN_SYSTEM_PT,
         telemetry=False,
-        use_json_mode=True,
+        **structured_output_kwargs(ActionPlan),
     )
     message = _build_user_message(conversation, opportunity, pipeline_rules, stage_guide)
     response = await _arun_agent(agent, message)

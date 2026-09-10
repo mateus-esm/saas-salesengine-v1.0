@@ -19,10 +19,13 @@ class Settings(BaseSettings):
     # ids that Verboo does not serve, so any environment that set LLM_BASE_URL
     # without also setting all three MODEL vars would fall back to a model the
     # provider rejects.
-    doorman_model: str = "pro-old/deepseek-v4-flash-0731"
-    worker_model: str = "pro-old/deepseek-v4-flash-0731"
-    shaper_model: str = "pro-old/deepseek-v4-flash-0731"
-    strategic_model: str = "o4-mini"
+    doorman_model: str = "deepseek-v4-flash-0731"
+    worker_model: str = "deepseek-v4-flash-0731"
+    shaper_model: str = "deepseek-v4-flash-0731"
+    # Same model as the rest: the Verboo account serves one family today, and a
+    # strategic tier pointing at an OpenAI id (o4-mini) was a model the provider
+    # does not serve -- reached the moment copilot_workflow_enabled was turned on.
+    strategic_model: str = "deepseek-v4-flash-0731"
     copilot_workflow_enabled: bool = False
     ingest_enabled: bool = False
 
@@ -65,14 +68,19 @@ class Settings(BaseSettings):
         return value
 
 
-# Model swaps documented for operators (ids must be valid for LLM_BASE_URL):
-# Verboo router:  pro-old/deepseek-v4-flash-0731 (default), deepseek-reasoner
-# Direct OpenAI:  gpt-4o-mini (doorman), gpt-4o (worker/shaper)
+# Model ids must be valid for whatever LLM_BASE_URL points at. What the Verboo
+# router actually serves for this account (GET /router/v1/models):
 #
-# NOTE: `strategic_model` is still an OpenAI id (o4-mini). It is only reached
-# through build_reasoning_model when copilot_workflow_enabled is on, which is
-# off by default -- but on Verboo it would be rejected, so set STRATEGIC_MODEL
-# before enabling that workflow.
+#   deepseek-v4-flash        1M ctx, reasoning: high|max
+#   deepseek-v4-flash-0731   1M ctx, reasoning: low|medium|high|max|xhigh  <- default
+#   glm-5.3-flash            1M ctx, vision
+#   mimo-v2.5                1M ctx, vision
+#
+# The slug is the BARE id. The `pro-old/` prefix seen in the API key
+# (`vbk_pro-old_...`) is the account namespace; the router accepts it but strips
+# it, and echoes the bare id back in the response. Use the bare id.
+#
+# Direct OpenAI (only when LLM_BASE_URL is unset): gpt-4o-mini, gpt-4o, o4-mini.
 
 
 @lru_cache
