@@ -553,7 +553,7 @@ Execução solo e sequencial: T1, T2, T3, T4, T5, T6, T7, T8, T9, T10.
 
 - [x] T1 · Runner de teste SQL · S
 - [x] T2 · Responsável no negócio · M
-- [ ] T3 · RPCs do quadro · L
+- [x] T3 · RPCs do quadro · L — na base real da Solo Energia: resumo 185 ms (conta os 1.259), página de 30 cards da maior coluna 114 ms
 - [ ] T4 · Kanban no quadro do servidor · L
 - [ ] T5 · Tabelas sem teto + score/touchpoints em uma chamada · M
 - [ ] T6 · Placar com números reais · S
