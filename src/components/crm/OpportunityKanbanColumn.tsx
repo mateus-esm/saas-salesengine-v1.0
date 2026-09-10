@@ -1,26 +1,28 @@
+import { useEffect, useMemo, useRef } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useBoardStage } from "@/hooks/useBoard";
 
-import type { Lead } from "@/types/crm";
-import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
+import type { BoardCard, BoardStageSummary } from "@/types/board";
+import type { CrmFilters } from "@/types/crmFilters";
+import type { CustomFieldSchema, PipelineStageV2 } from "@/types/pipelines";
 import { OpportunityCard, type NativeCardFlags } from "./OpportunityCard";
 
 interface OpportunityKanbanColumnProps {
+  pipelineId: string;
   stage: PipelineStageV2;
-  opportunities: Opportunity[];
-  leadsById: Record<string, Lead>;
+  filters: CrmFilters;
+  /** The column's true totals (crm_board_summary), not just the loaded cards. */
+  summary: BoardStageSummary | undefined;
   cardFields: CustomFieldSchema[];
-  touchpointCounts: Record<string, number>;      // NEW
   nativeFlags: NativeCardFlags;
-  onCardClick: (opp: Opportunity) => void;
+  /** Receives the clicked card and the cards loaded in this column (for paddle navigation). */
+  onCardClick: (card: BoardCard, siblings: BoardCard[]) => void;
   onOpenContact?: (leadId: string) => void;
-  companiesByOppId?: Record<string, { id: string; name: string }[]>;
 }
-
-const sumValues = (opps: Opportunity[]) =>
-  opps.reduce((acc, o) => acc + (o.value ?? 0), 0);
 
 const formatCompactBRL = (v: number) =>
   v === 0
@@ -31,24 +33,53 @@ const formatCompactBRL = (v: number) =>
         notation: "compact",
       }).format(v);
 
+/**
+ * Sprint 11 — one Kanban column, loaded from the server 30 cards at a time.
+ *
+ * The count and total in the header come from the summary, so a column with 514
+ * deals says 514 even while only the first 30 are on screen. Scrolling near the
+ * bottom loads the next page (infinite scroll, no page buttons).
+ */
 export const OpportunityKanbanColumn = ({
+  pipelineId,
   stage,
-  opportunities,
-  leadsById,
+  filters,
+  summary,
   cardFields,
-  touchpointCounts,
   nativeFlags,
   onCardClick,
   onOpenContact,
-  companiesByOppId = {},
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
     data: { type: "stage", stageId: stage.id },
   });
 
-  const total = formatCompactBRL(sumValues(opportunities));
+  const query = useBoardStage(pipelineId, stage.id, filters);
+  const cards = useMemo(() => query.data?.pages.flat() ?? [], [query.data]);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+
+  // The sentinel sits under the last card. The viewport is the observer root, so
+  // this works whether the column scrolls on its own or the page does — the
+  // browser accounts for the column's overflow clipping either way.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !isFetchingNextPage) fetchNextPage();
+      },
+      { rootMargin: "300px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const count = summary?.count ?? cards.length;
+  const total = formatCompactBRL(summary?.value_sum ?? 0);
   const dimmed = stage.stage_type === "lost";
+  const firstLoad = query.isLoading;
 
   return (
     <div
@@ -76,8 +107,11 @@ export const OpportunityKanbanColumn = ({
                 SLA {stage.max_idle_hours}h
               </span>
             )}
-            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-              {opportunities.length}
+            <span
+              className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full tabular-nums"
+              title={`${count} negócio(s) nesta etapa`}
+            >
+              {count}
             </span>
           </div>
         </div>
@@ -89,33 +123,56 @@ export const OpportunityKanbanColumn = ({
       </div>
 
       <div className="flex-1 p-2 overflow-y-auto" ref={setNodeRef}>
-        <SortableContext
-          items={opportunities.map((o) => o.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2 min-h-[100px]">
-            {opportunities.length === 0 ? (
+            {firstLoad ? (
+              <div className="flex items-center justify-center h-24 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            ) : query.isError ? (
+              <div className="flex flex-col items-center justify-center gap-2 h-24 text-xs text-destructive text-center px-2">
+                <span>Não foi possível carregar esta etapa.</span>
+                <button
+                  type="button"
+                  className="underline text-muted-foreground hover:text-foreground"
+                  onClick={() => query.refetch()}
+                >
+                  Tentar de novo
+                </button>
+              </div>
+            ) : cards.length === 0 ? (
               <div className="flex items-center justify-center h-24 text-xs text-muted-foreground border-2 border-dashed border-muted rounded-md">
                 Arraste leads aqui
               </div>
             ) : (
-              opportunities.map((opp) => (
-                <div key={opp.id} className="shrink-0">
+              cards.map((card) => (
+                <div key={card.id} className="shrink-0">
                   <OpportunityCard
-                    opportunity={opp}
-                    lead={leadsById[opp.lead_id]}
+                    opportunity={card}
+                    lead={card.lead}
                     stage={stage}
                     cardFields={cardFields}
-                    touchpointCount={touchpointCounts[opp.lead_id] ?? 0}
+                    touchpointCount={card.touchpoint_count}
                     nativeFlags={nativeFlags}
-                    leadScore={(opp as any)._lead_score ?? null}
-                    leadScoreBreakdown={(opp as any)._lead_breakdown}
-                    onClick={() => onCardClick(opp)}
+                    leadScore={card.lead_score}
+                    leadScoreBreakdown={
+                      card.lead_score !== null
+                        ? { icp: card.icp_score, velocity: card.velocity }
+                        : undefined
+                    }
+                    onClick={() => onCardClick(card, cards)}
                     onOpenContact={onOpenContact}
-                    companies={companiesByOppId[opp.id] ?? []}
+                    companies={card.companies}
                   />
                 </div>
               ))
+            )}
+
+            {hasNextPage && <div ref={sentinelRef} className="h-2" aria-hidden />}
+            {isFetchingNextPage && (
+              <div className="flex items-center justify-center py-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
             )}
           </div>
         </SortableContext>

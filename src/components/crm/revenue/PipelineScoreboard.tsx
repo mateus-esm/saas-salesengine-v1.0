@@ -45,15 +45,19 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
 
   const equipeId = profile?.equipe_id;
 
+  // Sprint 11: profiles has no `name` column (it is nome_completo) and its RLS
+  // only shows the user's own row, so this used to fail silently and every
+  // per-owner row showed a UUID fragment. crm_team_members() returns the team.
   const { data: profiles = [] } = useQuery({
-    queryKey: ["profiles", equipeId],
+    queryKey: ["team_members", equipeId, "scoreboard"],
     queryFn: async () => {
       const sb = supabase as any;
-      const { data } = await sb
-        .from("profiles")
-        .select("id, name")
-        .eq("equipe_id", equipeId);
-      return (data ?? []) as { id: string; name: string }[];
+      const { data, error } = await sb.rpc("crm_team_members");
+      if (error) throw error;
+      return ((data ?? []) as { id: string; nome_completo: string | null }[]).map((m) => ({
+        id: m.id,
+        name: m.nome_completo ?? "",
+      }));
     },
     enabled: !!equipeId,
     staleTime: 60_000,

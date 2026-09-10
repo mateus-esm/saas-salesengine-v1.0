@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { fetchAllPages } from "@/lib/fetchAllPages";
+import { createDebouncer } from "@/lib/debounce";
 
 import type {
   Opportunity,
@@ -31,6 +33,7 @@ interface OpportunityRow {
   stage_entered_at: string;
   closed_at: string | null;
   lost_reason: string | null;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -50,6 +53,7 @@ const normalize = (row: OpportunityRow): Opportunity => ({
   stage_entered_at: row.stage_entered_at,
   closed_at: row.closed_at ?? null,
   lost_reason: row.lost_reason ?? null,
+  owner_id: row.owner_id ?? null,
   created_at: row.created_at,
   updated_at: row.updated_at,
   deleted_at: row.deleted_at ?? null,
@@ -76,38 +80,81 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     queryKey,
     queryFn: async (): Promise<Opportunity[]> => {
       if (!equipeId) return [];
-      let q = sb
-        .from(TABLE)
-        .select("*")
-        .eq("equipe_id", equipeId)
-        .is("deleted_at", null);
-
-      if (pipelineId) q = q.eq("pipeline_id", pipelineId);
-      if (leadId) q = q.eq("lead_id", leadId);
-
-      const { data, error } = await q.order("position", { ascending: true });
-      if (error) throw error;
-      return ((data || []) as OpportunityRow[]).map(normalize);
+      // Sprint 11: every page, not just the first 1,000 rows (the API cap hid 259
+      // Solo Energia deals). `id` breaks the ties in `position` — 1,259 deals sat
+      // at position 0 — so pages cannot repeat or skip rows.
+      const rows = await fetchAllPages<OpportunityRow>((from, to) => {
+        let q = sb
+          .from(TABLE)
+          .select("*")
+          .eq("equipe_id", equipeId)
+          .is("deleted_at", null);
+        if (pipelineId) q = q.eq("pipeline_id", pipelineId);
+        if (leadId) q = q.eq("lead_id", leadId);
+        return q
+          .order("position", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+      });
+      return rows.map(normalize);
     },
     enabled: !!equipeId,
   });
 
   useEffect(() => {
     if (!equipeId) return;
+    // Sprint 11: a burst of changes (the Copilot, a bulk move, a webhook) used to
+    // refetch the whole list once per row. Grouped now.
+    const refresh = createDebouncer(
+      () => queryClient.invalidateQueries({ queryKey }),
+      1000,
+      { maxWait: 5000 },
+    );
     const channel = sb
       .channel(`opportunities_${equipeId}_${pipelineId ?? "all"}_${leadId ?? "all"}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: TABLE, filter: `equipe_id=eq.${equipeId}` },
-        () => queryClient.invalidateQueries({ queryKey }),
+        () => refresh.call(),
       )
       .subscribe();
     return () => {
+      refresh.cancel();
       sb.removeChannel(channel);
     };
     // queryKey is derived from these — including the array would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equipeId, pipelineId, leadId, queryClient]);
+
+  const mutations = useOpportunityMutations();
+
+  return {
+    opportunities: query.data || [],
+    isLoading: query.isLoading,
+    error: query.error,
+    ...mutations,
+    refetch: query.refetch,
+  };
+};
+
+/**
+ * Sprint 11 — the opportunity mutations without the list query.
+ *
+ * The detail modal used to call useOpportunities() only to get these, and it is
+ * mounted even while closed — with no pipelineId, so every Kanban visit loaded
+ * every opportunity of the team a second time. Anything that only edits should
+ * use this hook. Invalidates the Kanban board cache too, so an edit made in the
+ * modal shows up on the card.
+ */
+export const useOpportunityMutations = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const equipeId = profile?.equipe_id;
+
+  const invalidateLists = () => {
+    queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+  };
 
   const createOpportunity = useMutation({
     mutationFn: async (input: CreateOpportunityData): Promise<Opportunity> => {
@@ -147,7 +194,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       return normalize(data as OpportunityRow);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
       toast.success("Lead criado!");
     },
     onError: (e: Error) => toast.error("Erro ao criar lead: " + e.message),
@@ -165,7 +212,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       return normalize(data as OpportunityRow);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
     },
     onError: (e: Error) => toast.error("Erro ao atualizar: " + e.message),
   });
@@ -179,7 +226,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
       toast.success("Lead removido");
     },
     onError: (e: Error) => toast.error("Erro ao remover: " + e.message),
@@ -223,18 +270,14 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       toast.success(`${n} lead${n > 1 ? "s removidos" : " removido"}`);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      invalidateLists();
     },
   });
 
   return {
-    opportunities: query.data || [],
-    isLoading: query.isLoading,
-    error: query.error,
     createOpportunity,
     updateOpportunity,
     deleteOpportunity,
     bulkDeleteOpportunities,
-    refetch: query.refetch,
   };
 };

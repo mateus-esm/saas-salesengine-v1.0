@@ -8,57 +8,44 @@ export interface LeadScoreMap {
   [leadId: string]: {
     icpScore: number | null;
     velocity: number | null;
-    leadScore: number | null; // 0-10 combined score
+    leadScore: number | null; // 0-10 combined score; null = no data, never a fake 0
   };
 }
 
-/** Combine ICP (0-100) and velocity (0-100) into a single 0-10 score. */
-function computeLeadScore(icpScore: number | null, velocity: number | null): number | null {
-  if (icpScore === null && velocity === null) return null;
-  const avg = ((icpScore ?? 0) + (velocity ?? 0)) / 2;
-  return Math.min(Math.max(Math.round(avg / 10), 0), 10);
+interface ServerScore {
+  icp_score: number | null;
+  velocity: number | null;
+  lead_score: number | null;
 }
 
 /**
- * Sprint 6.7 — Batch-fetch ICP and lead-velocity scores for a set of lead IDs.
+ * Lead scores for a set of leads, in ONE request.
  *
- * Calls `fn_calculate_icp_score` and `fn_calculate_lead_velocity` for each
- * lead in parallel via Supabase RPC. Results are cached per lead set.
+ * Sprint 11: this used to fire `fn_calculate_icp_score` and
+ * `fn_calculate_lead_velocity` once per lead — about 2,000 requests every time
+ * the Solo Energia board opened. `crm_lead_scores` computes them all on the
+ * server; the ids travel in the POST body, so there is no URL length limit.
  *
- * Returns `{ scores, isLoading }` where `scores` is a map of lead_id → {icpScore, velocity}.
+ * The score is null when there is nothing to score (no ICP criteria on the
+ * pipeline and no activity on the lead). The badge hides instead of showing 0
+ * for everyone.
  */
 export function useLeadScores(leadIds: string[]) {
-  const deduped = [...new Set(leadIds.filter(Boolean))];
+  const deduped = [...new Set(leadIds.filter(Boolean))].sort();
 
   const { data, isLoading } = useQuery<LeadScoreMap>({
-    queryKey: ["lead-scores", ...deduped.sort()],
+    queryKey: ["lead-scores", ...deduped],
     queryFn: async (): Promise<LeadScoreMap> => {
-      const results = await Promise.all(
-        deduped.map(async (leadId) => {
-          const [icpResult, velResult] = await Promise.all([
-            sb.rpc("fn_calculate_icp_score", { p_lead_id: leadId }),
-            sb.rpc("fn_calculate_lead_velocity", { p_lead_id: leadId }),
-          ]);
-
-          const icpRaw = icpResult?.data?.[0];
-          const icpScore: number | null =
-            icpRaw && typeof icpRaw.score === "number" ? icpRaw.score : null;
-
-          const velRaw = velResult?.data;
-          const velocity: number | null =
-            velRaw !== null && velRaw !== undefined
-              ? typeof velRaw === "number"
-                ? velRaw
-                : Number(velRaw)
-              : null;
-
-          return { leadId, icpScore, velocity, leadScore: computeLeadScore(icpScore, velocity) };
-        }),
-      );
+      const { data: raw, error } = await sb.rpc("crm_lead_scores", { p_lead_ids: deduped });
+      if (error) throw error;
 
       const map: LeadScoreMap = {};
-      for (const r of results) {
-        map[r.leadId] = { icpScore: r.icpScore, velocity: r.velocity, leadScore: r.leadScore };
+      for (const [leadId, s] of Object.entries((raw ?? {}) as Record<string, ServerScore>)) {
+        map[leadId] = {
+          icpScore: s.icp_score ?? null,
+          velocity: s.velocity ?? null,
+          leadScore: s.lead_score ?? null,
+        };
       }
       return map;
     },

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { computeStageTelemetry } from "@/hooks/useStageTelemetry";
 import { NextContactBadge } from "./NextContactBadge";
 import { supabase } from "@/integrations/supabase/client";
-import type { Lead } from "@/types/crm";
+import type { CardLead } from "@/types/board";
 import type { Opportunity, PipelineStageV2 } from "@/types/pipelines";
 import { formatBrPhone } from "@/lib/displayName";
 
@@ -18,7 +18,7 @@ const toLocalDateString = (date: Date) => {
 interface CardTelemetryPillarsProps {
   opportunity: Opportunity;
   stage: PipelineStageV2 | undefined;
-  lead: Lead | undefined;
+  lead: CardLead | null | undefined;
   touchpointCount: number;
   timeInPhase?: boolean;
   touchpoints?: boolean;
@@ -58,6 +58,8 @@ export const CardTelemetryPillars = ({
       .eq("id", lead.id);
     queryClient.invalidateQueries({ queryKey: ["leads"] });
     queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+    queryClient.invalidateQueries({ queryKey: ["board"] });
+    queryClient.invalidateQueries({ queryKey: ["lead", lead.id] });
   };
 
   if (!timeInPhase && !touchpoints && !showNextContact && !hasPhone) return null;

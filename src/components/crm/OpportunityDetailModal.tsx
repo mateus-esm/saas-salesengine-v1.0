@@ -53,7 +53,7 @@ import type {
   Pipeline,
   PipelineStageV2,
 } from "@/types/pipelines";
-import { useOpportunities } from "@/hooks/useOpportunities";
+import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { useAgendaEvents } from "@/hooks/useAgendaEvents";
 import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
 import { BRAND } from "@/config/brand";
@@ -103,9 +103,10 @@ export const OpportunityDetailModal = ({
   siblings,
   onNavigate,
 }: OpportunityDetailModalProps) => {
-  const { updateOpportunity, deleteOpportunity } = useOpportunities({
-    pipelineId: opportunity?.pipeline_id,
-  });
+  // Sprint 11: mutations only. This modal is mounted even while closed; the old
+  // useOpportunities() call loaded the pipeline (or, with no opportunity, every
+  // deal of the team) just to get these two functions.
+  const { updateOpportunity, deleteOpportunity } = useOpportunityMutations();
 
   const queryClient = useQueryClient();
   const { profile, equipe } = useAuth();

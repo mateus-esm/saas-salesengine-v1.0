@@ -143,6 +143,8 @@ export interface Opportunity {
   closed_at: string | null;
   /** Sprint 9: why this deal was lost, when it was. */
   lost_reason: string | null;
+  /** Sprint 11: responsável pelo negócio (profiles.id). Herda leads.responsible_id no insert. */
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -231,6 +233,8 @@ export interface UpdateOpportunityData {
   closed_at?: string | null;
   /** Sprint 9: why a deal was lost. Chosen from pipelines.loss_reasons. */
   lost_reason?: string | null;
+  /** Sprint 11: responsável pelo negócio. Precisa ser da mesma equipe (trigger recusa). */
+  owner_id?: string | null;
 }
 
 // ───────────────────────────────────────────────────────────────

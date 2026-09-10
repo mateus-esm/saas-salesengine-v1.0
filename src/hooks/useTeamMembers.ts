@@ -12,11 +12,12 @@ export const useTeamMembers = () => {
     queryFn: async (): Promise<TeamMember[]> => {
       if (!equipeId) return [];
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, nome_completo, email")
-        .eq("equipe_id", equipeId)
-        .order("nome_completo");
+      // Sprint 11: a RLS de profiles só mostra o próprio profile, então a query
+      // direta devolvia só o usuário logado para quem não é super admin.
+      // crm_team_members() devolve a equipe inteira de quem chama, e só ela.
+      // Os tipos gerados ainda não conhecem a RPC.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("crm_team_members");
 
       if (error) throw error;
       return (data || []) as TeamMember[];

@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Lead, CreateLeadData, UpdateLeadData } from "@/types/crm";
+import { fetchAllPages } from "@/lib/fetchAllPages";
+import { createDebouncer } from "@/lib/debounce";
 
 export type { Lead, CreateLeadData, UpdateLeadData } from "@/types/crm";
 
@@ -21,16 +23,20 @@ export const useLeads = () => {
     queryKey: ["leads", equipeId],
     queryFn: async () => {
       if (!equipeId) return [];
-      
-      const { data, error } = await supabase
-        .from("leads")
-        .select("*")
-        .eq("equipe_id", equipeId)
-        .is("deleted_at", null)
-        .order("last_message_at", { ascending: false, nullsFirst: false });
 
-      if (error) throw error;
-      return (data || []) as Lead[];
+      // Sprint 11: every page — the API caps a query at 1,000 rows and Solo
+      // Energia has 1,253 contacts. `id` breaks ties (many leads share a null
+      // last_message_at), so pages cannot repeat or skip rows.
+      return fetchAllPages<Lead>((from, to) =>
+        sb
+          .from("leads")
+          .select("*")
+          .eq("equipe_id", equipeId)
+          .is("deleted_at", null)
+          .order("last_message_at", { ascending: false, nullsFirst: false })
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
     },
     enabled: !!equipeId,
   });
@@ -38,6 +44,15 @@ export const useLeads = () => {
   // Escutar atualizações na tabela Leads (Realtime)
   useEffect(() => {
     if (!equipeId) return;
+
+    // Sprint 11: WhatsApp traffic updates last_message_at / unread_count all day,
+    // and each change used to refetch every contact. Grouped: one refetch per
+    // quiet second, at least one every 5 s under a constant stream.
+    const refresh = createDebouncer(
+      () => queryClient.invalidateQueries({ queryKey: ["leads", equipeId] }),
+      1000,
+      { maxWait: 5000 },
+    );
 
     const channel = supabase
       .channel(`leads_updates_${equipeId}`)
@@ -49,14 +64,12 @@ export const useLeads = () => {
           table: "leads",
           filter: `equipe_id=eq.${equipeId}`
         },
-        () => {
-          // Quando o banco atualizar (ex: Webhook alterar o last_message_at ou unread_count), refetch!
-          queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
-        }
+        () => refresh.call(),
       )
       .subscribe();
 
     return () => {
+      refresh.cancel();
       supabase.removeChannel(channel);
     };
   }, [equipeId, queryClient]);
@@ -173,4 +186,62 @@ export const useLeads = () => {
     moveLeadToStage,
     refetch: leadsQuery.refetch,
   };
+};
+
+/**
+ * Sprint 11 — save / remove one contact without loading the whole contact base.
+ *
+ * The Kanban used useLeads() only to get these two mutations, which pulled every
+ * lead of the team (capped at 1,000 rows) into memory on every visit. Invalidates
+ * the single-lead cache and the board, so the card picks up the new name.
+ */
+export const useLeadMutations = () => {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const equipeId = profile?.equipe_id;
+
+  const invalidate = (leadId?: string) => {
+    queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+    if (leadId) queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
+  };
+
+  const updateLead = useMutation({
+    mutationFn: async ({ id, ...updateData }: UpdateLeadData) => {
+      const { data, error } = await sb
+        .from("leads")
+        .update({ ...updateData, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, vars) => {
+      invalidate(vars.id);
+      toast.success("Contato atualizado!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao atualizar contato: " + error.message);
+    },
+  });
+
+  const deleteLead = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await sb
+        .from("leads")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, id) => {
+      invalidate(id);
+      toast.success("Contato removido!");
+    },
+    onError: (error: Error) => {
+      toast.error("Erro ao remover contato: " + error.message);
+    },
+  });
+
+  return { updateLead, deleteLead };
 };

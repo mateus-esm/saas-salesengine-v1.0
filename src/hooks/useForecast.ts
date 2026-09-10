@@ -1,5 +1,103 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllPages } from "@/lib/fetchAllPages";
+
+/** Start (inclusive) and end (exclusive) of the current month or quarter, local time. */
+export function periodBounds(
+  period: "month" | "quarter",
+  now: Date = new Date(),
+): { start: Date; end: Date } {
+  if (period === "month") {
+    return {
+      start: new Date(now.getFullYear(), now.getMonth(), 1),
+      end: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+    };
+  }
+  const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+  return {
+    start: new Date(now.getFullYear(), quarterMonth, 1),
+    end: new Date(now.getFullYear(), quarterMonth + 3, 1),
+  };
+}
+
+/** The columns the placar reads from each opportunity. */
+export interface PlacarOpp {
+  status: string | null;
+  created_at: string | null;
+  closed_at: string | null;
+  owner_id: string | null;
+  value: number | string | null;
+}
+
+export interface PlacarResult {
+  won: number;
+  lost: number;
+  in_progress: number;
+  win_rate: number | null;
+  avg_velocity_days: number | null;
+  won_revenue: number;
+  owner_placar: Record<string, { won: number; lost: number; in_progress: number }>;
+}
+
+/**
+ * Sprint 11 — the placar of THIS period.
+ *
+ * A win or a loss counts only when it closed inside the period; a deal with no
+ * close date is not "this month" (Solo Energia imported 61 wins without one).
+ * In progress is a snapshot of every open deal. Per-owner rows use
+ * opportunities.owner_id — the old code read `assigned_to`, a column that does
+ * not exist on opportunities, so the query failed and every number was zero.
+ */
+export function buildPlacar(
+  opps: PlacarOpp[],
+  bounds: { start: Date; end: Date },
+): PlacarResult {
+  const inPeriod = (iso: string | null) => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) && t >= bounds.start.getTime() && t < bounds.end.getTime();
+  };
+  const money = (v: number | string | null) => (v === null ? 0 : Number(v) || 0);
+
+  let won = 0;
+  let lost = 0;
+  let in_progress = 0;
+  let won_revenue = 0;
+  const wonForVelocity: { created_at: string; closed_at: string }[] = [];
+  const owner_placar: PlacarResult["owner_placar"] = {};
+  const bump = (ownerId: string | null, key: "won" | "lost" | "in_progress") => {
+    if (!ownerId) return;
+    owner_placar[ownerId] ??= { won: 0, lost: 0, in_progress: 0 };
+    owner_placar[ownerId][key]++;
+  };
+
+  for (const o of opps) {
+    if (o.status === "open") {
+      in_progress++;
+      bump(o.owner_id, "in_progress");
+    } else if (o.status === "won" && inPeriod(o.closed_at)) {
+      won++;
+      won_revenue += money(o.value);
+      bump(o.owner_id, "won");
+      if (o.created_at && o.closed_at) {
+        wonForVelocity.push({ created_at: o.created_at, closed_at: o.closed_at });
+      }
+    } else if (o.status === "lost" && inPeriod(o.closed_at)) {
+      lost++;
+      bump(o.owner_id, "lost");
+    }
+  }
+
+  return {
+    won,
+    lost,
+    in_progress,
+    win_rate: computeWinRate(won, lost),
+    avg_velocity_days: computeAvgVelocityDays(wonForVelocity),
+    won_revenue,
+    owner_placar,
+  };
+}
 
 /** Days elapsed in the current period. */
 function daysElapsed(period: "month" | "quarter"): number {
@@ -109,11 +207,12 @@ export function useForecast(pipelineId: string | null) {
       const sb = supabase as any;
 
       // 1. Get pipeline revenue_config
-      const { data: pipe } = await sb
+      const { data: pipe, error: pipeError } = await sb
         .from("pipelines")
         .select("revenue_config")
         .eq("id", pipelineId)
         .single();
+      if (pipeError) throw pipeError;
 
       const config = pipe?.revenue_config ?? {};
       const goal_deals = config.goal_deals ?? 0;
@@ -123,9 +222,10 @@ export function useForecast(pipelineId: string | null) {
       const owner_goals = config.owner_goals ?? [];
 
       // 2. Call fn_stage_conversion_rates via rpc
-      const { data: rates } = await sb.rpc("fn_stage_conversion_rates", {
+      const { data: rates, error: ratesError } = await sb.rpc("fn_stage_conversion_rates", {
         p_pipeline_id: pipelineId,
       });
+      if (ratesError) throw ratesError;
 
       // Clamp every rate to [0,1]: a bad/over-1 conversion rate must never
       // explode required_inbound or render as nonsense (e.g. "2600%").
@@ -138,41 +238,22 @@ export function useForecast(pipelineId: string | null) {
         };
       });
 
-      // 3. Placar — now with timestamps for velocity computation + assigned_to for per-owner
-      const { data: opps } = await sb
-        .from("opportunities")
-        .select("status, created_at, closed_at, assigned_to, value")
-        .eq("pipeline_id", pipelineId);
+      // 3. Placar of this period (Sprint 11). Every page: the pipeline can pass
+      // the 1,000-row cap (Solo Energia has 1,259 deals). Errors are thrown —
+      // the old query asked for a column that does not exist, the error was
+      // swallowed, and the placar showed zeros for months.
+      const allOpps = await fetchAllPages<PlacarOpp>((from, to) =>
+        sb
+          .from("opportunities")
+          .select("status, created_at, closed_at, owner_id, value")
+          .eq("pipeline_id", pipelineId)
+          .is("deleted_at", null)
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
 
-      const allOpps = (opps ?? []) as any[];
-      const won = allOpps.filter((o: any) => o.status === "won").length;
-      const lost = allOpps.filter((o: any) => o.status === "lost").length;
-      const in_progress = allOpps.filter((o: any) => o.status === "open").length;
-
-      // 3a. Win rate: won / (won + lost) as percentage, null when no decisions
-      const win_rate = computeWinRate(won, lost);
-
-      // 3b. Pipeline velocity: avg days from created_at to closed_at (when stage changed to won)
-      const wonOpps = allOpps.filter((o: any) => o.status === "won" && o.created_at && o.closed_at);
-      const avg_velocity_days = computeAvgVelocityDays(wonOpps);
-
-      // 3c. Revenue from won opportunities
-      const won_revenue = allOpps
-        .filter((o: any) => o.status === "won")
-        .reduce((sum: number, o: any) => sum + (parseFloat(o.value) || 0), 0);
-
-      // 3d. Per-owner placar
-      const owner_placar: Record<string, { won: number; lost: number; in_progress: number }> = {};
-      for (const opp of allOpps) {
-        const ownerId = opp.assigned_to;
-        if (!ownerId) continue;
-        if (!owner_placar[ownerId]) {
-          owner_placar[ownerId] = { won: 0, lost: 0, in_progress: 0 };
-        }
-        if (opp.status === "won") owner_placar[ownerId].won++;
-        else if (opp.status === "lost") owner_placar[ownerId].lost++;
-        else if (opp.status === "open") owner_placar[ownerId].in_progress++;
-      }
+      const { won, lost, in_progress, win_rate, avg_velocity_days, won_revenue, owner_placar } =
+        buildPlacar(allOpps, periodBounds(period));
 
       // 4. Derived metrics are only honest when a goal is set AND there is real
       //    pipeline data to base conversion on. Otherwise we say so instead of
