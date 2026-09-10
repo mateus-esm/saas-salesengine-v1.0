@@ -735,3 +735,87 @@ regra diferente da do banco é o agente falando com ninguém.
   `custom_data.responsavel_jestor`. 573 das 1.260 vinham vazias.
 - O importador genérico e as oito features de paridade seguem abertos, cada um
   com sua sprint.
+
+---
+
+# Sprint 11 · Onda 1 — Handoff
+
+> **Sprint:** CRM v1.1 — Confiança (`sprint_11_crm_v1.1.md`)
+> **Fechada:** 2026-09-10 · **PM + Engineer:** Claude (Opus 5) · **Branch:** `claude/sprint11/w1/crm-confianca`
+> **Verificação:** `tsc -b` limpo · vitest 137/137 · `npm run build` · `deno test _shared` 84/84 ·
+> 4 testes SQL (`scripts/sqltest.sh`, em rollback contra a produção) · `python scripts/test_migrate_solo_energia.py`
+
+## 1. O que esta onda era
+
+A Sprint 11 abriu com 14 pontos do founder. A análise mostrou que o CRM tinha
+coisas **quebradas**, não só feias — e que tudo o que se construísse por cima
+herdaria isso. A Onda 1 conserta o que está quebrado, com prova, usando a Solo
+Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
+(tracking) seguem no plano.
+
+## 2. Entregue
+
+- **T1** `scripts/sqltest.sh` — testes SQL contra a produção sempre em
+  `BEGIN … ROLLBACK`, com `-- @include` da migration de verdade e recusa de `commit;`.
+- **T2** `opportunities.owner_id` (herda do contato, recusa responsável de outra
+  equipe) + `crm_team_members()` — a RLS de profiles fazia todo seletor de membro
+  mostrar só o usuário logado.
+- **T3** RPCs do quadro: `crm_board_summary`, `crm_board_stage`, `crm_lead_scores`,
+  `crm_touchpoint_counts`, com um só filtro (`crm_opp_matches`). Na base real:
+  resumo em 185 ms contando os 1.259, página de 30 cards em 114 ms.
+- **T4** Kanban lê do servidor, 30 cards por coluna com rolagem infinita; contador
+  e total verdadeiros; busca por nome/telefone/e-mail no cabeçalho.
+- **T5** tabelas leem além de 1.000 linhas; score e touchpoints numa chamada.
+- **T6** placar com números reais **do período** (antes: coluna inexistente → zero;
+  corrigido só isso, contaria o histórico inteiro como "mês").
+- **T7** webhook de entrada deduplica pelo telefone normalizado — e o achado maior (§3).
+- **T8** contrato dos campos: valor em `custom_data[field_id]`, chave imutável,
+  webhook traduz, dashboard lê pelo field_id e conta multi-seleção por item.
+- **T9** reparo da Solo Energia **aplicado**.
+
+## 3. Achados que não estavam no plano
+
+1. **Nenhum lead de WhatsApp/webhook virava negócio desde 23/06.** A reversão do
+   `stage_type` para inglês (Sprint 6.8) não viu `_shared/opportunities.ts`, que
+   seguiu procurando `stage_type = 'aberto'`. 296 leads fora de qualquer Kanban
+   (Casa Flow 174, Cinemas Benficas 120, Rema 1, Solo Energia 1). O mesmo erro
+   matava os movimentos de etapa por intenção do `analyze-message`.
+2. **19 tabelas de backup + `epic1_merge_log` estavam legíveis pela internet** com a
+   chave anon (contatos, 9.340 mensagens, cópias de profiles/billing/contracts/
+   equipes). Fechado com aprovação do founder. Logs só guardam ~1 dia: nenhum
+   acesso de fora nesse período; antes disso, não dá para saber. Os
+   `webhook_secret` expostos eram de equipes já apagadas.
+3. **Os dados da Sprint 10 (minha) saíram tortos:** data de criação = dia da
+   importação (bug do `parse_dt` com ISO), 564 ganhos/perdas sem data, eventos de
+   funil em setembro, responsável preso em custom_data, 10 campos invisíveis, 10
+   nomes com a barra dobrada.
+4. **O placar e o formulário de metas pediam `profiles.name`**, coluna que não
+   existe: nomes por vendedor viravam UUID e metas por vendedor nunca funcionaram.
+5. **O modal de detalhe carregava todos os negócios da equipe mesmo fechado.**
+6. **O webhook de entrada ignorava o pipeline configurado** e criava no padrão.
+
+## 4. Deploy / estado da produção (10/09)
+
+- **Migrations** `20260910000050` (backups fechados), `…0100` (owner), `…0200`
+  (quadro), `…0300` (telefone), `…0400` (quebra por field_id): aplicadas pela
+  Management API (o `supabase db push` não conecta desta máquina — DNS) e
+  **registradas em `supabase_migrations.schema_migrations`**. Histórico local ×
+  remoto sem divergência.
+- **Edge functions** `crm-webhook` v120, `gpt-maker-webhook` v149,
+  `solo-wpp-webhook` v18, `analyze-message` v115 — deploy com `--use-api`,
+  21:54 UTC.
+- **Backfill** `supabase/scripts/2026-09-10_sprint11_backfill_inbound_opportunities.sql`:
+  297 negócios criados, com o webhook `lead_created` desligado na transação
+  (conferido: 0 disparos). Desfazer = apagar os ids de `sprint11_backfill_inbound_opps`.
+- **Reparo da Solo Energia** aplicado; backups `*_backup_sprint11` com RLS.
+- **Frontend:** vai pelo PR desta branch → Netlify.
+
+## 5. Fica para depois
+
+- **Verificação no navegador** do Kanban novo (contadores = 1.259, <20
+  requisições, nome em todo card) — precisa de sessão logada.
+- Onda 2 (filtros, UI, mobile, placar redesenhado), Onda 3 (Propostas/Contratos),
+  Onda 4 (tracking) — plano detalhado quando cada uma abrir.
+- O modelo do lead score (ICP sem critério + contagem de atividade) — com o Copilot.
+- Leads anteriores a 23/06 sem negócio (outras equipes) têm outra causa; não mexidos.
+- Avaliar obrigação de LGPD pela exposição dos backups (decisão do founder).
