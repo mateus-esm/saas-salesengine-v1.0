@@ -267,3 +267,7 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-08-31 | 9 fix | Validação de telefone BR + verify_jwt do reports-cron | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-08-31 | 9 fix | stage_type editável + funnel_event no normalize | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-08-31 | 9 fix | Significado e motivo de perda dentro do card Etapas | Claude / Sonnet 5 | M | R$ 12 |
+| 2026-09-09 | 10 W1 | T1 Backup + purge da base da Solo Energia | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-09 | 10 W2 | T2 Script de migracao Jestor -> app | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-09 | 10 W3 | T3 Execucao da migracao + relatorio | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-09 | 10 W3 | T4 Fix stage_type Carregamento Veicular | Claude / Opus 5 (PM) | S | R$ 5 |

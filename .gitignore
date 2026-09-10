@@ -42,3 +42,10 @@ supabase/.temp/
 
 # Vite temp config artifacts
 vite.config.ts.timestamp-*
+
+# Sprint 10 — dados de cliente da migração do Jestor.
+# Os CSVs, o SQL gerado e o relatório carregam nome, e-mail e telefone de 1.251
+# pessoas reais. Ficam no disco para trabalhar e revisar; fora do git.
+Planning/Assets/*_migração_*_jestor.csv
+Planning/Assets/migration_solo_energia.sql
+Planning/Assets/migration_report_solo_energia.md
