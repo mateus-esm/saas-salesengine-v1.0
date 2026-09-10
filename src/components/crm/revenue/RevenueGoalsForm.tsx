@@ -88,15 +88,19 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
   const equipeId = profile?.equipe_id;
 
   // Team members
+  // Sprint 11: profiles has no `name` column (it is nome_completo) and its RLS
+  // only shows the user's own row, so this list was always empty and per-owner
+  // goals could not be set. crm_team_members() returns the whole team.
   const { data: members = [] } = useQuery({
     queryKey: ["team_members_for_goals", equipeId],
     queryFn: async () => {
       const sb = supabase as any;
-      const { data } = await sb
-        .from("profiles")
-        .select("id, name")
-        .eq("equipe_id", equipeId);
-      return (data ?? []) as { id: string; name: string | null }[];
+      const { data, error } = await sb.rpc("crm_team_members");
+      if (error) throw error;
+      return ((data ?? []) as { id: string; nome_completo: string | null }[]).map((m) => ({
+        id: m.id,
+        name: m.nome_completo,
+      }));
     },
     enabled: !!equipeId,
   });

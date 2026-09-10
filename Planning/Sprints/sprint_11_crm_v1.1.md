@@ -556,7 +556,7 @@ Execução solo e sequencial: T1, T2, T3, T4, T5, T6, T7, T8, T9, T10.
 - [x] T3 · RPCs do quadro · L — na base real da Solo Energia: resumo 185 ms (conta os 1.259), página de 30 cards da maior coluna 114 ms
 - [x] T4 · Kanban no quadro do servidor · L — código pronto (tsc, build, 22 testes de `lib/board` e `lib/debounce`); aceite ao vivo (1.259, <20 requisições) depende do deploy das RPCs → T10. Desvios do plano: `moveCardInPages` virou `removeCardFromPages` + `prependCardToPages` (as colunas são caches separados); `useOpportunityMutations`/`useLeadMutations` criados porque o modal de detalhe carregava a equipe inteira mesmo fechado; caixa de busca no cabeçalho do Kanban (antecipa o ponto 1 — o servidor já filtra)
 - [x] T5 · Tabelas sem teto + score/touchpoints em uma chamada · M — `useLeadScore` (singular, sem uso, com uma segunda cópia da fórmula) removido
-- [ ] T6 · Placar com números reais · S
+- [x] T6 · Placar com números reais · S — além do `assigned_to`, o placar contava ganhos/perdas de **todo o histórico** (a Solo Energia apareceria com 137 ganhos contra a meta do mês): agora conta só o que fechou dentro do período; e placar + formulário de metas pediam `profiles.name`, coluna que não existe — os nomes por vendedor e o seletor de metas por vendedor nunca funcionaram
 - [ ] T7 · Webhook deduplica pelo telefone normalizado · M
 - [ ] T8 · Contrato dos campos · M
 - [ ] T9 · Reparo dos dados da Solo Energia · L
