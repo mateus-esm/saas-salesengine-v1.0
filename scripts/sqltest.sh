@@ -22,6 +22,17 @@
 #
 # A API devolve só o resultado do último comando. Um assert que falha volta como
 # erro (exit 1); o marcador PASS no fim prova que o arquivo rodou até o final.
+#
+# INCLUDE
+#
+# Uma linha `-- @include supabase/migrations/<arquivo>.sql` (caminho relativo à
+# raiz do repo) é trocada pelo conteúdo do arquivo. Assim o teste roda a
+# migration de verdade, e não uma cópia que envelhece.
+#
+# Por isso o runner também recusa qualquer `commit;` no SQL montado: um commit
+# dentro de uma migration incluída encerraria a transação do teste no meio e
+# gravaria as fixtures em produção. Migrations desta base não usam begin/commit
+# próprios — o `supabase db push` já roda cada arquivo numa transação.
 
 set -euo pipefail
 
@@ -72,13 +83,37 @@ for file in "$@"; do
   # Lê como bytes e decodifica UTF-8: o stdin do Python no Windows decodifica em
   # cp1252 e estragaria os acentos dos comentários e das mensagens de assert.
   # Meta-comandos do psql (\set, \echo…) não existem para a API: saem aqui.
-  response="$(
+  if ! payload="$(
     "$PY" -c "
-import json, sys
+import json, os, re, sys
+root = sys.argv[1]
 text = sys.stdin.buffer.read().decode('utf-8')
-lines = [l for l in text.splitlines() if not l.lstrip().startswith(chr(92))]
-print(json.dumps({'query': '\n'.join(lines)}))
-" < "$file" \
+out = []
+for line in text.splitlines():
+    m = re.match(r'^\s*--\s*@include\s+(\S+)\s*$', line)
+    if m:
+        path = os.path.join(root, m.group(1))
+        if not os.path.isfile(path):
+            sys.stderr.write('include nao encontrado: ' + m.group(1) + '\n')
+            sys.exit(3)
+        with open(path, encoding='utf-8') as inc:
+            out.extend(inc.read().splitlines())
+    elif not line.lstrip().startswith(chr(92)):
+        out.append(line)
+bad = [l for l in out if re.match(r'^\s*commit\s*;', l, re.I)]
+if bad:
+    sys.stderr.write('commit; no SQL montado encerraria a transacao do teste: ' + bad[0].strip() + '\n')
+    sys.exit(3)
+print(json.dumps({'query': '\n'.join(out)}))
+" "$ROOT" < "$file"
+  )"; then
+    echo "RECUSADO $file — include inexistente ou commit; no SQL montado"
+    failures=$((failures + 1))
+    continue
+  fi
+
+  response="$(
+    printf '%s' "$payload" \
       | curl -sS -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
           -H "Authorization: Bearer $TOKEN" \
           -H "Content-Type: application/json" \
