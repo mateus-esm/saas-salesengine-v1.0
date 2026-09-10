@@ -623,3 +623,115 @@ Also fixed during the audits:
 - The `agent-assets` bucket writes training attachments with no `equipe_id` in the path, so it lacks the path-enforced isolation that `agent-training-docs` has.
 - Billing ledger amounts are roughly double the documented tier table across all 13 rows — needs a founder decision before cost-per-engineer means anything.
 - **The sprint's real proof is still untested by a human:** open Studio AI and confirm settings persist, channels list, usage shows real numbers, and an uploaded document appears. Everything is verified at the API layer; nobody has yet confirmed it in the running app.
+
+---
+
+# Sprint 10 — Handoff
+
+> **Sprint:** Migração Solo Energia (`sprint_10_migration_solo_energia.md`)
+> **Closed:** 2026-09-09 **Branch:** `claude/sprint10/migration/solo-energia` → PR #9
+> **Verification:** ensaio purge+import em transação com `ROLLBACK` contra a
+> produção · asserções da migration e do import passaram · `norm_phone` conferido
+> contra `normalize_phone_br` do banco em 400 telefones reais, 0 divergências
+
+---
+
+## 1. What this sprint was
+
+Tirar a Solo Energia do Jestor e colocá-la operando no app. A meta do founder
+era literal: *"made this migration to tomorrow i can begin to use the app"* — e
+a razão importa, porque ele usando o produto todo dia é o que faz o produto
+evoluir rápido.
+
+O escopo foi **só a migração**. O sprint original vinha embalado com mais duas
+coisas — um importador genérico de planilha com field-matching, e oito features
+de paridade com o Jestor (proposta, contrato, cadências de e-mail e WhatsApp,
+tabelas relacionais, logs, personalização, dashboard). Foram separadas de
+propósito: são oito sprints, não uma, e **a migração não depende do importador**.
+Decisão do founder: migração rápida agora, importador depois.
+
+## 2. Delivered — 4 tarefas, 1 branch
+
+- **T1 (M)** backup + zeragem da base atual da Solo Energia
+- **T2 (L)** `scripts/migrate_solo_energia.py` — normalização, dedup, geração do SQL
+- **T3 (M)** execução em produção + relatório de revisão
+- **T4 (S)** fix de `stage_type` do pipeline Carregamento Veicular
+
+```
+backup      468 leads · 56 oportunidades · 9.340 mensagens
+importado   1.251 leads · 1.260 oportunidades · 0 sem etapa
+telefone    1.173 leads com phone_normalized
+```
+
+O Kanban bate **1:1** com a contagem de `Estágio` do Jestor: Ganho 137, Perdido
+101, Desqualificado 402, Reciclo 514, e os ~106 vivos distribuídos nas etapas
+certas.
+
+## 3. O que a análise mudou no plano (antes de escrever código)
+
+- **A escala é 10× menor do que parece.** `wc -l` dá 5.085 / 14.512; parseado
+  como CSV de verdade são **1.268 / 1.260**. O resto era newline dentro de
+  `Observações` entre aspas. Planejar em cima do número errado teria virado uma
+  sprint inteira para um problema de uma tarde.
+- **O pipeline que já existia cobre 100% dos estágios do Jestor.** Os 10 valores
+  de `Estágio` caem todos nas 11 etapas de `Solo Energia | Usinas - Micro
+  Geração`. Não foi preciso criar pipeline nem etapa — só um rename no mapa
+  (`Nova Oportunidade` → `Contato Inicial`). **A resposta à pergunta do founder
+  ("nossos campos hoje são efetivos?") é sim**, sem alteração de schema.
+- **A junção é limpa:** `oportunidade.Lead` → `contato.Nome` casa 1.024 de 1.024.
+  `Propriedade` parecia chave e não é — é o marcador nulo `'-` do Jestor.
+- **73% da base é histórico morto** (Reciclo 514 + Desqualificado 402). O founder
+  optou por trazer tudo, com as fases corretas.
+
+## 4. Os cinco defeitos que o ensaio pegou (nenhum apareceria em teste local)
+
+Cada rodada de ensaio (`BEGIN; … ROLLBACK;` contra a produção) derrubou um:
+
+1. **Dedup cego por telefone destruiria 38 pessoas reais.** 65 grupos de telefone
+   repetido: 51 são a mesma pessoa com grafia diferente, 14 são gente diferente
+   dividindo o número. Regra final: primeiro nome igual (ou um nome contido no
+   outro) — compartilhar um token qualquer junta `Abinoan Pereira` com
+   `Gesaias Pereira Azevedo`.
+2. **`leads.origin_category` é taxonomia fechada** por CHECK. O rótulo cru do
+   Jestor não cabe: a categoria classifica, `origin_detail` preserva o original.
+3. **`UNIQUE (equipe_id, phone_normalized)` parcial.** O banco só admite um dono
+   por número — e está certo, porque mensagem que chega de um número
+   compartilhado não tem como ser desambiguada.
+4. **`trg_leads_sync_phone_normalized` recalcula a coluna no INSERT.** Zerar só
+   `phone_normalized` não adianta: o trigger reescreve a partir de `phone`.
+5. **`normalize_phone_br` não é "sempre prefixa 55".** Ela remove o 55 quando
+   `len >= 12`, insere o 9 do celular em números de 10 dígitos e devolve 8/9
+   dígitos **sem** DDI. Enquanto o script divergia dela, telefones que ele
+   julgava distintos colidiam no UNIQUE. Hoje é porta exata da função do banco.
+
+O item 5 é o que mais importa além desta sprint: o runbook já registra que
+WhatsApp sem o 55 é **aceito** pela API e a mensagem some. Normalizar por uma
+regra diferente da do banco é o agente falando com ninguém.
+
+## 5. Deploy / DB state
+
+- Migration `20260909000400_sprint10_backup_purge_solo_energia.sql` aplicada via
+  `supabase db push` (T1 + T4). Backup em `leads_backup_sprint10`,
+  `opportunities_backup_sprint10`, `messages_backup_sprint10` — mesma convenção
+  de `leads_backup_sprint3` / `leads_backup_sprint55_pre_merge`.
+- Import aplicado por `psql` a partir do SQL gerado, dentro de uma transação,
+  com asserções de contagem. **Nenhuma edge function mudou nesta sprint.**
+- **CI existe agora** (`.github/workflows/ci.yml`): `Backend unit tests` e
+  `Frontend build gate` são checks obrigatórios em `main`, e `main` está
+  protegida. O runbook (`docs/billing-runbook.md`) ainda diz *"Deploy é manual
+  neste projeto — não existe CI"* — está desatualizado.
+- CSVs, SQL gerado e relatório de revisão ficam **fora do git** (`.gitignore`):
+  carregam nome, e-mail e telefone de 1.251 pessoas reais.
+
+## 6. Known follow-ups outside this sprint
+
+- **24 grupos para revisão humana** — pessoas diferentes dividindo telefone,
+  preservadas separadas. Lista em `Planning/Assets/migration_report_solo_energia.md`.
+- **50 contatos ficaram sem `phone`** (o número foi para `observations`), porque
+  o UNIQUE só admite um dono por número.
+- **Nada foi importado para `messages`/`conversations`**: o histórico de conversa
+  do Jestor não veio no export. Os 9.340 do backup são do app, não do Jestor.
+- **`Responsável` não foi mapeado para usuários do app** — ficou em
+  `custom_data.responsavel_jestor`. 573 das 1.260 vinham vazias.
+- O importador genérico e as oito features de paridade seguem abertos, cada um
+  com sua sprint.

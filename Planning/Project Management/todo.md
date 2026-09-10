@@ -82,6 +82,141 @@ View of Project Manager: Mateus
 
 18. Landing Pages.
 
+# TODO — vindo do Sprint 10 (migração Solo Energia)
+
+Migração aplicada em produção em 09/09/2026: 1.251 leads, 1.260 oportunidades,
+0 sem etapa. O que ficou aberto, e o que a sprint ensinou.
+
+## 🟠 Aberto — precisa de decisão humana
+
+### 24 grupos de contato para revisar à mão
+
+Pessoas **diferentes** dividindo o mesmo telefone. Foram preservadas separadas
+de propósito: fundir depois é um clique, separar depois não é. A lista está em
+`Planning/Assets/migration_report_solo_energia.md` (fora do git, tem dado de
+cliente). Exemplos: `5588981536417` → Abinoan Pereira / Damares Vieira /
+Gesaias Pereira Azevedo.
+
+Alguns são claramente a mesma pessoa e o critério conservador não pegou —
+`Erimeudo Sampaio` vs `Erineudo Sampaio` (typo), `Luiza Ferreira` vs
+`Luísa Ferreira` (acento). Fundir esses no app quando aparecerem.
+
+### 50 contatos ficaram sem `phone`
+
+Consequência direta do `UNIQUE (equipe_id, phone_normalized)`: só um contato
+pode ser dono de um número. Nos grupos ambíguos o primeiro ficou com o telefone;
+nos outros o número foi para `observations` com a marca `[migracao]`. Eles
+existem, aparecem na busca por nome, mas **não recebem mensagem** — o roteamento
+de inbound vai para o dono do número.
+
+Decidir: aceitar como está, ou fundir os grupos e devolver o telefone.
+
+### `Responsável` não virou usuário do app
+
+Ficou em `custom_data.responsavel_jestor`. Do export: 573 vazias, 390 "Mateus
+Sombra", 224/65/8 em três e-mails. Enquanto não houver mapa para
+`responsible_id`/`assigned_to`, nenhuma oportunidade tem dono no app.
+
+### Alguns números são placeholder, não telefone
+
+`5511911112222` carrega Igor, Hilda, Guilherme, Fabiane e Carlos;
+`5585999138804` carrega 18 nomes distintos. São o "telefone" que alguém digitou
+quando não tinha o telefone. Valeria uma limpeza — hoje eles ocupam o slot de
+um número real.
+
+### Histórico de conversa não veio
+
+O export do Jestor não traz mensagens. As 9.340 em `messages_backup_sprint10`
+são do app, não do Jestor. Se o histórico importa, é outra exportação.
+
+### Tabelas de backup: quando descartar
+
+`leads_backup_sprint10`, `opportunities_backup_sprint10`,
+`messages_backup_sprint10`. Só apagar depois que a operação no app estiver
+confirmada por alguns dias.
+
+## 🔵 Dívida encontrada no caminho
+
+### O runbook diz que não existe CI — e existe
+
+`docs/billing-runbook.md` abre com *"Deploy é manual neste projeto — não existe
+CI"*. Hoje há `.github/workflows/ci.yml` com **checks obrigatórios**
+(`Backend unit tests`, `Frontend build gate`) e `main` protegida. Documentação
+que contradiz a realidade do deploy é a que mais custa caro.
+
+### `leads.stage_id` é legado e continua lá
+
+O modelo vivo são duas linhas: `leads` (a pessoa) e `opportunities` (o negócio).
+`leads.stage_id` sobrou do merge da Sprint 5.5. Enquanto existir, alguém vai
+escrever nele achando que alimenta o Kanban — que lê `opportunities`.
+
+### `Visita Técnica` nasceu com 0 cards
+
+Existe no pipeline e o Jestor nunca usou. Manter ou remover é decisão de
+processo, não de código.
+
+### `Carregamento Veicular` estava com a conversão zerada
+
+`Ganho` e `Perdido` com `stage_type = 'open'`. Corrigido junto (T4), mas vale a
+pergunta: nada na tela avisa quando um funil não tem etapa de fecho. Um guard
+na criação/edição de pipeline evitaria o próximo.
+
+## 💡 Insights e trade-offs (valem para as próximas migrações)
+
+### `wc -l` mente em CSV
+
+5.085 e 14.512 linhas viraram 1.268 e 1.260 quando parseadas de verdade — o
+resto era newline dentro de campo entre aspas. Dimensionar a sprint pelo número
+errado teria custado dias. **Sempre parsear antes de estimar.**
+
+### Ensaiar contra a produção dentro de uma transação
+
+`BEGIN; …migração…; ROLLBACK;` foi a técnica de maior retorno da sprint: pegou
+**cinco** defeitos que nenhum teste local pegaria, porque todos vinham de
+constraints, triggers e taxonomias que só existem no banco real. Custo: segundos
+por rodada. Deve virar padrão para toda migração de dados.
+
+### Portar a regra do banco, nunca reimplementar
+
+O script normalizava telefone "de forma equivalente" à do banco. Não era: a
+`normalize_phone_br` remove o 55 quando `len >= 12`, insere o 9 do celular em
+números de 10 dígitos e devolve 8/9 dígitos **sem** DDI. Enquanto divergiam,
+telefones "distintos" colidiam no UNIQUE — duas vezes, em números diferentes.
+A correção foi portar a função linha a linha e **conferir contra a função real
+em 400 telefones** (0 divergências). Onde existe uma regra no banco, o cliente
+copia a regra, não a intenção.
+
+### Fundir demais é irreversível; fundir de menos é um clique
+
+Base de toda a regra de dedup. Telefone cego dava a base mais enxuta (1.172) e
+destruía 38 pessoas reais. A regra conservadora deu 1.194 e preservou todas.
+Quando os dois erros não custam o mesmo, otimizar pelo que dá para desfazer.
+
+### A constraint do banco estava codificando uma verdade do domínio
+
+O `UNIQUE (equipe_id, phone_normalized)` parecia um obstáculo. Não era: um
+número só pode rotear para um lead, porque mensagem que chega dele não tem como
+ser desambiguada. Antes de contornar uma constraint, vale perguntar o que ela
+sabe.
+
+### Gerar SQL revisável em vez de escrever direto no banco
+
+O script não toca no banco: emite um `.sql`. Para operação destrutiva em
+produção, um diff custa menos que um rollback — e foi o que permitiu ensaiar.
+
+### Dado de cliente não entra no git
+
+1.251 nomes, e-mails e telefones reais. CSVs, SQL gerado e relatório ficaram no
+disco e fora do versionamento.
+
+### O importador genérico ficou para depois — de propósito
+
+Fazer a migração à mão primeiro mostra o que o importador precisa mesmo tratar
+(apóstrofo de guarda do Excel, três formatos de data no mesmo arquivo, colunas
+que são botões e não dados, `unsupported` como valor). Projetar a UI de
+field-matching antes disso seria chutar. `scripts/migrate_solo_energia.py` é a
+lista de requisitos.
+
 # TODO — vindo do Sprint 8.2 (onboarding)
 
 ## Segurança: duas fontes de verdade para "quem é admin" — URGENTE
@@ -99,11 +234,12 @@ ele, porque lê a outra tabela — e foi justamente isso que escondeu o problema
 O bloco C de `supabase/scripts/2026-09-02_producao_limpeza.sql` estanca o caso.
 Falta a correção estrutural:
 
-- [ ] Escolher UMA fonte de verdade (`user_roles` é a certa: existe uma linha por
-      papel, e é a tabela que o resto do RBAC usa)
+- [ ] Escolher UMA fonte de verdade (`user_roles` é a certa: existe uma linha
+      por papel, e é a tabela que o resto do RBAC usa)
 - [ ] `is_super_admin()` passa a ler de lá
 - [ ] Um CHECK ou trigger que impeça `profiles.role = 'super_admin'` quando
-      `equipe_id is not null` — um super admin nunca pertence à equipe de um cliente
+      `equipe_id is not null` — um super admin nunca pertence à equipe de um
+      cliente
 - [ ] Uma tela no admin que mostre os dois papéis lado a lado, para o
       descasamento ficar visível em vez de silencioso
 - [ ] Auditar o que esse login acessou (Supabase → Logs → PostgREST)
@@ -113,8 +249,8 @@ Falta a correção estrutural:
 - [ ] **Portal do cliente**: ele acompanha o próprio onboarding, vê em que etapa
       está e o que falta dele. Hoje o quadro é só interno.
 - [ ] **Calendly de verdade**: ler o agendamento pela API e mover o card de
-      Boas-vindas para Discovery sozinho. Depende de OAuth do Calendly.
-      Hoje o link é enviado e a data é anotada à mão.
+      Boas-vindas para Discovery sozinho. Depende de OAuth do Calendly. Hoje o
+      link é enviado e a data é anotada à mão.
 - [ ] **Checklist por etapa**: as entregas concretas da implantação (treinar
       agente, conectar canal, montar pipeline, n8n dos anúncios) como itens
       marcáveis que bloqueiam o go-live enquanto não estiverem prontos.
@@ -131,12 +267,12 @@ Falta a correção estrutural:
 
 ## Dívida técnica encontrada no caminho
 
-- [ ] `src/integrations/supabase/types.ts` está desatualizado desde o sprint 8.4:
-      não conhece `system_settings`, `notification_senders` nem
+- [ ] `src/integrations/supabase/types.ts` está desatualizado desde o sprint
+      8.4: não conhece `system_settings`, `notification_senders` nem
       `v_admin_notification_matrix`, e isso deixa **7 erros de typecheck** no
-      `main` desde antes do 8.2. Regenerar (passo 4 do `docs/runbook_sprint82.md`)
-      e trocar os `supabase as any` de `useOnboarding.ts` e `ProposalsTab.tsx`
-      pelo cliente tipado.
+      `main` desde antes do 8.2. Regenerar (passo 4 do
+      `docs/runbook_sprint82.md`) e trocar os `supabase as any` de
+      `useOnboarding.ts` e `ProposalsTab.tsx` pelo cliente tipado.
 - [ ] `billing-cron` anula fatura sem cobrança depois de 2h. Com a fatura de
       implantação agora nascendo no provisionamento e só sendo cobrada no
       go-live (`on_golive`), essa regra pode anular uma fatura legítima que está
@@ -161,7 +297,7 @@ Rotate all:
 - [ ] Verboo key
 - [ ] `AGENT_INTERNAL_TOKEN`
 - [ ] **Neon `neondb_owner` password** (pasted in chat 2026-08-09). Belongs to a
-      *different* project, not this repo — but it was exposed here, so rotate it
+      _different_ project, not this repo — but it was exposed here, so rotate it
       in the Neon console. Owner role = full DB access.
 
 Note: when setting `DATABASE_URL`, URL-encode the password (`%`→`%25`,
@@ -190,8 +326,8 @@ needed. Frontend deploys via Netlify on merge.
 
 ⚠️ `manage-agent-settings` **must** ship together with the frontend: its GET
 response dropped the legacy flat keys. Old JS against the new function is fine
-(nothing reads them), but do not deploy the function and then roll the
-frontend back past 7.2 W2.
+(nothing reads them), but do not deploy the function and then roll the frontend
+back past 7.2 W2.
 
 ### What shipped
 
@@ -208,13 +344,13 @@ frontend back past 7.2 W2.
 ### Verify in the running app after deploying
 
 1. **Canais** — 5 channels on Solo Energia, each showing its phone/@handle.
-2. **Knowledge Base** — Perfil opens with Solon's real prompt in *Texto Livre*;
+2. **Knowledge Base** — Perfil opens with Solon's real prompt in _Texto Livre_;
    Contexto shows the real company description.
 3. **Configurações** — all 4 tabs load; toggle something, reload, it stuck.
 4. **Regras de transferência** — the "cliente irritado" rule appears with
-   *Mateus Sombra* as its target.
-5. **Modelo** — pick Sonnet 5. If the slug is wrong you get an explicit
-   provider error, not silence — report it and the catalog gets corrected.
+   _Mateus Sombra_ as its target.
+5. **Modelo** — pick Sonnet 5. If the slug is wrong you get an explicit provider
+   error, not silence — report it and the catalog gets corrected.
 
 ## 🔴 SPRINT 7.2 CLOSE-OUT — WHAT IS STILL MISSING
 
@@ -227,16 +363,15 @@ frontend back past 7.2 W2.
 - [ ] **Open Studio AI and look.** Everything is verified at the API layer —
       settings round-trip live, the model catalog is real, a DOCUMENT training
       round-trips, RLS was read out of `pg_policies` in prod — but **no human
-      has confirmed it in the running app.** Check, in order:
-      1. **Configurações** — toggle a control, reload, it stuck.
-      2. **Modelo** — the selector shows the *current* model pre-selected and a
-         real catalog; change it, reload, it stuck.
-      3. **Canais** — real channels list (5 expected on Solo Energia).
-      4. **Uso & Analytics** — real balance and per-model breakdown, no
-         fabricated numbers.
-      5. **Knowledge Base** — upload a PDF; it appears without a manual reload.
-      6. **Billing** — the Solo API instances section renders.
-      If any of these is wrong, it is a *new* bug: the API layer is proven.
+      has confirmed it in the running app.** Check, in order: 1.
+      **Configurações** — toggle a control, reload, it stuck. 2. **Modelo** —
+      the selector shows the _current_ model pre-selected and a real catalog;
+      change it, reload, it stuck. 3. **Canais** — real channels list (5
+      expected on Solo Energia). 4. **Uso & Analytics** — real balance and
+      per-model breakdown, no fabricated numbers. 5. **Knowledge Base** — upload
+      a PDF; it appears without a manual reload. 6. **Billing** — the Solo API
+      instances section renders. If any of these is wrong, it is a _new_ bug:
+      the API layer is proven.
 
 ### Founder actions (only you have these credentials)
 
@@ -246,12 +381,14 @@ frontend back past 7.2 W2.
 - [ ] 🔴 **ROTATE the Asaas production key.** It was pasted in plaintext into a
       chat transcript on 2026-08-10. It is an `aact_prod_` key: anyone with
       transcript access can charge your customers. Rotate in Asaas, then update
-      the edge secret (`supabase secrets set --env-file …`) and the local `.env`.
+      the edge secret (`supabase secrets set --env-file …`) and the local
+      `.env`.
 - [ ] **Audit the rest of the billing path now that the key exists.** Every
-      tenant still has `subscription_status = null` and `asaas_subscription_id
-      = null`, so `asaas-subscribe` and `asaas-buy-credits` have likely never
-      run successfully either. The key was the blocker; whether the flows work
-      is untested.
+      tenant still has `subscription_status = null` and
+      `asaas_subscription_id
+      = null`, so `asaas-subscribe` and
+      `asaas-buy-credits` have likely never run successfully either. The key was
+      the blocker; whether the flows work is untested.
 - [ ] **Verify the Netlify env vars** (Site settings → Environment variables):
       `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPABASE_PROJECT_ID`.
       Flagged `UNVERIFIED` by T5. Until Sprint 7.2 the client silently fell back
@@ -269,8 +406,8 @@ frontend back past 7.2 W2.
       `unread` increments. This is the test that failed on 07/08.
 - [ ] Capture the real `connection.update` sequence + a verbatim
       `messages.upsert` to close out `sprint_7_api_reference.md`.
-- [ ] Coexistence echo: send from a number that is also on the agent provider and
-      confirm the dedup (AC4) doesn't duplicate.
+- [ ] Coexistence echo: send from a number that is also on the agent provider
+      and confirm the dedup (AC4) doesn't duplicate.
 - [ ] Capture the provider's window-closed error body → refine the T5 fallback
       match (today it falls back on **any** non-2xx, which is over-broad).
 - [ ] `wpp_instances.phone` is `null` on both instances — `connectionState`
@@ -285,37 +422,38 @@ frontend back past 7.2 W2.
 ### No provider API exists (verified against the live docs 2026-08-08)
 
 - [ ] **Horário de atendimento** — no field on the settings endpoint and no
-      agent-level route (re-verified 2026-08-14: 8 path variants all 404).
-      Would need enforcing in our own webhook layer before handing off to the
-      agent. **Partial workaround now shipped:** idle actions carry a
-      per-action `workingHours` (`dayWeek` 0–6 × `HH:MM` blocks) — supported by
+      agent-level route (re-verified 2026-08-14: 8 path variants all 404). Would
+      need enforcing in our own webhook layer before handing off to the agent.
+      **Partial workaround now shipped:** idle actions carry a per-action
+      `workingHours` (`dayWeek` 0–6 × `HH:MM` blocks) — supported by
       `manage-agent-idle-actions`, though the 7.3 UI only exposes the
       allow-all-hours toggle. Deferred by founder decision 2026-08-14.
 - [ ] **Moderação de conteúdo** — no field and no route either (4 variants
       probed 2026-08-14). The provider's docs "Moderation" section is
-      human-takeover (`/chats/start-human`), not content moderation. Deferred
-      by founder decision 2026-08-14.
+      human-takeover (`/chats/start-human`), not content moderation. Deferred by
+      founder decision 2026-08-14.
 - [ ] **Google Calendar / scheduling** — the provider's integrations (Eleven
       Labs, Google Agenda, Plug Chat, E-Vendi) are **dashboard-configured only,
-      no endpoints**. Revisit as a *native* scheduling intention over our own
+      no endpoints**. Revisit as a _native_ scheduling intention over our own
       Agenda module rather than depending on their dashboard.
 
 ### Capability we own but haven't built
 
-- [x] ~~**Transfer Rules**~~ ✅ **DONE Sprint 7.3** — `manage-agent-transfer-rules`
-      (full CRUD) + `TransferRulesTab`, human targets from
-      `/workspace/{id}/team`.
+- [x] ~~**Transfer Rules**~~ ✅ **DONE Sprint 7.3** —
+      `manage-agent-transfer-rules` (full CRUD) + `TransferRulesTab`, human
+      targets from `/workspace/{id}/team`.
 - [x] ~~**Idle Actions**~~ ✅ **DONE Sprint 7.3** — `manage-agent-idle-actions`
-      + `IdleActionsTab`. Exposed as get/save, not per-item CRUD: the
-      provider's POST replaces the whole configuration.
+      + `IdleActionsTab`. Exposed as get/save, not per-item CRUD: the provider's
+      POST replaces the whole configuration.
 - [ ] **Intentions rebuild** (founder pt 3 + 6) — the provider exposes full CRUD
-      with `fields[]` (typed collect-data), `headers`/`params`/`requestBody`, and
-      `variables[].defaultFieldKey`. `IntentionWizard.tsx` is already 569 lines;
-      the full schema roughly doubles it. Needs its own design pass with mockups
-      — it's a UX problem, not a wiring problem.
+      with `fields[]` (typed collect-data), `headers`/`params`/`requestBody`,
+      and `variables[].defaultFieldKey`. `IntentionWizard.tsx` is already 569
+      lines; the full schema roughly doubles it. Needs its own design pass with
+      mockups — it's a UX problem, not a wiring problem.
 - [ ] **Named training blocks** (founder pt 4) — the provider has **no
       title/name field** on a training (only `documentName` for DOCUMENT). Needs
-      our own convention, e.g. a `# [Título: ...]` header parsed out of the text.
+      our own convention, e.g. a `# [Título: ...]` header parsed out of the
+      text.
 - [ ] **i18n / system language** (founder pt 2) — most expensive item on the
       list, least urgent while every client is in Brazil.
 - [ ] **Niche-generic examples** (founder pt 3) — placeholder copy still uses
@@ -333,11 +471,11 @@ frontend back past 7.2 W2.
 - [ ] **Training bucket is public-read** — `agent-training-docs` is
       `public: true` because the provider fetches `documentUrl` server-side
       without auth. Object names carry a random UUID so they're unguessable, but
-      they are **not access-controlled**: anyone with the URL reads that tenant's
-      document, and knowledge-base files can hold pricing and commercial
-      material. Writes/deletes *are* correctly tenant-isolated by RLS. Revisit
-      whether a signed URL with expiry works — depends on whether the provider
-      re-fetches after the initial training.
+      they are **not access-controlled**: anyone with the URL reads that
+      tenant's document, and knowledge-base files can hold pricing and
+      commercial material. Writes/deletes _are_ correctly tenant-isolated by
+      RLS. Revisit whether a signed URL with expiry works — depends on whether
+      the provider re-fetches after the initial training.
 - [ ] **`resumeTransferHumanAI`** is returned live but undocumented. Surfaced in
       the settings contract; decide whether to expose it in the UI.
 - [ ] **Model catalog is hand-maintained.** No list endpoint exists (re-verified
@@ -368,11 +506,11 @@ frontend back past 7.2 W2.
       unlike the `agent-training-docs` bucket T4 built. Align it with the T4
       pattern.
 - [ ] **Billing tier amounts don't match the tier table.** `billing.md` states
-      S=R$5 · M=R$12 · L=R$20 · XL=R$28, but every Sprint 7.2 row uses
-      S=10 · M=20 · L=24 · XL=40 — roughly double, across 13 rows. The file
-      says the R$ "comes from the table — you don't calculate anything", so
-      either recalibrate the table or correct the rows. **Founder decision.**
-      Until it's resolved, cost-per-engineer totals are not meaningful.
+      S=R$5 · M=R$12 · L=R$20 · XL=R$28, but every Sprint 7.2 row uses S=10 ·
+      M=20 · L=24 · XL=40 — roughly double, across 13 rows. The file says the R$
+      "comes from the table — you don't calculate anything", so either
+      recalibrate the table or correct the rows. **Founder decision.** Until
+      it's resolved, cost-per-engineer totals are not meaningful.
 
 ### Process notes for the next wave
 
@@ -524,8 +662,8 @@ The whole app loses in-flight state because pages do full reloads. Symptoms:
 ## Surfaced while verifying Sprint 8.2 in production (24/08/2026)
 
 > Found tracing why granted credits never reached a balance. The credit path
-> itself is fixed (migrations `20260824000100` + `20260824000200`); these are the
-> loose ends that trace turned up.
+> itself is fixed (migrations `20260824000100` + `20260824000200`); these are
+> the loose ends that trace turned up.
 
 - [ ] **Sprint 9 signup OVERWRITES an existing profile instead of refusing.**
       Accepting a proposal moves the accepting user's `profiles.equipe_id` to
@@ -559,16 +697,17 @@ The whole app loses in-flight state because pages do full reloads. Symptoms:
       number joins `billing_products`**, so seat_limit, agent_limit, included
       credits, instance_limit and builder_hours all come back null/0. Live case:
       "Solo Teste" (proposal `73F74E2BB4F1`) holds exactly one item,
-      `product_id NULL` at R$200/month, and reads as entitled to nothing.
-      Decide whether a productless line should be rejected at acceptance, map to
-      a default plan, or carry its own entitlement metadata. See
+      `product_id NULL` at R$200/month, and reads as entitled to nothing. Decide
+      whether a productless line should be rejected at acceptance, map to a
+      default plan, or carry its own entitlement metadata. See
       `20260821000500_sprint9_provision_with_trial.sql` §4.
 
-- [ ] **`equipes.creditos_avulsos` / `limite_creditos` still have live readers.**
-      Both are deprecated and pinned at 0 (Sprint 8.2), but `fetch-gpt-credits`,
-      `Suporte.tsx` and `AuthContext` still select them, which is why the
-      migration zeroed rather than dropped the columns. Cut those three readers
-      over to `credit_balance(equipe_id, pool)`, then drop the columns.
+- [ ] **`equipes.creditos_avulsos` / `limite_creditos` still have live
+      readers.** Both are deprecated and pinned at 0 (Sprint 8.2), but
+      `fetch-gpt-credits`, `Suporte.tsx` and `AuthContext` still select them,
+      which is why the migration zeroed rather than dropped the columns. Cut
+      those three readers over to `credit_balance(equipe_id, pool)`, then drop
+      the columns.
 
 ## Sprint 8.3 — Fixes 2, bloco A (entregue 24/08/2026)
 
@@ -599,8 +738,8 @@ exatamente o mesmo caminho do pagamento real — créditos do plano, renovação
 período, religar o agente — e as chaves de idempotência são por fatura, então
 marcar na mão e depois receber a confirmação do Asaas credita uma vez só.
 
-**Armadilha resolvida:** `voidOrphanInvoices` cancelava toda fatura em aberto sem
-cobrança no gateway após 2h. Uma fatura avulsa para receber por PIX é
+**Armadilha resolvida:** `voidOrphanInvoices` cancelava toda fatura em aberto
+sem cobrança no gateway após 2h. Uma fatura avulsa para receber por PIX é
 indistinguível desse lixo — passou a ser marcada com `metadata.manual` e o cron
 a respeita.
 
@@ -608,12 +747,12 @@ a respeita.
 
 - [ ] **11 · Notificações (bloco B).** O núcleo já existe: `notifications`,
       `notification_deliveries` (in_app/email/whatsapp), `notification_types`
-      com matriz de canais, dispatcher com Resend e `sendViaSolo`. Falta o que
-      o founder pediu: instância Solo por finalidade (Comercial/Financeiro/
+      com matriz de canais, dispatcher com Resend e `sendViaSolo`. Falta o que o
+      founder pediu: instância Solo por finalidade (Comercial/Financeiro/
       Suporte/Operação), tela para conectar por QR ou por nome, templates
-      editáveis (hoje o texto está escrito na mão em cada chamador), liga/desliga
-      por cliente, e o disparo "Proposta Gerada → cliente recebe no WhatsApp".
-      Precisa de desenho próprio antes de codar.
+      editáveis (hoje o texto está escrito na mão em cada chamador),
+      liga/desliga por cliente, e o disparo "Proposta Gerada → cliente recebe no
+      WhatsApp". Precisa de desenho próprio antes de codar.
 - [ ] **12 · Revisão geral do billing/admin.** Não é tarefa isolada — é critério
       de aceite a aplicar sobre os outros itens.
 
@@ -624,23 +763,26 @@ a respeita.
 > redeployado. Nova aba **Notificações** no admin.
 
 - [x] **Instância por finalidade.** `notification_senders` com Comercial,
-      Financeiro, Suporte e Operação. Antes existia UMA instância para tudo,
-      num env var — cobrança e follow-up de venda saíam da mesma linha. Pode
+      Financeiro, Suporte e Operação. Antes existia UMA instância para tudo, num
+      env var — cobrança e follow-up de venda saíam da mesma linha. Pode
       escolher uma instância conectada no produto ou digitar o nome de uma que
       já existe na VPS. Botão de teste envia de verdade sem gravar histórico.
 - [x] **Templates editáveis.** O texto de cada notificação estava escrito na mão
       dentro das edge functions — mudar uma palavra exigia deploy. Agora vive em
-      `notification_types.template_*` com `{{variáveis}}`; quando existe, vence o
-      texto do código. Variável não fornecida some, o cliente nunca vê `{{x}}`.
+      `notification_types.template_*` com `{{variáveis}}`; quando existe, vence
+      o texto do código. Variável não fornecida some, o cliente nunca vê
+      `{{x}}`.
 - [x] **Liga/desliga por cliente.** `notification_policies`: por cliente e por
       tipo, decide se envia, por quais canais, se é automático e para qual
       número/e-mail. É distinto de `notification_preferences`, que é do cliente
       e só consegue reduzir. A política é o teto; a preferência do cliente
       abaixa mais. Ninguém opta por receber o que a plataforma não liberou.
-- [x] **Proposta no WhatsApp do cliente.** Era impossível: `notifications.
-      equipe_id` era NOT NULL e quem recebe proposta ainda não é tenant. Agora é
-      anulável com `proposal_id` e contatos próprios — e a RLS continua fechada
-      porque todo filtro usa `equipe_id IN (...)`, que NULL nunca satisfaz.
+- [x] **Proposta no WhatsApp do cliente.** Era impossível:
+      `notifications.
+      equipe_id` era NOT NULL e quem recebe proposta ainda
+      não é tenant. Agora é anulável com `proposal_id` e contatos próprios — e a
+      RLS continua fechada porque todo filtro usa `equipe_id IN (...)`, que NULL
+      nunca satisfaz.
 - [x] **Chave da Resend no painel.** `system_settings`, só super admin, e o
       valor nunca volta para a tela. Vazio = usa a variável de ambiente.
 
@@ -661,11 +803,13 @@ estreitado pela política do cliente.
       minuto e drenou na primeira execução a fila parada desde 24/08.
 
 - [ ] **Verificar o domínio na Resend.** É o único ponto que sobrou do canal de
-      e-mail: as 11 entregas falharam com `403: The soloventures.com.br domain
-      is not verified`. WhatsApp e in-app saem normalmente. Verificar em
-      https://resend.com/domains — precisa de acesso ao DNS, ninguém mais faz
-      isso. O código já avisava disso: o comentário em `brandFor` conta que a
-      produção recusou os domínios por nicho pelo mesmo motivo.
+      e-mail: as 11 entregas falharam com
+      `403: The soloventures.com.br domain
+      is not verified`. WhatsApp e
+      in-app saem normalmente. Verificar em https://resend.com/domains — precisa
+      de acesso ao DNS, ninguém mais faz isso. O código já avisava disso: o
+      comentário em `brandFor` conta que a produção recusou os domínios por
+      nicho pelo mesmo motivo.
 
 ## Sprint 8.5 — Fixes 3 (entregue 25/08/2026)
 
@@ -691,9 +835,9 @@ estreitado pela política do cliente.
 - [x] **14 · CRUD de modelos + escolha de canal.** Criar, editar, apagar e
       decidir por onde sai (app, e-mail, WhatsApp, todos, nenhum). Nenhum canal
       marcado = a notificação é registrada e não entregue, que é como se
-      silencia um aviso do sistema. Modelos criados à mão viram tipos
-      `custom.*` e ganham "enviar agora" para um cliente — sem isso um modelo
-      que nenhum código dispara seria peso morto.
+      silencia um aviso do sistema. Modelos criados à mão viram tipos `custom.*`
+      e ganham "enviar agora" para um cliente — sem isso um modelo que nenhum
+      código dispara seria peso morto.
 
       **Modelo do sistema não pode ser apagado.** Cada um é emitido por uma
       chamada de `notify()` dentro de uma edge function, e `notify()` levanta
@@ -705,8 +849,8 @@ estreitado pela política do cliente.
       dizia "Enviada com falhas" em vermelho sempre que qualquer canal falhasse
       — e o e-mail sempre falha enquanto o domínio não estiver verificado. Agora
       o aviso nomeia primeiro o canal que deu certo, e só fica vermelho quando
-      nada chegou ao cliente. O erro cru da Resend também virou frase
-      acionável em vez de JSON.
+      nada chegou ao cliente. O erro cru da Resend também virou frase acionável
+      em vez de JSON.
 
 ### Falta, e não é código
 
@@ -728,11 +872,11 @@ estreitado pela política do cliente.
 
 - [x] **Recarga de crédito não mudava nada.** Os créditos ENTRAVAM (500 às
       05:20, 500 às 05:21). O que os engolia era um lançamento de **−7000** que
-      o `credits-reconcile` fez às 04:30, na primeira execução depois que agendei
-      o cron. Ele pergunta ao GPT Maker o gasto do **mês calendário** e compara
-      com o que o nosso ledger registrou — só que o primeiro lançamento do
-      `credit_ledger` é de 24/08 16:06. Comparou 24 dias de provider contra 1 dia
-      de ledger e cobrou a diferença.
+      o `credits-reconcile` fez às 04:30, na primeira execução depois que
+      agendei o cron. Ele pergunta ao GPT Maker o gasto do **mês calendário** e
+      compara com o que o nosso ledger registrou — só que o primeiro lançamento
+      do `credit_ledger` é de 24/08 16:06. Comparou 24 dias de provider contra 1
+      dia de ledger e cobrou a diferença.
 
       Como `credit_balance` é `greatest(0, soma)`, o buraco ficava **invisível**:
       o saldo mostrava 0 e cada recarga nova desaparecia dentro dele sem deixar
@@ -756,10 +900,11 @@ estreitado pela política do cliente.
 - [x] **Studio AI mostrando consumo que não é daquele cliente.** O endpoint já
       era por agente (verificado contra a API: Solo Energia 3500, Walter Inglez
       10 no mesmo workspace). O problema era a JANELA: mostrava o mês inteiro do
-      agente ao lado do saldo do ledger, que começa no dia em que a equipe passou
-      a ser cobrada. "Saldo 1500, gastou 7000" — dois números sobre períodos
-      incompatíveis. Como a resposta do provider tem quebra **por dia**, aqui deu
-      para recortar exato, e a tela explica desde quando está contando.
+      agente ao lado do saldo do ledger, que começa no dia em que a equipe
+      passou a ser cobrada. "Saldo 1500, gastou 7000" — dois números sobre
+      períodos incompatíveis. Como a resposta do provider tem quebra **por
+      dia**, aqui deu para recortar exato, e a tela explica desde quando está
+      contando.
 
 ### Falta
 
@@ -835,8 +980,8 @@ estreitado pela política do cliente.
 contrato (o de teste) e 16 lançamentos no ledger** — nenhum deles referente a
 dinheiro que entrou de verdade. Enquanto isso for verdade, apagar o histórico
 financeiro não apaga registro contábil de ninguém. **Depois da primeira fatura
-paga, esta opção deixa de existir** e o reset vira "estornar", que é outra
-coisa e muito mais cara.
+paga, esta opção deixa de existir** e o reset vira "estornar", que é outra coisa
+e muito mais cara.
 
 **O que NÃO pode ser tocado, em hipótese alguma:** os 8 clientes reais e seus
 dados operacionais. São **1.653 leads** acumulados desde dezembro/2025 — Casa
@@ -852,12 +997,12 @@ botão só:
    propostas de teste, instância de teste, notificações de teste. Não toca em
    cliente real.
 
-2. **Zerar o estado de cobrança, mantendo os clientes.** Apagar
-   `credit_ledger`, `invoices`, `invoice_items`, `contracts`, `contract_items`,
-   `payment_events`, `consumo_creditos`, `notification_deliveries`,
-   `notifications` — e então **recomeçar deliberadamente**: anexar o plano de
-   cada cliente real com `admin_set_contract_item` e conceder o crédito inicial
-   com `admin_grant_credits`. Hoje os 8 clientes reais estão todos com
+2. **Zerar o estado de cobrança, mantendo os clientes.** Apagar `credit_ledger`,
+   `invoices`, `invoice_items`, `contracts`, `contract_items`, `payment_events`,
+   `consumo_creditos`, `notification_deliveries`, `notifications` — e então
+   **recomeçar deliberadamente**: anexar o plano de cada cliente real com
+   `admin_set_contract_item` e conceder o crédito inicial com
+   `admin_grant_credits`. Hoje os 8 clientes reais estão todos com
    `contract_status = none`; nenhum tem plano. Isto é menos "limpeza" e mais
    "finalmente começar a cobrar".
 
@@ -865,6 +1010,7 @@ botão só:
    nunca.
 
 **Guardas que o script precisa ter, ou não deve existir:**
+
 - Recusar-se a rodar se existir **qualquer fatura com `status = 'paid'`** — é o
   gatilho que diz "a janela fechou".
 - Rodar em modo simulação por padrão, listando o que apagaria e contando linhas,
@@ -881,3 +1027,11 @@ botão só:
 (`sprint8_billing_tick`, `sprint8_dispatch_tick`, `sprint8_reconcile_tick`) e
 religar depois. Um reset com o reconciliador rodando no meio recria exatamente o
 buraco que o 8.5 acabou de tapar.
+
+- Construir integraçãovia MCP
+- Configuração de pipelie com motivo de perda não persistente
+- Copilot com erro: tanto para sync do pipeline como para criar pipelines:
+  Copilot API error 422 : {"detail":[{"type":"model_type","loc":[],"msg":"Input
+  should be a valid dictionary or instance of
+  PipelineBlueprint","input":"invalid or expired
+  token","ctx":{"class_name":"PipelineBlueprint"},"url":"https://errors.pydantic.dev/2.13/v/model_type"}]}
