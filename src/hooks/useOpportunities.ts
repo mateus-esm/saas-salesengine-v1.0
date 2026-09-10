@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { fetchAllPages } from "@/lib/fetchAllPages";
+import { createDebouncer } from "@/lib/debounce";
 
 import type {
   Opportunity,
@@ -78,33 +80,46 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
     queryKey,
     queryFn: async (): Promise<Opportunity[]> => {
       if (!equipeId) return [];
-      let q = sb
-        .from(TABLE)
-        .select("*")
-        .eq("equipe_id", equipeId)
-        .is("deleted_at", null);
-
-      if (pipelineId) q = q.eq("pipeline_id", pipelineId);
-      if (leadId) q = q.eq("lead_id", leadId);
-
-      const { data, error } = await q.order("position", { ascending: true });
-      if (error) throw error;
-      return ((data || []) as OpportunityRow[]).map(normalize);
+      // Sprint 11: every page, not just the first 1,000 rows (the API cap hid 259
+      // Solo Energia deals). `id` breaks the ties in `position` — 1,259 deals sat
+      // at position 0 — so pages cannot repeat or skip rows.
+      const rows = await fetchAllPages<OpportunityRow>((from, to) => {
+        let q = sb
+          .from(TABLE)
+          .select("*")
+          .eq("equipe_id", equipeId)
+          .is("deleted_at", null);
+        if (pipelineId) q = q.eq("pipeline_id", pipelineId);
+        if (leadId) q = q.eq("lead_id", leadId);
+        return q
+          .order("position", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+      });
+      return rows.map(normalize);
     },
     enabled: !!equipeId,
   });
 
   useEffect(() => {
     if (!equipeId) return;
+    // Sprint 11: a burst of changes (the Copilot, a bulk move, a webhook) used to
+    // refetch the whole list once per row. Grouped now.
+    const refresh = createDebouncer(
+      () => queryClient.invalidateQueries({ queryKey }),
+      1000,
+      { maxWait: 5000 },
+    );
     const channel = sb
       .channel(`opportunities_${equipeId}_${pipelineId ?? "all"}_${leadId ?? "all"}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: TABLE, filter: `equipe_id=eq.${equipeId}` },
-        () => queryClient.invalidateQueries({ queryKey }),
+        () => refresh.call(),
       )
       .subscribe();
     return () => {
+      refresh.cancel();
       sb.removeChannel(channel);
     };
     // queryKey is derived from these — including the array would loop.

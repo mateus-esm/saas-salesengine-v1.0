@@ -90,6 +90,11 @@ const formatNextContact = (iso: string | null): { label: string | null; overdue:
  * Sprint 5.1 section 3.1 - batched touchpoint counts for an array of lead ids.
  * Returns a map { [lead_id]: count }. Empty arrays short-circuit without
  * hitting the network.
+ *
+ * Sprint 11: counted on the server by `crm_touchpoint_counts`. The old query put
+ * every lead id in the URL (`.in("lead_id", ids)`) — about 1,000 UUIDs for Solo
+ * Energia, past the URL size limit — and counted rows in the browser, which the
+ * 1,000-row cap also cut short. The ids now travel in the POST body.
  */
 export const useTouchpointCounts = (leadIds: string[]): Record<string, number> => {
   const { profile } = useAuth();
@@ -105,16 +110,16 @@ export const useTouchpointCounts = (leadIds: string[]): Record<string, number> =
     queryKey: ["touchpoint-counts", equipeId, sortedKey],
     enabled: !!equipeId && uniqueLeadIds.length > 0,
     queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await supabase
-        .from("touchpoints")
-        .select("lead_id")
-        .in("lead_id", uniqueLeadIds);
-
+      // The generated types do not know the Sprint 11 RPC yet.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("crm_touchpoint_counts", {
+        p_lead_ids: uniqueLeadIds,
+      });
       if (error) throw error;
 
       const counts: Record<string, number> = {};
-      for (const row of data ?? []) {
-        counts[row.lead_id] = (counts[row.lead_id] ?? 0) + 1;
+      for (const [leadId, n] of Object.entries((data ?? {}) as Record<string, number>)) {
+        counts[leadId] = Number(n) || 0;
       }
       return counts;
     },
