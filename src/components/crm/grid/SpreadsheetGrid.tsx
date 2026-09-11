@@ -48,6 +48,13 @@ export interface SpreadsheetGridProps {
   onReorderColumn?: (fromIndex: number, toIndex: number) => void;
   /** Column visibility toggle callback: (key) => void */
   onToggleColumn?: (key: string) => void;
+  // Sprint 11 · Onda 2 — server pages + open the record
+  /** The primary column (ColumnDef.primary) opens the record. */
+  onRowOpen?: (rowId: string) => void;
+  /** Infinite scroll: a sentinel under the last row asks for the next page. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onEndReached?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +154,10 @@ export function SpreadsheetGrid({
   surfaceKey,
   onReorderColumn,
   onToggleColumn: _onToggleColumn,
+  onRowOpen,
+  hasMore = false,
+  loadingMore = false,
+  onEndReached,
 }: SpreadsheetGridProps) {
   const allIds = rows.map((r) => r.id);
   const { selectedIds, isSelected, toggle, toggleAll, clear, count } =
@@ -167,13 +178,31 @@ export function SpreadsheetGrid({
   const layoutEnabled = !!surfaceKey;
   const renderColumns = layoutEnabled ? layoutVisibleColumns : columns;
 
+  // The promise goes back to the cell, which shows a failed save on itself.
   const handleCellCommit = useCallback(
     (row: GridRow, column: ColumnDef) =>
-      (value: unknown) => {
-        onCellCommit({ rowId: row.id, column, value });
-      },
+      (value: unknown) => onCellCommit({ rowId: row.id, column, value }),
     [onCellCommit],
   );
+
+  // ---- Infinite scroll ----------------------------------------------------
+  // The viewport is the observer root: it works whether the grid scrolls on its
+  // own or the page does (the browser accounts for the containers' clipping).
+  const sentinelRef = useRef<HTMLTableRowElement | null>(null);
+  const onEndReachedRef = useRef(onEndReached);
+  onEndReachedRef.current = onEndReached;
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore || loadingMore || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onEndReachedRef.current?.();
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, rows.length]);
 
   // ---- Resize: drag tracking ---------------------------------------------
   const [resizing, setResizing] = useState<{
@@ -501,7 +530,7 @@ export function SpreadsheetGrid({
   return (
     <div className="w-full overflow-auto">
       <table className="w-full border-collapse">
-        <thead>
+        <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_hsl(var(--border))]">
           <tr className="border-b">
             <th className="w-10 px-2 py-2">
               <Checkbox
@@ -572,6 +601,7 @@ export function SpreadsheetGrid({
                       onCommit={handleCellCommit(row, col)}
                       equipeId={equipeId}
                       fromTable={fromTable}
+                      onOpen={col.primary && onRowOpen ? () => onRowOpen(row.id) : undefined}
                     />
                   </td>
                 );
@@ -580,6 +610,22 @@ export function SpreadsheetGrid({
               {colunasBodyCell}
             </tr>
           ))}
+          {(hasMore || loadingMore) && (
+            <tr ref={sentinelRef} aria-hidden={!loadingMore}>
+              <td
+                colSpan={
+                  renderColumns.length +
+                  1 +
+                  (showLeadScore ? 1 : 0) +
+                  (allowColumnCreate && onAddColumn ? 1 : 0) +
+                  (layoutEnabled && allowColumnHide ? 1 : 0)
+                }
+                className="px-3 py-3 text-center text-xs text-muted-foreground"
+              >
+                {loadingMore ? "Carregando mais…" : ""}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 

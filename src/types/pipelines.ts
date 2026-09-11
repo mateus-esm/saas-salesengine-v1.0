@@ -31,7 +31,10 @@ export type CustomFieldType =
   | "address"
   | "property_ref"
   | "company_ref"
-  | "contact_ref";
+  | "contact_ref"
+  // Sprint 11 · Onda 2 — a team member (profiles.id), for roles other than the
+  // deal owner (pre-seller, site visit technician).
+  | "user";
 
 /** Structured value for type === "address". Persisted as JSON object. */
 export interface AddressValue {

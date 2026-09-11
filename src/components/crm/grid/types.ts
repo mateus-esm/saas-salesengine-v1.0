@@ -1,5 +1,12 @@
+import type { FieldContext, FieldType } from "@/lib/fields/registry";
+
+/**
+ * A grid column is a field type from the registry (src/lib/fields/registry.ts),
+ * or a relation. The v2 slots stay registered but are not implemented.
+ */
 export type ColumnKind =
-  | "text" | "number" | "select" | "date" | "relation" | "boolean"
+  | FieldType
+  | "relation"
   | "formula" | "rollup" | "conditional"; // v2 slots — registered, not implemented
 
 export type JsonbField =
@@ -11,16 +18,22 @@ export interface ColumnDef {
   kind: ColumnKind;
   source: "native" | "jsonb";
   jsonbField?: JsonbField;      // required when source === "jsonb"
-  options?: { value: string; label: string }[]; // for kind "select"
+  options?: { value: string; label: string }[]; // for kind "select" / "multi_select"
   relation?: {
     table: string;
     displayField: string;
     linkTable?: string;
     /** UUID of the target custom table; present when the target is a virtual (custom_table_records) table. */
     targetTableId?: string;
+    /** The chips already come in the row value ({ id, name }[]): no query per cell. */
+    resolvedFromRow?: boolean;
   }; // for kind "relation"
   editable?: boolean;          // default true
   width?: number;
+  /** Opens the record: the cell renders as a button. One per grid. */
+  primary?: boolean;
+  /** What the field type needs to show a value (member names for "user"). */
+  context?: FieldContext;
 }
 
 export interface GridRow {

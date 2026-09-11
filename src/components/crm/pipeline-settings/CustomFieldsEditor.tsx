@@ -56,6 +56,9 @@ export const TYPE_LABELS: Record<CustomFieldType, string> = {
   company_ref: "Empresa",
   property_ref: "Propriedade",
   contact_ref: "Contato",
+  // Sprint 11 · Onda 2 — pré-vendedor, técnico da visita… (o dono do negócio é o
+  // responsável nativo).
+  user: "Usuário (membro da equipe)",
 };
 
 const TYPES_WITH_OPTIONS: CustomFieldType[] = ["select", "multi_select"];
