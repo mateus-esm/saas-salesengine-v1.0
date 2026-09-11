@@ -333,6 +333,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 isDragOverlay
                 companies={activeCard.companies}
                 nameOf={nameOf}
+                ownerName={activeCard.owner_name}
               />
             )}
           </DragOverlay>

@@ -167,6 +167,7 @@ export const OpportunityKanbanColumn = ({
                     onOpenContact={onOpenContact}
                     companies={card.companies}
                     nameOf={nameOf}
+                    ownerName={card.owner_name}
                   />
                 </div>
               ))

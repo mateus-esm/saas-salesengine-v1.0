@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { fetchAllPages } from "@/lib/fetchAllPages";
 import { createDebouncer } from "@/lib/debounce";
+import { patchRowInCache } from "@/lib/tablePages";
 
 import type {
   Opportunity,
@@ -277,10 +278,47 @@ export const useOpportunityMutations = () => {
     },
   });
 
+  // Sprint 11 · Onda 2 · T20 — the owner is saved on its own, the moment it is
+  // chosen (the business verb records the change in the owner history). Every
+  // board column and table loaded shows the new owner before the server answers.
+  const setOwner = useMutation({
+    mutationFn: async ({ id, owner_id }: SetOwnerVars) => {
+      const { error } = await sb.rpc("crm_update_opportunities", {
+        p_ids: [id],
+        p_patch: { owner_id },
+      });
+      if (error) throw error;
+    },
+    onMutate: async ({ id, owner_id, owner_name }: SetOwnerVars) => {
+      const scopes = [{ queryKey: ["board", equipeId] }, { queryKey: ["opp_table", equipeId] }];
+      await Promise.all(scopes.map((s) => queryClient.cancelQueries(s)));
+      const snapshots = scopes.flatMap((s) => queryClient.getQueriesData(s));
+      for (const s of scopes) {
+        queryClient.setQueriesData(s, (data: unknown) => patchRowInCache(data, id, { owner_id, owner_name }));
+      }
+      return { snapshots };
+    },
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error("Erro ao trocar o responsável: " + e.message);
+    },
+    onSettled: () => {
+      invalidateLists();
+    },
+  });
+
   return {
     createOpportunity,
     updateOpportunity,
     deleteOpportunity,
     bulkDeleteOpportunities,
+    setOwner,
   };
 };
+
+export interface SetOwnerVars {
+  id: string;
+  owner_id: string | null;
+  /** Shown on the card and the table until the server answers. */
+  owner_name: string | null;
+}

@@ -28,6 +28,7 @@ import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
 import { LeadScoreBadge, type LeadScoreBreakdown } from "./LeadScoreBadge";
 import { RelationChip } from "./grid/RelationChip";
+import { UserAvatar } from "./fields/UserAvatar";
 import { BRAND } from "@/config/brand";
 import { getFieldType } from "@/lib/fields/registry";
 
@@ -73,6 +74,8 @@ interface OpportunityCardProps {
   companies?: { id: string; name: string }[];    // Sprint 6.7 — linked companies for card chips
   /** Sprint 11 · Onda 2 — member names for "Usuário" fields (loaded once by the Kanban). */
   nameOf?: (userId: string) => string | null;
+  /** Sprint 11 · T20 — the deal owner's name (the board card carries it). */
+  ownerName?: string | null;
 }
 
 const formatCurrency = (value: number | null | undefined, currency: string) => {
@@ -114,6 +117,7 @@ export const OpportunityCard = ({
   isDragOverlay,
   companies = [],
   nameOf,
+  ownerName,
 }: OpportunityCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: opportunity.id,
@@ -195,6 +199,11 @@ export const OpportunityCard = ({
               />
             </span>
           )}
+          <UserAvatar
+            userId={opportunity.owner_id}
+            name={ownerName ?? (opportunity.owner_id ? nameOf?.(opportunity.owner_id) : null)}
+            size="xs"
+          />
         </div>
       </div>
 

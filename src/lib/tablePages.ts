@@ -32,6 +32,17 @@ export function patchRowInPages<T extends { id: string }>(
 }
 
 /**
+ * patchRowInPages for a cache whose shape is not known in advance: an edit made
+ * in the deal modal patches every board column and every table loaded, and the
+ * board's summary (a plain list) sits under the same key prefix. Only caches of
+ * pages are touched; anything else comes back as it was.
+ */
+export function patchRowInCache(data: unknown, id: string, patch: Record<string, unknown>): unknown {
+  if (!data || typeof data !== "object" || !Array.isArray((data as { pages?: unknown }).pages)) return data;
+  return patchRowInPages(data as TablePages<{ id: string } & Record<string, unknown>>, id, patch);
+}
+
+/**
  * Removes rows from the loaded pages. Emptied pages are kept: the next page is
  * fetched at an offset computed from the pages loaded, and dropping one would
  * shift it. The refetch after the mutation settles the offsets for real.

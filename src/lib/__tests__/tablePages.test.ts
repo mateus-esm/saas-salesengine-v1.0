@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   flattenPages,
   nextOffset,
+  patchRowInCache,
   patchRowInPages,
   removeRowsFromPages,
   type TablePages,
@@ -43,6 +44,20 @@ describe("patchRowInPages", () => {
 
   it("passes undefined through", () => {
     expect(patchRowInPages<Row>(undefined, "a", { name: "x" })).toBeUndefined();
+  });
+});
+
+describe("patchRowInCache", () => {
+  it("patches a cache of pages (a board column, a table)", () => {
+    const after = patchRowInCache(pages([r("a")], [r("b")]), "b", { owner_id: "u1" }) as TablePages<Row>;
+    expect(flattenPages(after)[1]).toEqual({ id: "b", name: "b", owner_id: "u1" });
+  });
+
+  it("leaves any other shape alone (the board summary is a plain list)", () => {
+    const summary = [{ stage_id: "s1", count: 3, value_sum: 10 }];
+    expect(patchRowInCache(summary, "s1", { owner_id: "u1" })).toBe(summary);
+    expect(patchRowInCache(undefined, "a", { owner_id: "u1" })).toBeUndefined();
+    expect(patchRowInCache(null, "a", { owner_id: "u1" })).toBeNull();
   });
 });
 
