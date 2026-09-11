@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/select";
 import {
   newFieldId,
-  slugify,
   TYPE_LABELS,
 } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
+import { slugify } from "@/lib/customFieldKeys";
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 interface ContactColumnsToolbarProps {

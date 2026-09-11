@@ -28,7 +28,9 @@ import { CardTelemetryPillars } from "./CardTelemetryPillars";
 import { SyncButton } from "./copilot/SyncButton";
 import { LeadScoreBadge, type LeadScoreBreakdown } from "./LeadScoreBadge";
 import { RelationChip } from "./grid/RelationChip";
+import { UserAvatar } from "./fields/UserAvatar";
 import { BRAND } from "@/config/brand";
+import { getFieldType } from "@/lib/fields/registry";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -70,6 +72,10 @@ interface OpportunityCardProps {
   onOpenContact?: (leadId: string) => void;
   isDragOverlay?: boolean;
   companies?: { id: string; name: string }[];    // Sprint 6.7 — linked companies for card chips
+  /** Sprint 11 · Onda 2 — member names for "Usuário" fields (loaded once by the Kanban). */
+  nameOf?: (userId: string) => string | null;
+  /** Sprint 11 · T20 — the deal owner's name (the board card carries it). */
+  ownerName?: string | null;
 }
 
 const formatCurrency = (value: number | null | undefined, currency: string) => {
@@ -84,52 +90,17 @@ const formatCurrency = (value: number | null | undefined, currency: string) => {
   }
 };
 
-const renderCustomValue = (field: CustomFieldSchema, raw: unknown): string | null => {
-  if (raw === null || raw === undefined || raw === "") return null;
-
-  const fromUrl = (url: string) => {
-    const clean = url.split("?")[0]?.split("#")[0] ?? url;
-    const name = clean.split("/").filter(Boolean).pop();
-    return name ? decodeURIComponent(name) : "Arquivo anexado";
-  };
-
-  const objectLabel = (value: unknown): string => {
-    if (Array.isArray(value)) {
-      const labels = value
-        .map((item) => objectLabel(item))
-        .filter(Boolean);
-      return labels.length ? labels.join(", ") : `${value.length} item(s)`;
-    }
-    if (value && typeof value === "object") {
-      const record = value as Record<string, unknown>;
-      const candidate = record.name ?? record.label ?? record.title ?? record.file_name;
-      if (typeof candidate === "string" && candidate.trim()) return candidate;
-      if (typeof record.url === "string" && record.url.trim()) return fromUrl(record.url);
-      if (typeof record.path === "string" && record.path.trim()) return fromUrl(record.path);
-      return "Dados preenchidos";
-    }
-    return String(value);
-  };
-
-  switch (field.type) {
-    case "currency":
-      return typeof raw === "number"
-        ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(raw)
-        : String(raw);
-    case "boolean":
-      return raw ? "Sim" : "Não";
-    case "date":
-      try {
-        return new Date(String(raw)).toLocaleDateString("pt-BR");
-      } catch {
-        return String(raw);
-      }
-    case "file":
-      return objectLabel(raw);
-    default:
-      if (typeof raw === "object") return objectLabel(raw);
-      return String(raw);
-  }
+// Sprint 11 · Onda 2 — the card shows a field the way the grid and the filters
+// do: through the field-type registry. (Before: its own switch, which showed a
+// raw id for refs and "Dados preenchidos" for an address.)
+const renderCustomValue = (
+  field: CustomFieldSchema,
+  raw: unknown,
+  nameOf?: (userId: string) => string | null,
+): string | null => {
+  const spec = getFieldType(field.type);
+  if (spec.isEmpty(raw)) return null;
+  return spec.format(raw, { nameOf, options: field.options }) || null;
 };
 
 export const OpportunityCard = ({
@@ -145,6 +116,8 @@ export const OpportunityCard = ({
   onOpenContact,
   isDragOverlay,
   companies = [],
+  nameOf,
+  ownerName,
 }: OpportunityCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: opportunity.id,
@@ -226,6 +199,11 @@ export const OpportunityCard = ({
               />
             </span>
           )}
+          <UserAvatar
+            userId={opportunity.owner_id}
+            name={ownerName ?? (opportunity.owner_id ? nameOf?.(opportunity.owner_id) : null)}
+            size="xs"
+          />
         </div>
       </div>
 
@@ -275,7 +253,7 @@ export const OpportunityCard = ({
       {cardFields.length > 0 && (
         <div className="space-y-0.5 pt-1 border-t border-border/60">
           {cardFields.map((f) => {
-            const display = renderCustomValue(f, opportunity.custom_data?.[f.field_id]);
+            const display = renderCustomValue(f, opportunity.custom_data?.[f.field_id], nameOf);
             if (!display) return null;
             return (
               <div key={f.field_id} className="flex items-baseline justify-between gap-2 text-[11px]">

@@ -22,11 +22,14 @@ export interface CopilotDecisionRow {
 interface UseCopilotDecisionsArgs {
   pipelineId?: string | null;
   limit?: number;
+  /** Sprint 11 · T20 — the deal modal asks only while open (it is mounted while closed). */
+  enabled?: boolean;
 }
 
 export function useCopilotDecisions({
   pipelineId,
   limit = 100,
+  enabled = true,
 }: UseCopilotDecisionsArgs = {}) {
   const { profile } = useAuth();
   const equipeId = profile?.equipe_id;
@@ -48,7 +51,7 @@ export function useCopilotDecisions({
 
       return (await res.json()) as CopilotDecisionRow[];
     },
-    enabled: !!equipeId,
+    enabled: enabled && !!equipeId,
     staleTime: 15_000,
   });
 }

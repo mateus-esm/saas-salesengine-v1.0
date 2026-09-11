@@ -7,11 +7,32 @@ import { toast } from "sonner";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
+/**
+ * Sprint 11 · T21 — the column types of a custom table: the field-type registry's
+ * (src/lib/fields/registry.ts) plus the relation to another custom table.
+ */
+export type CustomTableColumnType =
+  | "text"
+  | "number"
+  | "currency"
+  | "date"
+  | "boolean"
+  | "select"
+  | "multi_select"
+  | "url"
+  | "phone"
+  | "user"
+  | "relation";
+
 export interface CustomTableColumn {
+  /** Born from the label (uniqueKey) and never edited: records keep their values under it. */
   key: string;
   label: string;
-  type: "text" | "number" | "date" | "boolean" | "select" | "relation";
+  type: CustomTableColumnType;
+  /** Only for select / multi_select. */
   options?: string[];
+  /** Removed from the table; its values stay stored and its key is never reused. */
+  is_deleted?: boolean;
   relationConfig?: {
     targetTable: string;
     targetTableSlug: string;

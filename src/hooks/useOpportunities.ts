@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { fetchAllPages } from "@/lib/fetchAllPages";
 import { createDebouncer } from "@/lib/debounce";
+import { patchRowInCache } from "@/lib/tablePages";
 
 import type {
   Opportunity,
@@ -154,6 +155,9 @@ export const useOpportunityMutations = () => {
   const invalidateLists = () => {
     queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
     queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+    // Sprint 11 · Onda 2 — the server-side tables show deals too.
+    queryClient.invalidateQueries({ queryKey: ["opp_table", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["contacts_table", equipeId] });
   };
 
   const createOpportunity = useMutation({
@@ -232,42 +236,32 @@ export const useOpportunityMutations = () => {
     onError: (e: Error) => toast.error("Erro ao remover: " + e.message),
   });
 
-  // Sprint 5.5 3.1 — Mass purge for deals.
-  // Single round-trip soft delete: when a marketing channel pollutes a
-  // pipeline with junk leads, operators select rows and we PATCH them in
-  // one go via .in('id', ids). Optimistic cache update so the rows vanish
-  // from the Kanban / table before the network resolves; rollback on error.
-  const bulkDeleteOpportunities = useMutation({
-    mutationFn: async (ids: string[]) => {
-      if (ids.length === 0) return;
-      const { error } = await sb
-        .from(TABLE)
-        .update({ deleted_at: new Date().toISOString() })
-        .in("id", ids);
+  // Mass delete moved to the business verb crm_delete_opportunities (Sprint 11 ·
+  // T13/T18, useDeleteOpportunities): ids in the POST body, not in the URL.
+
+  // Sprint 11 · Onda 2 · T20 — the owner is saved on its own, the moment it is
+  // chosen (the business verb records the change in the owner history). Every
+  // board column and table loaded shows the new owner before the server answers.
+  const setOwner = useMutation({
+    mutationFn: async ({ id, owner_id }: SetOwnerVars) => {
+      const { error } = await sb.rpc("crm_update_opportunities", {
+        p_ids: [id],
+        p_patch: { owner_id },
+      });
       if (error) throw error;
     },
-    onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey: ["opportunities", equipeId] });
-      const previous = queryClient.getQueryData<Opportunity[]>([
-        "opportunities",
-        equipeId,
-      ]);
-      if (previous) {
-        const idSet = new Set(ids);
-        const next = previous.filter((o) => !idSet.has(o.id));
-        queryClient.setQueryData(["opportunities", equipeId], next);
+    onMutate: async ({ id, owner_id, owner_name }: SetOwnerVars) => {
+      const scopes = [{ queryKey: ["board", equipeId] }, { queryKey: ["opp_table", equipeId] }];
+      await Promise.all(scopes.map((s) => queryClient.cancelQueries(s)));
+      const snapshots = scopes.flatMap((s) => queryClient.getQueriesData(s));
+      for (const s of scopes) {
+        queryClient.setQueriesData(s, (data: unknown) => patchRowInCache(data, id, { owner_id, owner_name }));
       }
-      return { previous };
+      return { snapshots };
     },
-    onError: (e: Error, _ids, ctx) => {
-      if (ctx?.previous) {
-        queryClient.setQueryData(["opportunities", equipeId], ctx.previous);
-      }
-      toast.error("Erro ao remover: " + e.message);
-    },
-    onSuccess: (_data, ids) => {
-      const n = ids.length;
-      toast.success(`${n} lead${n > 1 ? "s removidos" : " removido"}`);
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error("Erro ao trocar o responsável: " + e.message);
     },
     onSettled: () => {
       invalidateLists();
@@ -278,6 +272,13 @@ export const useOpportunityMutations = () => {
     createOpportunity,
     updateOpportunity,
     deleteOpportunity,
-    bulkDeleteOpportunities,
+    setOwner,
   };
 };
+
+export interface SetOwnerVars {
+  id: string;
+  owner_id: string | null;
+  /** Shown on the card and the table until the server answers. */
+  owner_name: string | null;
+}

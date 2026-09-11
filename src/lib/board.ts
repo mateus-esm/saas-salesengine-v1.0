@@ -8,7 +8,8 @@
 
 import type { InfiniteData } from "@tanstack/react-query";
 import type { BoardCard, BoardStageSummary } from "@/types/board";
-import type { CrmFilters } from "@/types/crmFilters";
+import type { ContactFilters, CrmFilters, CustomFieldFilter } from "@/types/crmFilters";
+import { cleanCustomFilters } from "@/lib/crmFilters";
 import type { OpportunityStatus } from "@/types/pipelines";
 
 /** One column's cache: pages of cards, keyed by the offset each page was fetched at. */
@@ -18,8 +19,10 @@ export type BoardPages = InfiniteData<BoardCard[], number>;
  * Drops empty values so "no filter" has exactly one shape. `{}` and
  * `{ search: "" }` must hit the same cache entry and send the same request —
  * otherwise clearing the search box refetches every column for nothing.
+ * Works for both filter shapes (CrmFilters and ContactFilters); half-built
+ * custom-field filters are dropped too (Wave 2).
  */
-export function cleanFilters(filters: CrmFilters): CrmFilters {
+export function cleanFilters<T extends CrmFilters | ContactFilters>(filters: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(filters)) {
     if (value === undefined || value === null) continue;
@@ -28,13 +31,18 @@ export function cleanFilters(filters: CrmFilters): CrmFilters {
       if (trimmed) out[key] = trimmed;
       continue;
     }
+    if (key === "custom" && Array.isArray(value)) {
+      const custom = cleanCustomFilters(value as CustomFieldFilter[]);
+      if (custom.length) out[key] = custom;
+      continue;
+    }
     if (Array.isArray(value)) {
       if (value.length) out[key] = value;
       continue;
     }
     out[key] = value;
   }
-  return out as CrmFilters;
+  return out as T;
 }
 
 /** Applies the defaults the rest of the app expects to a raw `crm_board_stage` row. */

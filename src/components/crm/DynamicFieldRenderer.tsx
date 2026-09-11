@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { EntityLinker, type EntityKind } from "./EntityLinker";
+import { UserPicker } from "./fields/UserPicker";
 
 import type {
   AddressValue,
@@ -329,6 +330,22 @@ const FieldInput = ({ field, value, onChange, disabled }: FieldInputProps) => {
         </div>
       );
 
+    // Sprint 11 · Onda 2 — a team member; the value is the profiles.id.
+    case "user":
+      return (
+        <div className="space-y-1.5">
+          {labelNode}
+          <UserPicker
+            id={inputId}
+            value={typeof value === "string" && value ? value : null}
+            onChange={(next) => onChange(next)}
+            disabled={disabled}
+            noneLabel="Ninguém"
+            ariaLabel={field.label}
+          />
+        </div>
+      );
+
     case "company_ref":
       return (
         <div className="space-y-1.5">
@@ -567,6 +584,7 @@ export interface FieldValidationError {
 }
 
 const URL_PATTERN = /^https?:\/\/.+/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const validateCustomData = (
   schema: CustomFieldSchema[],
@@ -623,6 +641,14 @@ export const validateCustomData = (
         message: `${field.label}: URL inválida (use http:// ou https://)`,
       });
     }
+    // Sprint 11 · Onda 2 — the value of a user field is a profiles.id, never a name.
+    if (field.type === "user" && (typeof v !== "string" || !UUID_PATTERN.test(v))) {
+      errors.push({
+        field_id: field.field_id,
+        label: field.label,
+        message: `${field.label}: usuário inválido (escolha um membro da equipe)`,
+      });
+    }
   }
   return errors;
 };
@@ -630,7 +656,7 @@ export const validateCustomData = (
 const ALL_FIELD_TYPES: readonly CustomFieldType[] = [
   "text", "number", "currency", "date", "boolean", "select",
   "multi_select", "url", "phone", "address",
-  "property_ref", "company_ref", "contact_ref",
+  "property_ref", "company_ref", "contact_ref", "user",
 ];
 
 export const isCustomFieldType = (s: string): s is CustomFieldType =>

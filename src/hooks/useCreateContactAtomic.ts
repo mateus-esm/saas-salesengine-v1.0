@@ -14,8 +14,8 @@ export type RelationalLinkKind = "company" | "property";
  * Sprint 5.2 T7 — canonical contact-ledger persistence path.
  *
  * Upserts a company/property relationship onto the ledger tables that
- * Base de Contatos reads (`contact_company_links` / `property_owner_links` via
- * useLeadEntitySummary). Linking inside a pipeline used to write only
+ * Base de Contatos reads (`contact_company_links` / `property_owner_links`; the
+ * company column comes from crm_contacts_table). Linking inside a pipeline used to write only
  * `opportunity_links`, so the relationship never surfaced in the contacts grid.
  *
  * Idempotent: reactivates a soft-deleted row instead of inserting a duplicate.

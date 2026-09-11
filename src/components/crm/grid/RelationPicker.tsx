@@ -57,21 +57,22 @@ export function RelationPicker({
 
       if (targetTableId) {
         // Virtual custom table: rows live in custom_table_records keyed by table_id.
-        // Display value is read from data[displayField] (JSONB).
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const { data } = await sb
+        // Display value is read from data[displayField] (JSONB). Sprint 11 · T21:
+        // the search runs on the server — it used to filter the first 50 records
+        // in the browser, so a record past them could never be found.
+        let query = sb
           .from("custom_table_records")
           .select("id, data")
           .eq("table_id", targetTableId)
-          .is("deleted_at", null)
-          .limit(50);
+          .is("deleted_at", null);
+        if (search.trim()) query = query.ilike(`data->>${displayField}`, `%${search.trim()}%`);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const { data } = await query.order("id", { ascending: true }).limit(50);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const all = ((data ?? []) as any[]).map((r: any) => ({
+        return ((data ?? []) as any[]).map((r: any) => ({
           id: r.id as string,
           label: String(r.data?.[displayField] ?? ""),
         }));
-        const q = search.trim().toLowerCase();
-        return q ? all.filter((item) => item.label.toLowerCase().includes(q)) : all;
       }
 
       // Physical table (e.g. "companies"): query directly by equipe_id.

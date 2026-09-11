@@ -54,9 +54,11 @@ import type {
   PipelineStageV2,
 } from "@/types/pipelines";
 import { useOpportunityMutations } from "@/hooks/useOpportunities";
-import { useAgendaEvents } from "@/hooks/useAgendaEvents";
+import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
 import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { BRAND } from "@/config/brand";
+import { UserPicker } from "./fields/UserPicker";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -106,7 +108,8 @@ export const OpportunityDetailModal = ({
   // Sprint 11: mutations only. This modal is mounted even while closed; the old
   // useOpportunities() call loaded the pipeline (or, with no opportunity, every
   // deal of the team) just to get these two functions.
-  const { updateOpportunity, deleteOpportunity } = useOpportunityMutations();
+  const { updateOpportunity, deleteOpportunity, setOwner } = useOpportunityMutations();
+  const { nameOf } = useMemberDirectory();
 
   const queryClient = useQueryClient();
   const { profile, equipe } = useAuth();
@@ -120,6 +123,9 @@ export const OpportunityDetailModal = ({
   const [status, setStatus] = useState<OpportunityStatus>("open");
   const [value, setValue] = useState<string>("");
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const [decisionsOpen, setDecisionsOpen] = useState(false);
 
   useEffect(() => {
     if (!opportunity) return;
@@ -127,6 +133,7 @@ export const OpportunityDetailModal = ({
     setStatus(opportunity.status);
     setValue(opportunity.value != null ? String(opportunity.value) : "");
     setCustomData(opportunity.custom_data ?? {});
+    setOwnerId(opportunity.owner_id ?? null);
   }, [opportunity]);
 
   const schema = useMemo(
@@ -140,15 +147,18 @@ export const OpportunityDetailModal = ({
     opportunity?.id ?? null,
   );
 
-  // Sprint 6.10 T2 — Agenda do card: fetch all team events, filter by lead_id client-side.
-  const { events, isLoading: agendaLoading } = useAgendaEvents();
-  const cardEvents = useMemo(
-    () => events.filter((e) => e.lead_id && e.lead_id === opportunity?.lead_id),
-    [events, opportunity?.lead_id],
-  );
+  // Sprint 11 · T20 — this modal is mounted while closed, so the agenda and the
+  // Copilot decisions (an external API) are asked only with the modal open and
+  // their section expanded. Before, every Kanban and Table visit loaded the whole
+  // team's agenda and called the Copilot.
+  const agendaQuery = useLeadAgendaEvents(opportunity?.lead_id ?? null, open && agendaOpen);
+  const cardEvents = agendaQuery.data ?? [];
 
   // Sprint 6.10 T2 — Decisões do Copilot: external API may be unconfigured; handle gracefully.
-  const decisionsQuery = useCopilotDecisions({ pipelineId: opportunity?.pipeline_id });
+  const decisionsQuery = useCopilotDecisions({
+    pipelineId: opportunity?.pipeline_id,
+    enabled: open && decisionsOpen,
+  });
   const cardDecisions = useMemo(
     () => (decisionsQuery.data ?? []).filter((d) => d.opportunity_id === opportunity?.id),
     [decisionsQuery.data, opportunity?.id],
@@ -176,6 +186,16 @@ export const OpportunityDetailModal = ({
           : opportunity.closed_at ?? new Date().toISOString(),
     });
     onClose();
+  };
+
+  // The owner is saved the moment it is chosen (not with "Salvar"): the card and
+  // the table change at once, and the change enters the owner history.
+  const handleOwnerChange = (next: string | null) => {
+    setOwnerId(next);
+    setOwner.mutate(
+      { id: opportunity.id, owner_id: next, owner_name: next ? nameOf(next) : null },
+      { onError: () => setOwnerId(opportunity.owner_id ?? null) },
+    );
   };
 
   const handleDelete = () => {
@@ -218,9 +238,20 @@ export const OpportunityDetailModal = ({
               <DialogTitle className="text-base font-semibold leading-tight">
                 {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                em <span className="font-medium text-foreground/70">{pipeline?.name ?? "Pipeline"}</span>
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
+                <span>
+                  em <span className="font-medium text-foreground/70">{pipeline?.name ?? "Pipeline"}</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  Responsável
+                  <UserPicker
+                    ariaLabel="Responsável"
+                    value={ownerId}
+                    onChange={handleOwnerChange}
+                    className="h-7 w-auto min-w-[9rem] max-w-[14rem] text-xs"
+                  />
+                </span>
+              </div>
             </div>
             {siblings && siblings.length > 1 && (
               <div className="shrink-0 mr-7">
@@ -397,7 +428,7 @@ export const OpportunityDetailModal = ({
                 </Collapsible>
 
                 {/* Agenda do card */}
-                <Collapsible>
+                <Collapsible open={agendaOpen} onOpenChange={setAgendaOpen}>
                   <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md px-2 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
                     <span className="flex items-center gap-2">
                       <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
@@ -406,7 +437,7 @@ export const OpportunityDetailModal = ({
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-2 pb-2">
-                    {agendaLoading ? (
+                    {agendaQuery.isLoading ? (
                       <p className="text-xs text-muted-foreground py-2">Carregando…</p>
                     ) : cardEvents.length === 0 ? (
                       <p className="text-xs text-muted-foreground italic py-2">Sem agendamentos.</p>
@@ -431,7 +462,7 @@ export const OpportunityDetailModal = ({
                 </Collapsible>
 
                 {/* Decisões do Copilot */}
-                <Collapsible>
+                <Collapsible open={decisionsOpen} onOpenChange={setDecisionsOpen}>
                   <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md px-2 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
                     <span className="flex items-center gap-2">
                       <Bot className="h-3.5 w-3.5 shrink-0" />

@@ -22,10 +22,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer";
+import { UserAvatar } from "./fields/UserAvatar";
 import type { Opportunity, OpportunityStatus, Pipeline } from "@/types/pipelines";
 
 interface LeadOpportunitiesSectionProps {
@@ -187,6 +189,8 @@ const OpportunityRow = ({
   onUpdate,
 }: OpportunityRowProps) => {
   const { stages } = usePipelineStagesV2(opportunity.pipeline_id);
+  const { nameOf } = useMemberDirectory();
+  const ownerName = opportunity.owner_id ? nameOf(opportunity.owner_id) : null;
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const [stageId, setStageId] = useState(opportunity.stage_id);
@@ -267,9 +271,14 @@ const OpportunityRow = ({
                 </Badge>
               )}
             </div>
-            {fmtValue && (
-              <p className="text-xs text-muted-foreground mt-0.5">{fmtValue}</p>
-            )}
+            {/* Sprint 11 · T20 — the contact has no owner; each of its deals does. */}
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <UserAvatar userId={opportunity.owner_id} name={ownerName} size="xs" />
+              <span className="truncate">
+                {ownerName ?? (opportunity.owner_id ? "Usuário removido" : "Sem responsável")}
+              </span>
+              {fmtValue && <span className="shrink-0">· {fmtValue}</span>}
+            </div>
           </div>
           {expanded ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />

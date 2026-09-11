@@ -43,9 +43,9 @@ import { useContactFields } from "@/hooks/useContactFields";
 import {
   SortableFieldRow,
   TYPE_LABELS,
-  slugify,
   newFieldId,
 } from "./CustomFieldsEditor";
+import { slugify } from "@/lib/customFieldKeys";
 
 const TYPES_WITH_OPTIONS: CustomFieldType[] = ["select", "multi_select"];
 const TYPES_AS_REF: CustomFieldType[] = [

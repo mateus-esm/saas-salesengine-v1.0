@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import {
   Dialog,
@@ -16,31 +18,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { usePipelines } from "@/hooks/usePipelines";
-import { useOpportunities } from "@/hooks/useOpportunities";
-import { useLeads } from "@/hooks/useLeads";
+
+const sb = supabase as any;
 
 interface AssignToPipelineDialogProps {
   open: boolean;
   onClose: () => void;
-  /** One or more contact ids to assign. When multiple are passed, one
-   *  opportunity per contact is created in the same pipeline. */
+  /** One or more contact ids. One deal per contact is created in the pipeline. */
   contactIds: string[];
   /** Optional label for the dialog (e.g., the contact's name when single). */
   label?: string;
-  /** Pre-select a pipeline (used by deep-links and the Assign row action from
-   *  inside a pipeline workspace). */
+  /** Pre-select a pipeline. */
   defaultPipelineId?: string | null;
 }
 
 /**
- * Sprint 4 EPIC 4 §4.3.1 — "Assign Contact to Pipeline" flow. Creates one
- * opportunity per selected contact in the first stage of the chosen pipeline.
- *
- * Also performs the contact_type bump: contacts currently typed as 'lead' are
- * promoted to 'opportunity' since they now live inside a sales process. This
- * matches the Epic 0 webhook behavior for inbound leads.
+ * Sprint 4 EPIC 4 §4.3.1 — "Assign Contact to Pipeline". Sprint 11 · Onda 2: one
+ * call to the business verb `crm_create_opportunities` (one deal per contact, in
+ * the first open stage; contacts that already have an open deal in that
+ * pipeline are skipped; "lead" contacts become "opportunity"). Before, it
+ * created the deals one request at a time and loaded every lead and deal of the
+ * team to do it.
  */
 export const AssignToPipelineDialog = ({
   open,
@@ -50,42 +51,46 @@ export const AssignToPipelineDialog = ({
   defaultPipelineId,
 }: AssignToPipelineDialogProps) => {
   const { activePipelines } = usePipelines();
-  const { createOpportunity } = useOpportunities();
-  const { leads, updateLead } = useLeads();
+  const { profile } = useAuth();
+  const equipeId = profile?.equipe_id;
+  const queryClient = useQueryClient();
 
   const [pipelineId, setPipelineId] = useState<string>(defaultPipelineId ?? "");
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setPipelineId(defaultPipelineId ?? "");
-    }
+    if (open) setPipelineId(defaultPipelineId ?? "");
   }, [open, defaultPipelineId]);
 
   const handleAssign = async () => {
     if (!pipelineId || contactIds.length === 0) return;
-
-    // Sequential to respect any server-side rate limits and keep the toasts
-    // ordered per contact; at typical bulk sizes the perf hit is negligible.
-    for (const contactId of contactIds) {
-      try {
-        await createOpportunity.mutateAsync({
-          lead_id: contactId,
-          pipeline_id: pipelineId,
-        });
-
-        // contact_type bump — promote leads to opportunities when they enter
-        // a sales process. Leave other types alone (contact/spam/archived).
-        const contact = leads.find((l) => l.id === contactId);
-        if (contact?.contact_type === "lead") {
-          updateLead.mutate({ id: contactId, contact_type: "opportunity" });
-        }
-      } catch {
-        // Per-row error toast surfaces from the hook; keep looping so a single
-        // failure doesn't abort the bulk assign.
+    setRunning(true);
+    try {
+      const { data, error } = await sb.rpc("crm_create_opportunities", {
+        p_lead_ids: contactIds,
+        p_pipeline_id: pipelineId,
+      });
+      if (error) throw error;
+      const created = Number(data?.created) || 0;
+      const skipped = Number(data?.skipped) || 0;
+      if (created > 0) {
+        toast.success(
+          `${created} ${created === 1 ? "negócio criado" : "negócios criados"}` +
+            (skipped > 0 ? ` · ${skipped} já ${skipped === 1 ? "tinha" : "tinham"} negócio aberto nessa pipeline` : ""),
+        );
+      } else {
+        toast.info("Todos já têm um negócio aberto nessa pipeline.");
       }
+      queryClient.invalidateQueries({ queryKey: ["contacts_table", equipeId] });
+      queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+      queryClient.invalidateQueries({ queryKey: ["opp_table", equipeId] });
+      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      onClose();
+    } catch (e) {
+      toast.error("Não foi possível adicionar: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setRunning(false);
     }
-
-    onClose();
   };
 
   const title =
@@ -117,10 +122,8 @@ export const AssignToPipelineDialog = ({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              O lead será criado na primeira etapa da pipeline escolhida.
-              Contatos do tipo "lead" são promovidos automaticamente para
-              "oportunidade".
+            <p className="mt-1 text-xs text-muted-foreground">
+              Um negócio por contato, na primeira etapa aberta. Quem já tem um negócio aberto nessa pipeline é pulado.
             </p>
           </div>
         </div>
@@ -129,11 +132,8 @@ export const AssignToPipelineDialog = ({
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button
-            onClick={handleAssign}
-            disabled={!pipelineId || createOpportunity.isPending || contactIds.length === 0}
-          >
-            Adicionar
+          <Button onClick={handleAssign} disabled={!pipelineId || running || contactIds.length === 0}>
+            {running ? "Adicionando..." : "Adicionar"}
           </Button>
         </DialogFooter>
       </DialogContent>
