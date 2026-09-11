@@ -10,10 +10,9 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { Loader2, LayoutGrid, Search, Settings2, X } from "lucide-react";
+import { Loader2, LayoutGrid, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +30,7 @@ import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { useDealUrlFilters } from "@/hooks/useUrlFilters";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import {
@@ -42,16 +42,15 @@ import { OpportunityKanbanColumn } from "./OpportunityKanbanColumn";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { CardFieldsPicker, NATIVE_CARD_FIELDS } from "./pipeline-settings/CardFieldsPicker";
 import { PipelineScoreboard } from "./revenue/PipelineScoreboard";
+import { DealFilterBar } from "./filters/DealFilterBar";
+import { countDealFilters } from "./filters/model";
 
 import type { BoardCard } from "@/types/board";
-import type { CrmFilters } from "@/types/crmFilters";
 import type { Opportunity } from "@/types/pipelines";
 
 interface OpportunityKanbanProps {
   pipelineId: string;
 }
-
-const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * Sprint 11 — the Kanban reads from the server.
@@ -70,15 +69,18 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   // One request for the whole board: names for "Usuário" fields on the cards.
   const { nameOf } = useMemberDirectory();
 
-  // Search runs on the server (crm_opp_matches: name, e-mail, or phone typed any
-  // way). Wave 2 replaces this box with the full filter bar on the same contract.
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [searchInput]);
-  const filters = useMemo<CrmFilters>(() => (search.trim() ? { search } : {}), [search]);
+  // Sprint 11 · Onda 2 — the filters live in the URL (shared with the Leads
+  // table, shareable, kept on reload) and the server applies them
+  // (crm_opp_matches): the column counts and the cards always agree.
+  const { filters, setFilters } = useDealUrlFilters();
+  const filtered = countDealFilters(filters) > 0;
+  const declaredFields = useMemo(
+    () =>
+      (pipeline?.custom_fields_schema ?? [])
+        .filter((f) => !f.is_deleted)
+        .sort((a, b) => a.position - b.position),
+    [pipeline?.custom_fields_schema],
+  );
 
   const summaryQuery = useBoardSummary(pipelineId, filters);
   const summaryByStage = useMemo(
@@ -257,42 +259,30 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-border bg-card">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold text-foreground truncate">
-            {pipeline?.name ?? "Pipeline"}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
-            {summaryQuery.isLoading ? "…" : totalCount} {search ? "encontrados" : "leads"} ·{" "}
-            {orderedStages.length} etapas
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Buscar nome, telefone ou e-mail"
-              className="h-9 w-64 pl-8 pr-8"
-              aria-label="Buscar no quadro"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => setSearchInput("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Limpar busca"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+      <div className="space-y-3 border-b border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-foreground">
+              {pipeline?.name ?? "Pipeline"}
+            </h1>
+            <p className="mt-0.5 text-xs text-muted-foreground">{orderedStages.length} etapas</p>
           </div>
           <Button variant="outline" size="sm" onClick={openCardConfig} disabled={!pipeline}>
-            <Settings2 className="h-4 w-4 mr-1.5" />
+            <Settings2 className="mr-1.5 h-4 w-4" />
             Campos do card
           </Button>
         </div>
+        <DealFilterBar
+          filters={filters}
+          onChange={setFilters}
+          stages={orderedStages}
+          fields={declaredFields}
+          resultLabel={
+            summaryQuery.isLoading
+              ? "…"
+              : `${totalCount.toLocaleString("pt-BR")} ${filtered ? (totalCount === 1 ? "encontrado" : "encontrados") : totalCount === 1 ? "negócio" : "negócios"}`
+          }
+        />
       </div>
 
       <PipelineScoreboard pipelineId={pipelineId} />

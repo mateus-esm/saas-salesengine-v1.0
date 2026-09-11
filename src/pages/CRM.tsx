@@ -25,6 +25,7 @@ import { CustomTableManager } from "@/components/crm/customtables/CustomTableMan
 import { CustomTableView } from "@/components/crm/customtables/CustomTableView";
 import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActivationGrid";
 import { AgendaView } from "@/components/crm/AgendaView";
+import { FILTER_PARAM_KEYS } from "@/lib/crmFilterParams";
 
 type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot" | "tabelas" | "agenda";
 
@@ -74,9 +75,14 @@ const CRM = () => {
       if (next !== "tabelas") {
         params.delete("custom_table");
       }
+      // Sprint 11 · Onda 2 — each screen has its own filters in the URL (deals on
+      // the pipeline, contacts on the contact base); a tab switch starts clean.
+      if (next !== tab) {
+        for (const key of FILTER_PARAM_KEYS) params.delete(key);
+      }
       setSearchParams(params, { replace: false });
     },
-    [searchParams, setSearchParams],
+    [searchParams, setSearchParams, tab],
   );
 
   const customTableSlug = searchParams.get("custom_table");

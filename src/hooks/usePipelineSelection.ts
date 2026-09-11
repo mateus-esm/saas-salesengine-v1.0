@@ -41,6 +41,14 @@ export const usePipelineSelection = () => {
   const setPipeline = useCallback(
     (id: string) => {
       const next = new URLSearchParams(searchParams);
+      if (next.get("pipeline") !== id) {
+        // Sprint 11 · Onda 2 — stages and declared fields belong to a pipeline:
+        // their filters (and a sort by a field) mean nothing in another one.
+        // Search, owner and period carry over.
+        next.delete("etapa");
+        next.delete("cf");
+        if (next.get("ordem")?.startsWith("cf:")) next.delete("ordem");
+      }
       next.set("pipeline", id);
       setSearchParams(next, { replace: false });
       if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, id);

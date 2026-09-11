@@ -287,3 +287,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W2A | T14 Eventos com o responsavel do momento + metricas por responsavel | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-11 | 11 W2A | T15 Registro de tipos de campo + grade certa por tipo | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-11 | 11 W2A | T16 Campo Usuario | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-11 | 11 W2A | T17 Barra de filtros e filtros na URL | Claude / Opus 5 (PM) | L | R$ 20 |
