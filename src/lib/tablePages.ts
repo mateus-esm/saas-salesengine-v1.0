@@ -11,7 +11,7 @@ import type { InfiniteData } from "@tanstack/react-query";
 /** One table's cache: pages of rows, keyed by offset. */
 export type TablePages<T> = InfiniteData<T[], number>;
 
-export function flattenPages<T>(pages: TablePages<T> | undefined): T[] {
+export function flattenPages<T>(pages: { pages: T[][] } | undefined): T[] {
   return pages ? pages.pages.flat() : [];
 }
 

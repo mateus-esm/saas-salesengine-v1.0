@@ -203,6 +203,9 @@ export const useLeadMutations = () => {
   const invalidate = (leadId?: string) => {
     queryClient.invalidateQueries({ queryKey: ["leads", equipeId] });
     queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+    // Sprint 11 · Onda 2 — the server-side tables show the contact's name too.
+    queryClient.invalidateQueries({ queryKey: ["opp_table", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["contacts_table", equipeId] });
     if (leadId) queryClient.invalidateQueries({ queryKey: ["lead", leadId] });
   };
 

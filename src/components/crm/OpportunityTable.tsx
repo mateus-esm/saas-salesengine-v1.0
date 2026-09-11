@@ -1,6 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { ArrowRight, Loader2, Trash2, UserRound } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -8,147 +29,157 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowRight, Loader2, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useLeads } from "@/hooks/useLeads";
-import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
-import { useLeadScores } from "@/hooks/useLeadScores";
-import { useOpportunities } from "@/hooks/useOpportunities";
+import { useBoardSummary } from "@/hooks/useBoard";
+import { useLead, useOpportunity } from "@/hooks/useLead";
+import { useLeadMutations } from "@/hooks/useLeads";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import {
+  useDeleteOpportunities,
+  useOppCellUpdate,
+  useOppTable,
+  useOppTablePatcher,
+  useOppTableRealtime,
+  useUpdateOpportunities,
+} from "@/hooks/useOppTable";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
-import { computeStageTelemetry, useTouchpointCounts } from "@/hooks/useStageTelemetry";
+import { computeStageTelemetry } from "@/hooks/useStageTelemetry";
+import { useDealUrlFilters } from "@/hooks/useUrlFilters";
 import { formatDisplayName } from "@/lib/displayName";
+import { columnFromField } from "@/lib/fields/columns";
+import { getFieldType } from "@/lib/fields/registry";
+import { flattenPages } from "@/lib/tablePages";
+import type { CrmSort } from "@/types/crmFilters";
+import type { OppTableRow } from "@/types/crmTables";
+import type { CustomFieldSchema, Opportunity, OpportunityStatus } from "@/types/pipelines";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
+import { UserPicker } from "./fields/UserPicker";
+import { DealFilterBar } from "./filters/DealFilterBar";
+import { countDealFilters } from "./filters/model";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
 import { SpreadsheetGrid } from "./grid/SpreadsheetGrid";
-import { GridToolbar } from "./grid/GridToolbar";
-import type { ColumnDef, CellMutation, ColumnKind, GridRow } from "./grid/types";
 import type { MassAction } from "./grid/MassActionBar";
-import type { Lead } from "@/types/crm";
-import type {
-  CustomFieldSchema,
-  CustomFieldType,
-  Opportunity,
-  OpportunityStatus,
-  PipelineStageV2,
-} from "@/types/pipelines";
+import type { CellMutation, ColumnDef, GridRow } from "./grid/types";
 
 interface OpportunityTableProps {
   pipelineId: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as any;
+
+const STATUS_OPTIONS: { value: OpportunityStatus; label: string }[] = [
+  { value: "open", label: "Aberta" },
+  { value: "won", label: "Ganha" },
+  { value: "lost", label: "Perdida" },
+];
+
 // ---------------------------------------------------------------------------
-// Helper — map CustomFieldType to grid ColumnKind
+// Sort: a grid column ↔ the server's sort key (crm_opp_table)
 // ---------------------------------------------------------------------------
-function toColumnKind(type: CustomFieldType): ColumnDef["kind"] {
-  switch (type) {
-    case "number":
-    case "currency":
-      return "number";
-    case "select":
-      return "select";
-    case "date":
-      return "date";
-    default:
-      return "text";
+
+function toServerSort(gridKey: string, dir: "asc" | "desc", schema: CustomFieldSchema[]): CrmSort | null {
+  switch (gridKey) {
+    case "lead_name":
+      return { key: "lead_name", dir };
+    case "owner_id":
+      return { key: "owner_name", dir };
+    case "value":
+    case "created_at":
+    case "updated_at":
+    case "next_contact":
+      return { key: gridKey, dir };
+    case "stage_id":
+      return { key: "stage", dir };
+    // Less time in the stage = entered later.
+    case "time_in_phase_label":
+      return { key: "stage_entered_at", dir: dir === "asc" ? "desc" : "asc" };
+    default: {
+      const field = schema.find((f) => f.field_id === gridKey);
+      return field && getFieldType(field.type).sortAs ? { key: `cf:${gridKey}`, dir } : null;
+    }
   }
+}
+
+function toGridSort(sort: CrmSort | null): { key?: string; dir: "asc" | "desc" | null } {
+  if (!sort) return { dir: null };
+  const map: Record<string, string> = {
+    lead_name: "lead_name",
+    owner_name: "owner_id",
+    value: "value",
+    created_at: "created_at",
+    updated_at: "updated_at",
+    next_contact: "next_contact",
+    stage: "stage_id",
+  };
+  if (sort.key === "stage_entered_at") {
+    return { key: "time_in_phase_label", dir: sort.dir === "asc" ? "desc" : "asc" };
+  }
+  if (sort.key.startsWith("cf:")) return { key: sort.key.slice(3), dir: sort.dir };
+  return map[sort.key] ? { key: map[sort.key], dir: sort.dir } : { dir: null };
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * Sprint 11 · Onda 2 · T18 — the Leads table of a pipeline, from the server.
+ *
+ * Pages of 50 from crm_opp_table, with the Kanban's filters (same URL, same
+ * server function: the total here is the Kanban's total) and sorting on the
+ * server. Each row already carries the contact, owner, companies, touchpoints
+ * and score — no request per row. Cells edit each field type correctly
+ * (registry); bulk actions go through the business verbs (one request each).
+ */
 export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const { profile } = useAuth();
+  const equipeId = profile?.equipe_id;
   const { pipelines } = usePipelines();
   const { stages } = usePipelineStagesV2(pipelineId);
-  const { opportunities, isLoading, updateOpportunity, bulkDeleteOpportunities } =
-    useOpportunities({ pipelineId });
-  const { leads, updateLead, deleteLead } = useLeads();
-  const equipeId = profile?.equipe_id;
-  const queryClient = useQueryClient();
-
   const pipeline = pipelines.find((p) => p.id === pipelineId);
+  const { nameOf } = useMemberDirectory();
 
-  const [globalFilter, setGlobalFilter] = useState("");
-  const [stageFilter, setStageFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { filters, setFilters, sort, setSort } = useDealUrlFilters();
+  const query = useOppTable(pipelineId, filters, sort);
+  useOppTableRealtime(pipelineId);
+  const summary = useBoardSummary(pipelineId, filters);
+  const total = useMemo(() => (summary.data ?? []).reduce((sum, s) => sum + s.count, 0), [summary.data]);
+  const rows = useMemo(() => flattenPages(query.data), [query.data]);
+
+  const updateMany = useUpdateOpportunities(pipelineId, filters, sort);
+  const deleteMany = useDeleteOpportunities(pipelineId, filters, sort);
+  const updateCell = useOppCellUpdate(pipelineId, filters, sort);
+  const patchRow = useOppTablePatcher(pipelineId, filters, sort);
+  const { updateLead, deleteLead } = useLeadMutations();
+
+  const orderedStages = useMemo(() => [...stages].sort((a, b) => a.position - b.position), [stages]);
+  const stagesById = useMemo(() => new Map(orderedStages.map((s) => [s.id, s])), [orderedStages]);
+  const schema = useMemo(
+    () =>
+      (pipeline?.custom_fields_schema ?? [])
+        .filter((f) => !f.is_deleted)
+        .sort((a, b) => a.position - b.position),
+    [pipeline?.custom_fields_schema],
+  );
+
+  // ---- Modals ---------------------------------------------------------------
   const [selectedOpp, setSelectedOpp] = useState<Opportunity | null>(null);
-  const [contactDrawerLead, setContactDrawerLead] = useState<Lead | null>(null);
+  const [contactLeadId, setContactLeadId] = useState<string | null>(null);
+  const selectedLead = useLead(selectedOpp?.lead_id);
+  const contactLead = useLead(contactLeadId);
 
-  // Sprint 6.8 T4.2 — sort state
-  const [sortKey, setSortKey] = useState<string | undefined>();
-  const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
-
-  // Sprint 6.8 T5 — creation ordering (newest first by default) + canal filter
-  const [orderBy, setOrderBy] = useState<"recent" | "oldest">("recent");
-  const [originFilter, setOriginFilter] = useState<string>("all");
-
-  // Sprint 6.8 T5.3 — grid toolbar derived state
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (stageFilter !== "all") count++;
-    if (statusFilter !== "all") count++;
-    if (originFilter !== "all") count++;
-    if (globalFilter.length > 0) count++;
-    return count;
-  }, [stageFilter, statusFilter, originFilter, globalFilter]);
-
-  const handleClearFilters = useCallback(() => {
-    setStageFilter("all");
-    setStatusFilter("all");
-    setOriginFilter("all");
-    setGlobalFilter("");
-  }, []);
-
-  // Sprint 6.8 T4.4 — bulk move dialog state
-  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
-  const [moveIds, setMoveIds] = useState<string[]>([]);
-  const [moveStageId, setMoveStageId] = useState<string>("");
-
-  const bulkMove = useMutation({
-    mutationFn: async ({
-      ids,
-      stageId,
-    }: {
-      ids: string[];
-      stageId: string;
-    }) => {
-      const { error } = await supabase
-        .from("opportunities")
-        .update({ stage_id: stageId })
-        .in("id", ids);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      toast.success("Oportunidades movidas com sucesso");
-    },
-    onError: (err) => toast.error("Erro ao mover: " + err.message),
-  });
-
-  // Sprint 4 EPIC 2 §2.3 — deep-link via ?opp=<id>
+  // Sprint 4 EPIC 2 §2.3 — ?opp=<id> opens the deal, even if its page is not loaded.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkOppId = searchParams.get("opp");
-
+  const deepLinkOpp = useOpportunity(deepLinkOppId && selectedOpp?.id !== deepLinkOppId ? deepLinkOppId : null);
   useEffect(() => {
-    if (!deepLinkOppId || selectedOpp?.id === deepLinkOppId) return;
-    const match = opportunities.find((o) => o.id === deepLinkOppId);
-    if (match) setSelectedOpp(match);
-  }, [deepLinkOppId, opportunities, selectedOpp?.id]);
+    const opp = deepLinkOpp.data;
+    if (opp && opp.pipeline_id === pipelineId) setSelectedOpp(opp);
+  }, [deepLinkOpp.data, pipelineId]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedOpp(null);
@@ -159,538 +190,386 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
     }
   }, [searchParams, setSearchParams]);
 
-  // ---- Derived data -------------------------------------------------------
-  const leadsById = useMemo(() => {
-    const map: Record<string, Lead> = {};
-    for (const l of leads) map[l.id] = l;
-    return map;
-  }, [leads]);
+  // ---- Bulk-action dialogs -------------------------------------------------
+  const [moveIds, setMoveIds] = useState<string[]>([]);
+  const [moveStageId, setMoveStageId] = useState("");
+  const [assignIds, setAssignIds] = useState<string[]>([]);
+  const [assignOwner, setAssignOwner] = useState<string | null>(null);
+  const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
-  const stagesById = useMemo(() => {
-    const map: Record<string, PipelineStageV2> = {};
-    for (const s of stages) map[s.id] = s;
-    return map;
-  }, [stages]);
-
-  const leadIds = useMemo(
-    () => Array.from(new Set(opportunities.map((o) => o.lead_id))),
-    [opportunities],
-  );
-  const touchpointCounts = useTouchpointCounts(leadIds);
-
-  const schema = useMemo(
-    () =>
-      (pipeline?.custom_fields_schema ?? [])
-        .filter((f) => !f.is_deleted)
-        .sort((a, b) => a.position - b.position),
-    [pipeline],
-  );
-
-  // ---- Filter + creation ordering -----------------------------------------
-  const filteredOpps = useMemo(() => {
-    const rows = opportunities.filter((o) => {
-      if (stageFilter !== "all" && o.stage_id !== stageFilter) return false;
-      if (statusFilter !== "all" && o.status !== statusFilter) return false;
-      if (originFilter !== "all") {
-        const lead = leadsById[o.lead_id];
-        if ((lead?.origin ?? "") !== originFilter) return false;
-      }
-      if (globalFilter) {
-        const lead = leadsById[o.lead_id];
-        const needle = globalFilter.toLowerCase();
-        const hay = `${formatDisplayName(lead?.name, lead?.phone) ?? ""} ${lead?.phone ?? ""} ${lead?.email ?? ""}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
-      return true;
-    });
-    // Default ordering by creation date (newest first). An explicit column
-    // sort (sortKey/sortDir) still overrides this in `sortedRows` below.
-    return [...rows].sort((a, b) => {
-      const cmp = String(a.created_at ?? "").localeCompare(String(b.created_at ?? ""));
-      return orderBy === "recent" ? -cmp : cmp;
-    });
-  }, [opportunities, leadsById, stageFilter, statusFilter, originFilter, globalFilter, orderBy]);
-
-  // Canal (origin) options derived from the leads present in this pipeline.
-  const ORIGIN_LABELS: Record<string, string> = {
-    whatsapp: "WhatsApp",
-    manual: "Manual",
-    web: "Web",
-    import: "Importação",
-  };
-  const originOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const o of opportunities) {
-      const lead = leadsById[o.lead_id];
-      if (lead?.origin) set.add(lead.origin);
-    }
-    return Array.from(set).map((v) => ({ value: v, label: ORIGIN_LABELS[v] ?? v }));
-  }, [opportunities, leadsById]);
-
-  const rowLeadIds = useMemo(
-    () => filteredOpps.map((o) => o.lead_id).filter(Boolean),
-    [filteredOpps],
-  );
-
-  const { data: entitySummary = {} } = useLeadEntitySummary(rowLeadIds);
-  const { scores: leadScores } = useLeadScores(rowLeadIds);
-
-  // ---- Column definitions -------------------------------------------------
-  const stageOptions = useMemo(
-    () => stages.map((s) => ({ value: s.id, label: s.name })),
-    [stages],
-  );
-
-  const statusOptions: { value: string; label: string }[] = [
-    { value: "open", label: "Aberta" },
-    { value: "won", label: "Ganha" },
-    { value: "lost", label: "Perdida" },
-  ];
-
-  const nativeColumns: ColumnDef[] = useMemo(
-    () => [
-      {
-        key: "lead_name",
-        label: "Lead",
-        kind: "text",
-        source: "native",
-        editable: false,
-      },
+  // ---- Columns --------------------------------------------------------------
+  const columns: ColumnDef[] = useMemo(() => {
+    const stageOptions = orderedStages.map((s) => ({ value: s.id, label: s.name }));
+    const native: ColumnDef[] = [
+      { key: "lead_name", label: "Lead", kind: "text", source: "native", editable: false, primary: true, width: 220 },
+      { key: "owner_id", label: "Responsável", kind: "user", source: "native", context: { nameOf } },
       {
         key: "company",
         label: "Empresa",
-        kind: "relation" as ColumnKind,
+        kind: "relation",
         source: "native",
-        editable: true,
-        relation: {
-          table: "companies",
-          displayField: "name",
-          linkTable: "opportunity_links",
-        },
+        relation: { table: "companies", displayField: "name", linkTable: "opportunity_links", resolvedFromRow: true },
       },
-      {
-        key: "property_count",
-        label: "Imóveis",
-        kind: "number",
-        source: "native",
-        editable: false,
-      },
-      {
-        key: "value",
-        label: "Valor",
-        kind: "number",
-        source: "native",
-        editable: true,
-      },
-      {
-        key: "stage_id",
-        label: "Etapa",
-        kind: "select",
-        source: "native",
-        editable: true,
-        options: stageOptions,
-      },
-      {
-        key: "time_in_phase_label",
-        label: "Tempo na Fase",
-        kind: "text",
-        source: "native",
-        editable: false,
-      },
-      {
-        key: "touchpoints_count",
-        label: "Interações",
-        kind: "number",
-        source: "native",
-        editable: false,
-      },
-      {
-        key: "status",
-        label: "Status",
-        kind: "select",
-        source: "native",
-        editable: true,
-        options: statusOptions,
-      },
-      {
-        key: "updated_at",
-        label: "Atualizada",
-        kind: "date",
-        source: "native",
-        editable: false,
-      },
-    ],
-    [stageOptions],
-  );
+      { key: "property_count", label: "Imóveis", kind: "number", source: "native", editable: false, width: 90 },
+      { key: "value", label: "Valor", kind: "currency", source: "native" },
+      { key: "stage_id", label: "Etapa", kind: "select", source: "native", options: stageOptions },
+      { key: "time_in_phase_label", label: "Tempo na fase", kind: "text", source: "native", editable: false },
+      { key: "touchpoints_count", label: "Interações", kind: "number", source: "native", editable: false, width: 100 },
+      { key: "status", label: "Status", kind: "select", source: "native", options: STATUS_OPTIONS },
+      { key: "next_contact", label: "Próximo contato", kind: "date", source: "native", editable: false },
+      { key: "created_at", label: "Criado em", kind: "date", source: "native", editable: false },
+      { key: "updated_at", label: "Atualizada", kind: "date", source: "native", editable: false },
+    ];
+    const custom = schema.map((f) => columnFromField(f, "custom_data", "field_id", { nameOf }));
+    return [...native, ...custom];
+  }, [orderedStages, schema, nameOf]);
 
-  const customColumns: ColumnDef[] = useMemo(
+  // ---- Rows -----------------------------------------------------------------
+  const gridRows: GridRow[] = useMemo(
     () =>
-      schema.map((f) => ({
-        key: f.field_id,
-        label: f.label,
-        kind: toColumnKind(f.type),
-        source: "jsonb" as const,
-        jsonbField: "custom_data" as const,
-      })),
-    [schema],
+      rows.map((r) => {
+        const stage = stagesById.get(r.stage_id);
+        const telemetry = computeStageTelemetry({
+          stageEnteredAt: r.stage_entered_at,
+          maxIdleHours: stage?.max_idle_hours ?? null,
+          touchpointCount: r.touchpoint_count,
+          nextContact: null,
+        });
+        const row: GridRow = {
+          id: r.id,
+          equipe_id: r.equipe_id,
+          lead_name: formatDisplayName(r.lead?.name, r.lead?.phone, "[Novo Contato - WhatsApp]"),
+          owner_id: r.owner_id,
+          company: r.companies,
+          property_count: r.property_count,
+          value: r.value,
+          stage_id: r.stage_id,
+          time_in_phase_label: telemetry.hoursInPhaseLabel,
+          touchpoints_count: r.touchpoint_count,
+          status: r.status,
+          next_contact: r.lead?.next_contact ?? null,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          _lead_score: r.lead_score,
+          _lead_breakdown: r.lead_score !== null ? { icp: r.icp_score, velocity: r.velocity } : undefined,
+        };
+        for (const field of schema) row[field.field_id] = r.custom_data?.[field.field_id] ?? null;
+        return row;
+      }),
+    [rows, stagesById, schema],
   );
 
-  const allColumns = useMemo(
-    () => [...nativeColumns, ...customColumns],
-    [nativeColumns, customColumns],
-  );
+  const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
-  // Sprint 6.8 T4.2 — sort handler
+  // ---- Sort -----------------------------------------------------------------
+  const gridSort = toGridSort(sort);
   const handleSort = useCallback(
     (key: string, dir: "asc" | "desc" | null) => {
-      setSortKey(dir ? key : undefined);
-      setSortDir(dir);
+      if (!dir) return setSort(null);
+      const next = toServerSort(key, dir, schema);
+      if (next) setSort(next);
     },
-    [],
+    [schema, setSort],
   );
 
-  // ---- Grid rows ----------------------------------------------------------
-  const gridRows: GridRow[] = useMemo(() => {
-    return filteredOpps.map((opp) => {
-      const lead = leadsById[opp.lead_id];
-      const stage = stagesById[opp.stage_id];
-      const summary = opp.lead_id ? entitySummary[opp.lead_id] : undefined;
-      const telemetry = computeStageTelemetry({
-        stageEnteredAt: opp.stage_entered_at,
-        maxIdleHours: stage?.max_idle_hours ?? null,
-        touchpointCount: touchpointCounts[opp.lead_id] ?? 0,
-        nextContact: null,
-      });
-
-      const row: GridRow = {
-        id: opp.id,
-        equipe_id: opp.equipe_id,
-        lead_name: formatDisplayName(
-          lead?.name,
-          lead?.phone,
-          "[Novo Contato - WhatsApp]",
-        ),
-        company: [],
-        property_count: summary?.propertyCount ?? 0,
-        value: opp.value ?? 0,
-        stage_id: opp.stage_id,
-        time_in_phase_label: telemetry.hoursInPhaseLabel,
-        touchpoints_count: touchpointCounts[opp.lead_id] ?? 0,
-        status: opp.status,
-        updated_at: opp.updated_at,
-      };
-
-      // Flatten custom fields into the row
-      const customData = (opp.custom_data ?? {}) as Record<string, unknown>;
-      for (const field of schema) {
-        row[field.field_id] = customData[field.field_id] ?? null;
-      }
-
-      // Sprint 6.8 T3.3 — attach combined lead score for badge rendering
-      const s = opp.lead_id ? leadScores[opp.lead_id] : undefined;
-      row._lead_score = s?.leadScore ?? null;
-      row._lead_breakdown = s ? { icp: s.icpScore, velocity: s.velocity } : undefined;
-
-      return row;
-    });
-  }, [filteredOpps, leadsById, stagesById, entitySummary, touchpointCounts, schema, leadScores]);
-
-  // Sprint 6.8 T4.2 — sort rows
-  const sortedRows: GridRow[] = useMemo(() => {
-    if (!sortKey || !sortDir) return gridRows;
-    return [...gridRows].sort((a, b) => {
-      const va = a[sortKey];
-      const vb = b[sortKey];
-      if (va == null && vb == null) return 0;
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      let cmp: number;
-      if (typeof va === "number" && typeof vb === "number") {
-        cmp = va - vb;
-      } else {
-        cmp = String(va).localeCompare(String(vb));
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [gridRows, sortKey, sortDir]);
-
-  // ---- Cell commit --------------------------------------------------------
+  // ---- Cell commit ----------------------------------------------------------
   const handleCellCommit = useCallback(
     async (m: CellMutation) => {
-      // Sprint 6.7 — opportunity_links relation (companies, properties, etc.)
-      if (m.column.relation?.linkTable === "opportunity_links") {
-        const value = m.value as
-          | { toId: string; label: string; action?: "link" | "remove" }
-          | undefined;
-        if (!value || !equipeId) return;
+      const row = rowById.get(m.rowId);
+      if (!row) return;
 
-        if (value.action === "remove") {
-          // Soft-delete the link row by linked_id
-          await supabase
+      if (m.column.key === "company") {
+        const link = m.value as { toId: string; label: string; action?: "remove" } | undefined;
+        if (!link || !equipeId) return;
+        if (link.action === "remove") {
+          const { error } = await sb
             .from("opportunity_links")
             .update({ deleted_at: new Date().toISOString() })
-            .eq("opportunity_id", m.rowId)
+            .eq("opportunity_id", row.id)
             .eq("linked_type", "company")
-            .eq("linked_id", value.toId)
+            .eq("linked_id", link.toId)
             .eq("equipe_id", equipeId);
+          if (error) throw new Error(error.message);
+          patchRow(row.id, { companies: row.companies.filter((c) => c.id !== link.toId) });
         } else {
-          // Link — insert a new opportunity_links row
-          await supabase.from("opportunity_links").insert({
+          const { error } = await sb.from("opportunity_links").insert({
             equipe_id: equipeId,
-            opportunity_id: m.rowId,
+            opportunity_id: row.id,
             linked_type: "company",
-            linked_id: value.toId,
+            linked_id: link.toId,
             relation: "related",
           });
+          if (error) throw new Error(error.message);
+          patchRow(row.id, { companies: [...row.companies, { id: link.toId, name: link.label }] });
         }
-        // Invalidate relation cache so chips refresh immediately
-        queryClient.invalidateQueries({
-          queryKey: ["relation", "opp_links", m.rowId],
+        return;
+      }
+
+      if (m.column.key === "owner_id") {
+        const ownerId = (m.value as string | null) ?? null;
+        await updateMany.mutateAsync({
+          ids: [row.id],
+          patch: { owner_id: ownerId },
+          display: { owner_name: ownerId ? nameOf(ownerId) : null },
         });
         return;
       }
 
-      if (m.column.source === "jsonb" && m.column.jsonbField === "custom_data") {
-        // Merge into custom_data JSONB
-        const opp = opportunities.find((o) => o.id === m.rowId);
-        const existing = {
-          ...((opp?.custom_data ?? {}) as Record<string, unknown>),
-        };
-        existing[m.column.key] = m.value;
-        await updateOpportunity.mutateAsync({
-          id: m.rowId,
-          custom_data: existing,
-        });
-      } else if (m.column.key === "stage_id") {
-        await updateOpportunity.mutateAsync({
-          id: m.rowId,
-          stage_id: m.value as string,
-        });
-      } else if (m.column.key === "status") {
-        const newStatus = m.value as OpportunityStatus;
-        await updateOpportunity.mutateAsync({
-          id: m.rowId,
-          status: newStatus,
-          closed_at:
-            newStatus === "open"
-              ? null
-              : new Date().toISOString(),
-        });
-      } else {
-        await updateOpportunity.mutateAsync({
-          id: m.rowId,
-          [m.column.key]: m.value,
-        });
+      if (m.column.key === "stage_id") {
+        if (!m.value) throw new Error("A etapa é obrigatória.");
+        await updateMany.mutateAsync({ ids: [row.id], patch: { stage_id: String(m.value) } });
+        return;
+      }
+
+      if (m.column.key === "status") {
+        if (!m.value) throw new Error("O status é obrigatório.");
+        const status = m.value as OpportunityStatus;
+        await updateCell(row.id, { status, closed_at: status === "open" ? null : new Date().toISOString() });
+        return;
+      }
+
+      if (m.column.key === "value") {
+        await updateCell(row.id, { value: m.value ?? null });
+        return;
+      }
+
+      if (m.column.source === "jsonb") {
+        const custom_data = { ...(row.custom_data ?? {}), [m.column.key]: m.value };
+        await updateCell(row.id, { custom_data });
       }
     },
-    [updateOpportunity, opportunities, equipeId, queryClient],
+    [rowById, equipeId, patchRow, updateMany, updateCell, nameOf],
   );
 
-  // ---- Mass actions -------------------------------------------------------
+  // ---- Bulk actions ---------------------------------------------------------
   const massActions: MassAction[] = useMemo(
     () => [
       {
         id: "move-stage",
         label: "Mover para etapa",
-        icon: <ArrowRight className="h-4 w-4" />,
-        run: async (ids: string[]) => {
+        icon: <ArrowRight className="mr-1 h-4 w-4" />,
+        run: async (ids) => {
           setMoveIds(ids);
           setMoveStageId("");
-          setMoveDialogOpen(true);
+        },
+      },
+      {
+        id: "assign-owner",
+        label: "Atribuir responsável",
+        icon: <UserRound className="mr-1 h-4 w-4" />,
+        run: async (ids) => {
+          setAssignIds(ids);
+          setAssignOwner(null);
         },
       },
       {
         id: "delete",
         label: "Excluir",
-        icon: <Trash2 className="h-4 w-4" />,
-        run: async (ids: string[]) => {
-          await bulkDeleteOpportunities.mutateAsync(ids);
-        },
+        icon: <Trash2 className="mr-1 h-4 w-4" />,
+        run: async (ids) => setDeleteIds(ids),
         destructive: true,
       },
     ],
-    [bulkDeleteOpportunities],
+    [],
   );
 
-  // ---- Sibling rows for detail navigation ---------------------------------
-  const siblingsForDetail = useMemo(
-    () => filteredOpps,
-    [filteredOpps],
-  );
+  const filtered = countDealFilters(filters) > 0;
+  const resultLabel = summary.isLoading
+    ? "…"
+    : `${total.toLocaleString("pt-BR")} ${filtered ? (total === 1 ? "encontrado" : "encontrados") : total === 1 ? "negócio" : "negócios"}`;
 
-  if (isLoading && opportunities.length === 0) {
+  if (query.isLoading && rows.length === 0 && !query.isError) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b border-border bg-card space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">{pipeline?.name ?? "Pipeline"}</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {filteredOpps.length} leads · {schema.length} campos personalizados
-            </p>
-          </div>
+    <div className="flex h-full flex-col">
+      <div className="space-y-3 border-b border-border bg-card p-4">
+        <div>
+          <h1 className="text-xl font-bold">{pipeline?.name ?? "Pipeline"}</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">{schema.length} campos personalizados</p>
         </div>
-
-        {/* Grid toolbar (search + filters) */}
-        <GridToolbar
-          search={globalFilter}
-          onSearchChange={setGlobalFilter}
-          searchPlaceholder="Buscar por lead, email, telefone..."
-          filters={[
-            {
-              key: "stage",
-              label: "Etapa",
-              value: stageFilter,
-              options: stageOptions,
-              onChange: setStageFilter,
-            },
-            {
-              key: "status",
-              label: "Status",
-              value: statusFilter,
-              options: statusOptions,
-              onChange: setStatusFilter,
-            },
-            ...(originOptions.length > 0
-              ? [{
-                  key: "origin",
-                  label: "Canal",
-                  value: originFilter,
-                  options: originOptions,
-                  onChange: setOriginFilter,
-                }]
-              : []),
-          ]}
-          onClearFilters={handleClearFilters}
-          activeFilterCount={activeFilterCount}
-        >
-          <Select value={orderBy} onValueChange={(v) => setOrderBy(v as "recent" | "oldest")}>
-            <SelectTrigger className="w-[150px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Mais recentes</SelectItem>
-              <SelectItem value="oldest">Mais antigos</SelectItem>
-            </SelectContent>
-          </Select>
-        </GridToolbar>
-      </div>
-
-      {/* Grid */}
-      <div className="flex-1 overflow-auto p-4">
-        <SpreadsheetGrid
-          rows={sortedRows}
-          columns={allColumns}
-          onCellCommit={handleCellCommit}
-          massActions={massActions}
-          loading={isLoading}
-          equipeId={equipeId}
-          fromTable="opportunities"
-          onSort={handleSort}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          surfaceKey="opportunity_table"
-          allowColumnReorder
-          allowColumnResize
-          allowColumnHide
-          showLeadScore
+        <DealFilterBar
+          filters={filters}
+          onChange={setFilters}
+          stages={orderedStages}
+          fields={schema}
+          resultLabel={resultLabel}
         />
       </div>
 
-      {/* Modals */}
+      <div className="flex-1 overflow-auto p-4">
+        {query.isError ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
+            Não foi possível carregar a tabela.
+            <Button variant="outline" size="sm" onClick={() => query.refetch()}>
+              Tentar de novo
+            </Button>
+          </div>
+        ) : (
+          <SpreadsheetGrid
+            rows={gridRows}
+            columns={columns}
+            onCellCommit={handleCellCommit}
+            massActions={massActions}
+            loading={query.isLoading}
+            equipeId={equipeId}
+            fromTable="opportunities"
+            onSort={handleSort}
+            sortKey={gridSort.key}
+            sortDir={gridSort.dir}
+            surfaceKey="opportunity_table"
+            allowColumnReorder
+            allowColumnResize
+            allowColumnHide
+            showLeadScore
+            onRowOpen={(id) => {
+              const r = rowById.get(id);
+              if (r) setSelectedOpp(r);
+            }}
+            hasMore={!!query.hasNextPage}
+            loadingMore={query.isFetchingNextPage}
+            onEndReached={() => {
+              if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+            }}
+          />
+        )}
+      </div>
+
       <OpportunityDetailModal
         open={!!selectedOpp}
         opportunity={selectedOpp}
         pipeline={pipeline}
-        stages={stages}
-        lead={selectedOpp ? leadsById[selectedOpp.lead_id] : undefined}
+        stages={orderedStages}
+        lead={selectedLead.data ?? undefined}
         onClose={handleCloseDetail}
-        onOpenContact={(contactId) => {
-          const target = leadsById[contactId];
-          if (target) setContactDrawerLead(target);
-        }}
-        siblings={siblingsForDetail}
+        onOpenContact={(contactId) => setContactLeadId(contactId)}
+        siblings={rows as Opportunity[]}
         onNavigate={(id) => {
-          const next = opportunities.find((o) => o.id === id);
-          if (next) setSelectedOpp(next);
+          const next = rowById.get(id);
+          if (next) setSelectedOpp(next as OppTableRow);
         }}
       />
 
       <ContactDetailsModal
-        lead={contactDrawerLead}
-        open={!!contactDrawerLead}
-        onClose={() => setContactDrawerLead(null)}
+        lead={contactLead.data ?? null}
+        open={!!contactLeadId && !!contactLead.data}
+        onClose={() => setContactLeadId(null)}
         onSave={(data) => {
           updateLead.mutate(data);
-          setContactDrawerLead(null);
+          setContactLeadId(null);
         }}
         onDelete={(id) => {
           deleteLead.mutate(id);
-          setContactDrawerLead(null);
+          setContactLeadId(null);
         }}
       />
 
-      {/* Sprint 6.8 T4.4 — bulk move to stage */}
-      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+      {/* Mover para etapa */}
+      <Dialog open={moveIds.length > 0} onOpenChange={(o) => !o && setMoveIds([])}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Mover para etapa</DialogTitle>
             <DialogDescription>
-              Mover {moveIds.length} oportunidade
-              {moveIds.length !== 1 ? "s" : ""} para qual etapa?
+              Mover {moveIds.length} {moveIds.length === 1 ? "negócio" : "negócios"} para qual etapa?
             </DialogDescription>
           </DialogHeader>
-
-          <div className="py-4">
-            <Select value={moveStageId} onValueChange={setMoveStageId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma etapa..." />
-              </SelectTrigger>
-              <SelectContent>
-                {stages.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
+          <Select value={moveStageId} onValueChange={setMoveStageId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione uma etapa..." />
+            </SelectTrigger>
+            <SelectContent>
+              {orderedStages.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setMoveDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setMoveIds([])}>
               Cancelar
             </Button>
             <Button
-              disabled={!moveStageId || bulkMove.isPending}
+              disabled={!moveStageId || updateMany.isPending}
               onClick={() => {
-                bulkMove.mutate(
-                  { ids: moveIds, stageId: moveStageId },
-                  {
-                    onSettled: () => {
-                      setMoveDialogOpen(false);
-                      setMoveIds([]);
-                      setMoveStageId("");
-                    },
-                  },
+                const ids = moveIds;
+                updateMany.mutate(
+                  { ids, patch: { stage_id: moveStageId } },
+                  { onSuccess: (n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`) },
                 );
+                setMoveIds([]);
               }}
             >
-              {bulkMove.isPending ? "Movendo..." : "Mover"}
+              Mover
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Atribuir responsável */}
+      <Dialog open={assignIds.length > 0} onOpenChange={(o) => !o && setAssignIds([])}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Atribuir responsável</DialogTitle>
+            <DialogDescription>
+              Quem fica responsável por {assignIds.length} {assignIds.length === 1 ? "negócio" : "negócios"}?
+            </DialogDescription>
+          </DialogHeader>
+          <UserPicker value={assignOwner} onChange={setAssignOwner} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignIds([])}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={updateMany.isPending}
+              onClick={() => {
+                const ids = assignIds;
+                updateMany.mutate(
+                  {
+                    ids,
+                    patch: { owner_id: assignOwner },
+                    display: { owner_name: assignOwner ? nameOf(assignOwner) : null },
+                  },
+                  { onSuccess: (n) => toast.success(`Responsável atribuído a ${n} ${n === 1 ? "negócio" : "negócios"}`) },
+                );
+                setAssignIds([]);
+              }}
+            >
+              Atribuir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Excluir */}
+      <AlertDialog open={deleteIds.length > 0} onOpenChange={(o) => !o && setDeleteIds([])}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir negócios</AlertDialogTitle>
+            <AlertDialogDescription>
+              Excluir {deleteIds.length} {deleteIds.length === 1 ? "negócio" : "negócios"}? O contato continua na Base
+              de Contatos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                deleteMany.mutate(deleteIds);
+                setDeleteIds([]);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

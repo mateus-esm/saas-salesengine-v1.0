@@ -154,6 +154,9 @@ export const useOpportunityMutations = () => {
   const invalidateLists = () => {
     queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
     queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
+    // Sprint 11 · Onda 2 — the server-side tables show deals too.
+    queryClient.invalidateQueries({ queryKey: ["opp_table", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["contacts_table", equipeId] });
   };
 
   const createOpportunity = useMutation({
