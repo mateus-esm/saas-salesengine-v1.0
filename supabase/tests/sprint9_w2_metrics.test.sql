@@ -9,6 +9,12 @@
 
 begin;
 
+-- Sprint 11 · Onda 2 (T14): as métricas seguem o dono do negócio. Estes testes
+-- rodam sobre a versão nova (o negócio herda o responsável do contato pelo
+-- trigger do T2, então as expectativas da Sprint 9 continuam valendo).
+-- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
+-- @include supabase/migrations/20260911000300_sprint11_w2_owner_events.sql
+
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link) values
   ('7e511111-1111-1111-1111-111111111111', 'Alfa', 'x', 'y'),
@@ -251,3 +257,4 @@ begin
 end $$;
 
 rollback;
+select 'PASS' as result;

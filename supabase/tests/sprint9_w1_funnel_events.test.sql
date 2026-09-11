@@ -3,6 +3,11 @@
 
 begin;
 
+-- Sprint 11 · Onda 2 (T14): o evento ganha o dono do momento (trigger BEFORE
+-- INSERT em funnel_events). Os gatilhos da Sprint 9 têm de continuar iguais.
+-- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
+-- @include supabase/migrations/20260911000300_sprint11_w2_owner_events.sql
+
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link)
 values ('11111111-1111-1111-1111-111111111111', 'Teste Funil', 'x', 'y');
@@ -28,6 +33,12 @@ values ('b0000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-11111111
 insert into public.leads (id, equipe_id, name)
 values ('b0000000-0000-0000-0000-000000000003','11111111-1111-1111-1111-111111111111','Lead Tres');
 
+-- Sprint 11: este teste nasceu para o banco local vazio. Contra a produção,
+-- `count(*) from funnel_events` conta os eventos reais de todos os clientes;
+-- as contagens abaixo olham só a equipe do teste.
+create temp view fe_t as
+  select * from public.funnel_events where equipe_id = '11111111-1111-1111-1111-111111111111';
+
 -- =========================================================================
 -- TEST 1 — an opportunity born in an unmapped stage produces no event.
 -- =========================================================================
@@ -37,7 +48,7 @@ values ('c0000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-11111111
         'a0000000-0000-0000-0000-000000000001', 5000);
 
 do $$ begin
-  assert (select count(*) from public.funnel_events) = 0,
+  assert (select count(*) from fe_t) = 0,
     'T1 FAIL: unmapped birth stage produced an event';
   raise notice 'T1 ok — estagio sem mapa nao gera evento';
 end $$;
@@ -49,9 +60,9 @@ update public.opportunities set stage_id = 'a0000000-0000-0000-0000-000000000002
  where id = 'c0000000-0000-0000-0000-000000000001';
 
 do $$ begin
-  assert (select count(*) from public.funnel_events where event='proposal_sent') = 1,
+  assert (select count(*) from fe_t where event='proposal_sent') = 1,
     'T2 FAIL: expected exactly 1 proposal_sent, got ' ||
-    (select count(*) from public.funnel_events where event='proposal_sent');
+    (select count(*) from fe_t where event='proposal_sent');
   raise notice 'T2 ok — mover para estagio mapeado gera 1 evento';
 end $$;
 
@@ -67,8 +78,8 @@ update public.opportunities set stage_id = 'a0000000-0000-0000-0000-000000000003
 do $$
 declare v_prop int; v_meet int;
 begin
-  select count(*) into v_prop from public.funnel_events where event='proposal_sent';
-  select count(*) into v_meet from public.funnel_events where event='meeting_scheduled';
+  select count(*) into v_prop from fe_t where event='proposal_sent';
+  select count(*) into v_meet from fe_t where event='meeting_scheduled';
   assert v_prop = 2, 'T3 FAIL: expected 2 proposal_sent, got ' || v_prop;
   assert v_meet = 2, 'T3 FAIL: expected 2 meeting_scheduled, got ' || v_meet;
   raise notice 'T3 ok — historico preservado: % propostas, % reunioes', v_prop, v_meet;
@@ -86,7 +97,7 @@ update public.opportunities
 do $$
 declare v_won int;
 begin
-  select count(*) into v_won from public.funnel_events
+  select count(*) into v_won from fe_t
    where event='won' and opportunity_id='c0000000-0000-0000-0000-000000000001';
   assert v_won = 1, 'T4 FAIL: expected exactly 1 won event, got ' || v_won;
   raise notice 'T4 ok — fechar movendo de estagio conta ganho UMA vez';
@@ -107,7 +118,7 @@ update public.opportunities set status = 'lost', closed_at = now()
 do $$
 declare v_lost int;
 begin
-  select count(*) into v_lost from public.funnel_events
+  select count(*) into v_lost from fe_t
    where event='lost' and opportunity_id='c0000000-0000-0000-0000-000000000002';
   assert v_lost = 1, 'T5 FAIL: expected 1 lost event via status path, got ' || v_lost;
   raise notice 'T5 ok — fechamento so por status tambem vira evento';
@@ -124,7 +135,7 @@ values ('c0000000-0000-0000-0000-000000000003','11111111-1111-1111-1111-11111111
 do $$
 declare v int;
 begin
-  select count(*) into v from public.funnel_events
+  select count(*) into v from fe_t
    where opportunity_id='c0000000-0000-0000-0000-000000000003' and event='proposal_sent'
      and source='opportunity_created';
   assert v = 1, 'T6 FAIL: opportunity born in a mapped stage produced ' || v || ' events';
@@ -137,11 +148,11 @@ end $$;
 do $$
 declare v_before int; v_after1 int; v_after2 int;
 begin
-  select count(*) into v_before from public.funnel_events;
+  select count(*) into v_before from fe_t;
   perform public._rebuild_funnel_events('22222222-2222-2222-2222-222222222222');
-  select count(*) into v_after1 from public.funnel_events;
+  select count(*) into v_after1 from fe_t;
   perform public._rebuild_funnel_events('22222222-2222-2222-2222-222222222222');
-  select count(*) into v_after2 from public.funnel_events;
+  select count(*) into v_after2 from fe_t;
 
   assert v_after1 = v_after2,
     'T7 FAIL: recompute is not idempotent — ' || v_after1 || ' then ' || v_after2;
@@ -164,13 +175,13 @@ update public.pipeline_stages_v2 set funnel_event = 'qualified'
 do $$
 declare v_prop_before int; v_prop_after int; v_qual int;
 begin
-  select count(*) into v_prop_before from public.funnel_events where event='proposal_sent';
+  select count(*) into v_prop_before from fe_t where event='proposal_sent';
   assert v_prop_before > 0, 'T8 setup FAIL: no proposal events before remap';
 
   perform public._rebuild_funnel_events('22222222-2222-2222-2222-222222222222');
 
-  select count(*) into v_prop_after from public.funnel_events where event='proposal_sent';
-  select count(*) into v_qual from public.funnel_events where event='qualified';
+  select count(*) into v_prop_after from fe_t where event='proposal_sent';
+  select count(*) into v_qual from fe_t where event='qualified';
 
   assert v_prop_after = 0, 'T8 FAIL: old proposal events survived the remap: ' || v_prop_after;
   assert v_qual = v_prop_before, 'T8 FAIL: expected ' || v_prop_before || ' qualified, got ' || v_qual;
@@ -190,7 +201,7 @@ do $$
 declare v int;
 begin
   perform public._rebuild_funnel_events('22222222-2222-2222-2222-222222222222');
-  select count(*) into v from public.funnel_events where source='manual' and event='no_show';
+  select count(*) into v from fe_t where source='manual' and event='no_show';
   assert v = 1, 'T9 FAIL: recompute destroyed a manual event';
   raise notice 'T9 ok — evento manual sobrevive ao recompute';
 end $$;
@@ -258,3 +269,4 @@ begin
 end $$;
 
 rollback;
+select 'PASS' as result;
