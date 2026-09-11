@@ -24,6 +24,9 @@ interface OpportunityKanbanColumnProps {
   onOpenContact?: (leadId: string) => void;
   /** Member names for "Usuário" fields on the cards. */
   nameOf?: (userId: string) => string | null;
+  /** Sprint 11 Wave 2B: collapse state */
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const formatCompactBRL = (v: number) =>
@@ -52,6 +55,8 @@ export const OpportunityKanbanColumn = ({
   onCardClick,
   onOpenContact,
   nameOf,
+  isCollapsed,
+  onToggleCollapse,
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -62,13 +67,10 @@ export const OpportunityKanbanColumn = ({
   const cards = useMemo(() => query.data?.pages.flat() ?? [], [query.data]);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
 
-  // The sentinel sits under the last card. The viewport is the observer root, so
-  // this works whether the column scrolls on its own or the page does — the
-  // browser accounts for the column's overflow clipping either way.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
+    if (!el || !hasNextPage || isCollapsed) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) fetchNextPage();
@@ -77,12 +79,37 @@ export const OpportunityKanbanColumn = ({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, isCollapsed]);
 
   const count = summary?.count ?? cards.length;
   const total = formatCompactBRL(summary?.value_sum ?? 0);
   const dimmed = stage.stage_type === "lost";
   const firstLoad = query.isLoading;
+
+  if (isCollapsed) {
+    return (
+      <div
+        onClick={onToggleCollapse}
+        className={cn(
+          "flex flex-col items-center min-w-[48px] max-w-[48px] rounded-lg bg-card border border-border cursor-pointer hover:border-primary/50 py-3 transition-all duration-200 select-none",
+          isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+          dimmed && "opacity-60",
+        )}
+        title={`Clique para expandir "${stage.name}" (${count} negócios)`}
+      >
+        <div
+          className="w-3 h-3 rounded-full shrink-0 mb-3"
+          style={{ backgroundColor: stage.color }}
+        />
+        <div className="flex-1 flex items-center justify-center [writing-mode:vertical-lr] rotate-180 text-xs font-semibold text-foreground tracking-wide gap-2">
+          <span>{stage.name}</span>
+          <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+            {count}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -93,8 +120,10 @@ export const OpportunityKanbanColumn = ({
       )}
     >
       <div
-        className="p-3 border-b border-border rounded-t-lg"
+        className="p-3 border-b border-border rounded-t-lg group cursor-pointer"
         style={{ borderTopColor: stage.color, borderTopWidth: "3px" }}
+        onClick={onToggleCollapse}
+        title="Clique para recolher esta coluna"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">

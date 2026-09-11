@@ -1532,8 +1532,9 @@ Arquivos compartilhados entre tarefas (`OpportunityKanban.tsx`, `OpportunityTabl
 
 ### Ledger · Onda 2B
 
-- [ ] T23 · Design do card, da coluna, do placar e do celular · M
-- [ ] T24 · Card e coluna redesenhados · M
-- [ ] T25 · Placar redesenhado · M
-- [ ] T26 · CRM no celular · L
-- [ ] T27 · Verificação 2B, deploy, PR e handoff · S
+- [x] T23 · Design do card, da coluna, do placar e do celular · M — hierarquia visual do card (título, valor, responsável, selo de atraso, campos visíveis), recolhimento de coluna e layout mobile definidos e padronizados
+- [x] T24 · Card e coluna redesenhados · M — `src/lib/cardModel.ts` (modelo puro de exibição do card com 4 testes vitest), `useCollapsedStages` (recolher coluna com persistência em localStorage), visual renovado no Kanban
+- [x] T25 · Placar redesenhado · M — `PipelineScoreboard` atualizado para ler `crm_placar` RPC (ganhos pelo responsável do momento, 0 chamadas excessivas), mantendo `computeRunRate`
+- [x] T26 · CRM no celular · L — `StagePicker` (chips de etapas com contagem no mobile), `MoveToStageSheet` (seletor modal de etapa), visualização em 1 etapa por vez para viewports < 768px (`useIsMobile`), `pickInitialStage` (com 4 testes vitest)
+- [x] T27 · Verificação 2B, deploy, PR e handoff · S — `tsc -b` limpo, 234 testes vitest passando, 10 testes SQL passando, build de produção passando, PR e merge concluídos.
+
