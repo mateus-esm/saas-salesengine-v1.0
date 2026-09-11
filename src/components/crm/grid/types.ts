@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { FieldContext, FieldType } from "@/lib/fields/registry";
 
 /**
@@ -34,6 +36,11 @@ export interface ColumnDef {
   primary?: boolean;
   /** What the field type needs to show a value (member names for "user"). */
   context?: FieldContext;
+  /**
+   * A display-only column drawn by the screen (e.g. the deals of a contact as
+   * chips). The cell is not editable and does no query of its own.
+   */
+  render?: (value: unknown, row: GridRow) => ReactNode;
 }
 
 export interface GridRow {

@@ -56,8 +56,8 @@ export const useOpportunityLinks = (opportunityId: string | null | undefined) =>
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["opportunity_links"] });
-    // T7: keep Base de Contatos relationship badges in sync after a cascade.
-    queryClient.invalidateQueries({ queryKey: ["lead_entity_summary"] });
+    // T7: keep Base de Contatos (company column) in sync after a cascade.
+    queryClient.invalidateQueries({ queryKey: ["contacts_table"] });
   };
 
   // T7 — resolve the opportunity's underlying contact (lead) for ledger cascade.

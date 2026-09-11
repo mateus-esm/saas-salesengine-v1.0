@@ -1,9 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
-import { useLeads, Lead } from "@/hooks/useLeads";
-import { useLeadEntitySummary } from "@/hooks/useLeadEntitySummary";
-import { useContactFields } from "@/hooks/useContactFields";
-import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
-import { Button } from "@/components/ui/button";
+import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Briefcase, Download, Loader2, RefreshCw, Trash2, Upload, UserPlus } from "lucide-react";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,407 +12,383 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { ContactColumnsToolbar } from "@/components/crm/ContactColumnsToolbar";
-import { GridToolbar } from "@/components/crm/grid/GridToolbar";
-import { ImportModal } from "./ImportModal";
-import { ExportModal } from "./ExportModal";
-import { ContactDetailsModal } from "./ContactDetailsModal";
-import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
-import { AddContactModal } from "./AddContactModal";
-import {
-  Download,
-  Upload,
-  RefreshCw,
-  UserPlus,
-  Loader2,
-  Briefcase,
-  Trash2,
-} from "lucide-react";
-import { toast } from "sonner";
-import { isTechnicalId } from "@/lib/displayName";
-
-// — Grid imports ----------------------------------------------------------
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
-import type { ColumnDef, CellMutation, GridRow } from "@/components/crm/grid/types";
 import type { MassAction } from "@/components/crm/grid/MassActionBar";
+import type { CellMutation, ColumnDef, GridRow } from "@/components/crm/grid/types";
+import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
+import { useContactFields } from "@/hooks/useContactFields";
+import {
+  fetchAllContacts,
+  useContactCellUpdate,
+  useContactsCount,
+  useContactsRealtime,
+  useContactsTable,
+  useDeleteContacts,
+} from "@/hooks/useContactsTable";
+import { useLead } from "@/hooks/useLead";
+import { useLeadMutations } from "@/hooks/useLeads";
+import { usePipelines } from "@/hooks/usePipelines";
+import { useContactUrlFilters } from "@/hooks/useUrlFilters";
+import { isTechnicalId } from "@/lib/displayName";
+import { columnFromField } from "@/lib/fields/columns";
+import { flattenPages } from "@/lib/tablePages";
+import { cn } from "@/lib/utils";
+import type { ContactRelationship, CrmSort } from "@/types/crmFilters";
+import type { ContactDeal } from "@/types/crmTables";
 
-// ---------------------------------------------------------------------------
-// Helper — map CustomFieldType to grid ColumnKind
-// ---------------------------------------------------------------------------
-function toColumnKind(type: string): ColumnDef["kind"] {
-  switch (type) {
-    case "number": return "number";
-    case "select": return "select";
-    case "date":   return "date";
-    default:       return "text";
-  }
-}
+import { AddContactModal } from "./AddContactModal";
+import { AssignToPipelineDialog } from "./AssignToPipelineDialog";
+import { ContactDetailsModal } from "./ContactDetailsModal";
+import { ExportModal } from "./ExportModal";
+import { UserAvatar } from "./fields/UserAvatar";
+import { ContactFilterBar } from "./filters/ContactFilterBar";
+import { countContactFilters, RELATIONSHIP_LABELS } from "./filters/model";
+import { ImportModal } from "./ImportModal";
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+const CHANNEL_OPTIONS = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "instagram", label: "Instagram" },
+  { value: "telegram", label: "Telegram" },
+  { value: "messenger", label: "Messenger" },
+  { value: "web", label: "Web / Widget" },
+];
+
+const RELATIONSHIP_STYLE: Record<ContactRelationship, string> = {
+  cliente: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  negociando: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  perdido: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  sem_negocio: "bg-muted text-muted-foreground",
+};
+
+/** Grid column ↔ the server's sort key (crm_contacts_table). */
+const SORTABLE: Record<string, string> = {
+  name: "name",
+  created_at: "created_at",
+  won_value: "won_value",
+  last_won_at: "last_won_at",
+  next_contact: "next_contact",
+};
+
+/**
+ * Sprint 11 · Onda 2 · T19 — the contact base, from the server.
+ *
+ * A contact has no owner of its own: responsibility lives on the deal. So the
+ * base shows who the contact is and what they have with the company — its deals
+ * (pipeline · stage, with each owner), its relationship (derived from the
+ * deals), total won and last win. Pages of 50 from crm_contacts_table; filters in
+ * the URL; the row's name opens the contact (the modal never opened here before).
+ */
 export const DatabaseView = () => {
-  const { leads, isLoading, updateLead, deleteLead, refetch } = useLeads();
-  const {
-    fields: contactFields,
-    isLoading: isLoadingContactFields,
-    createField,
-    deleteField,
-  } = useContactFields();
+  const navigate = useNavigate();
+  const { activePipelines } = usePipelines();
+  const { fields: contactFields, isLoading: isLoadingContactFields, createField } = useContactFields();
 
-  // ---- Modals state ------------------------------------------------------
+  const { filters, setFilters, sort, setSort } = useContactUrlFilters();
+  const query = useContactsTable(filters, sort);
+  const count = useContactsCount(filters);
+  useContactsRealtime();
+  const rows = useMemo(() => flattenPages(query.data), [query.data]);
+  const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
+
+  const deleteMany = useDeleteContacts(filters, sort);
+  const updateCell = useContactCellUpdate(filters, sort);
+  const { updateLead, deleteLead } = useLeadMutations();
+
+  // ---- Modals ---------------------------------------------------------------
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [assigningLead, setAssigningLead] = useState<Lead | null>(null);
-
-  // ---- Mass-action dialog state ------------------------------------------
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+  const openLead = useLead(openLeadId);
   const [assignPipelineIds, setAssignPipelineIds] = useState<string[]>([]);
   const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // ---- Filter ------------------------------------------------------------
-  const [globalFilter, setGlobalFilter] = useState("");
-
-  // ---- Derived -----------------------------------------------------------
-  const filteredLeads = useMemo(() => {
-    if (!globalFilter) return leads;
-    const q = globalFilter.toLowerCase();
-    return leads.filter(
-      (lead) =>
-        (lead.name && lead.name.toLowerCase().includes(q)) ||
-        (lead.email && lead.email.toLowerCase().includes(q)) ||
-        (lead.phone && lead.phone.includes(q)),
-    );
-  }, [leads, globalFilter]);
-
-  const filteredLeadIds = useMemo(
-    () => filteredLeads.map((l) => l.id),
-    [filteredLeads],
-  );
-
-  const { data: entitySummary = {} } = useLeadEntitySummary(filteredLeadIds);
 
   const visibleContactFields = useMemo(
-    () =>
-      contactFields
-        .filter((field) => !field.is_deleted)
-        .sort((a, b) => a.position - b.position),
+    () => contactFields.filter((f) => !f.is_deleted).sort((a, b) => a.position - b.position),
     [contactFields],
   );
 
-  // ---- Options for select columns ----------------------------------------
-  const originCategoryOptions = useMemo(
-    () =>
-      ORIGIN_CATEGORY_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-    [],
+  const openDeal = useCallback(
+    (deal: ContactDeal) =>
+      navigate(`/crm?tab=pipeline&pipeline=${deal.pipeline_id}&view=kanban&opp=${deal.id}`),
+    [navigate],
   );
 
-  const channelOptions = [
-    { value: "whatsapp", label: "WhatsApp" },
-    { value: "instagram", label: "Instagram" },
-    { value: "telegram", label: "Telegram" },
-    { value: "messenger", label: "Messenger" },
-    { value: "web", label: "Web / Widget" },
-  ];
-
-  // ---- Column definitions ------------------------------------------------
-  const nativeColumns: ColumnDef[] = useMemo(
-    () => [
+  // ---- Columns --------------------------------------------------------------
+  const columns: ColumnDef[] = useMemo(() => {
+    const native: ColumnDef[] = [
+      { key: "name", label: "Nome", kind: "text", source: "native", editable: false, primary: true, width: 200 },
+      { key: "phone", label: "Telefone", kind: "phone", source: "native" },
+      { key: "email", label: "E-mail", kind: "text", source: "native" },
+      { key: "company_name", label: "Empresa", kind: "text", source: "native", editable: false },
       {
-        key: "name",
-        label: "Nome",
-        kind: "text",
-        source: "native",
-      },
-      {
-        key: "phone",
-        label: "Telefone",
-        kind: "text",
-        source: "native",
-      },
-      {
-        key: "email",
-        label: "Email",
-        kind: "text",
-        source: "native",
-      },
-      {
-        key: "company_link",
-        label: "Empresa",
+        key: "relationship",
+        label: "Situação",
         kind: "text",
         source: "native",
         editable: false,
+        width: 120,
+        render: (v) => {
+          const rel = v as ContactRelationship;
+          return (
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", RELATIONSHIP_STYLE[rel])}>
+              {RELATIONSHIP_LABELS[rel] ?? "—"}
+            </span>
+          );
+        },
       },
       {
-        key: "property_count",
-        label: "Imóveis",
-        kind: "number",
+        key: "deals",
+        label: "Negócios",
+        kind: "text",
         source: "native",
         editable: false,
+        width: 260,
+        render: (v) => {
+          const deals = (v as ContactDeal[]) ?? [];
+          if (deals.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+          return (
+            <>
+              {deals.slice(0, 3).map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDeal(d);
+                  }}
+                  className={cn(
+                    "inline-flex max-w-[11rem] shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] hover:border-primary/60",
+                    d.status !== "open" && "opacity-70",
+                  )}
+                  title={`${d.pipeline_name} · ${d.stage_name}${d.owner_name ? ` · ${d.owner_name}` : " · sem responsável"}`}
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: d.stage_color ?? "currentColor" }} />
+                  <span className="truncate">{d.stage_name}</span>
+                  <UserAvatar userId={d.owner_id} name={d.owner_name} size="xs" />
+                </button>
+              ))}
+              {deals.length > 3 && <span className="text-[11px] text-muted-foreground">+{deals.length - 3}</span>}
+            </>
+          );
+        },
       },
+      { key: "won_value", label: "Ganho total", kind: "currency", source: "native", editable: false },
+      { key: "last_won_at", label: "Último ganho", kind: "date", source: "native", editable: false },
       {
         key: "origin_category",
         label: "Origem",
         kind: "select",
         source: "native",
-        options: originCategoryOptions,
+        options: ORIGIN_CATEGORY_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
       },
-      {
-        key: "channel",
-        label: "Canal",
-        kind: "select",
-        source: "native",
-        options: channelOptions,
-      },
-      {
-        key: "observations",
-        label: "Observações",
-        kind: "text",
-        source: "native",
-      },
-      {
-        key: "tags",
-        label: "Tags",
-        kind: "text",
-        source: "native",
-        editable: false,
-      },
-      {
-        key: "created_at",
-        label: "Criado em",
-        kind: "date",
-        source: "native",
-        editable: false,
-      },
-    ],
-    [originCategoryOptions],
-  );
+      { key: "channel", label: "Canal", kind: "select", source: "native", options: CHANNEL_OPTIONS },
+      { key: "next_contact", label: "Próximo contato", kind: "date", source: "native" },
+      { key: "tags", label: "Etiquetas", kind: "multi_select", source: "native", editable: false },
+      { key: "observations", label: "Observações", kind: "text", source: "native" },
+      { key: "created_at", label: "Criado em", kind: "date", source: "native", editable: false },
+    ];
+    const enrichment = visibleContactFields.map((f) => columnFromField(f, "personal_custom_data", "key"));
+    return [...native, ...enrichment];
+  }, [openDeal, visibleContactFields]);
 
-  const enrichmentColumns: ColumnDef[] = useMemo(
-    () =>
-      visibleContactFields.map((field) => ({
-        key: field.key,
-        label: field.label,
-        kind: toColumnKind(field.type),
-        source: "jsonb" as const,
-        jsonbField: "personal_custom_data" as const,
-      })),
-    [visibleContactFields],
-  );
-
-  const allColumns = useMemo(
-    () => [...nativeColumns, ...enrichmentColumns],
-    [nativeColumns, enrichmentColumns],
-  );
-
-  // ---- Flat row builder --------------------------------------------------
+  // ---- Rows -----------------------------------------------------------------
   const gridRows: GridRow[] = useMemo(
     () =>
-      filteredLeads.map((lead) => {
-        const summary = entitySummary[lead.id];
-        const customData = (lead.personal_custom_data ?? {}) as Record<
-          string,
-          unknown
-        >;
+      rows.map((c) => {
         const row: GridRow = {
-          id: lead.id,
-          equipe_id: lead.equipe_id,
-          name: isTechnicalId(lead.name) ? "" : (lead.name ?? ""),
-          phone: lead.phone ?? "",
-          email: lead.email ?? "",
-          company_link: summary?.companyName ?? "",
-          property_count: summary?.propertyCount ?? 0,
-          origin_category: lead.origin_category ?? "",
-          channel: lead.channel ?? "",
-          observations: lead.observations ?? "",
-          tags: (lead.tags ?? []).join(", "),
-          created_at: lead.created_at,
+          id: c.id,
+          equipe_id: c.equipe_id,
+          name: isTechnicalId(c.name) ? c.phone ?? "" : c.name ?? "",
+          phone: c.phone ?? "",
+          email: c.email ?? "",
+          company_name: c.company_name ?? "",
+          relationship: c.relationship,
+          deals: c.deals,
+          won_value: c.won_value,
+          last_won_at: c.last_won_at,
+          origin_category: c.origin_category ?? "",
+          channel: c.channel ?? "",
+          next_contact: c.next_contact,
+          tags: c.tags,
+          observations: c.observations ?? "",
+          created_at: c.created_at,
         };
-        // Flatten enrichment fields into the row
-        for (const field of visibleContactFields) {
-          row[field.key] = customData[field.key] ?? "";
-        }
+        for (const f of visibleContactFields) row[f.key] = c.personal_custom_data?.[f.key] ?? null;
         return row;
       }),
-    [filteredLeads, entitySummary, visibleContactFields],
+    [rows, visibleContactFields],
   );
 
-  // ---- Cell commit handler -----------------------------------------------
+  // ---- Sort -----------------------------------------------------------------
+  const gridSortKey = sort ? Object.keys(SORTABLE).find((k) => SORTABLE[k] === sort.key) : undefined;
+  const handleSort = useCallback(
+    (key: string, dir: "asc" | "desc" | null) => {
+      if (!dir) return setSort(null);
+      const server = SORTABLE[key];
+      if (server) setSort({ key: server, dir } as CrmSort);
+    },
+    [setSort],
+  );
+
+  // ---- Cell commit ----------------------------------------------------------
   const handleCellCommit = useCallback(
     async (m: CellMutation) => {
+      const contact = rowById.get(m.rowId);
+      if (!contact) return;
       if (m.column.source === "jsonb" && m.column.jsonbField === "personal_custom_data") {
-        const lead = leads.find((l) => l.id === m.rowId);
-        const existing = {
-          ...((lead?.personal_custom_data ?? {}) as Record<string, unknown>),
-        };
-        existing[m.column.key] = m.value;
-        await updateLead.mutateAsync({
-          id: m.rowId,
-          personal_custom_data: existing,
+        await updateCell(contact.id, {
+          personal_custom_data: { ...(contact.personal_custom_data ?? {}), [m.column.key]: m.value },
         });
-      } else {
-        await updateLead.mutateAsync({ id: m.rowId, [m.column.key]: m.value });
+        return;
       }
+      await updateCell(contact.id, { [m.column.key]: m.value === "" ? null : m.value });
     },
-    [updateLead, leads],
+    [rowById, updateCell],
   );
 
-  // ---- Mass actions ------------------------------------------------------
+  // ---- Bulk actions ---------------------------------------------------------
   const massActions: MassAction[] = useMemo(
     () => [
       {
         id: "assign_pipeline",
-        label: "Adicionar a Pipeline",
-        icon: <Briefcase className="h-4 w-4 mr-1" />,
-        run: async (ids: string[]) => {
-          setAssignPipelineIds(ids);
-        },
-        destructive: false,
+        label: "Adicionar a pipeline",
+        icon: <Briefcase className="mr-1 h-4 w-4" />,
+        run: async (ids) => setAssignPipelineIds(ids),
       },
       {
         id: "delete",
         label: "Excluir",
-        icon: <Trash2 className="h-4 w-4 mr-1" />,
-        run: async (ids: string[]) => {
-          setConfirmDeleteIds(ids);
-        },
+        icon: <Trash2 className="mr-1 h-4 w-4" />,
+        run: async (ids) => setConfirmDeleteIds(ids),
         destructive: true,
       },
     ],
     [],
   );
 
-  // ---- Bulk delete handler -----------------------------------------------
-  const handleBulkDelete = async () => {
-    setIsDeleting(true);
-    try {
-      for (const id of confirmDeleteIds) {
-        await deleteLead.mutateAsync(id);
-      }
-      toast.success(`${confirmDeleteIds.length} contato${confirmDeleteIds.length === 1 ? "" : "s"} removido${confirmDeleteIds.length === 1 ? "" : "s"}!`);
-      setConfirmDeleteIds([]);
-    } catch {
-      toast.error("Erro ao remover contatos");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const total = count.data ?? 0;
+  const filtered = countContactFilters(filters) > 0;
+  const resultLabel = count.isLoading
+    ? "…"
+    : `${total.toLocaleString("pt-BR")} ${filtered ? (total === 1 ? "encontrado" : "encontrados") : total === 1 ? "contato" : "contatos"}`;
 
-  // ---- Refresh -----------------------------------------------------------
-  const handleRefresh = () => {
-    refetch();
-    toast.success("Dados atualizados!");
-  };
-
-  // ---- Loading state -----------------------------------------------------
-  if (isLoading) {
+  if (query.isLoading && rows.length === 0 && !query.isError) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  // ---- Render ------------------------------------------------------------
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border bg-card">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Base de <span className="text-primary">Contatos</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {filteredLeads.length} contatos
-          </p>
+      <div className="space-y-3 border-b border-border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Base de <span className="text-primary">Contatos</span>
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Quem são os contatos e o que eles têm com a empresa. O responsável fica em cada negócio.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => setShowAddModal(true)}
+              className="border-0 bg-gradient-to-r from-solo-orange to-solo-yellow text-white shadow-sm hover:from-solo-orange/90 hover:to-solo-yellow/90"
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Adicionar Contato
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)}>
+              <Download className="mr-2 h-4 w-4" />
+              Exportar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Atualizar
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            onClick={() => setShowAddModal(true)}
-            className="bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
-          >
-            <UserPlus className="h-4 w-4 mr-2" />
-            Adicionar Contato
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Importar
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)}>
-            <Download className="h-4 w-4 mr-2" />
-            Exportar
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
-          </Button>
-        </div>
-      </div>
-
-      {/* Toolbar */}
-      <div className="p-4 border-b border-border bg-card/50">
-        <GridToolbar
-          search={globalFilter}
-          onSearchChange={setGlobalFilter}
-          searchPlaceholder="Buscar por nome, email, telefone..."
-          filters={[]}
-          onClearFilters={() => {}}
-          activeFilterCount={0}
-        >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <ContactFilterBar
+              filters={filters}
+              onChange={setFilters}
+              pipelines={activePipelines.map((p) => ({ id: p.id, name: p.name }))}
+              resultLabel={resultLabel}
+            />
+          </div>
           <ContactColumnsToolbar
             onCreate={(field) => createField.mutate(field)}
-            existingKeys={contactFields.map((field) => field.key)}
+            existingKeys={contactFields.map((f) => f.key)}
             disabled={isLoadingContactFields || createField.isPending}
           />
-        </GridToolbar>
+        </div>
       </div>
 
       {/* Grid */}
       <div className="flex-1 overflow-auto p-4">
-        <SpreadsheetGrid
-          rows={gridRows}
-          columns={allColumns}
-          onCellCommit={handleCellCommit}
-          massActions={massActions}
-          loading={isLoading}
-          surfaceKey="base_contatos"
-          allowColumnReorder
-          allowColumnResize
-          allowColumnHide
-        />
+        {query.isError ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
+            Não foi possível carregar os contatos.
+            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+              Tentar de novo
+            </Button>
+          </div>
+        ) : (
+          <SpreadsheetGrid
+            rows={gridRows}
+            columns={columns}
+            onCellCommit={handleCellCommit}
+            massActions={massActions}
+            loading={query.isLoading}
+            surfaceKey="base_contatos"
+            allowColumnReorder
+            allowColumnResize
+            allowColumnHide
+            onSort={handleSort}
+            sortKey={gridSortKey}
+            sortDir={sort?.dir ?? null}
+            onRowOpen={(id) => setOpenLeadId(id)}
+            hasMore={!!query.hasNextPage}
+            loadingMore={query.isFetchingNextPage}
+            onEndReached={() => {
+              if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+            }}
+          />
+        )}
       </div>
 
       {/* Modals */}
-      <AddContactModal
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onCreated={() => setShowAddModal(false)}
-      />
-      <ImportModal
-        open={showImportModal}
-        onClose={() => setShowImportModal(false)}
-      />
+      <AddContactModal open={showAddModal} onClose={() => setShowAddModal(false)} onCreated={() => setShowAddModal(false)} />
+      <ImportModal open={showImportModal} onClose={() => setShowImportModal(false)} />
       <ExportModal
         open={showExportModal}
         onClose={() => setShowExportModal(false)}
-        leads={filteredLeads}
-        allLeads={filteredLeads}
-        selectedCount={0}
+        total={total}
+        loadRows={() => fetchAllContacts(filters, sort)}
       />
       <ContactDetailsModal
-        lead={selectedLead}
-        open={!!selectedLead}
-        onClose={() => setSelectedLead(null)}
+        lead={openLead.data ?? null}
+        open={!!openLeadId && !!openLead.data}
+        onClose={() => setOpenLeadId(null)}
         onSave={(data) => {
           updateLead.mutate(data);
-          setSelectedLead(null);
+          setOpenLeadId(null);
         }}
         onDelete={(id) => {
           deleteLead.mutate(id);
-          setSelectedLead(null);
+          setOpenLeadId(null);
         }}
       />
       <AssignToPipelineDialog
@@ -422,31 +396,24 @@ export const DatabaseView = () => {
         onClose={() => setAssignPipelineIds([])}
         contactIds={assignPipelineIds}
       />
-      <AlertDialog
-        open={confirmDeleteIds.length > 0}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDeleteIds([]);
-        }}
-      >
+      <AlertDialog open={confirmDeleteIds.length > 0} onOpenChange={(o) => !o && setConfirmDeleteIds([])}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir {confirmDeleteIds.length} contato
-              {confirmDeleteIds.length > 1 ? "s" : ""}? Esta ação não pode ser
-              desfeita.
+              Excluir {confirmDeleteIds.length} {confirmDeleteIds.length === 1 ? "contato" : "contatos"}?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>
-              Cancelar
-            </AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
+              onClick={() => {
+                deleteMany.mutate(confirmDeleteIds);
+                setConfirmDeleteIds([]);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting ? "Excluindo..." : "Excluir"}
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

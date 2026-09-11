@@ -578,7 +578,7 @@ $$;
 -- Um negócio por contato numa linha: na etapa informada ou na primeira etapa
 -- aberta. Pula quem já tem negócio aberto nessa linha (um contato pode ter vários
 -- negócios, mas o lote não duplica sem querer). O responsável vem do trigger do
--- T2. Devolve {created, skipped}.
+-- T2; contato do tipo "lead" passa a "opportunity". Devolve {created, skipped}.
 create or replace function public.crm_create_opportunities(
   p_lead_ids uuid[],
   p_pipeline_id uuid,
@@ -639,6 +639,15 @@ begin
   ins as (
     insert into public.opportunities (equipe_id, lead_id, pipeline_id, stage_id)
     select v_equipe, t.id, p_pipeline_id, v_stage from target t
+    returning lead_id
+  ),
+  -- Um contato do tipo "lead" que entra num processo de venda vira
+  -- "opportunity" (o que o AssignToPipelineDialog fazia um por um, Sprint 4).
+  bump as (
+    update public.leads l
+       set contact_type = 'opportunity'
+     where l.id in (select lead_id from ins)
+       and l.contact_type = 'lead'
     returning 1
   )
   select count(*) into v_created from ins;

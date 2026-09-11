@@ -381,6 +381,8 @@ begin
                     and o.stage_id = '5115d000-0000-0000-0000-000000000011'
                     and o.deleted_at is null),
     'T13-7 FAIL: o negocio criado deveria estar aberto na primeira etapa da linha';
+  assert (select contact_type from public.leads where id = '5115e000-0000-0000-0000-000000000001') = 'opportunity',
+    'T13-7 FAIL: contato do tipo lead que entra numa linha deveria virar opportunity';
 
   failed := false;
   begin

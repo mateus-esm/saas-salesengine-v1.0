@@ -54,7 +54,7 @@ export function InlineCell(props: InlineCellProps) {
 // Field cells
 // ---------------------------------------------------------------------------
 
-function FieldCell({ column, value, onCommit, onOpen }: InlineCellProps) {
+function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +81,10 @@ function FieldCell({ column, value, onCommit, onOpen }: InlineCellProps) {
     },
     [onCommit, value],
   );
+
+  if (column.render) {
+    return <div className={cn(CELL, "gap-1 overflow-hidden")}>{column.render(value, row)}</div>;
+  }
 
   if (column.primary) {
     return (
