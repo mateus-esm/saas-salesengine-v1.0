@@ -88,7 +88,8 @@ the foundations.
 1. **Ordem das ondas:** Onda 1 (o que está quebrado + reparo dos dados da Solo
    Energia) → Onda 2 (Kanban e tabelas claros) → Onda 3 (tabelas relacionais) →
    Onda 4 (tracking de origem). MCP (`future_sprint__mcp_v1.md`) e Copilot ficam para
-   sprints próprias.
+   sprints próprias. *(Reordenada em 11/09 — decisão 10: a Receita entra como Onda 3,
+   tabelas relacionais viram a Onda 4 e o tracking, a Onda 5.)*
 2. **Reparo de dados da Solo Energia:** aplicar em produção **depois** de um ensaio
    (`BEGIN … ROLLBACK`) que passe.
 3. **Responsável fica no negócio** (`opportunities.owner_id`), herdando o
@@ -98,6 +99,28 @@ the foundations.
 4. **Rolagem infinita** em vez de paginação com botões. O servidor continua
    entregando em blocos — é isso que tira o teto de 1.000 e a latência —; a tela
    carrega o próximo bloco ao rolar.
+
+### Decisões do Human (2026-09-11) — planejamento da Onda 2
+
+5. **Responsável só no negócio.** O contato não tem responsável: ele pode ter vários
+   negócios, na mesma linha ou em outras, cada um com o seu. A Base de Contatos
+   mostra os negócios do contato e os responsáveis deles. `leads.responsible_id` fica
+   como legado (padrão do negócio novo, pelo trigger do T2), sem aparecer em tela.
+   *(Reafirma a Sprint 4: "Contacts stay identity-pure".)*
+6. **O dashboard segue o negócio, e o evento guarda o responsável do momento.** Ganho,
+   perda e marcos contam para quem era dono naquele instante; o que está em aberto,
+   para o dono atual; números de contato, para quem tem negócio com o contato.
+7. **Arquitetura em motores** — `Planning/Architecture/motores_revops.md`: objetos,
+   eventos e artefatos como lente; oito motores; toda porta (tela, WhatsApp, webhook,
+   Copilot, API, MCP) usa as mesmas operações. Serve todo tenant — nada desenhado para
+   um só. Evolui v1.1 → v1.2 → v2 → v3.
+8. **O pipeline é uma linha configurável por naturezas** (Duração, Entradas, Oferta,
+   Processo), com catálogo, preço e recorrência opcionais — o cliente pode não usar.
+9. **Recorrência = novo negócio por ciclo.** Reciclo continua sendo o mesmo negócio
+   voltando para a linha, e ganha agendador.
+10. **Nova ordem das ondas:** 2 Kanban e tabelas claros (2A funcional; 2B visual e
+    celular) → 3 Receita e linha configurada → 4 Artefatos (Propostas e Contratos) →
+    5 Entradas e atribuição.
 
 ---
 
@@ -167,7 +190,7 @@ page como dado.** Há seis colunas de origem sobrepostas (`source`, `origem`,
 "Tráfego Pago". Os dois webhooks de entrada da Solo Energia (Formulário Meta ADS,
 Landing Page) mapeiam só nome/telefone/e-mail/origem. `messages` não guarda o
 payload bruto, então dado de anúncio clique-para-WhatsApp, se vier, é descartado.
-→ Onda 4.
+→ Onda 5 (era a 4 antes da reordenação de 11/09).
 
 **9. No Jestor, "Propostas Comerciais" é uma tabela ligada à oportunidade** (213
 propostas): Fabricante, Módulo, Nº Módulos, Inversor, Potência do Inversor, Qtde de
@@ -175,7 +198,8 @@ Inversores, Tipo de Estrutura, Monitoramento, Preço Total, Condições de Pagam
 Equipamentos Extras, Consumo Médio, Exclusões, Adicionais, Status, Link do PDF,
 Formulário. No app, a Solo Energia só tem a tabela "Teste" (1 linha). **Atenção ao
 nome:** `proposals` e `contracts` no banco já são as tabelas de **cobrança** (a Solo
-Ventures vendendo o SaaS); as do CRM precisam de outro nome. → Onda 3.
+Ventures vendendo o SaaS); as do CRM precisam de outro nome. → Onda 4 (era a 3 antes
+da reordenação de 11/09).
 
 **10. Pontas soltas.** Um webhook `meeting_scheduled` da Solo Energia ("Teste") nunca
 dispara — nenhum código emite esse evento. As chaves soltas `tipo_telhado`,
@@ -211,12 +235,53 @@ custaria bem mais que os "~5 arquivos" que o estudo estimou. Fica assim:
   `key ↔ field_id`.
 - **`label` é a única coisa renomeável.**
 
+## 🔬 Achados da Onda 2 (PM · 2026-09-11)
+
+Levantados do código em `main` @ `9f022ee` e de consultas **somente leitura** na
+produção.
+
+12. **Tabela de Leads e Base de Contatos não abrem o registro.** Na Tabela de Leads o
+    modal só abre por `?opp=`; na Base de Contatos, `selectedLead` nunca é setado — o
+    `ContactDetailsModal` é código morto naquela tela.
+13. **A grade trata o tipo do campo errado.** A coluna Seleção nasce sem as opções
+    (dropdown vazio). Multi-seleção, endereço, sim/não, URL e moeda caem em "texto":
+    editar multi-seleção grava texto no lugar da lista; endereço aparece
+    `[object Object]`. Data digitada na grade grava meia-noite UTC e aparece um dia
+    antes. Em produção existem campos de 9 tipos (número 7, seleção 7, texto 6, data 5,
+    moeda 5, URL 3, endereço 1, sim/não 1, multi-seleção 1).
+14. **A Tabela de Leads repete a latência antiga do Kanban.** A coluna Empresa faz uma
+    consulta por linha (`useRelationResolver` em cada célula: ~1.260 requisições na
+    Solo Energia) e `useLeadEntitySummary` manda ~1.250 UUIDs na URL em três consultas
+    — o mesmo defeito que a Onda 1 corrigiu nos scores.
+15. **Nenhum lugar do CRM deixa escolher o responsável**, nem do negócio nem do
+    contato. 648 negócios da Solo Energia estão sem dono.
+16. **O modal do negócio trabalha fechado.** A cada abertura do Kanban ou da Tabela, ele
+    busca todos os eventos de agenda da equipe e chama a API do Copilot.
+17. **Tabelas personalizadas:** sem excluir linha, sem ação em massa, um toast a cada
+    edição, teto de 1.000, relação resolvida por célula, chave de coluna digitada à
+    mão. Em produção só existe uma ("Teste", 1 linha, Solo Energia).
+18. **O placar mostra os mesmos números duas vezes** (faixa Meta/Atual/Projetado/Gap e
+    de novo em quatro cartões) e baixa todos os negócios do pipeline para contar.
+19. **Dashboard e CRM discordam sobre "responsável".** As RPCs da Sprint 9 filtram por
+    `leads.responsible_id`; o CRM usa `opportunities.owner_id`. E `funnel_events` guarda
+    o `actor` (quem clicou), não o dono: reatribuir um negócio ganho moveria o ganho —
+    e a comissão — para outra pessoa.
+20. **Ciclo e ciclo de vida nunca rodaram.** Duas etapas `ciclo` configuradas (WI
+    Advogados, 30 dias; Casa Flow, 15) e nenhum cron do banco chama o `cycle_pass` do
+    `python-agent`; os 2.215 contatos estão em `lifecycle_stage = raw`. → Onda 3.
+21. **Escala:** o maior tenant é a Solo Energia (1.254 contatos, 1.261 negócios, 2
+    membros); 79 contatos já têm 2+ negócios; 7 pipelines ativos em 6 tenants.
+
 ---
 
 ## 🛠️ Implementation Plan (PM)
 
 **Agente:** Claude / Opus 5 (PM + Engineer, execução solo).
-**Branch da Onda 1:** `claude/sprint11/w1/crm-confianca`.
+**Branch da Onda 1:** `claude/sprint11/w1/crm-confianca` (merged, PR #11).
+**Branches da Onda 2:** `claude/sprint11/w2a/achar-filtrar-atribuir` (2A) ·
+`claude/sprint11/w2b/claro-e-celular` (2B, criada do `main` depois do merge da 2A).
+**Arquitetura:** `Planning/Architecture/motores_revops.md` — cada tarefa diz o motor que
+avança.
 
 ### Restrições globais (valem para toda tarefa)
 
@@ -230,8 +295,22 @@ custaria bem mais que os "~5 arquivos" que o estudo estimou. Fica assim:
 - Não tocar em `docs/billing-runbook.md` (alteração pendente de outra sessão).
 - Toda RPC nova: `security invoker` (a RLS faz o recorte de tenant),
   `set search_path = public`, `grant execute … to authenticated`.
+- *(Onda 2 em diante)* **Nenhuma porta tem atalho privado** (`motores_revops.md` §2):
+  regra de negócio mora no banco; a tela monta o pedido e desenha a resposta.
+- *(Onda 2 em diante)* **Nenhuma lista carrega a base inteira no navegador:** páginas do
+  servidor com rolagem infinita; contador e lista usam a mesma função de filtro.
+- *(Onda 2 em diante)* **Escrita em lote vai por verbo de negócio** (RPC, ids no corpo do
+  POST) — nunca `.in()` com ids na URL.
+- *(Onda 2 em diante)* **Em tabela, sucesso de edição é silencioso; erro sempre aparece**,
+  na própria célula.
+- *(Onda 2 em diante)* **Uma linha de billing por tarefa** em `Planning/Workflow/billing.md`
+  (gate do workflow; a Onda 1 ficou sem — linhas acrescentadas no commit do plano da
+  Onda 2).
 
 ### Contrato de filtros (servidor na Onda 1, tela na Onda 2)
+
+> **Versão 2** (chaves `next_contact`, `custom` e `ContactFilters`) em "Contratos da
+> onda", na Onda 2. O bloco abaixo é a versão da Onda 1.
 
 ```ts
 // src/types/crmFilters.ts
@@ -495,48 +574,889 @@ transação, então pode rodar **antes** do deploy; o `commit` só depois delas 
   card; requisições e tempo de carga antes × depois; placar com números reais.
 - Handoff em `Planning/Project Management/Sprints_PM_Handoff.md`.
 
-### Onda 2 — Kanban e tabelas claros *(plano detalhado quando a Onda 1 fechar)*
+### Onda 2 — Kanban e tabelas claros
 
-- **Barra de filtros única** (`CrmFilters`) no Kanban, na Tabela de Leads e na Base de
-  Contatos: busca, criado em, responsável, origem, etiquetas, etapa/status, valor,
-  campo personalizado declarado. Estado na URL — compartilhável, sobrevive ao reload.
-- **Tabelas** com página no servidor + rolagem infinita + filtros no servidor
-  (substitui o paliativo do T5); edição inline confiável; tabelas personalizadas no
-  mesmo padrão.
-- **Responsável:** seletor no card, no modal e na tabela; avatar no card; **tipo de
-  campo Usuário** (estilo Jestor).
-- **Card redesenhado** com hierarquia clara; cabeçalho da coluna com contagem e total
-  verdadeiros.
-- **Placar redesenhado:** faixa compacta, meta × realizado × ritmo, por responsável.
-- **Mobile:** Kanban em uma coluna com seletor de etapa; tabelas viram lista; modal em
-  tela cheia.
-- **Saída:** achar qualquer cliente da Solo Energia pelo nome no Kanban em menos de
-  2 s; filtrar por responsável e período; usar no celular.
+> Execução com `superpowers:executing-plans`, uma tarefa por vez, TDD. Tarefa **L**
+> apresenta plano curto (arquivos + lógica) antes do código (workflow §3). Duas
+> entregas, cada uma com parada para aprovação → deploy → PR:
+> **2A · Achar, filtrar, atribuir** (T11–T22) e **2B · Claro e no celular** (T23–T27).
 
-### Onda 3 — Tabelas relacionais: Propostas e Contratos *(plano detalhado depois)*
+**Saída da onda** (founder, 10/09): achar qualquer cliente da Solo Energia pelo nome no
+Kanban em menos de 2 s; filtrar por responsável e período; usar no celular.
 
-- Campo **Oportunidade (N:1)** em tabela personalizada + painel reverso no negócio
+**O que a onda constrói de cada motor:** Modelo v1 (registro de tipos de campo, campo
+Usuário) · Consulta v1 (filtros v2, tabelas no servidor, filtros na URL) · Automação
+(verbos de negócio) · Eventos (responsável do momento) · Métricas (dashboard e placar
+por responsável).
+
+#### Orçamento de latência (linha de base no T11; conferido no T22 e no T27)
+
+| Tela (Solo Energia, máquina e rede do founder) | Requisições | Tempo até o conteúdo |
+| :-- | :-- | :-- |
+| Abrir o Kanban | ≤ 20 | primeira coluna com cards < 1,5 s |
+| Buscar um nome no Kanban | — | resultado < 2 s |
+| Abrir a Tabela de Leads | ≤ 10 | primeiras 50 linhas < 1,5 s |
+| Abrir a Base de Contatos | ≤ 10 | primeiras 50 linhas < 1,5 s |
+| Abrir um negócio | ≤ 8 | < 1 s |
+
+Se uma lista rolar travando depois das páginas no servidor, virtualização de linhas
+entra como tarefa nova — não antes de medir.
+
+#### Contratos da onda
+
+**Filtros v2** (`src/types/crmFilters.ts`; chaves iguais no `p_filters jsonb`; chave
+ausente = sem filtro):
+
+```ts
+export type NextContactBucket = "overdue" | "today" | "week" | "none"; // dia de São Paulo
+
+export type CustomFieldFilterOp =
+  | "any_of"          // seleção, multi-seleção, usuário: o valor (ou algum item) está na lista
+  | "contains"        // texto, url, telefone: pedaço do texto, sem diferenciar maiúsculas
+  | "between_number"  // número, moeda: from <= v <= to (cada ponta opcional)
+  | "between_date"    // data: from <= v < to (ISO; cada ponta opcional)
+  | "is_true"
+  | "is_false"        // só false; vazio é "empty"
+  | "empty"           // ausente, null, "", [] ou {}
+  | "not_empty";
+
+export interface CustomFieldFilter {
+  field_id: string;
+  op: CustomFieldFilterOp;
+  values?: string[];       // any_of
+  value?: string;          // contains
+  from?: string | number;  // between_*
+  to?: string | number;    // between_*
+}
+
+export interface CrmFilters {            // negócios: Kanban e Tabela de Leads
+  search?: string;
+  created_from?: string;                 // ISO, inclusivo
+  created_to?: string;                   // ISO, exclusivo
+  owner_ids?: string[];                  // responsável do negócio; "none" = sem responsável
+  stage_ids?: string[];
+  statuses?: OpportunityStatus[];
+  origin_categories?: string[];
+  tags?: string[];
+  value_min?: number;
+  value_max?: number;
+  next_contact?: NextContactBucket;      // do contato do negócio
+  custom?: CustomFieldFilter[];          // campos declarados do pipeline (E entre eles)
+}
+
+export type ContactRelationship = "sem_negocio" | "negociando" | "cliente" | "perdido";
+
+export interface ContactFilters {        // Base de Contatos
+  search?: string;
+  created_from?: string;
+  created_to?: string;
+  origin_categories?: string[];
+  tags?: string[];
+  next_contact?: NextContactBucket;
+  relationship?: ContactRelationship[];  // derivada dos negócios (ver T12)
+  pipeline_ids?: string[];               // tem negócio nessas linhas
+  deal_owner_ids?: string[];             // tem negócio desses responsáveis; "none" = negócio sem dono
+}
+
+export interface CrmSort {
+  key: string;                           // chave da lista abaixo, ou "cf:<field_id>"
+  dir: "asc" | "desc";
+}
+```
+
+**Ordenação** (nulos sempre no fim; desempate por `id`; chave desconhecida = padrão):
+negócios — `created_at` (padrão, desc), `updated_at`, `value`, `stage`,
+`stage_entered_at`, `closed_at`, `lead_name`, `owner_name`, `next_contact`,
+`cf:<field_id>`; contatos — `created_at` (padrão, desc), `name`, `last_message_at`,
+`won_value`, `last_won_at`, `next_contact`.
+
+**Filtros na URL** (T17). A mesma chave vale nas duas telas: `resp` é sempre o
+responsável **do negócio**.
+
+| Chave | Filtro | Exemplo |
+| :-- | :-- | :-- |
+| `q` | search | `q=maria` |
+| `criado` | created_from / created_to (dias locais; fim inclusivo na URL, exclusivo no filtro) | `criado=2026-09-01..2026-09-30` · `criado=..2026-09-30` |
+| `resp` | owner_ids · deal_owner_ids | `resp=<uuid>,none` |
+| `etapa` | stage_ids | `etapa=<uuid>,<uuid>` |
+| `status` | statuses | `status=open,won` |
+| `origem` | origin_categories | `origem=paid_social` |
+| `tags` | tags | `tags=solar,vip` |
+| `valor` | value_min / value_max | `valor=1000..50000` |
+| `prox` | next_contact | `prox=overdue` |
+| `cf` (repetível) | custom | `cf=<field_id>~any_of~Indicação\|Site` · `cf=<field_id>~between_date~2026-09-01..2026-09-30` |
+| `situacao` | relationship (contatos) | `situacao=cliente,negociando` |
+| `linha` | pipeline_ids (contatos) | `linha=<uuid>` |
+| `ordem` | sort | `ordem=value.desc` · `ordem=cf:<field_id>.asc` |
+
+**Linhas das tabelas** (`src/types/crmTables.ts`):
+
+```ts
+export interface OppTableRow extends BoardCard {   // BoardCard: src/types/board.ts (Onda 1)
+  property_count: number;
+}
+
+export interface ContactDeal {
+  id: string;
+  pipeline_id: string;
+  pipeline_name: string;
+  stage_id: string;
+  stage_name: string;
+  stage_color: string | null;
+  status: OpportunityStatus;
+  value: number | null;
+  owner_id: string | null;
+  owner_name: string | null;
+}
+
+export interface ContactRow {
+  id: string;
+  equipe_id: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  origin_category: string | null;
+  channel: string | null;
+  tags: string[];
+  observations: string | null;
+  created_at: string;
+  last_message_at: string | null;
+  next_contact: string | null;          // date (AAAA-MM-DD)
+  personal_custom_data: Record<string, unknown>;
+  company_name: string | null;          // empresa principal (contact_company_links)
+  property_count: number;               // property_owner_links, owner_type = 'contact'
+  relationship: ContactRelationship;
+  open_count: number;
+  won_value: number;                    // soma de value dos negócios ganhos (Onda 3: da receita)
+  last_won_at: string | null;
+  deals: ContactDeal[];                 // até 10: abertos primeiro, depois os mais recentes
+}
+```
+
+**Registro de tipos de campo** (`src/lib/fields/registry.ts`, T15) — o motor de Modelo
+v1. Grade, card e barra de filtros leem daqui; o SQL do T12/T13 é o gêmeo.
+
+```ts
+export type FieldType = CustomFieldType;          // inclui "user" a partir do T15
+export type InlineEditor =
+  | "text" | "number" | "currency" | "date" | "boolean"
+  | "select" | "multi_select" | "url" | "phone" | "user";
+
+export interface FieldContext {
+  options?: string[];                             // seleção / multi-seleção
+  nameOf?: (userId: string) => string | null;     // usuário
+}
+
+export interface FieldTypeSpec {
+  type: FieldType;
+  label: string;                                  // PT-BR, no editor de campos
+  format(value: unknown, ctx?: FieldContext): string;  // nunca lança
+  parse(raw: string, ctx?: FieldContext): unknown;     // do texto digitado ao valor gravado
+  isEmpty(value: unknown): boolean;               // o mesmo vazio de _crm_is_empty
+  filterOps: CustomFieldFilterOp[];               // os que o SQL aceita para o tipo
+  sortAs: "number" | "date" | "text" | null;      // o mesmo do ORDER BY de crm_opp_table
+  inlineEdit: InlineEditor | null;                // null = só leitura na grade (edita no modal)
+}
+
+export const FIELD_TYPES: readonly FieldTypeSpec[];
+export function getFieldType(type: string | null | undefined): FieldTypeSpec; // desconhecido → texto
+```
+
+| Tipo | Mostra | Edita na grade | Filtros | Ordena |
+| :-- | :-- | :-- | :-- | :-- |
+| `text` | o texto | texto | contains · empty · not_empty | texto |
+| `number` | 1.234,5 | número | between_number · empty · not_empty | número |
+| `currency` | R$ 1.234,56 | moeda (aceita "1.234,56") | between_number · empty · not_empty | número |
+| `date` | 14/03/2026 (dia local) | data (grava meia-noite local, como o modal) | between_date · empty · not_empty | data |
+| `boolean` | Sim / Não | sim/não | is_true · is_false · empty | — |
+| `select` | a opção | seleção com as opções do campo | any_of · empty · not_empty | texto |
+| `multi_select` | a, b | multi-seleção (grava array) | any_of · empty · not_empty | — |
+| `url` | link | url | contains · empty · not_empty | texto |
+| `phone` | (85) 99262-5840 | telefone | contains · empty · not_empty | texto |
+| `user` | nome do membro · "Usuário removido" | seletor de membro | any_of · empty · not_empty | — |
+| `address` | Rua, nº – bairro, cidade/UF | — (modal) | empty · not_empty | — |
+| `file` | nome do arquivo | — | empty · not_empty | — |
+| `company_ref` · `property_ref` · `contact_ref` | "Vinculado" | — | empty · not_empty | — |
+
+### Onda 2A — Achar, filtrar, atribuir
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T11 | Verificação da Onda 1 + linha de base de latência | Consulta | S |
+| T12 | Filtros v2 no servidor | Consulta | L |
+| T13 | Tabelas no servidor + verbos de negócio | Consulta · Automação | L |
+| T14 | Eventos com o responsável do momento + métricas por responsável | Eventos · Métricas | L |
+| T15 | Registro de tipos de campo + grade certa por tipo | Modelo | L |
+| T16 | Campo Usuário | Modelo | M |
+| T17 | Barra de filtros e filtros na URL | Consulta | L |
+| T18 | Tabela de Leads no servidor | Consulta · Automação | M |
+| T19 | Base de Contatos no servidor | Consulta · Automação | M |
+| T20 | Responsável no negócio + modal leve | Processo · Consulta | M |
+| T21 | Tabelas personalizadas no mesmo padrão | Modelo | M |
+| T22 | Verificação 2A, deploy e PR | — | S |
+
+#### T11 · Verificação da Onda 1 + linha de base (S)
+
+**Files:** modify `Planning/Sprints/sprint_11_crm_v1.1.md` (tabela "Linha de base").
+
+- Navegador (Chrome, sessão logada do founder, equipe Solo Energia), aba de rede aberta.
+- **Pendência da Onda 1:** no Kanban de `Solo Energia | Usinas - Micro Geração`, a soma
+  dos contadores das colunas = total de negócios não apagados do pipeline (consultar na
+  hora; era 1.259, a produção tinha 1.261 em 11/09); nenhum card
+  `[Novo Contato - WhatsApp]` para lead com nome; ≤ 20 requisições ao abrir; placar com
+  números do mês.
+- **Linha de base** de cada tela do orçamento: requisições, tempo até o conteúdo, bytes.
+- Regressão da Onda 1 encontrada aqui vira correção antes do T12.
+
+**Aceite:** tabela "Linha de base" preenchida neste arquivo; pendência da Onda 1 marcada.
+
+#### T12 · Filtros v2 no servidor (L)
+
+**Files:** create `supabase/migrations/20260911000100_sprint11_w2_filters.sql`,
+`supabase/tests/sprint11_w2_filters.test.sql`, `src/lib/crmFilters.ts`,
+`src/lib/__tests__/crmFilters.test.ts`; modify `src/types/crmFilters.ts`,
+`src/lib/board.ts` (`cleanFilters` limpa `custom`), `supabase/tests/sprint11_w1_board.test.sql`
+(passa a incluir esta migration, para testar a versão nova de `crm_opp_matches`).
+
+**Produces (SQL)** — todas `set search_path = public`, revoke de `public, anon`, grant a
+`authenticated`:
+- `_crm_is_empty(v jsonb) → boolean` — ausente, `null`, `""`, `[]` ou `{}`.
+- `_crm_try_numeric(p text) → numeric` e `_crm_try_timestamptz(p text) → timestamptz` —
+  null em vez de erro.
+- `_crm_custom_match(p_data jsonb, p_filter jsonb) → boolean` e
+  `_crm_custom_matches(p_data jsonb, p_custom jsonb) → boolean` (E entre os filtros).
+  Op desconhecida = filtro ignorado. Valor gravado que não converte = não bate. Ponta
+  `from`/`to` que não converte = ponta ausente. `any_of` sobre array (multi-seleção) =
+  sobreposição.
+- `_crm_next_contact_matches(p_next date, p_bucket text) → boolean` — hoje =
+  `(now() at time zone 'America/Sao_Paulo')::date`; `week` = de hoje até hoje + 6;
+  balde nulo = sem filtro.
+- `_crm_search_matches(l leads, p_search text) → boolean` — a busca que hoje mora dentro
+  de `crm_opp_matches`, extraída para servir negócio e contato.
+- `crm_opp_matches(o, l, p_filters)` recriada (mesma assinatura) + `next_contact` + `custom`.
+- `_crm_lead_relationship(p_lead_id uuid) → text` — `cliente` (algum ganho) >
+  `negociando` (algum aberto) > `perdido` (só perdidos) > `sem_negocio`; só negócios
+  não apagados.
+- `crm_lead_matches(l leads, p_filters jsonb) → boolean` com as chaves de
+  `ContactFilters`; `deal_owner_ids` e `pipeline_ids` olham os negócios não apagados.
+- `create index if not exists idx_opportunities_lead_active on public.opportunities (lead_id) where deleted_at is null;`
+
+**Produces (TS):** os tipos de "Contratos da onda";
+`cleanCustomFilters(list: CustomFieldFilter[]): CustomFieldFilter[]` em
+`src/lib/crmFilters.ts` (tira filtro sem conteúdo: `any_of` sem valores, `contains` sem
+texto, `between_*` sem ponta).
+
+**Testes SQL** — fixtures: 2 tenants; 1 pipeline com 8 campos declarados (seleção,
+multi-seleção, usuário, número, moeda, data, sim/não, texto); negócios com valores
+válidos, vazios (`null`, `""`, `[]`, `{}`, chave ausente) e malformados (`"abc"` no
+número, `"31/02/2026"` na data):
+1. `any_of` em seleção, multi-seleção (sobreposição) e usuário;
+2. `between_number` com só `from`, só `to` e os dois; `"abc"` não bate e não quebra;
+3. `between_date` meio-aberto; data malformada não bate e não quebra;
+4. `is_true` / `is_false`; `contains` sem diferenciar maiúsculas;
+5. `empty` / `not_empty` nos cinco jeitos de vazio;
+6. dois filtros juntos = E; op desconhecida = sem filtro;
+7. `next_contact` nos quatro baldes, com datas montadas a partir de hoje em São Paulo;
+8. `crm_board_summary` e `crm_board_stage` com `custom`: soma do resumo = linhas que batem;
+9. `crm_lead_matches`: telefone digitado com máscara, período, as quatro situações
+   (contato com ganho e com aberto = `cliente`), `pipeline_ids`, `deal_owner_ids` com
+   `"none"`;
+10. RLS: o usuário do tenant B conta 0 contatos do tenant A.
+
+**Testes vitest:** `cleanCustomFilters` e `cleanFilters` com as chaves novas.
+
+**Aceite:** `bash scripts/sqltest.sh supabase/tests/sprint11_w2_filters.test.sql supabase/tests/sprint11_w1_board.test.sql` → PASS · `npx tsc -b` · `npm test`.
+
+#### T13 · Tabelas no servidor + verbos de negócio (L)
+
+**Files:** create `supabase/migrations/20260911000200_sprint11_w2_tables.sql`,
+`supabase/tests/sprint11_w2_tables.test.sql`, `src/types/crmTables.ts`,
+`src/lib/tablePages.ts`, `src/lib/__tests__/tablePages.test.ts`; modify
+`supabase/tests/sprint11_w1_board.test.sql` (inclui esta migration: `crm_board_stage`
+muda por dentro e o teste da Onda 1 prova que a saída não mudou).
+
+**Consumes:** T12 (`crm_opp_matches`, `crm_lead_matches`, `_crm_lead_relationship`,
+`_crm_try_*`).
+
+**Produces (SQL):**
+- `_crm_card_json(o opportunities, l leads, p_has_icp boolean, p_owner_name text) → jsonb`
+  — o card que `crm_board_stage` já monta (lead, owner_name, touchpoint_count,
+  icp_score, velocity, lead_score, companies) num lugar só; `crm_board_stage` recriada
+  em cima dela, com a mesma saída.
+- `crm_opp_table(p_pipeline_id uuid, p_filters jsonb default '{}', p_sort jsonb default '{"key":"created_at","dir":"desc"}', p_limit int default 50, p_offset int default 0) → jsonb`
+  — array de `OppTableRow` (card + `property_count`); limite entre 1 e 200.
+- `crm_contacts_table(p_filters jsonb default '{}', p_sort jsonb default '{"key":"created_at","dir":"desc"}', p_limit int default 50, p_offset int default 0) → jsonb`
+  — array de `ContactRow`, **só da equipe de quem chama**
+  (`l.equipe_id = (select equipe_id from profiles where id = auth.uid())`; a RLS sozinha
+  deixaria um super admin ver todos os tenants).
+- `crm_contacts_count(p_filters jsonb default '{}') → int`.
+- **Ordenação sem SQL dinâmico:** três chaves por linha (`sk_num`, `sk_ts`, `sk_text`)
+  calculadas por `p_sort->>'key'`, e `order by` com `case` por direção,
+  `nulls last`, desempate por `id`. `cf:<field_id>` lê o tipo no
+  `custom_fields_schema` do pipeline: número/moeda → `_crm_try_numeric`; data →
+  `_crm_try_timestamptz`; texto, URL, telefone, seleção → `lower(texto)`; outros tipos
+  não ordenam (cai no padrão).
+- **Verbos de negócio** (`security invoker`; ids no corpo do POST):
+  - `crm_update_opportunities(p_ids uuid[], p_patch jsonb) → int` — chaves aceitas:
+    `stage_id` (move só os negócios da linha dessa etapa) e `owner_id` (null = sem
+    responsável; outra equipe é recusada pelo trigger do T2). Chave desconhecida →
+    `raise exception 'invalid_patch_key: %'`. Devolve quantos mudaram.
+  - `crm_delete_opportunities(p_ids uuid[]) → int` e `crm_delete_leads(p_ids uuid[]) → int`
+    — soft delete.
+  - `crm_create_opportunities(p_lead_ids uuid[], p_pipeline_id uuid, p_stage_id uuid default null) → jsonb`
+    → `{"created": n, "skipped": m}` — um negócio por contato, na etapa informada ou na
+    primeira etapa aberta; pula quem já tem negócio aberto nessa linha; o responsável
+    vem do trigger do T2.
+
+**Produces (TS):** os tipos `OppTableRow`, `ContactDeal`, `ContactRow`; e
+
+```ts
+// src/lib/tablePages.ts
+export type TablePages<T> = InfiniteData<T[], number>;
+export function flattenPages<T>(pages: TablePages<T> | undefined): T[];
+export function patchRowInPages<T extends { id: string }>(
+  pages: TablePages<T> | undefined, id: string, patch: Partial<T>,
+): TablePages<T> | undefined;
+export function removeRowsFromPages<T extends { id: string }>(
+  pages: TablePages<T> | undefined, ids: string[],
+): TablePages<T> | undefined;
+export function nextOffset<T>(lastPage: T[], allPages: T[][], pageSize: number): number | undefined;
+```
+
+**Testes SQL** — fixtures: 2 tenants; 1 pipeline com campo número, data e texto; 60
+negócios; contatos com 0, 1 e 3 negócios em 2 pipelines; empresa e imóvel ligados:
+1. `crm_opp_table` página de 50 + página de 10 sem sobreposição; total = soma do
+   `crm_board_summary` com os mesmos filtros;
+2. cada chave de ordenação nos dois sentidos, nulos no fim, sem repetir linha entre
+   páginas quando o valor empata;
+3. `cf:` numérico ordena 9 antes de 10; `cf:` texto ordena "10" antes de "9";
+4. o card de `crm_opp_table` é igual ao de `crm_board_stage` para o mesmo negócio
+   (menos `property_count`);
+5. `crm_contacts_table`: `relationship`, `open_count`, `won_value`, `last_won_at`,
+   `deals` com nome da linha, da etapa e do responsável, abertos primeiro, no máximo 10;
+6. `crm_contacts_count` = soma das páginas, com filtro;
+7. tenant B vê 0 linhas e contagem 0;
+8. verbos: mover etapa grava histórico; etapa de outra linha não move; `owner_id` de
+   outra equipe levanta erro; chave desconhecida levanta `invalid_patch_key`; apagar
+   devolve a contagem e some das listas; ids de outro tenant contam 0;
+   `crm_create_opportunities` pula quem já tem negócio aberto;
+9. 1.200 ids numa chamada.
+
+**Medir** (como no T3): `crm_opp_table` página 1 por `created_at` e por `cf:`;
+`crm_contacts_table` página 1 — na base real da Solo Energia, dentro de `rollback`.
+Meta < 300 ms cada.
+
+**Testes vitest:** as cinco funções de `tablePages.ts`.
+
+**Aceite:** os testes SQL do T12, do T13 e da Onda 1 → PASS · tsc · npm test.
+
+#### T14 · Eventos com o responsável do momento + métricas por responsável (L)
+
+**Files:** create `supabase/migrations/20260911000300_sprint11_w2_owner_events.sql`,
+`supabase/tests/sprint11_w2_owner_events.test.sql`; modify
+`supabase/tests/sprint9_w2_metrics.test.sql`, `supabase/tests/sprint9_w4_reports.test.sql`,
+`supabase/tests/sprint11_w1_breakdown.test.sql` (fixtures passam a dar dono ao negócio).
+
+**Produces (SQL):**
+- Tabela `opportunity_owner_history` (`id bigserial`, `equipe_id`, `opportunity_id` →
+  cascade, `from_owner`, `to_owner`, `changed_by`, `changed_at`,
+  `source text check (source in ('change','backfill'))`), RLS de leitura para a equipe
+  e **nenhuma política de escrita** (só o trigger grava); índice
+  `(opportunity_id, changed_at)`.
+- Trigger `trg_opportunity_owner_history` — AFTER INSERT (com dono) e AFTER UPDATE OF
+  `owner_id` (quando muda); `changed_by = auth.uid()`.
+- `_opportunity_owner_at(p_opportunity_id uuid, p_at timestamptz) → uuid` — o último
+  `to_owner` até `p_at`; senão o `from_owner` da primeira troca depois de `p_at`; sem
+  histórico, o dono atual.
+- `funnel_events.owner_id uuid` + índice `(equipe_id, owner_id, occurred_at)` + trigger
+  BEFORE INSERT que preenche `owner_id` com `_opportunity_owner_at(opportunity_id,
+  occurred_at)` quando vier nulo — cobre os sete lugares que gravam evento (três
+  triggers, `record_funnel_event`, o replay) sem mexer em nenhum.
+- Backfill: uma linha `source = 'backfill'` por negócio com dono (em `created_at`);
+  depois `funnel_events.owner_id` dos eventos existentes. Ensaio em `rollback` antes.
+- **Métricas recriadas com as mesmas assinaturas**, por uma regra só:
+  - **métrica de evento** (qualificados, propostas, reuniões, no-show, ganhos, perdidos,
+    receita ganha e perdida, ciclo médio, motivos de perda) → `funnel_events.owner_id`;
+  - **métrica de estado** (valor e contagem em aberto, novos negócios, top
+    oportunidades) → `opportunities.owner_id`;
+  - **métrica de contato** (novos leads, touchpoints) → contatos com algum negócio não
+    apagado do responsável;
+  - o vendedor sem papel de gestor (D7 da Sprint 9, `_funnel_scope`) passa a ver o que é
+    dele pela mesma regra.
+  - Funções: `_funnel_overview_core`, `_loss_reasons_core`, `_top_opportunities_core`
+    (última versão em `20260830000900`), `get_funnel_series`, `get_funnel_breakdown`
+    (`20260830000600`), `get_custom_field_breakdown` (`20260910000400`).
+    `get_funnel_overview`, `get_loss_reasons`, `get_top_opportunities` e
+    `build_report_snapshot` herdam por chamarem os `_core`.
+  - `_top_opportunities_core` devolve o nome do dono do negócio na mesma chave JSON que
+    hoje leva o responsável do contato (a tela não muda).
+  - `get_custom_field_breakdown`: campo do tipo `user` agrupa pelo **nome** do membro
+    (`profiles` da equipe; "Usuário removido" quando o id não é da equipe).
+- `crm_placar(p_pipeline_id uuid, p_from timestamptz, p_to timestamptz) → jsonb`
+  (`security invoker`; a RLS de `funnel_events` já dá leitura à equipe):
+  `{won, lost, won_revenue, in_progress, avg_velocity_days, by_owner: [{owner_id, owner_name, won, lost, in_progress, won_revenue}]}`
+  — ganhos e perdas por evento no período (negócio distinto, dono do momento); em
+  andamento pelo dono atual. O T25 troca o placar para ela.
+
+**Testes SQL** (novo) — contato sem responsável; negócio do vendedor B ganho em março
+e depois passado para C; negócio aberto de C:
+1. o ganho conta para B, não para C, em overview, série, quebra, motivos, relatório
+   agendado e `crm_placar`;
+2. o aberto conta para C em `open_count` e `in_progress`;
+3. filtrando C, "novos leads" conta o contato (tem negócio de C);
+4. o vendedor B (sem papel de gestor) vê o ganho dele e não vê o aberto de C;
+5. `recompute_funnel_events` mantém o dono do momento;
+6. quebra por campo Usuário mostra nomes.
+
+Os testes da Sprint 9 e da Onda 1 que montam responsável em `leads.responsible_id`
+passam a dar dono ao negócio e continuam passando.
+
+**Aceite:** os seis arquivos de teste SQL → PASS.
+
+#### T15 · Registro de tipos de campo + grade certa por tipo (L)
+
+**Files:** create `src/lib/fields/registry.ts`, `src/lib/fields/dateOnly.ts`,
+`src/lib/fields/columns.ts`, `src/lib/fields/__tests__/registry.test.ts`,
+`src/lib/fields/__tests__/dateOnly.test.ts`, `src/lib/fields/__tests__/columns.test.ts`,
+`src/hooks/useMemberDirectory.ts`, `src/components/crm/fields/UserAvatar.tsx`,
+`src/components/crm/fields/UserPicker.tsx`, `src/components/crm/fields/MultiSelectPicker.tsx`,
+`src/components/crm/grid/__tests__/InlineCell.test.tsx`; modify `src/types/pipelines.ts`
+(`CustomFieldType` ganha `"user"`), `src/components/crm/grid/types.ts`,
+`src/components/crm/grid/columnTypes.tsx` (delega ao registro),
+`src/components/crm/grid/InlineCell.tsx`, `src/components/crm/grid/SpreadsheetGrid.tsx`.
+
+**Produces:**
+- O registro (contrato acima) com os 14 tipos da tabela.
+- Grade:
+
+```ts
+// src/components/crm/grid/types.ts
+export type ColumnKind = FieldType | "relation" | "formula" | "rollup" | "conditional";
+export interface ColumnDef {
+  // … campos atuais …
+  /** Abre o registro: a célula vira botão. Uma por grade. */
+  primary?: boolean;
+  relation?: {
+    // … campos atuais …
+    /** Os chips já vêm na linha ({ id, name }[]): nenhuma consulta por célula. */
+    resolvedFromRow?: boolean;
+  };
+}
+
+// SpreadsheetGrid — props novas
+onRowOpen?: (rowId: string) => void;
+hasMore?: boolean;
+loadingMore?: boolean;
+onEndReached?: () => void;   // sentinela no fim (IntersectionObserver no contêiner da grade)
+```
+
+- `InlineCell`: modo de exibição puro (sem consulta); editor montado só ao editar,
+  escolhido por `spec.inlineEdit`; `useRelationResolver` só para `relation` sem
+  `resolvedFromRow`; `onCommit` devolve promessa — falha mostra erro na célula (contorno
+  e `title`) e volta o valor; sucesso silencioso. Cabeçalho fixo ao rolar.
+- `columnFromField(field: { field_id?: string; key: string; label: string; type: string; options?: string[] }, jsonbField: JsonbField, addressBy: "field_id" | "key" = "field_id"): ColumnDef`
+  — `key` da coluna = `field_id` (campos do pipeline) ou `key` (campos de contato e
+  tabelas personalizadas, que ainda se endereçam por `key` até a v1.2), `kind` = tipo do
+  campo, opções, `editable` = `spec.inlineEdit !== null`.
+- `useMemberDirectory(): { members: { id: string; name: string; email: string }[]; nameOf(id: string | null): string | null }`
+  — sobre `useTeamMembers` (`crm_team_members`, em cache).
+- `UserPicker({ value, onChange, allowNone = true, placeholder })` — combobox (`cmdk`) com
+  avatar, busca por nome e "Sem responsável". `UserAvatar({ userId, size })` —
+  iniciais, cor fixa por id, `title` com o nome.
+- `MultiSelectPicker({ options, value, onChange })` — chips + lista com caixas.
+
+**Testes vitest:**
+- registro: `format` / `parse` / `isEmpty` de cada tipo (moeda "1.234,56" → 1234.56;
+  multi-seleção → "a, b"; sim/não; usuário por nome e "Usuário removido"; endereço
+  resumido; tipo desconhecido cai em texto sem erro); `filterOps` por tipo = os
+  operadores do T12;
+- `dateOnly` (com `process.env.TZ = "America/Sao_Paulo"`): "2026-03-14" mostra 14/03/2026;
+  o input "2026-03-14" grava a meia-noite local; ISO com fuso mostra o dia local;
+- `columns`: seleção leva as opções; multi-seleção e usuário viram o `kind` certo;
+  endereço fica só leitura;
+- `InlineCell` (testing-library): seleção mostra as opções e grava o valor; multi-seleção
+  grava array; data grava meia-noite local; sim/não alterna; falha no commit mostra erro
+  e volta o valor.
+
+**Aceite:** tsc · npm test. Nenhuma tela muda de dados aqui (as telas trocam nos T18–T21).
+
+#### T16 · Campo Usuário (M)
+
+**Files:** modify `src/components/crm/pipeline-settings/CustomFieldsEditor.tsx` (tipo
+"Usuário (membro da equipe)"), `src/components/crm/DynamicFieldRenderer.tsx`
+(`case "user"` com `UserPicker`; `validateCustomData` aceita uuid ou vazio),
+`src/components/crm/OpportunityCard.tsx` (`renderCustomValue` mostra o nome); create
+`src/components/crm/__tests__/DynamicFieldRenderer.user.test.tsx`.
+
+**Consumes:** T15 (registro com `user`, `UserPicker`, `useMemberDirectory`), T12
+(`any_of` com ids), T14 (quebra por nome).
+
+- Valor gravado: o `profiles.id` do membro, em `custom_data[field_id]`. Um usuário por
+  campo (vários: v1.2, se pedirem).
+- Webhook de entrada: sem mudança — grava o que vier; a tela mostra "Usuário removido"
+  para id que não é da equipe.
+- Regras do Agente CRM com campo Usuário: fora da onda.
+
+**Testes vitest:** o renderer escolhe e limpa o membro; `validateCustomData` recusa
+texto que não é uuid.
+
+**Aceite:** num pipeline de teste, criar "Pré-vendedor", preencher no modal, ver no
+card, filtrar por ele (T17) e ver a quebra do dashboard com o nome.
+
+#### T17 · Barra de filtros e filtros na URL (L)
+
+**Files:** create `src/lib/crmFilterParams.ts`, `src/lib/__tests__/crmFilterParams.test.ts`,
+`src/hooks/useUrlFilters.ts`, `src/components/crm/filters/DealFilterBar.tsx`,
+`src/components/crm/filters/ContactFilterBar.tsx`, `src/components/crm/filters/controls.tsx`
+(busca, multi-seleção, período, faixa de valor, próximo contato, campo personalizado,
+chips ativos, menu "+ Filtro"), `src/components/crm/filters/FilterSheet.tsx` (celular:
+"Filtros (n)" abre folha de baixo com os mesmos controles, `vaul`),
+`src/components/crm/filters/__tests__/DealFilterBar.test.tsx`; modify
+`src/components/crm/OpportunityKanban.tsx` (a barra no lugar da caixa de busca; filtros
+da URL), `src/hooks/usePipelineSelection.ts` (trocar de pipeline apaga `etapa`, `cf` e
+`ordem=cf:*`), `src/pages/CRM.tsx` (trocar de aba de topo apaga as chaves de filtro).
+
+**Consumes:** T12 (tipos), T15 (`getFieldType(...).filterOps`, `UserPicker`,
+`useMemberDirectory`), T16 (campo Usuário filtrável).
+
+**Produces:**
+
+```ts
+// src/lib/crmFilterParams.ts
+export const FILTER_PARAM_KEYS: readonly string[];  // q, criado, resp, etapa, status, origem, tags, valor, prox, cf, situacao, linha, ordem
+export function crmFiltersToParams(f: CrmFilters, into?: URLSearchParams): URLSearchParams;
+export function paramsToCrmFilters(p: URLSearchParams): CrmFilters;
+export function contactFiltersToParams(f: ContactFilters, into?: URLSearchParams): URLSearchParams;
+export function paramsToContactFilters(p: URLSearchParams): ContactFilters;
+export function sortToParam(s: CrmSort | null): string | null;
+export function paramToSort(v: string | null): CrmSort | null;
+
+// src/hooks/useUrlFilters.ts
+export function useDealUrlFilters(): {
+  filters: CrmFilters; setFilters(next: CrmFilters): void;
+  sort: CrmSort | null; setSort(next: CrmSort | null): void;
+};
+export function useContactUrlFilters(): {
+  filters: ContactFilters; setFilters(next: ContactFilters): void;
+  sort: CrmSort | null; setSort(next: CrmSort | null): void;
+};
+```
+
+- Busca com debounce de 300 ms e `replace: true` (digitar não enche o histórico); os
+  outros filtros com `replace: false` (voltar desfaz o filtro).
+- Sempre visíveis: busca, **Responsável** (membros + "Sem responsável"), **Criado em**
+  (Hoje, 7 dias, 30 dias, Este mês, Mês passado, Personalizado). No "+ Filtro": Etapa,
+  Status, Origem, Etiquetas, Valor, Próximo contato e cada campo declarado do pipeline
+  (operadores do registro). Filtros ativos viram chips removíveis; "Limpar".
+- Kanban: cabeçalho "N negócios", ou "N encontrados · Limpar" com filtro.
+
+**Testes vitest:** ida e volta URL ↔ filtro para cada chave (inclui `cf` com `|`, `~` e
+acento no valor, período com uma ponta só, `none`); parâmetro inválido é ignorado sem
+erro; período em dias locais vira `[início, dia seguinte)`; a barra remove o chip certo
+e adiciona "Sem responsável".
+
+**Aceite:** na Solo Energia, buscar um nome no Kanban traz o card em < 2 s; filtrar por
+responsável e por "Criado em: mês passado" muda contadores e cards juntos; recarregar
+mantém o filtro; o link copiado abre com o mesmo filtro.
+
+#### T18 · Tabela de Leads no servidor (M)
+
+**Files:** create `src/hooks/useOppTable.ts`; modify `src/components/crm/OpportunityTable.tsx`.
+
+**Consumes:** T13 (`crm_opp_table`, verbos, `tablePages`), T15 (grade,
+`columnFromField`, `UserPicker`), T17 (`DealFilterBar`, `useDealUrlFilters`),
+`useBoardSummary` (total).
+
+**Produces:**
+
+```ts
+export function useOppTable(pipelineId: string, filters: CrmFilters, sort: CrmSort | null):
+  UseInfiniteQueryResult<TablePages<OppTableRow>>;           // 50 por página
+export function useOppTableRealtime(pipelineId: string): void; // debounce 1 s, maxWait 5 s
+export function useUpdateOpportunities(pipelineId: string, filters: CrmFilters, sort: CrmSort | null):
+  UseMutationResult<number, Error, { ids: string[]; patch: { stage_id?: string; owner_id?: string | null } }>;
+  // otimista via patchRowInPages; volta no erro
+export function useDeleteOpportunities(pipelineId: string, filters: CrmFilters, sort: CrmSort | null):
+  UseMutationResult<number, Error, string[]>;                // otimista via removeRowsFromPages
+```
+
+- Colunas: **Lead** (principal: abre o negócio), **Responsável** (usuário, editável),
+  Empresa (chips da linha com `resolvedFromRow`; vincular/desvincular continua pelo
+  `RelationPicker` e corrige a linha no cache), Imóveis, Valor (moeda), Etapa, Tempo na
+  fase, Interações, Status, Próximo contato, Criado em, Atualizada + campos declarados
+  por `columnFromField`.
+- Ordenar pelo cabeçalho = `ordem` na URL, no servidor.
+- Ações em massa: Mover para etapa, **Atribuir responsável** (diálogo com `UserPicker`),
+  Excluir — uma chamada de verbo cada.
+- Cabeçalho: total = soma do `useBoardSummary` com os mesmos filtros (o número do Kanban).
+- Saem da tela: `useLeads`, `useOpportunities`, `useLeadEntitySummary`, `useLeadScores`,
+  `useTouchpointCounts` e a consulta por célula. O modal recebe o lead por
+  `useLead(row.lead_id)`.
+
+**Aceite:** na Solo Energia, o total é o do Kanban com o mesmo filtro; rolar até o fim
+carrega todos; editar seleção, multi-seleção, data, moeda, sim/não e usuário e recarregar
+mostra o valor salvo; atribuir responsável a 20 negócios numa ação; ≤ 10 requisições
+até as primeiras linhas.
+
+#### T19 · Base de Contatos no servidor (M)
+
+**Files:** create `src/hooks/useContactsTable.ts`; modify `src/components/crm/DatabaseView.tsx`,
+`src/components/crm/AssignToPipelineDialog.tsx` (uma chamada a `crm_create_opportunities`;
+mostra "X criados, Y já tinham negócio aberto"), `src/components/crm/ExportModal.tsx`
+(recebe `ContactRow[]`; a coluna "Responsável" vira "Responsáveis dos negócios", nomes
+separados por vírgula).
+
+**Consumes:** T13 (`crm_contacts_table`, `crm_contacts_count`, `crm_delete_leads`,
+`crm_create_opportunities`), T15, T17 (`ContactFilterBar`, `useContactUrlFilters`).
+
+**Produces:**
+
+```ts
+export function useContactsTable(filters: ContactFilters, sort: CrmSort | null):
+  UseInfiniteQueryResult<TablePages<ContactRow>>;
+export function useContactsCount(filters: ContactFilters): UseQueryResult<number>;
+export function useContactsRealtime(): void;   // leads e opportunities da equipe, debounce 1 s
+export function useDeleteContacts(filters: ContactFilters, sort: CrmSort | null):
+  UseMutationResult<number, Error, string[]>;
+export async function fetchAllContacts(filters: ContactFilters, sort: CrmSort | null):
+  Promise<ContactRow[]>;                       // exportar: páginas de 200
+```
+
+- **Sem coluna Responsável** (o contato não tem). Colunas: **Nome** (principal: abre o
+  contato), Telefone, E-mail, Empresa, **Situação** (selo), **Negócios** (chips
+  "linha · etapa" com o avatar do responsável; o clique abre o negócio no Kanban por
+  `?opp=`), **Ganho total**, **Último ganho**, Origem, Canal, Etiquetas, Observações,
+  Criado em + campos de contato (`columnFromField(campo, "personal_custom_data", "key")`).
+- Filtros: busca, Criado em, Origem, Etiquetas, Próximo contato, **Situação**,
+  **Pipeline**, **Responsável (de um negócio)**.
+- Ações em massa: Adicionar a pipeline, Excluir.
+- O contato abre por `useLead(id)`.
+
+**Aceite:** a contagem bate com os contatos não apagados da Solo Energia (1.254 em
+11/09); filtrar "cliente" bate com os contatos que têm ganho; abrir um contato pela
+linha; adicionar 3 contatos a uma pipeline numa chamada; exportar todos os filtrados;
+≤ 10 requisições até as primeiras linhas.
+
+#### T20 · Responsável no negócio + modal leve (M)
+
+**Files:** modify `src/components/crm/OpportunityDetailModal.tsx` (seletor de
+responsável no cabeçalho, salva na hora por `crm_update_opportunities`; agenda e
+decisões só com o modal aberto), `src/components/crm/LeadOpportunitiesSection.tsx`
+(cada negócio do contato mostra avatar e nome do responsável),
+`src/components/crm/OpportunityCard.tsx` (avatar do responsável no canto do card — só
+isso; o redesenho é o T24), `src/hooks/useCopilotDecisions.ts` (aceita `enabled`);
+create `src/hooks/useLeadAgendaEvents.ts`.
+
+**Produces:** `useLeadAgendaEvents(leadId: string | null, enabled: boolean)` — os
+`agenda_events` do contato, não da equipe inteira; `useCopilotDecisions({ pipelineId, enabled })`.
+
+- O contato não ganha responsável: mostra os negócios e os responsáveis deles.
+- `leads.responsible_id` fica como está (legado, padrão do negócio novo pelo T2), sem tela.
+
+**Aceite:** o card mostra o avatar do responsável; trocar o responsável no modal
+atualiza card e tabela sem recarregar; abrir o
+Kanban e a Tabela não dispara `agenda_events` nem a API do Copilot (aba de rede); abrir
+um negócio ≤ 8 requisições.
+
+#### T21 · Tabelas personalizadas no mesmo padrão (M)
+
+**Files:** modify `src/components/crm/customtables/CustomTableView.tsx`,
+`src/hooks/useCustomTableRecords.ts`, `src/hooks/useCustomTables.ts`; create
+`src/components/crm/customtables/CustomRecordDrawer.tsx`, `src/lib/customTables.ts`,
+`src/lib/__tests__/customTables.test.ts`.
+
+**Consumes:** T15 (grade, registro, `UserPicker`), `uniqueKey` (`src/lib/customFieldKeys.ts`, T8).
+
+- Layout de altura cheia; tipos de coluna do registro: Texto, Número, Moeda, Data,
+  Sim/Não, Seleção, Multi-seleção, URL, Telefone, Usuário, Relação.
+- A chave da coluna nasce do rótulo por `uniqueKey` e não se edita (o contrato dos
+  campos do pipeline); a coluna nova pede só rótulo e tipo.
+- Abrir a linha → gaveta do registro (todos os campos, criado/atualizado, excluir).
+- Excluir linha, uma ou em massa; sucesso sem toast; erro sempre aparece.
+- Registros sem teto de 1.000 (`fetchAllPages`, desempate por `id`).
+- Relação resolvida **por coluna**:
+  `mapLinksToRows(links, targetRecords, displayField): Record<string, { id: string; name: string }[]>`
+  (puro, testado) sobre duas consultas por coluna (vínculos da coluna; registros da
+  tabela alvo), entregue à grade com `resolvedFromRow`.
+- Página no servidor e `field_id` nas tabelas personalizadas: Onda 4, quando elas
+  ganham vínculo com o negócio.
+
+**Testes vitest:** `mapLinksToRows` (vínculo apagado some; alvo sem o campo de exibição
+mostra "[registro]"; várias linhas).
+
+**Aceite:** na tabela "Teste" da Solo Energia: criar coluna de cada tipo, editar, abrir
+a gaveta, excluir linha; tabela com relação abre com 2 consultas por coluna de relação.
+
+#### T22 · Verificação 2A, deploy e PR (S)
+
+- Gates completos no branch; testes SQL da onda + os da Sprint 9 e da Onda 1.
+- **Ponto de parada — aprovação do founder** para: (a) aplicar as migrations T12/T13/T14
+  pela Management API e registrá-las em `supabase_migrations.schema_migrations` (como na
+  Onda 1); (b) PR e merge (o Netlify publica o frontend). A 2A não muda edge function.
+- Navegador, Solo Energia: a saída da onda (nome em < 2 s; responsável e período); o
+  orçamento de latência contra a linha de base; editar cada tipo de campo na Tabela de
+  Leads; Base de Contatos com a situação; dashboard filtrado por um responsável.
+- Handoff "Sprint 11 · Onda 2A" em `Planning/Project Management/Sprints_PM_Handoff.md`.
+
+### Onda 2B — Claro e no celular
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T23 | Design do card, da coluna, do placar e do celular (canvas aprovado) | — | M |
+| T24 | Card e coluna redesenhados | Consulta (tela) | M |
+| T25 | Placar redesenhado | Métricas | M |
+| T26 | CRM no celular | todas as telas do CRM | L |
+| T27 | Verificação 2B, deploy, PR e handoff | — | S |
+
+#### T23 · Design do card, da coluna, do placar e do celular (M)
+
+- Canvas (skill `design`) com **dados fictícios** (dado de cliente não entra em
+  artefato): (1) Kanban no desktop — card novo em quatro estados (normal, contato
+  atrasado, com campos do card, perdido) e cabeçalho da coluna (contagem, total, SLA,
+  recolher); (2) placar em faixa única + detalhe por responsável; (3) celular — Kanban
+  de uma etapa por vez com seletor e "Mover para…", lista no lugar da tabela, negócio em
+  tela cheia, folha de filtros.
+- Direção para o card (o canvas decide): linha 1 nome + avatar do responsável; linha 2
+  valor · tempo na etapa · próximo contato; linha 3 até três campos do card e etiquetas;
+  ações (Chat, Touchpoint, ⚡) no hover do desktop e sempre visíveis no toque.
+- Placar: cada número uma vez só — Meta · Realizado · Ritmo · Falta · Conversão · Ciclo —
+  com barra fina; por responsável num detalhe que abre.
+- **Ponto de parada:** o founder aprova o canvas; as decisões ficam registradas aqui
+  antes do T24.
+
+#### T24 · Card e coluna redesenhados (M)
+
+**Files:** modify `src/components/crm/OpportunityCard.tsx`,
+`src/components/crm/CardTelemetryPillars.tsx`, `src/components/crm/OpportunityKanbanColumn.tsx`,
+`src/components/crm/OpportunityKanban.tsx`; create `src/lib/cardModel.ts`,
+`src/lib/__tests__/cardModel.test.ts`, `src/hooks/useCollapsedStages.ts`.
+
+**Produces:**
+`buildCardModel(card: BoardCard, stage: PipelineStageV2 | undefined, flags: NativeCardFlags, fields: CustomFieldSchema[], today: Date): CardModel`
+— puro: título, valor, responsável, selos em ordem, campos visíveis (a hierarquia
+aprovada vira regra testável); `useCollapsedStages(pipelineId)` (localStorage com
+try/catch).
+
+**Testes vitest:** `buildCardModel` nos quatro estados do canvas; campo vazio não
+aparece; selo de atraso só com próximo contato no passado.
+
+**Aceite:** igual ao canvas; nenhuma requisição a mais por card; recolher "Perdido"
+persiste ao recarregar.
+
+#### T25 · Placar redesenhado (M)
+
+**Files:** modify `src/components/crm/revenue/PipelineScoreboard.tsx`,
+`src/hooks/useForecast.ts`, `src/hooks/__tests__/useForecast.test.ts`.
+
+**Consumes:** `crm_placar` (T14).
+
+- O placar lê `crm_placar` (ganho pelo responsável do momento, como o dashboard) em vez
+  de baixar todos os negócios do pipeline; `buildPlacar` sai, `computeRunRate` fica.
+- Faixa única conforme o canvas; detalhe por responsável com avatar, ganhos/meta, barra
+  e ritmo; "Sem responsável" aparece quando existe.
+
+**Testes vitest:** a resposta de `crm_placar` vira o placar certo (inclui "Sem
+responsável" e meta zero).
+
+**Aceite:** os números batem com o dashboard filtrado pelo mesmo pipeline e mês.
+
+#### T26 · CRM no celular (L)
+
+**Files:** modify `src/pages/CRM.tsx` (abas de topo roláveis),
+`src/components/crm/PipelineWorkspace.tsx` (cabeçalho compacto),
+`src/components/crm/OpportunityKanban.tsx`, `src/components/crm/OpportunityKanbanColumn.tsx`,
+`src/components/crm/grid/SpreadsheetGrid.tsx` (modo lista: `renderMobileRow`),
+`src/components/crm/OpportunityTable.tsx`, `src/components/crm/DatabaseView.tsx`,
+`src/components/crm/OpportunityDetailModal.tsx`, `src/components/crm/ContactDetailsModal.tsx`;
+create `src/components/crm/mobile/StagePicker.tsx`,
+`src/components/crm/mobile/MoveToStageSheet.tsx`, `src/lib/mobileBoard.ts`,
+`src/lib/__tests__/mobileBoard.test.ts`.
+
+- Abaixo de 768 px (`useIsMobile`): o Kanban mostra uma etapa por vez, escolhida por
+  chips com a contagem (`crm_board_summary`); mover card é "Mover para…" (arrastar não
+  funciona bem no toque); tabelas viram lista (nome, valor/etapa, responsável, próximo
+  contato); filtros pela `FilterSheet` (T17); modais em tela cheia; placar recolhido em
+  uma linha.
+
+**Produces:** `pickInitialStage(summary: BoardStageSummary[], stages: PipelineStageV2[]): string`
+— a primeira etapa aberta com cards; senão a primeira.
+
+**Testes vitest:** `pickInitialStage`.
+
+**Aceite:** em 390×844 e 360×800 (navegador redimensionado): achar um cliente pelo nome,
+abrir o negócio, mover de etapa, filtrar por responsável; a página nunca rola na
+horizontal.
+
+#### T27 · Verificação 2B, deploy, PR e handoff (S)
+
+- Gates; conferência contra o canvas; orçamento de latência de novo; celular nos dois
+  tamanhos.
+- **Ponto de parada:** aprovação do founder para PR e merge (a 2B só tem frontend).
+- Handoff "Sprint 11 · Onda 2" (2A + 2B) em `Sprints_PM_Handoff.md`; memória do
+  projeto atualizada.
+
+### Onda 3 — Receita e linha configurada *(plano detalhado quando a Onda 2 fechar)*
+
+Motores: Receita v1 · Processo (naturezas Oferta e Processo, modelos, agendador) ·
+Eventos (receita, ciclo).
+
+- Naturezas **Oferta** e **Processo** na configuração do pipeline; **modelos** (venda
+  consultiva, clínica com retorno, lançamento, serviço jurídico); o Track Shaper do
+  Copilot preenche as naturezas a partir da descrição do negócio. Escolher os marcos
+  gera etapas que já declaram o `funnel_event`.
+- **Catálogo** de produtos e serviços (preço fixo ou negociável; recorrência opcional
+  por item). Nomes que não colidam com `billing_products` / `proposal_items` /
+  `contract_items` (são da cobrança do SaaS).
+- **Itens do negócio**; valor do negócio = soma dos itens quando há itens (sem itens,
+  continua o valor livre de hoje).
+- **Ganho → lançamento de receita** (um por item; um pelo valor quando não há itens).
+  Negócio fechado não reabre; reabrir por engano estorna a receita.
+- **Recorrência:** item recorrente ganho agenda o próximo ciclo; X dias antes do
+  vencimento nasce um **negócio novo** (mesmo contato, mesmo responsável, mesmos itens,
+  ligado ao anterior, origem "recorrência").
+- **Agendador único** (pg_cron → função) para os timers: Reciclo (o `cycle_pass` nunca
+  rodou — WI Advogados e Casa Flow) e recorrência.
+- Situação do contato passa a vir da receita; `leads.lifecycle_stage` (2.215 em `raw`)
+  aposentado ou recalculado a partir dela.
+- Placar e dashboard passam a ler a receita.
+
+### Onda 4 — Artefatos: Propostas e Contratos *(plano detalhado depois)*
+
+Motores: Artefatos v1 · Modelo (N:1 com o negócio, lookup, arquivo) · Automação
+(botão → webhook → retorno).
+
+- Campo **Negócio (N:1)** em tabela personalizada + painel reverso no negócio
   ("Propostas (3)"), criando já vinculado.
-- **Campos de consulta** (lookup): nome e telefone do cliente vindos do negócio.
+- **Campos de consulta** (lookup): nome e telefone do cliente vindos do negócio; itens
+  vindos do catálogo (Onda 3) — a proposta da Solo cota módulo e inversor do catálogo.
 - **Campo arquivo** (Storage, isolado por tenant).
+- **Ciclo de vida do artefato** (rascunho → enviado → aceito/assinado/recusado), que
+  emite o marco ("proposta enviada" = uma Proposta chegou em *enviada*).
 - **Botão de automação** → webhook de saída com registro + negócio + contato + URL de
   retorno com token → o n8n devolve campos e arquivos → o registro é atualizado
   (status, link do PDF, arquivo).
 - **Formulário público** para preencher um registro (Dados para Contrato), ligado ao
   negócio.
+- Tabelas personalizadas passam para `field_id` e ganham página no servidor.
 - Semente da Solo Energia: "Propostas Comerciais" (campos do Jestor) e "Contratos".
 - **Pré-requisito:** ver os fluxos atuais do n8n (APITemplate / ClickSign) para fixar
   o contrato do payload.
 
-### Onda 4 — Tracking de origem *(plano detalhado depois)*
+### Onda 5 — Entradas e atribuição *(plano detalhado depois)*
 
+Motores: Entradas v1 · Métricas (ROI sobre a receita).
+
+- Naturezas **Duração** (contínuo, ou campanha com início e fim — ao terminar para de
+  receber e o placar vira o relatório da campanha) e **Entradas** (que fontes alimentam
+  a linha) no pipeline.
 - **Atribuição por lead** (primeiro toque): plataforma, campanha, conjunto/anúncio,
   UTMs, click IDs (`fbclid`, `gclid`, `ctwa_clid`), landing page, formulário,
   referrer, payload bruto.
 - **Tabela de campanhas:** nome, plataforma, responsável, meta, investimento (manual
-  primeiro) → ROI por campanha no dashboard.
-- Cada endpoint de entrada **carimba a própria origem** (Formulário Meta ADS → social
-  pago / Meta / nome do formulário) e captura `utm_*` sozinho.
+  primeiro) → ROI por campanha sobre a receita (Onda 3).
+- Cada entrada **carimba a própria origem** (Formulário Meta ADS → social pago / Meta /
+  nome do formulário), captura `utm_*` sozinha e pode definir o responsável (fixo ou
+  rodízio).
 - **Spike:** o canal de WhatsApp entrega dado de anúncio clique-para-WhatsApp? Se sim,
   "Mensagem Whatsapp" ganha a campanha sozinha.
 - Os 639 "Tráfego Pago" antigos ficam como social pago sem plataforma — a campanha não
@@ -547,7 +1467,10 @@ transação, então pode rodar **antes** do deploy; o `commit` só depois delas 
 ### Fora desta sprint
 
 Copilot: velocidade e UI (ponto 8 — medir antes de mexer) · modelo do lead score ·
-página de integrações · MCP (`future_sprint__mcp_v1.md`).
+página de integrações · MCP (`future_sprint__mcp_v1.md`) · visões salvas, agrupar e
+"selecionar todos os filtrados" (v1.2) · filtros por campo de contato · campos de
+contato em `field_id` (v1.2) · regras do Agente CRM com campo Usuário · campo com
+vários usuários · virtualização de lista (só se o orçamento de latência falhar).
 
 ### Wave map — Onda 1
 
@@ -561,6 +1484,21 @@ T2 + T8 no ensaio ─► T9 (ensaio) ─► T10 (aprovação → deploy → T9 a
 ```
 
 Execução solo e sequencial: T1, T2, T3, T4, T5, T6, T7, T8, T9, T10.
+
+### Wave map — Onda 2
+
+```
+2A   T11 ─► T12 ─► T13 ─► T14                 SQL: Consulta, Automação, Eventos, Métricas
+            T12 ─► T15 ─► T16 ─► T17          Modelo v1 + barra de filtros
+     T13 + T17 ─► T18 ─► T19                  as tabelas sobre as RPCs
+            T15 ─► T20 ─► T21 ─► T22          modal, tabelas personalizadas, deploy da 2A
+2B   (branch do main depois do merge da 2A)
+     T23 (canvas aprovado) ─► T24 ─► T25 ─► T26 ─► T27
+```
+
+Execução solo e sequencial: T11 … T22 (entrega 2A), depois T23 … T27 (entrega 2B).
+Arquivos compartilhados entre tarefas (`OpportunityKanban.tsx`, `OpportunityTable.tsx`,
+`DatabaseView.tsx`, os modais) só são tocados por uma tarefa de cada vez, na ordem.
 
 ---
 
@@ -576,3 +1514,26 @@ Execução solo e sequencial: T1, T2, T3, T4, T5, T6, T7, T8, T9, T10.
 - [x] T8 · Contrato dos campos · M — o teste rodado contra a função atual da produção confirmou o bug (valor digitado no app caía em "Não informado"); a quebra agora conta multi-seleção por item (receita por produto)
 - [x] T9 · Reparo dos dados da Solo Energia · L — **aplicado em produção em 10/09** (ensaio passou; a migration do owner, T2, foi aplicada à mão antes, por ser pré-requisito — idempotente). Conferido: 9 campos declarados, 0 valor fora do contrato (eram 6.193), responsável Mateus 390 / Luiz 223, 0 lead com a data da importação, 3 ganhos/perdas em setembro (eram 640), mediana do tempo na etapa 24 dias (era 0), 95 "próximo contato" nos cards ativos, 10 nomes com escape do Jestor corrigidos. Backups `*_backup_sprint11` com RLS
 - [x] T10 · Verificação, deploy e handoff · S — migrations aplicadas e registradas no histórico; 4 edge functions publicadas; backfill de 297 negócios aplicado; handoff em `Sprints_PM_Handoff.md`. Pendente: verificação no navegador depois do deploy do frontend
+
+### Ledger · Onda 2A
+
+- [ ] T11 · Verificação da Onda 1 + linha de base · S
+- [ ] T12 · Filtros v2 no servidor · L
+- [ ] T13 · Tabelas no servidor + verbos de negócio · L
+- [ ] T14 · Eventos com o responsável do momento + métricas por responsável · L
+- [ ] T15 · Registro de tipos de campo + grade certa por tipo · L
+- [ ] T16 · Campo Usuário · M
+- [ ] T17 · Barra de filtros e filtros na URL · L
+- [ ] T18 · Tabela de Leads no servidor · M
+- [ ] T19 · Base de Contatos no servidor · M
+- [ ] T20 · Responsável no negócio + modal leve · M
+- [ ] T21 · Tabelas personalizadas no mesmo padrão · M
+- [ ] T22 · Verificação 2A, deploy e PR · S
+
+### Ledger · Onda 2B
+
+- [ ] T23 · Design do card, da coluna, do placar e do celular · M
+- [ ] T24 · Card e coluna redesenhados · M
+- [ ] T25 · Placar redesenhado · M
+- [ ] T26 · CRM no celular · L
+- [ ] T27 · Verificação 2B, deploy, PR e handoff · S
