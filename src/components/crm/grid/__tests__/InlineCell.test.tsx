@@ -12,7 +12,7 @@ vi.mock("@/hooks/useMemberDirectory", () => ({
   }),
 }));
 
-const resolverSpy = vi.fn(() => ({ links: [], loading: false }));
+const resolverSpy = vi.fn((..._args: unknown[]) => ({ links: [] as { toId: string; label: string }[], loading: false }));
 vi.mock("@/hooks/useRelationResolver", () => ({
   useRelationResolver: (...args: unknown[]) => resolverSpy(...args),
 }));

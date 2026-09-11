@@ -22,6 +22,8 @@ interface OpportunityKanbanColumnProps {
   /** Receives the clicked card and the cards loaded in this column (for paddle navigation). */
   onCardClick: (card: BoardCard, siblings: BoardCard[]) => void;
   onOpenContact?: (leadId: string) => void;
+  /** Member names for "Usuário" fields on the cards. */
+  nameOf?: (userId: string) => string | null;
 }
 
 const formatCompactBRL = (v: number) =>
@@ -49,6 +51,7 @@ export const OpportunityKanbanColumn = ({
   nativeFlags,
   onCardClick,
   onOpenContact,
+  nameOf,
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -163,6 +166,7 @@ export const OpportunityKanbanColumn = ({
                     onClick={() => onCardClick(card, cards)}
                     onOpenContact={onOpenContact}
                     companies={card.companies}
+                    nameOf={nameOf}
                   />
                 </div>
               ))

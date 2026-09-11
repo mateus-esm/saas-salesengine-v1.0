@@ -23,6 +23,10 @@ import { cn } from "@/lib/utils";
 import { UserAvatar } from "./UserAvatar";
 
 interface UserPickerProps {
+  /** Lets a form <Label htmlFor> point at the trigger. */
+  id?: string;
+  /** Accessible name of the trigger when there is no visible label. */
+  ariaLabel?: string;
   value: string | null;
   onChange: (userId: string | null) => void;
   allowNone?: boolean;
@@ -39,6 +43,8 @@ interface UserPickerProps {
 }
 
 export function UserPicker({
+  id,
+  ariaLabel,
   value,
   onChange,
   allowNone = true,
@@ -73,9 +79,11 @@ export function UserPicker({
       <PopoverTrigger asChild disabled={disabled}>
         {trigger ?? (
           <Button
+            id={id}
             type="button"
             variant="outline"
             size="sm"
+            aria-label={ariaLabel ? `${ariaLabel}: ${currentName ?? (allowNone ? noneLabel : placeholder)}` : undefined}
             className={cn("h-9 w-full justify-between gap-2 font-normal", className)}
             disabled={disabled}
           >

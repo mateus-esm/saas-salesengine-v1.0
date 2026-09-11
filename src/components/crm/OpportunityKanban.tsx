@@ -30,6 +30,7 @@ import { useLeadMutations } from "@/hooks/useLeads";
 import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
 import {
@@ -66,6 +67,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const { pipelines, updatePipeline } = usePipelines();
   const { stages, isLoading: stagesLoading } = usePipelineStagesV2(pipelineId);
   const pipeline = pipelines.find((p) => p.id === pipelineId);
+  // One request for the whole board: names for "Usuário" fields on the cards.
+  const { nameOf } = useMemberDirectory();
 
   // Search runs on the server (crm_opp_matches: name, e-mail, or phone typed any
   // way). Wave 2 replaces this box with the full filter bar on the same contract.
@@ -316,6 +319,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                   setSiblings(cards);
                 }}
                 onOpenContact={(leadId) => setContactLeadId(leadId)}
+                nameOf={nameOf}
               />
             ))}
           </div>
@@ -338,6 +342,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 onClick={() => {}}
                 isDragOverlay
                 companies={activeCard.companies}
+                nameOf={nameOf}
               />
             )}
           </DragOverlay>
