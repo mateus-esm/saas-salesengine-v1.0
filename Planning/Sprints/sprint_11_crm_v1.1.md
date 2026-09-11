@@ -1519,7 +1519,7 @@ Arquivos compartilhados entre tarefas (`OpportunityKanban.tsx`, `OpportunityTabl
 
 - [ ] T11 · Verificação da Onda 1 + linha de base · S
 - [x] T12 · Filtros v2 no servidor · L — 10 blocos de teste SQL passando (e o teste da Onda 1 roda sobre a versão nova); um mutante provou que o arquivo falha quando deve. A mais do plano: as datas e valores dos filtros nativos (criado em, valor) também passam pelas conversões seguras — antes, `criado` malformado na URL derrubaria o quadro. `cleanFilters` virou genérico (negócio e contato)
-- [ ] T13 · Tabelas no servidor + verbos de negócio · L
+- [x] T13 · Tabelas no servidor + verbos de negócio · L — medido na base real da Solo Energia (em `rollback`): a 1ª versão do T12 relia o `p_filters` em cada linha e deixou o resumo do Kanban em 590 ms (era 185 ms na Onda 1) e "clientes" na Base de Contatos em 2 s. **Filtro compilado** (`_crm_compile_*` lê o jsonb uma vez; `_crm_*_matches_c` é SQL que o planner embute) + contatos agregados numa passada só: resumo do Kanban **8 ms**, maior coluna 78 ms, Tabela de Leads p1 153 ms (ordenando por campo 120–131 ms, filtro de campo 122 ms), Base de Contatos p1 35 ms, clientes por ganho 25 ms, contagem 13 ms. `crm_opp_matches`/`crm_lead_matches` seguem como contrato para linha avulsa. Achado: o pipeline da Solo Energia tem **duas chaves `reuniao_agendada`** (seleção e sim/não) — as bordas que traduzem por `key` ficam ambíguas; corrigir renomeando a chave de um dos dois (dado de produção, com aprovação)
 - [ ] T14 · Eventos com o responsável do momento + métricas por responsável · L
 - [ ] T15 · Registro de tipos de campo + grade certa por tipo · L
 - [ ] T16 · Campo Usuário · M
