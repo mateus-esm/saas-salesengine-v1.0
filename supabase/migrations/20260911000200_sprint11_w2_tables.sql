@@ -20,7 +20,8 @@
 --   crm_contacts_table      a Base de Contatos: página de contatos com a situação,
 --   crm_contacts_count      os números e os negócios de cada um.
 --   verbos de negócio       crm_update_opportunities, crm_delete_opportunities,
---                           crm_delete_leads, crm_create_opportunities — ids no
+--                           crm_delete_leads, crm_create_opportunities,
+--                           crm_delete_custom_records (T21) — ids no
 --                           corpo do POST. A tela usa agora; automação, Copilot e
 --                           MCP usam os mesmos depois (motores_revops.md §4.4).
 --
@@ -656,6 +657,25 @@ begin
 end;
 $$;
 
+-- T21 — excluir registros de tabela personalizada em lote (soft delete). Os ids
+-- vão no corpo do POST: com `.in()` eles iriam na URL, e "selecionar todos" numa
+-- tabela de centenas de linhas passaria do tamanho que a URL aguenta. A RLS de
+-- custom_table_records recorta o tenant; devolve quantos saíram.
+create or replace function public.crm_delete_custom_records(p_ids uuid[])
+returns int
+language sql
+set search_path = public
+as $$
+  with d as (
+    update public.custom_table_records r
+       set deleted_at = now()
+     where r.id = any(coalesce(p_ids, array[]::uuid[]))
+       and r.deleted_at is null
+    returning 1
+  )
+  select count(*)::int from d;
+$$;
+
 -- ============================================================================
 -- 5. PERMISSÕES
 -- ============================================================================
@@ -670,6 +690,7 @@ revoke all on function public.crm_update_opportunities(uuid[], jsonb) from publi
 revoke all on function public.crm_delete_opportunities(uuid[]) from public, anon;
 revoke all on function public.crm_delete_leads(uuid[]) from public, anon;
 revoke all on function public.crm_create_opportunities(uuid[], uuid, uuid) from public, anon;
+revoke all on function public.crm_delete_custom_records(uuid[]) from public, anon;
 
 grant execute on function public._crm_card_json(public.opportunities, public.leads, boolean, text) to authenticated;
 grant execute on function public.crm_board_stage(uuid, uuid, jsonb, int, int) to authenticated;
@@ -681,3 +702,4 @@ grant execute on function public.crm_update_opportunities(uuid[], jsonb) to auth
 grant execute on function public.crm_delete_opportunities(uuid[]) to authenticated;
 grant execute on function public.crm_delete_leads(uuid[]) to authenticated;
 grant execute on function public.crm_create_opportunities(uuid[], uuid, uuid) to authenticated;
+grant execute on function public.crm_delete_custom_records(uuid[]) to authenticated;

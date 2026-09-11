@@ -123,6 +123,16 @@ insert into public.leads (id, equipe_id, name) values
 insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id, value) values
   ('5115f000-0000-0000-0000-000000000999', '5115a000-0000-0000-0000-000000000002', '5115e000-0000-0000-0000-000000000999', '5115c000-0000-0000-0000-000000000009', '5115d000-0000-0000-0000-000000000019', 777);
 
+-- Tabelas personalizadas (T21): 3 registros da equipe A, 1 do vizinho.
+insert into public.custom_tables (id, equipe_id, name, slug) values
+  ('5115ac00-0000-0000-0000-000000000001', '5115a000-0000-0000-0000-000000000001', 'Usinas S11W2',  'usinas_s11w2'),
+  ('5115ac00-0000-0000-0000-000000000009', '5115a000-0000-0000-0000-000000000002', 'Vizinho S11W2', 'vizinho_s11w2');
+insert into public.custom_table_records (id, equipe_id, table_id, data) values
+  ('5115ad00-0000-0000-0000-000000000001', '5115a000-0000-0000-0000-000000000001', '5115ac00-0000-0000-0000-000000000001', '{"nome":"Usina 1"}'),
+  ('5115ad00-0000-0000-0000-000000000002', '5115a000-0000-0000-0000-000000000001', '5115ac00-0000-0000-0000-000000000001', '{"nome":"Usina 2"}'),
+  ('5115ad00-0000-0000-0000-000000000003', '5115a000-0000-0000-0000-000000000001', '5115ac00-0000-0000-0000-000000000001', '{"nome":"Usina 3"}'),
+  ('5115ad00-0000-0000-0000-000000000009', '5115a000-0000-0000-0000-000000000002', '5115ac00-0000-0000-0000-000000000009', '{"nome":"Do vizinho"}');
+
 -- Tudo abaixo roda como o chefe da equipe A, com a RLS valendo.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"5115b000-0000-0000-0000-00000000000a","role":"authenticated"}';
@@ -393,6 +403,19 @@ begin
     failed := sqlerrm like '%stage_not_in_pipeline%';
   end;
   assert failed, 'T13-7 FAIL: etapa de outra linha deveria ser recusada ao criar';
+
+  -- T21 — excluir registros de tabela personalizada em lote, ids no corpo do POST:
+  -- os 2 da equipe; o do vizinho a RLS não deixa tocar; repetir não conta de novo.
+  n := public.crm_delete_custom_records(array['5115ad00-0000-0000-0000-000000000001',
+                                               '5115ad00-0000-0000-0000-000000000002',
+                                               '5115ad00-0000-0000-0000-000000000009']::uuid[]);
+  assert n = 2, 'T21 FAIL: excluir registros deveria contar os 2 da equipe, contou ' || n;
+  assert (select count(*) from public.custom_table_records
+           where table_id = '5115ac00-0000-0000-0000-000000000001' and deleted_at is null) = 1,
+    'T21 FAIL: deveria sobrar 1 registro ativo na tabela da equipe A';
+  n := public.crm_delete_custom_records(array['5115ad00-0000-0000-0000-000000000001']::uuid[]);
+  assert n = 0, 'T21 FAIL: registro ja excluido nao conta de novo';
+  assert public.crm_delete_custom_records(null) = 0, 'T21 FAIL: lista nula deveria contar 0';
 end $$;
 
 -- ============================================================================
@@ -406,6 +429,9 @@ do $$ begin
   assert (select count(*) from jsonb_array_elements(public.crm_contacts_table('{}', null, 200, 0)) r
            where r->>'equipe_id' <> '5115a000-0000-0000-0000-000000000002') = 0,
     'T13-8 FAIL: o vizinho recebeu contato de outra equipe';
+  assert (select deleted_at is null from public.custom_table_records
+           where id = '5115ad00-0000-0000-0000-000000000009'),
+    'T21 FAIL: o registro do vizinho foi excluido pela equipe A';
 end $$;
 
 rollback;

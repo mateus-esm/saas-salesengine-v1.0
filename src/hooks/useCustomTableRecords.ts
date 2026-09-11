@@ -103,14 +103,15 @@ export const useCustomTableRecords = (tableId: string | null) => {
     },
   });
 
-  /** One or many rows (soft delete), gone from the list at once. */
+  /**
+   * One or many rows (soft delete), gone from the list at once. The ids go in
+   * the POST body (crm_delete_custom_records): in a `.in()` they would go in the
+   * URL, and "select all" on a table of hundreds of rows would not fit.
+   */
   const deleteRecords = useMutation({
     mutationFn: async (ids: string[]) => {
       if (ids.length === 0) return;
-      const { error } = await sb
-        .from("custom_table_records")
-        .update({ deleted_at: new Date().toISOString() })
-        .in("id", ids);
+      const { error } = await sb.rpc("crm_delete_custom_records", { p_ids: ids });
       if (error) throw error;
     },
     onMutate: async (ids) => {
