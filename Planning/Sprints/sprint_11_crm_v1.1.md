@@ -1518,7 +1518,7 @@ Arquivos compartilhados entre tarefas (`OpportunityKanban.tsx`, `OpportunityTabl
 ### Ledger · Onda 2A
 
 - [ ] T11 · Verificação da Onda 1 + linha de base · S
-- [ ] T12 · Filtros v2 no servidor · L
+- [x] T12 · Filtros v2 no servidor · L — 10 blocos de teste SQL passando (e o teste da Onda 1 roda sobre a versão nova); um mutante provou que o arquivo falha quando deve. A mais do plano: as datas e valores dos filtros nativos (criado em, valor) também passam pelas conversões seguras — antes, `criado` malformado na URL derrubaria o quadro. `cleanFilters` virou genérico (negócio e contato)
 - [ ] T13 · Tabelas no servidor + verbos de negócio · L
 - [ ] T14 · Eventos com o responsável do momento + métricas por responsável · L
 - [ ] T15 · Registro de tipos de campo + grade certa por tipo · L

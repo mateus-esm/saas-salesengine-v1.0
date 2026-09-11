@@ -282,3 +282,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-10 | 11 W1 | T9 Reparo dos dados da Solo Energia | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-10 | 11 W1 | T10 Verificacao, deploy e handoff | Claude / Opus 5 (PM) | S | R$ 5 |
 | 2026-09-11 | 11 W2 | Plano da Onda 2 + arquitetura de motores (motores_revops.md) | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-09-11 | 11 W2A | T12 Filtros v2 no servidor | Claude / Opus 5 (PM) | L | R$ 20 |

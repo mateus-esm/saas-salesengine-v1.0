@@ -10,6 +10,8 @@ begin;
 
 -- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
 -- @include supabase/migrations/20260910000200_sprint11_crm_board.sql
+-- Onda 2: as versões novas das mesmas funções têm de passar no teste da Onda 1.
+-- @include supabase/migrations/20260911000100_sprint11_w2_filters.sql
 
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link) values
