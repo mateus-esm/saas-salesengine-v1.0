@@ -48,6 +48,12 @@ import { countDealFilters } from "./filters/model";
 import type { BoardCard } from "@/types/board";
 import type { Opportunity } from "@/types/pipelines";
 
+import { useCollapsedStages } from "@/hooks/useCollapsedStages";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { StagePicker } from "./mobile/StagePicker";
+import { MoveToStageSheet } from "./mobile/MoveToStageSheet";
+import { pickInitialStage } from "@/lib/mobileBoard";
+
 interface OpportunityKanbanProps {
   pipelineId: string;
 }
@@ -68,6 +74,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const pipeline = pipelines.find((p) => p.id === pipelineId);
   // One request for the whole board: names for "Usuário" fields on the cards.
   const { nameOf } = useMemberDirectory();
+  const isMobile = useIsMobile();
+  const { isCollapsed, toggleStage } = useCollapsedStages(pipelineId);
 
   // Sprint 11 · Onda 2 — the filters live in the URL (shared with the Leads
   // table, shareable, kept on reload) and the server applies them
@@ -104,12 +112,27 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const [showCardConfig, setShowCardConfig] = useState(false);
   const [cardFieldDraft, setCardFieldDraft] = useState<string[]>([]);
 
+  // Mobile state
+  const [mobileStageId, setMobileStageId] = useState<string>("");
+  const [moveSheetCard, setMoveSheetCard] = useState<BoardCard | null>(null);
+
+  const orderedStages = useMemo(
+    () => [...stages].sort((a, b) => a.position - b.position),
+    [stages],
+  );
+
+  // Set initial active stage for mobile
+  useEffect(() => {
+    if (isMobile && !mobileStageId && orderedStages.length > 0) {
+      setMobileStageId(pickInitialStage(summaryQuery.data, orderedStages));
+    }
+  }, [isMobile, mobileStageId, orderedStages, summaryQuery.data]);
+
   // The cards carry a slice of the lead; the modals need the whole row.
   const selectedLead = useLead(selectedOpp?.lead_id);
   const contactLead = useLead(contactLeadId);
 
-  // Sprint 4 EPIC 2 §2.3 — deep-link `?opp=<id>` opens the matching card. The
-  // card may be on a page not loaded yet, so it is fetched by id.
+  // Sprint 4 EPIC 2 §2.3 — deep-link `?opp=<id>` opens the matching card.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkOppId = searchParams.get("opp");
   const deepLinkOpp = useOpportunity(
@@ -166,18 +189,12 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     };
   }, [pipeline?.card_field_ids]);
 
-  const orderedStages = useMemo(
-    () => [...stages].sort((a, b) => a.position - b.position),
-    [stages],
-  );
-
   const handleDragStart = (e: DragStartEvent) => {
+    if (isMobile) return;
     const card = e.active.data.current?.opportunity as BoardCard | undefined;
     setActiveCard(card ?? null);
   };
 
-  // Sprint 9: a deal dropped into a lost stage is asked why. Held here between
-  // the drop (which already moved the card) and the answer.
   const [pendingLoss, setPendingLoss] = useState<{ id: string; leadName?: string } | null>(null);
 
   const lossReasons: LossReasonOption[] = useMemo(() => {
@@ -188,12 +205,11 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     setActiveCard(null);
-    if (!over) return;
+    if (!over || isMobile) return;
 
     const card = active.data.current?.opportunity as BoardCard | undefined;
     if (!card) return;
 
-    // Dropped either on a column (stage) or on another card (take its stage).
     const overData = over.data.current as
       | { type?: string; stageId?: string; opportunity?: BoardCard }
       | undefined;
@@ -203,14 +219,27 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     else targetStageId = String(over.id);
 
     if (!targetStageId || !orderedStages.some((s) => s.id === targetStageId)) return;
-    if (targetStageId === card.stage_id) return; // same-column drop
+    if (targetStageId === card.stage_id) return;
 
     moveCard.mutate(
       { card, toStageId: targetStageId },
       {
         onSuccess: () => {
-          // Ask for the motive only after the move actually landed, so a failed
-          // save never leaves a dialog asking about something that did not happen.
+          const target = orderedStages.find((s) => s.id === targetStageId);
+          if (target?.stage_type === "lost") {
+            setPendingLoss({ id: card.id, leadName: card.lead?.name });
+          }
+        },
+      },
+    );
+  };
+
+  const handleMobileMove = (card: BoardCard, targetStageId: string) => {
+    if (targetStageId === card.stage_id) return;
+    moveCard.mutate(
+      { card, toStageId: targetStageId },
+      {
+        onSuccess: () => {
           const target = orderedStages.find((s) => s.id === targetStageId);
           if (target?.stage_type === "lost") {
             setPendingLoss({ id: card.id, leadName: card.lead?.name });
@@ -257,6 +286,9 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     );
   }
 
+  // Display stages for mobile vs desktop
+  const activeMobileStage = orderedStages.find((s) => s.id === mobileStageId) || orderedStages[0];
+
   return (
     <div className="flex flex-col h-full">
       <div className="space-y-3 border-b border-border bg-card p-4">
@@ -287,21 +319,28 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
       <PipelineScoreboard pipelineId={pipelineId} />
 
-      <div className="flex-1 overflow-x-auto p-4 bg-muted/30">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex gap-4 h-full min-h-[500px]">
-            {orderedStages.map((stage) => (
+      {/* Mobile Stage Picker */}
+      {isMobile && (
+        <div className="pt-3 bg-muted/20 border-b border-border/40">
+          <StagePicker
+            stages={orderedStages}
+            summary={summaryQuery.data ?? []}
+            activeStageId={activeMobileStage.id}
+            onSelectStage={setMobileStageId}
+          />
+        </div>
+      )}
+
+      <div className="flex-1 overflow-x-auto p-2 sm:p-4 bg-muted/30">
+        {isMobile ? (
+          <div className="flex justify-center h-full min-h-[400px]">
+            <div className="w-full max-w-md">
               <OpportunityKanbanColumn
-                key={stage.id}
+                key={activeMobileStage.id}
                 pipelineId={pipelineId}
-                stage={stage}
+                stage={activeMobileStage}
                 filters={filters}
-                summary={summaryByStage[stage.id]}
+                summary={summaryByStage[activeMobileStage.id]}
                 cardFields={cardFields}
                 nativeFlags={nativeFlags}
                 onCardClick={(card, cards) => {
@@ -311,35 +350,64 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 onOpenContact={(leadId) => setContactLeadId(leadId)}
                 nameOf={nameOf}
               />
-            ))}
+            </div>
           </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex gap-3 h-full min-h-[500px]">
+              {orderedStages.map((stage) => (
+                <OpportunityKanbanColumn
+                  key={stage.id}
+                  pipelineId={pipelineId}
+                  stage={stage}
+                  filters={filters}
+                  summary={summaryByStage[stage.id]}
+                  cardFields={cardFields}
+                  nativeFlags={nativeFlags}
+                  onCardClick={(card, cards) => {
+                    setSelectedOpp(card);
+                    setSiblings(cards);
+                  }}
+                  onOpenContact={(leadId) => setContactLeadId(leadId)}
+                  nameOf={nameOf}
+                  isCollapsed={isCollapsed(stage.id)}
+                  onToggleCollapse={() => toggleStage(stage.id)}
+                />
+              ))}
+            </div>
 
-          <DragOverlay>
-            {activeCard && (
-              <OpportunityCard
-                opportunity={activeCard}
-                lead={activeCard.lead}
-                stage={orderedStages.find((s) => s.id === activeCard.stage_id)}
-                cardFields={cardFields}
-                touchpointCount={activeCard.touchpoint_count}
-                nativeFlags={nativeFlags}
-                leadScore={activeCard.lead_score}
-                leadScoreBreakdown={
-                  activeCard.lead_score !== null
-                    ? { icp: activeCard.icp_score, velocity: activeCard.velocity }
-                    : undefined
-                }
-                onClick={() => {}}
-                isDragOverlay
-                companies={activeCard.companies}
-                nameOf={nameOf}
-                ownerName={activeCard.owner_name}
-              />
-            )}
-          </DragOverlay>
-        </DndContext>
+            <DragOverlay>
+              {activeCard && (
+                <OpportunityCard
+                  opportunity={activeCard}
+                  lead={activeCard.lead}
+                  stage={orderedStages.find((s) => s.id === activeCard.stage_id)}
+                  cardFields={cardFields}
+                  touchpointCount={activeCard.touchpoint_count}
+                  nativeFlags={nativeFlags}
+                  leadScore={activeCard.lead_score}
+                  leadScoreBreakdown={
+                    activeCard.lead_score !== null
+                      ? { icp: activeCard.icp_score, velocity: activeCard.velocity }
+                      : undefined
+                  }
+                  onClick={() => {}}
+                  isDragOverlay
+                  companies={activeCard.companies}
+                  nameOf={nameOf}
+                  ownerName={activeCard.owner_name}
+                />
+              )}
+            </DragOverlay>
+          </DndContext>
+        )}
 
-        {/* Sprint 9 — the motive, asked at the moment it is known. */}
+        {/* Loss Reason Dialog */}
         <LossReasonDialog
           open={!!pendingLoss}
           onOpenChange={(o) => { if (!o) setPendingLoss(null); }}
@@ -352,6 +420,20 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
             setPendingLoss(null);
           }}
         />
+
+        {/* Mobile Move to Stage Sheet */}
+        {moveSheetCard && (
+          <MoveToStageSheet
+            open={!!moveSheetCard}
+            onOpenChange={(o) => { if (!o) setMoveSheetCard(null); }}
+            stages={orderedStages}
+            currentStageId={moveSheetCard.stage_id}
+            onMove={(targetStageId) => {
+              handleMobileMove(moveSheetCard, targetStageId);
+              setMoveSheetCard(null);
+            }}
+          />
+        )}
       </div>
 
       <OpportunityDetailModal

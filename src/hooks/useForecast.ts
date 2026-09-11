@@ -238,34 +238,50 @@ export function useForecast(pipelineId: string | null) {
         };
       });
 
-      // 3. Placar of this period (Sprint 11). Every page: the pipeline can pass
-      // the 1,000-row cap (Solo Energia has 1,259 deals). Errors are thrown —
-      // the old query asked for a column that does not exist, the error was
-      // swallowed, and the placar showed zeros for months.
-      const allOpps = await fetchAllPages<PlacarOpp>((from, to) =>
-        sb
-          .from("opportunities")
-          .select("status, created_at, closed_at, owner_id, value")
-          .eq("pipeline_id", pipelineId)
-          .is("deleted_at", null)
-          .order("id", { ascending: true })
-          .range(from, to),
-      );
+      // 3. Call crm_placar RPC for current period bounds (Sprint 11 Wave 2)
+      const bounds = periodBounds(period);
+      const { data: placarData, error: placarError } = await sb.rpc("crm_placar", {
+        p_pipeline_id: pipelineId,
+        p_from: bounds.start.toISOString(),
+        p_to: bounds.end.toISOString(),
+      });
+      if (placarError) throw placarError;
 
-      const { won, lost, in_progress, win_rate, avg_velocity_days, won_revenue, owner_placar } =
-        buildPlacar(allOpps, periodBounds(period));
+      const won = placarData?.won ?? 0;
+      const lost = placarData?.lost ?? 0;
+      const in_progress = placarData?.in_progress ?? 0;
+      const won_revenue = Number(placarData?.won_revenue ?? 0);
+      const avg_velocity_days = placarData?.avg_velocity_days !== null && placarData?.avg_velocity_days !== undefined
+        ? Number(placarData.avg_velocity_days)
+        : null;
+      const win_rate = computeWinRate(won, lost);
 
-      // 4. Derived metrics are only honest when a goal is set AND there is real
-      //    pipeline data to base conversion on. Otherwise we say so instead of
-      //    rendering impossible numbers.
+      const owner_placar: Record<string, { won: number; lost: number; in_progress: number }> = {};
+      const byOwner = (placarData?.by_owner ?? []) as Array<{
+        owner_id: string | null;
+        owner_name: string | null;
+        won: number;
+        lost: number;
+        in_progress: number;
+        won_revenue: number;
+      }>;
+      for (const bo of byOwner) {
+        if (bo.owner_id) {
+          owner_placar[bo.owner_id] = {
+            won: bo.won,
+            lost: bo.lost,
+            in_progress: bo.in_progress,
+          };
+        }
+      }
+
+      // 4. Derived metrics
       const cumulative = conversion_rates.reduce((acc: number, r) => acc * r.rate, 1.0);
-      const sufficient_data =
-        goal_deals > 0 && conversion_rates.length > 0 && allOpps.length > 0;
+      const sufficient_data = goal_deals > 0 && conversion_rates.length > 0 && (won + lost + in_progress > 0);
       const required_inbound =
         sufficient_data && cumulative > 0 ? Math.round(goal_deals / cumulative) : null;
 
       // 4a. Smart defaults: derive activity targets from win rate + stage conversion rates
-      //     win_rate is already a percentage (0-100), convert to decimal for math
       const winRateDecimal = win_rate !== null ? win_rate / 100 : null;
       const deals_needed = goal_deals - won;
       const opportunities_needed =
@@ -273,29 +289,24 @@ export function useForecast(pipelineId: string | null) {
           ? Math.round(deals_needed / winRateDecimal)
           : null;
 
-      // proposals_needed: apply stage1→stage2 conversion rate to opportunities_needed
-      // If we have at least 2 stages, use the first stage's rate as "stage1→stage2"
       const stage1Rate = conversion_rates.length > 0 ? conversion_rates[0].rate : null;
       const proposals_needed =
         opportunities_needed !== null && stage1Rate !== null && stage1Rate > 0
           ? Math.round(opportunities_needed / stage1Rate)
           : null;
 
-      // meetings_needed: apply stage2→stage3 conversion rate to proposals_needed
       const stage2Rate = conversion_rates.length > 1 ? conversion_rates[1].rate : null;
       const meetings_needed =
         proposals_needed !== null && stage2Rate !== null && stage2Rate > 0
           ? Math.round(proposals_needed / stage2Rate)
           : null;
 
-      // W3 — touchpoints: apply stage3→stage4 rate to meetings_needed
       const stage3Rate = conversion_rates.length > 2 ? conversion_rates[2].rate : null;
       const touchpoints_needed =
         meetings_needed !== null && stage3Rate !== null && stage3Rate > 0
           ? Math.round(meetings_needed / stage3Rate)
           : null;
 
-      // W3 — gap & pace
       const deals_gap = Math.max(0, goal_deals - won);
       const revenue_gap = Math.max(0, goal_revenue - won_revenue);
       const pctElapsed = Math.min(1, daysElapsed(period) / daysInPeriod(period));
@@ -327,6 +338,7 @@ export function useForecast(pipelineId: string | null) {
         won_revenue,
         owner_placar,
         owner_goals,
+        by_owner: byOwner,
       } as ForecastData;
     },
     enabled: !!pipelineId,
