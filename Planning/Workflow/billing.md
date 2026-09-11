@@ -291,3 +291,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W2A | T18 Tabela de Leads no servidor | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-11 | 11 W2A | T19 Base de Contatos no servidor | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-11 | 11 W2A | T20 Responsavel no negocio + modal leve | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-11 | 11 W2A | T21 Tabelas personalizadas no mesmo padrao | Claude / Opus 5 (PM) | M | R$ 12 |

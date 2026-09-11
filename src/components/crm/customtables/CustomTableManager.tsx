@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCustomTables, type CustomTable } from "@/hooks/useCustomTables";
+import { activeColumns } from "@/lib/customTables";
 
 interface CustomTableManagerProps {
   onSelectTable: (table: CustomTable) => void;
@@ -109,7 +110,7 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
               </CardHeader>
               <CardContent className="text-xs text-muted-foreground">
                 {table.description || `slug: ${table.slug}`} ·{" "}
-                {table.table_schema.length} colunas
+                {activeColumns(table.table_schema).length} colunas
               </CardContent>
             </Card>
           ))}

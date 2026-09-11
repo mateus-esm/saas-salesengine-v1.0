@@ -1,375 +1,490 @@
-import { useMemo, useState } from "react";
-import { ArrowLeft, Plus, Settings2, Grip, Trash2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Loader2, Plus, Settings2, Trash2 } from "lucide-react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GridToolbar } from "@/components/crm/grid/GridToolbar";
-import { useCustomTableRecords } from "@/hooks/useCustomTableRecords";
+import type { MassAction } from "@/components/crm/grid/MassActionBar";
+import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
+import type { CellMutation, ColumnDef, GridRow } from "@/components/crm/grid/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useCustomTables, type CustomTable, type CustomTableColumn } from "@/hooks/useCustomTables";
-import type { ColumnDef, CellMutation } from "@/components/crm/grid/types";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  customTableKeys,
+  useCustomTableRecords,
+  useCustomTableRelations,
+} from "@/hooks/useCustomTableRecords";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+  useCustomTables,
+  type CustomTable,
+  type CustomTableColumn,
+  type CustomTableColumnType,
+} from "@/hooks/useCustomTables";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { activeColumns, newColumnKey, type RelationChips } from "@/lib/customTables";
+import { columnFromField } from "@/lib/fields/columns";
+
+import { CustomRecordDrawer } from "./CustomRecordDrawer";
+
+const sb = supabase as any;
+
+const COLUMN_TYPES: { value: CustomTableColumnType; label: string }[] = [
+  { value: "text", label: "Texto" },
+  { value: "number", label: "Número" },
+  { value: "currency", label: "Moeda (R$)" },
+  { value: "date", label: "Data" },
+  { value: "boolean", label: "Sim/Não" },
+  { value: "select", label: "Seleção" },
+  { value: "multi_select", label: "Multi-seleção" },
+  { value: "url", label: "URL" },
+  { value: "phone", label: "Telefone" },
+  { value: "user", label: "Usuário (membro da equipe)" },
+  { value: "relation", label: "Relação (outra tabela)" },
+];
+const TYPE_LABEL = Object.fromEntries(COLUMN_TYPES.map((t) => [t.value, t.label])) as Record<string, string>;
 
 interface CustomTableViewProps {
   table: CustomTable;
   onBack: () => void;
 }
 
+/**
+ * Sprint 5.3 T15 / Sprint 11 · T21 — a custom table in the same pattern as the
+ * CRM tables: full height, a grid cell per field type (the registry), the first
+ * column opens the record, rows deleted one or many, every record (no 1,000 cap)
+ * and relation chips resolved per column instead of per cell.
+ */
 export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const { profile } = useAuth();
-  const { records, isLoading, createRecord, updateRecord } =
-    useCustomTableRecords(table.id);
-  const { updateTable } = useCustomTables();
+  const equipeId = profile?.equipe_id ?? "";
+  const queryClient = useQueryClient();
+  const { nameOf } = useMemberDirectory();
+  const { tables, updateTable } = useCustomTables();
+  const { records, isLoading, createRecord, updateRecord, deleteRecords } = useCustomTableRecords(table.id);
 
-  // Search state
+  const visible = useMemo(() => activeColumns(table.table_schema), [table.table_schema]);
+  const relations = useCustomTableRelations(table, visible);
+  const recordById = useMemo(() => new Map(records.map((r) => [r.id, r])), [records]);
+
   const [search, setSearch] = useState("");
+  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
+  const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[]>([]);
 
-  // Column editor state
-  const [colEditorOpen, setColEditorOpen] = useState(false);
-  const [newColKey, setNewColKey] = useState("");
-  const [newColLabel, setNewColLabel] = useState("");
-  const [newColType, setNewColType] = useState<CustomTableColumn["type"]>("text");
-  const [newColTargetTable, setNewColTargetTable] = useState("");
-  const [newColDisplayField, setNewColDisplayField] = useState("");
-  const [newColOptions, setNewColOptions] = useState("");
-
-  // Fetch other custom tables for relation target picker
-  const { data: otherTables = [] } = useQuery({
-    queryKey: ["custom_tables_all"],
-    queryFn: async () => {
-      const sb = supabase as any;
-      const { data } = await sb
-        .from("custom_tables")
-        .select("id, name, slug, table_schema")
-        .neq("id", table.id)
-        .eq("equipe_id", profile?.equipe_id)
-        .order("name");
-      return (data ?? []) as CustomTable[];
-    },
-    enabled: !!profile?.equipe_id,
-  });
-
-  const columns = useMemo(() => {
-    return table.table_schema.map((col: CustomTableColumn): ColumnDef => {
-      const def: ColumnDef = {
-        key: col.key,
-        label: col.label,
-        kind: col.type as ColumnDef["kind"],
-        source: "jsonb",
-        jsonbField: "data",
-        editable: true,
-      };
-      if (col.type === "select" && col.options) {
-        def.options = col.options.map((opt) => ({
-          value: opt,
-          label: opt,
-        }));
-      }
-      if (col.type === "relation" && col.relationConfig) {
-        def.relation = {
-          table: col.relationConfig.targetTableSlug,
-          displayField: col.relationConfig.displayField,
-          // targetTableId enables the picker and resolver to query
-          // custom_table_records instead of a non-existent physical table.
-          targetTableId: col.relationConfig.targetTableId,
+  // ---- Columns --------------------------------------------------------------
+  const columns: ColumnDef[] = useMemo(() => {
+    const primaryKey = visible.find((c) => c.type !== "relation")?.key;
+    return visible.map((col): ColumnDef => {
+      if (col.type === "relation") {
+        return {
+          key: col.key,
+          label: col.label,
+          kind: "relation",
+          source: "jsonb",
+          jsonbField: "data",
+          relation: {
+            table: col.relationConfig?.targetTableSlug ?? "",
+            displayField: col.relationConfig?.displayField ?? "name",
+            targetTableId: col.relationConfig?.targetTableId,
+            resolvedFromRow: true,
+          },
         };
       }
-      return def;
+      const def = columnFromField(col, "data", "key", { nameOf });
+      return col.key === primaryKey ? { ...def, primary: true, width: 200 } : def;
     });
-  }, [table.table_schema]);
+  }, [visible, nameOf]);
 
-  const allRows = useMemo(() => {
-    return records.map((r) => ({
-      id: r.id,
-      equipe_id: profile?.equipe_id ?? "",
-      ...(r.data as Record<string, unknown>),
-    }));
-  }, [records, profile?.equipe_id]);
+  // ---- Rows -----------------------------------------------------------------
+  const allRows: GridRow[] = useMemo(
+    () =>
+      records.map((r) => {
+        const row: GridRow = { id: r.id, equipe_id: equipeId, ...(r.data ?? {}) };
+        for (const [key, byRow] of Object.entries(relations)) row[key] = byRow[r.id] ?? [];
+        return row;
+      }),
+    [records, relations, equipeId],
+  );
 
   const rows = useMemo(() => {
-    if (!search.trim()) return allRows;
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
+    if (!q) return allRows;
     return allRows.filter((row) =>
-      Object.values(row).some(
-        (v) => typeof v === "string" && v.toLowerCase().includes(q),
+      Object.values(row).some((v) =>
+        typeof v === "string"
+          ? v.toLowerCase().includes(q)
+          : Array.isArray(v) && v.some((c) => typeof c?.name === "string" && c.name.toLowerCase().includes(q)),
       ),
     );
   }, [allRows, search]);
 
-  const handleCellCommit = async (m: CellMutation) => {
-    const record = records.find((r) => r.id === m.rowId);
-    if (!record) return;
+  // ---- Cell commit ----------------------------------------------------------
+  const handleCellCommit = useCallback(
+    async (m: CellMutation) => {
+      const record = recordById.get(m.rowId);
+      if (!record) return;
 
-    // Relation columns write to custom_table_links bridge, not JSONB data.
-    // custom_table_links uses soft-delete (deleted_at) matching opportunity_links pattern.
-    if (m.column.kind === "relation") {
-      const linkVal = m.value as { toId?: string; action?: string } | null;
-      if (!linkVal?.toId) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any;
-      // to_table stores the target custom table UUID so the resolver can query
-      // custom_table_records with `table_id = to_table`.
-      const toTable = m.column.relation?.targetTableId ?? m.column.relation?.table ?? "";
-      if (linkVal.action === "remove") {
-        // Soft-delete: matches the opportunity_links write pattern.
-        await sb
-          .from("custom_table_links")
-          .update({ deleted_at: new Date().toISOString() })
-          .eq("equipe_id", profile?.equipe_id)
-          .eq("from_table", table.slug)
-          .eq("from_id", m.rowId)
-          .eq("relation_key", m.column.key)
-          .eq("to_id", linkVal.toId);
-      } else {
-        // supabase-js v2: await the builder directly; .execute() does not exist.
-        await sb.from("custom_table_links").insert({
-          equipe_id: profile?.equipe_id,
-          from_table: table.slug,
-          from_id: m.rowId,
-          to_table: toTable,
-          to_id: linkVal.toId,
-          relation_key: m.column.key,
-        });
+      if (m.column.kind === "relation") {
+        const link = m.value as { toId?: string; label?: string; action?: string } | null;
+        if (!link?.toId) return;
+        const relKey = customTableKeys.relation(table.id, m.column.key);
+        const current = (relations[m.column.key]?.[m.rowId] ?? []) as RelationChips;
+        const remove = link.action === "remove";
+        if (!remove && current.some((c) => c.id === link.toId)) return;
+
+        const previous = queryClient.getQueryData<Record<string, RelationChips>>(relKey);
+        queryClient.setQueryData<Record<string, RelationChips>>(relKey, (byRow) => ({
+          ...(byRow ?? {}),
+          [m.rowId]: remove
+            ? current.filter((c) => c.id !== link.toId)
+            : [...current, { id: link.toId!, name: link.label ?? "[registro]" }],
+        }));
+
+        // Links are soft-deleted (the opportunity_links pattern); to_table holds
+        // the target custom table's id.
+        const { error } = remove
+          ? await sb
+              .from("custom_table_links")
+              .update({ deleted_at: new Date().toISOString() })
+              .eq("equipe_id", equipeId)
+              .eq("from_table", table.slug)
+              .eq("from_id", m.rowId)
+              .eq("relation_key", m.column.key)
+              .eq("to_id", link.toId)
+              .is("deleted_at", null)
+          : await sb.from("custom_table_links").insert({
+              equipe_id: equipeId,
+              from_table: table.slug,
+              from_id: m.rowId,
+              to_table: m.column.relation?.targetTableId ?? m.column.relation?.table ?? "",
+              to_id: link.toId,
+              relation_key: m.column.key,
+            });
+        if (error) {
+          queryClient.setQueryData(relKey, previous);
+          throw new Error(error.message);
+        }
+        return;
       }
-      return;
-    }
 
-    const existing = { ...(record.data as Record<string, unknown>) };
-    existing[m.column.key] = m.value;
-    await updateRecord.mutateAsync({
-      id: m.rowId,
-      data: existing,
-    });
+      await updateRecord.mutateAsync({ id: m.rowId, data: { ...(record.data ?? {}), [m.column.key]: m.value } });
+    },
+    [recordById, relations, queryClient, table.id, table.slug, equipeId, updateRecord],
+  );
+
+  // ---- Rows: add, delete ----------------------------------------------------
+  const handleAddRow = async () => {
+    try {
+      const created = await createRecord.mutateAsync({});
+      setOpenRecordId(created.id);
+    } catch {
+      // the hook shows the error
+    }
   };
 
-  const handleAddColumn = async () => {
-    if (!newColKey.trim()) return;
-    const key = newColKey.trim().toLowerCase().replace(/\s+/g, "_");
+  const massActions: MassAction[] = useMemo(
+    () => [
+      {
+        id: "delete",
+        label: "Excluir",
+        icon: <Trash2 className="mr-1 h-4 w-4" />,
+        run: async (ids) => setConfirmDeleteIds(ids),
+        destructive: true,
+      },
+    ],
+    [],
+  );
+
+  const openRecord = openRecordId ? recordById.get(openRecordId) ?? null : null;
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="space-y-3 border-b border-border bg-card p-4">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
+          </Button>
+          <h2 className="truncate text-lg font-semibold">{table.name}</h2>
+          <span className="text-sm text-muted-foreground">
+            {records.length.toLocaleString("pt-BR")} {records.length === 1 ? "registro" : "registros"}
+          </span>
+        </div>
+
+        <GridToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Buscar..."
+          filters={[]}
+          onClearFilters={() => {}}
+          activeFilterCount={0}
+        >
+          <ColumnsEditor
+            table={table}
+            otherTables={tables.filter((t) => t.id !== table.id)}
+            onChange={(table_schema) => updateTable.mutateAsync({ id: table.id, table_schema })}
+            saving={updateTable.isPending}
+          />
+          <Button variant="outline" size="sm" onClick={handleAddRow} disabled={createRecord.isPending}>
+            {createRecord.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Plus className="mr-1 h-3 w-3" />}
+            Linha
+          </Button>
+        </GridToolbar>
+      </div>
+
+      <div className="flex-1 overflow-auto p-4">
+        <SpreadsheetGrid
+          rows={rows}
+          columns={columns}
+          onCellCommit={handleCellCommit}
+          massActions={massActions}
+          loading={isLoading}
+          equipeId={equipeId}
+          fromTable={table.slug}
+          surfaceKey={`custom_table_${table.id}`}
+          allowColumnReorder
+          allowColumnResize
+          allowColumnHide
+          onRowOpen={setOpenRecordId}
+        />
+      </div>
+
+      <CustomRecordDrawer
+        record={openRecord}
+        columns={visible}
+        relations={relations}
+        onClose={() => setOpenRecordId(null)}
+        onSave={(id, data) => updateRecord.mutateAsync({ id, data })}
+        onDelete={(id) => deleteRecords.mutate([id])}
+      />
+
+      <AlertDialog open={confirmDeleteIds.length > 0} onOpenChange={(o) => !o && setConfirmDeleteIds([])}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Excluir {confirmDeleteIds.length} {confirmDeleteIds.length === 1 ? "registro" : "registros"}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                deleteRecords.mutate(confirmDeleteIds);
+                setConfirmDeleteIds([]);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Columns editor
+// ---------------------------------------------------------------------------
+
+interface ColumnsEditorProps {
+  table: CustomTable;
+  otherTables: CustomTable[];
+  onChange: (schema: CustomTableColumn[]) => Promise<unknown>;
+  saving: boolean;
+}
+
+/**
+ * A new column asks only for its label and type (plus options, or the target
+ * table). The key is born from the label and never edited — the same contract as
+ * the pipeline's fields. Removing a column hides it; its values stay stored.
+ */
+function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorProps) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState<CustomTableColumnType>("text");
+  const [options, setOptions] = useState("");
+  const [targetTableId, setTargetTableId] = useState("");
+  const [displayField, setDisplayField] = useState("");
+
+  const visible = activeColumns(table.table_schema);
+  const target = otherTables.find((t) => t.id === targetTableId);
+  const targetFields = target ? activeColumns(target.table_schema).filter((c) => c.type !== "relation") : [];
+
+  const reset = () => {
+    setLabel("");
+    setType("text");
+    setOptions("");
+    setTargetTableId("");
+    setDisplayField("");
+  };
+
+  const canAdd =
+    !!label.trim() && (type !== "relation" || !!target) && !((type === "select" || type === "multi_select") && !options.trim());
+
+  const handleAdd = async () => {
+    if (!canAdd) return;
     const column: CustomTableColumn = {
-      key,
-      label: newColLabel.trim() || key,
-      type: newColType,
+      key: newColumnKey(table.table_schema, label.trim()),
+      label: label.trim(),
+      type,
     };
-    if (newColType === "select") {
-      const opts = newColOptions
+    if (type === "select" || type === "multi_select") {
+      column.options = options
         .split(",")
         .map((o) => o.trim())
         .filter(Boolean);
-      column.options = opts;
     }
-    if (newColType === "relation") {
-      const target = otherTables.find((t) => t.id === newColTargetTable);
-      if (!target) return;
+    if (type === "relation" && target) {
       column.relationConfig = {
         targetTable: target.name,
         targetTableSlug: target.slug,
         targetTableId: target.id,
-        displayField: newColDisplayField || "name",
+        displayField: displayField || targetFields[0]?.key || "name",
       };
     }
-    await updateTable.mutateAsync({
-      id: table.id,
-      table_schema: [...table.table_schema, column],
-    });
-    setNewColKey("");
-    setNewColLabel("");
-    setNewColType("text");
-    setNewColTargetTable("");
-    setNewColDisplayField("");
-    setNewColOptions("");
+    try {
+      await onChange([...table.table_schema, column]);
+      reset();
+    } catch {
+      // the hook shows the error
+    }
   };
 
-  const handleRemoveColumn = async (key: string) => {
-    await updateTable.mutateAsync({
-      id: table.id,
-      table_schema: table.table_schema.filter((c) => c.key !== key),
-    });
-  };
-
-  const handleAddRow = async () => {
-    await createRecord.mutateAsync({});
-  };
-
-  // No mass actions for now
-  const massActions = [];
+  const handleRemove = (key: string) =>
+    onChange(table.table_schema.map((c) => (c.key === key ? { ...c, is_deleted: true } : c))).catch(() => {});
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Settings2 className="mr-1 h-3 w-3" /> Colunas
         </Button>
-        <h2 className="text-lg font-semibold">{table.name}</h2>
-      </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-80" align="end">
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Colunas</h4>
+          {visible.length === 0 && <p className="text-xs text-muted-foreground">Nenhuma coluna ainda.</p>}
+          <div className="max-h-56 space-y-1.5 overflow-y-auto">
+            {visible.map((col) => (
+              <div
+                key={col.key}
+                className="flex items-center justify-between gap-2 rounded border border-border px-3 py-1.5 text-sm"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{col.label}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {TYPE_LABEL[col.type] ?? col.type}
+                    {col.type === "relation" && col.relationConfig && ` → ${col.relationConfig.targetTable}`}
+                  </span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={() => void handleRemove(col.key)}
+                  disabled={saving}
+                  aria-label={`Remover a coluna ${col.label}`}
+                >
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </Button>
+              </div>
+            ))}
+          </div>
 
-      {/* Toolbar: search + add column + add row */}
-      <GridToolbar
-        search={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Buscar..."
-        filters={[]}
-        onClearFilters={() => {}}
-        activeFilterCount={0}
-      >
-        <Popover open={colEditorOpen} onOpenChange={setColEditorOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Settings2 className="mr-1 h-3 w-3" /> Colunas
-            </Button>
-          </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium">Colunas</h4>
-                {table.table_schema.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Nenhuma coluna ainda.
-                  </p>
-                )}
-                {table.table_schema.map((col) => (
-                  <div
-                    key={col.key}
-                    className="flex items-center justify-between rounded border border-border px-3 py-1.5 text-sm"
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      <Grip className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="font-medium truncate">{col.label}</span>
-                      <span className="text-[10px] text-muted-foreground uppercase shrink-0">
-                        {col.type}
-                        {col.type === "relation" && col.relationConfig && (
-                          <span className="text-muted-foreground/60 normal-case ml-1">
-                            → {col.relationConfig.targetTable}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5"
-                      onClick={() => handleRemoveColumn(col.key)}
-                    >
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
-                  </div>
+          <div className="space-y-2 border-t border-border pt-2">
+            <h5 className="text-xs font-medium">Nova coluna</h5>
+            <Input
+              placeholder="Nome (ex: Data de instalação)"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <Select
+              value={type}
+              onValueChange={(v) => {
+                setType(v as CustomTableColumnType);
+                setTargetTableId("");
+                setDisplayField("");
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {COLUMN_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
                 ))}
-                <div className="border-t border-border pt-2 space-y-2">
-                  <h5 className="text-xs font-medium">Nova coluna</h5>
-                  <Input
-                    placeholder="Chave (ex: email)"
-                    value={newColKey}
-                    onChange={(e) => setNewColKey(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                  <Input
-                    placeholder="Rótulo (ex: E-mail)"
-                    value={newColLabel}
-                    onChange={(e) => setNewColLabel(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                  <Select
-                    value={newColType}
-                    onValueChange={(v) => {
-                      setNewColType(v as CustomTableColumn["type"]);
-                      if (v !== "relation") {
-                        setNewColTargetTable("");
-                        setNewColDisplayField("");
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
+              </SelectContent>
+            </Select>
+
+            {(type === "select" || type === "multi_select") && (
+              <div className="space-y-1">
+                <Label className="text-[10px] font-medium text-muted-foreground">Opções (separadas por vírgula)</Label>
+                <Input
+                  value={options}
+                  onChange={(e) => setOptions(e.target.value)}
+                  placeholder="Opção 1, Opção 2, Opção 3"
+                  className="h-8 text-xs"
+                />
+              </div>
+            )}
+
+            {type === "relation" && (
+              <div className="space-y-2 rounded-md border border-border bg-muted/30 p-2">
+                <Select value={targetTableId} onValueChange={(v) => { setTargetTableId(v); setDisplayField(""); }}>
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue placeholder="Tabela alvo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {otherTables.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {target && targetFields.length > 0 && (
+                  <Select value={displayField || targetFields[0].key} onValueChange={setDisplayField}>
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue placeholder="Mostrar pelo campo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="text">Texto</SelectItem>
-                      <SelectItem value="number">Número</SelectItem>
-                      <SelectItem value="date">Data</SelectItem>
-                      <SelectItem value="boolean">Sim/Não</SelectItem>
-                      <SelectItem value="select">Seleção</SelectItem>
-                      <SelectItem value="relation">Relação</SelectItem>
+                      {targetFields.map((c) => (
+                        <SelectItem key={c.key} value={c.key}>
+                          Mostrar: {c.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-
-                  {/* Select options config (conditional) */}
-                  {newColType === "select" && (
-                    <div className="space-y-1">
-                      <Label className="text-[10px] text-muted-foreground font-medium">Opções (separadas por vírgula)</Label>
-                      <Input
-                        value={newColOptions}
-                        onChange={(e) => setNewColOptions(e.target.value)}
-                        placeholder="Opção 1, Opção 2, Opção 3"
-                        className="h-8 text-xs"
-                      />
-                    </div>
-                  )}
-
-                  {/* Relation config (conditional) */}
-                  {newColType === "relation" && (
-                    <div className="space-y-2 border border-border rounded-md p-2 bg-muted/30">
-                      <p className="text-[10px] text-muted-foreground font-medium">Configurar relação</p>
-                      <Select value={newColTargetTable} onValueChange={setNewColTargetTable}>
-                        <SelectTrigger className="h-7 text-xs">
-                          <SelectValue placeholder="Tabela alvo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {otherTables.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        value={newColDisplayField}
-                        onChange={(e) => setNewColDisplayField(e.target.value)}
-                        placeholder="Campo de exibição (ex: name)"
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                  )}
-
-                  <Button
-                    size="sm"
-                    className="w-full h-8 text-xs"
-                    onClick={handleAddColumn}
-                    disabled={!newColKey.trim() || (newColType === "relation" && !newColTargetTable)}
-                  >
-                    Adicionar coluna
-                  </Button>
-                </div>
+                )}
+                {otherTables.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground">Crie outra tabela para relacionar.</p>
+                )}
               </div>
-            </PopoverContent>
-          </Popover>
-          <Button variant="outline" size="sm" onClick={handleAddRow}>
-            <Plus className="mr-1 h-3 w-3" /> Linha
-          </Button>
-      </GridToolbar>
-      <SpreadsheetGrid
-        rows={rows}
-        columns={columns}
-        onCellCommit={handleCellCommit}
-        massActions={massActions}
-        loading={isLoading}
-        equipeId={profile?.equipe_id ?? ""}
-        fromTable={table.slug}
-        surfaceKey={`custom_table_${table.id}`}
-        allowColumnReorder
-        allowColumnResize
-        allowColumnHide
-      />
-    </div>
+            )}
+
+            <Button size="sm" className="h-8 w-full text-xs" onClick={handleAdd} disabled={!canAdd || saving}>
+              Adicionar coluna
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

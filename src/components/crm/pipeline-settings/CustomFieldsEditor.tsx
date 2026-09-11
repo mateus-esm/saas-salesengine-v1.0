@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
-import { uniqueKey } from "@/lib/customFieldKeys";
+import { slugify, uniqueKey } from "@/lib/customFieldKeys";
 
 export const TYPE_LABELS: Record<CustomFieldType, string> = {
   text: "Texto",
@@ -67,16 +67,6 @@ const TYPES_AS_REF: CustomFieldType[] = [
   "property_ref",
   "contact_ref",
 ];
-
-export const slugify = (s: string) =>
-  s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40);
 
 export const newFieldId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
