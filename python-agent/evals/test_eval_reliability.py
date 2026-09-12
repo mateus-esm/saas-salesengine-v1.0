@@ -76,18 +76,20 @@ async def test_charge_idempotency_key_is_tenant_run_scoped(monkeypatch):
         def __init__(self, **kw):
             pass
 
-        async def set_field(self, opportunity_id, field_id, value):
+        async def move_stage(self, opportunity_id, stage_type="open"):
             from app.schemas import ActionResult
             return ActionResult(success=True, detail={})
 
     monkeypatch.setattr("app.cascade.executor._skill_for", lambda *a, **k: _Skill())
     plan = ActionPlan(
         relevant=True, confidence=0.9, reason="ok",
-        actions=[PlannedAction(verb="set_field", args={"field_id": "f1", "value": "v"})],
+        # Use a non-field verb so this metering eval stays independent from the
+        # field-dictionary safety guard, which is covered by executor unit tests.
+        actions=[PlannedAction(verb="move_stage", args={"stage_type": "open"})],
     )
     await run_plan(
         plan, ctx=_ctx(), opportunity={"id": "o1"}, lead={"id": "l1"},
         rules={}, client=object(), charge_fn=charge, run_id="run-xyz",
     )
     assert len(seen) == 1
-    assert seen[0]["idempotency_key"].startswith("run-xyz:set_field:o1")
+    assert seen[0]["idempotency_key"].startswith("run-xyz:move_stage:o1")
