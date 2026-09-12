@@ -349,6 +349,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 }}
                 onOpenContact={(leadId) => setContactLeadId(leadId)}
                 nameOf={nameOf}
+                onMoveCard={setMoveSheetCard}
               />
             </div>
           </div>
@@ -384,23 +385,13 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
             <DragOverlay>
               {activeCard && (
                 <OpportunityCard
-                  opportunity={activeCard}
-                  lead={activeCard.lead}
+                  card={activeCard}
                   stage={orderedStages.find((s) => s.id === activeCard.stage_id)}
                   cardFields={cardFields}
-                  touchpointCount={activeCard.touchpoint_count}
                   nativeFlags={nativeFlags}
-                  leadScore={activeCard.lead_score}
-                  leadScoreBreakdown={
-                    activeCard.lead_score !== null
-                      ? { icp: activeCard.icp_score, velocity: activeCard.velocity }
-                      : undefined
-                  }
                   onClick={() => {}}
                   isDragOverlay
-                  companies={activeCard.companies}
                   nameOf={nameOf}
-                  ownerName={activeCard.owner_name}
                 />
               )}
             </DragOverlay>

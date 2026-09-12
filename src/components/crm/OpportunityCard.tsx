@@ -1,36 +1,29 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { MessageSquarePlus, MessageSquareText, User } from "lucide-react";
+import { ArrowRightLeft, Clock, MessageCircle, MessageSquare, MessageSquarePlus, MessageSquareText } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { formatDisplayName } from "@/lib/displayName";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
 import { useLogTouchpoint, type CreateTouchpointData } from "@/hooks/useTouchpoints";
 import { useCopilotApprovals } from "@/hooks/useCopilotApprovals";
-import type { CardLead } from "@/types/board";
-import type { CustomFieldSchema, Opportunity, PipelineStageV2 } from "@/types/pipelines";
-import { CardTelemetryPillars } from "./CardTelemetryPillars";
-import { SyncButton } from "./copilot/SyncButton";
-import { LeadScoreBadge, type LeadScoreBreakdown } from "./LeadScoreBadge";
-import { RelationChip } from "./grid/RelationChip";
-import { UserAvatar } from "./fields/UserAvatar";
+import { buildCardModel, type CardBadgeKind } from "@/lib/cardModel";
+import { formatBrPhone } from "@/lib/displayName";
+import type { BoardCard } from "@/types/board";
+import type { CustomFieldSchema, PipelineStageV2 } from "@/types/pipelines";
 import { BRAND } from "@/config/brand";
-import { getFieldType } from "@/lib/fields/registry";
+
+import { SyncButton } from "./copilot/SyncButton";
+import { UserAvatar } from "./fields/UserAvatar";
+import { RelationChip } from "./grid/RelationChip";
+import { LeadScoreBadge } from "./LeadScoreBadge";
+import { NextContactBadge } from "./NextContactBadge";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -58,92 +51,97 @@ export const DEFAULT_NATIVE_CARD_FLAGS: NativeCardFlags = {
   whatsapp: true,
 };
 
+const BADGE_STYLE: Record<CardBadgeKind, string> = {
+  won: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  lost: "border-border bg-muted text-muted-foreground",
+  overdue: "border-destructive/30 bg-destructive/10 text-destructive",
+  sla: "border-destructive/30 bg-destructive/10 text-destructive",
+  interactions: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+};
+
+const MAX_TAGS = 3;
+
 interface OpportunityCardProps {
-  opportunity: Opportunity;
-  /** Sprint 11: the slice the card draws. A full Lead fits too. */
-  lead: CardLead | null | undefined;
-  stage: PipelineStageV2 | undefined;            // NEW
-  cardFields: CustomFieldSchema[];   // schema entries whose field_id ∈ pipeline.card_field_ids (already filtered)
-  touchpointCount: number;                       // NEW — supplied by parent (batched)
+  /** Sprint 11 · T24 — the board card carries everything the card draws. */
+  card: BoardCard;
+  stage: PipelineStageV2 | undefined;
+  /** Schema entries whose field_id ∈ pipeline.card_field_ids (already filtered, in order). */
+  cardFields: CustomFieldSchema[];
   nativeFlags?: NativeCardFlags;
-  leadScore?: number | null;                     // Sprint 6.8 T3.3 — combined 0-10 lead score
-  leadScoreBreakdown?: LeadScoreBreakdown;       // optional breakdown shown in tooltip
   onClick: () => void;
   onOpenContact?: (leadId: string) => void;
+  /** Touch screens: moving is "Mover para…", not dragging. */
+  onMoveRequest?: () => void;
   isDragOverlay?: boolean;
-  companies?: { id: string; name: string }[];    // Sprint 6.7 — linked companies for card chips
-  /** Sprint 11 · Onda 2 — member names for "Usuário" fields (loaded once by the Kanban). */
+  /** Member names for "Usuário" fields and the owner (loaded once by the Kanban). */
   nameOf?: (userId: string) => string | null;
-  /** Sprint 11 · T20 — the deal owner's name (the board card carries it). */
-  ownerName?: string | null;
 }
 
-const formatCurrency = (value: number | null | undefined, currency: string) => {
-  if (value === null || value === undefined) return null;
-  try {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: currency || "BRL",
-    }).format(value);
-  } catch {
-    return `${currency} ${value}`;
-  }
-};
+const toLocalDateString = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-// Sprint 11 · Onda 2 — the card shows a field the way the grid and the filters
-// do: through the field-type registry. (Before: its own switch, which showed a
-// raw id for refs and "Dados preenchidos" for an address.)
-const renderCustomValue = (
-  field: CustomFieldSchema,
-  raw: unknown,
-  nameOf?: (userId: string) => string | null,
-): string | null => {
-  const spec = getFieldType(field.type);
-  if (spec.isEmpty(raw)) return null;
-  return spec.format(raw, { nameOf, options: field.options }) || null;
-};
+/** Stop drag/open propagation so the card's controls don't move or open it. */
+const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
+/**
+ * Sprint 11 · Onda 2B · T24 — the Kanban card, drawn from buildCardModel:
+ * name and owner; value · time in stage · next contact; badges in order; up to
+ * three card fields, tags and companies; actions on hover (desktop) or always
+ * (touch). No request per card: everything comes in the board card, and the
+ * Copilot approvals are one shared query per pipeline.
+ */
 export const OpportunityCard = ({
-  opportunity,
-  lead,
+  card,
   stage,
   cardFields,
-  touchpointCount,
   nativeFlags = DEFAULT_NATIVE_CARD_FLAGS,
-  leadScore,
-  leadScoreBreakdown,
   onClick,
   onOpenContact,
+  onMoveRequest,
   isDragOverlay,
-  companies = [],
   nameOf,
-  ownerName,
 }: OpportunityCardProps) => {
+  const queryClient = useQueryClient();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: opportunity.id,
-    data: { type: "opportunity", opportunity },
-    disabled: isDragOverlay,
+    id: card.id,
+    data: { type: "opportunity", opportunity: card },
+    disabled: isDragOverlay || !!onMoveRequest,
   });
 
-  const style = isDragOverlay
-    ? undefined
-    : {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.4 : 1,
-      };
-
-  const valueText = formatCurrency(opportunity.value, opportunity.currency);
+  const model = useMemo(
+    () => buildCardModel(card, stage, nativeFlags, cardFields, new Date(), nameOf),
+    [card, stage, nativeFlags, cardFields, nameOf],
+  );
+  const lead = card.lead;
 
   // Sprint 6.3 T8 — Intent Detected badge (hits shared React Query cache, no extra request)
-  const { data: approvals = [] } = useCopilotApprovals(opportunity.pipeline_id);
+  const { data: approvals = [] } = useCopilotApprovals(card.pipeline_id);
   const intentDecision = approvals.find(
     (d) =>
-      d.opportunity_id === opportunity.id &&
+      d.opportunity_id === card.id &&
       (d.output_action as { intent_detected?: boolean } | null)?.intent_detected === true,
   );
   const intentKeyword =
     (intentDecision?.output_action as { intent_keyword?: string } | null)?.intent_keyword ?? null;
+
+  // T11 (Sprint 5) — Driver Override: change the next contact right on the card.
+  const handleNextContactChange = async (date: Date | null) => {
+    if (!lead?.id) return;
+    await (supabase as any)
+      .from("leads")
+      .update({ next_contact: date ? toLocalDateString(date) : null })
+      .eq("id", lead.id);
+    queryClient.invalidateQueries({ queryKey: ["board"] });
+    queryClient.invalidateQueries({ queryKey: ["opp_table"] });
+    queryClient.invalidateQueries({ queryKey: ["lead", lead.id] });
+  };
+
+  const style = isDragOverlay
+    ? undefined
+    : { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+
+  const hiddenTags = Math.max(0, model.tags.length - MAX_TAGS);
+  const showWhatsApp = nativeFlags.whatsapp && !!lead?.phone;
 
   return (
     <div
@@ -153,131 +151,197 @@ export const OpportunityCard = ({
       {...listeners}
       onClick={onClick}
       className={cn(
-        "group cursor-grab active:cursor-grabbing select-none",
-        "rounded-md border border-border bg-card hover:border-primary/50 hover:shadow-sm",
-        "p-2.5 space-y-1.5 transition-colors overflow-hidden",
-        isDragOverlay && "shadow-lg rotate-1 scale-[1.02]",
+        "group select-none space-y-1.5 overflow-hidden rounded-md border border-border bg-card p-2.5 transition-colors",
+        onMoveRequest ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+        "hover:border-primary/50 hover:shadow-sm",
+        model.status === "lost" && "opacity-75",
+        isDragOverlay && "rotate-1 scale-[1.02] shadow-lg",
       )}
     >
-      <div className="flex items-center justify-between gap-1.5 text-sm font-medium">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span
-            className={cn(
-              "truncate",
-              onOpenContact && lead?.id && "cursor-pointer hover:text-primary",
-            )}
-            onClick={(e) => {
-              if (onOpenContact && lead?.id) {
-                e.stopPropagation();
-                onOpenContact(lead.id);
-              }
-            }}
-          >
-            {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {nativeFlags.value && valueText && (
-            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">
-              {valueText}
-            </span>
+      {/* Line 1 — who, and whose */}
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className={cn(
+            "min-w-0 truncate text-sm font-medium leading-5",
+            onOpenContact && model.leadId && "cursor-pointer hover:text-primary",
           )}
-          {/* E2: on-card ⚡ Sync — stop drag/open propagation so it acts standalone */}
-          {!isDragOverlay && lead?.id && (
-            <span
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={stop}
-              onPointerDown={stop}
-            >
-              <SyncButton
-                mode="single"
-                variant="card"
-                leadId={lead.id}
-                opportunityId={opportunity.id}
-                pipelineId={opportunity.pipeline_id}
-              />
-            </span>
+          title={model.title}
+          onClick={(e) => {
+            if (onOpenContact && model.leadId) {
+              e.stopPropagation();
+              onOpenContact(model.leadId);
+            }
+          }}
+        >
+          {model.title}
+        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          {card.lead_score !== null && card.lead_score !== undefined && (
+            <LeadScoreBadge
+              score={card.lead_score}
+              size="sm"
+              breakdown={{ icp: card.icp_score, velocity: card.velocity }}
+            />
           )}
-          <UserAvatar
-            userId={opportunity.owner_id}
-            name={ownerName ?? (opportunity.owner_id ? nameOf?.(opportunity.owner_id) : null)}
-            size="xs"
-          />
+          <UserAvatar userId={model.ownerId} name={model.ownerName} size="xs" />
         </div>
       </div>
 
-      {/* Sprint 6.8 T3.3 — unified Lead Score badge (hidden when no score) */}
-      {leadScore !== null && leadScore !== undefined && (
-        <div className="flex items-center gap-1">
-          <LeadScoreBadge score={leadScore} breakdown={leadScoreBreakdown} />
-          <span className="text-[10px] text-muted-foreground">Lead Score</span>
+      {/* Line 2 — value · time in stage · touchpoints · next contact */}
+      {(model.valueText || model.timeInStageText || nativeFlags.touchpoints || (nativeFlags.nextContact && lead)) && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          {model.valueText && (
+            <span className="font-semibold text-green-600 dark:text-green-400">{model.valueText}</span>
+          )}
+          {model.timeInStageText && (
+            <span
+              className={cn("inline-flex items-center gap-0.5", model.slaBreached && "font-medium text-destructive")}
+              title={model.slaBreached ? `Acima do SLA da etapa (${stage?.max_idle_hours}h)` : "Tempo na etapa"}
+            >
+              <Clock className="h-3 w-3 shrink-0" />
+              {model.timeInStageText}
+            </span>
+          )}
+          {nativeFlags.touchpoints && (
+            <span
+              className={cn("inline-flex items-center gap-0.5", model.interactionsBreached && "font-medium text-amber-600")}
+              title={`${model.touchpointCount} interações`}
+            >
+              <MessageSquare className="h-3 w-3 shrink-0" />
+              {model.touchpointCount}
+            </span>
+          )}
+          {nativeFlags.nextContact && lead && !isDragOverlay && (
+            <span onClick={stop} onPointerDown={stop}>
+              <NextContactBadge
+                nextContactLabel={model.nextContactBadge?.label ?? null}
+                nextContactState={model.nextContactBadge?.variant ?? null}
+                currentDate={lead.next_contact ?? null}
+                onChange={handleNextContactChange}
+              />
+            </span>
+          )}
         </div>
       )}
 
-      {/* Sprint 6.3 T8 — Intent Detected badge: shown only on real cards, not drag overlay */}
-      {!isDragOverlay && intentDecision && (
-        <div
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-medium w-full"
-          title={
-            intentKeyword
-              ? `O lead mencionou "${intentKeyword}". Sincronize o Copilot.`
-              : "Intenção comercial detectada pelo Copilot."
-          }
-        >
-          <span className="shrink-0">⚠️</span>
-          <span className="truncate">Intenção Detectada</span>
+      {/* Badges — outcome, overdue, SLA, interaction cap; then the Copilot's intent */}
+      {(model.badges.length > 0 || (!isDragOverlay && intentDecision)) && (
+        <div className="flex flex-wrap gap-1">
+          {model.badges.map((b) => (
+            <span
+              key={b.kind}
+              className={cn("max-w-full truncate rounded border px-1.5 py-0.5 text-[10px] font-medium", BADGE_STYLE[b.kind])}
+              title={b.label}
+            >
+              {b.label}
+            </span>
+          ))}
+          {!isDragOverlay && intentDecision && (
+            <span
+              className="truncate rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+              title={
+                intentKeyword
+                  ? `O lead mencionou "${intentKeyword}". Sincronize o Copilot.`
+                  : "Intenção comercial detectada pelo Copilot."
+              }
+            >
+              Intenção detectada
+            </span>
+          )}
         </div>
       )}
 
-      {/* Sprint 6.7 — Company chips from opportunity_links */}
-      {companies.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          {companies.map((c) => (
-            <RelationChip key={c.id} label={c.name} />
+      {/* Line 3 — the card's fields, then tags and companies */}
+      {model.fields.length > 0 && (
+        <div className="space-y-0.5 border-t border-border/60 pt-1">
+          {model.fields.map((f) => (
+            <div key={f.field_id} className="flex items-baseline justify-between gap-2 text-[11px]">
+              <span className="truncate uppercase tracking-wide text-muted-foreground">{f.label}</span>
+              <span className="truncate text-foreground/90">{f.value}</span>
+            </div>
           ))}
         </div>
       )}
-
-      <CardTelemetryPillars
-        opportunity={opportunity}
-        stage={stage}
-        lead={lead}
-        touchpointCount={touchpointCount}
-        timeInPhase={nativeFlags.timeInPhase}
-        touchpoints={nativeFlags.touchpoints}
-        nextContact={nativeFlags.nextContact}
-        whatsapp={nativeFlags.whatsapp}
-      />
-
-      {cardFields.length > 0 && (
-        <div className="space-y-0.5 pt-1 border-t border-border/60">
-          {cardFields.map((f) => {
-            const display = renderCustomValue(f, opportunity.custom_data?.[f.field_id], nameOf);
-            if (!display) return null;
-            return (
-              <div key={f.field_id} className="flex items-baseline justify-between gap-2 text-[11px]">
-                <span className="uppercase tracking-wide text-muted-foreground truncate">{f.label}</span>
-                <span className="truncate text-foreground/90">{display}</span>
-              </div>
-            );
-          })}
+      {(model.companies.length > 0 || model.tags.length > 0) && (
+        <div className="flex flex-wrap items-center gap-1">
+          {model.companies.map((c) => (
+            <RelationChip key={c.id} label={c.name} />
+          ))}
+          {model.tags.slice(0, MAX_TAGS).map((t) => (
+            <span key={t} className="max-w-[8rem] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {t}
+            </span>
+          ))}
+          {hiddenTags > 0 && <span className="text-[10px] text-muted-foreground">+{hiddenTags}</span>}
         </div>
       )}
 
-      {/* Sprint 5.3 — card footer actions: open chat + quick-log a touchpoint */}
+      {/* Actions — on hover where there is a mouse, always on touch */}
       {!isDragOverlay && lead?.id && (
-        <CardQuickActions leadId={lead.id} />
+        <div
+          className={cn(
+            "flex items-center gap-1 border-t border-border/60 pt-1.5 transition-opacity",
+            "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-within:opacity-100",
+          )}
+          onClick={stop}
+          onPointerDown={stop}
+        >
+          <ChatAction leadId={lead.id} />
+          <TouchpointAction leadId={lead.id} />
+          {showWhatsApp && (
+            <a
+              href={`https://wa.me/${lead.phone!.replace(/\D/g, "").replace(/^(?!55)/, "55$&")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-green-700 hover:bg-green-500/10 dark:text-green-400"
+              title={`WhatsApp ${formatBrPhone(lead.phone) ?? lead.phone}`}
+              aria-label="Abrir no WhatsApp"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <span className="ml-auto flex items-center gap-1">
+            {onMoveRequest && (
+              <button
+                type="button"
+                onClick={onMoveRequest}
+                className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-primary hover:bg-primary/10"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                Mover para…
+              </button>
+            )}
+            <SyncButton
+              mode="single"
+              variant="card"
+              leadId={lead.id}
+              opportunityId={card.id}
+              pipelineId={card.pipeline_id}
+            />
+          </span>
+        </div>
       )}
     </div>
   );
 };
 
-/** Stop drag/open propagation so footer controls don't move or open the card. */
-const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-
-function CardQuickActions({ leadId }: { leadId: string }) {
+function ChatAction({ leadId }: { leadId: string }) {
   const navigate = useNavigate();
+  const title = `Abrir conversa no ${BRAND.product}`;
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(`/chat?contact=${leadId}`)}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-primary/10"
+      title={title}
+      aria-label={title}
+    >
+      <MessageSquareText className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function TouchpointAction({ leadId }: { leadId: string }) {
   const logTouchpoint = useLogTouchpoint();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<TouchpointType>("whatsapp");
@@ -285,7 +349,11 @@ function CardQuickActions({ leadId }: { leadId: string }) {
 
   const register = () => {
     logTouchpoint.mutate(
-      { lead_id: leadId, touchpoint_type: type, content: content.trim() || TOUCHPOINT_TYPES.find((t) => t.value === type)!.label },
+      {
+        lead_id: leadId,
+        touchpoint_type: type,
+        content: content.trim() || TOUCHPOINT_TYPES.find((t) => t.value === type)!.label,
+      },
       {
         onSuccess: () => {
           setContent("");
@@ -296,73 +364,47 @@ function CardQuickActions({ leadId }: { leadId: string }) {
   };
 
   return (
-    <div
-      className="grid grid-cols-2 gap-1 pt-1.5 border-t border-border/60"
-      onClick={stop}
-      onPointerDown={stop}
-    >
-      <button
-        type="button"
-        onClick={() => navigate(`/chat?contact=${leadId}`)}
-        className="min-w-0 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
-        title={`Abrir conversa no ${BRAND.product}`}
-      >
-        <MessageSquareText className="h-3 w-3 shrink-0" />
-        <span className="truncate">Chat</span>
-      </button>
-
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="min-w-0 inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] text-muted-foreground bg-muted/60 hover:bg-muted transition-colors"
-            title="Registrar touchpoint"
-          >
-            <MessageSquarePlus className="h-3 w-3 shrink-0" />
-            <span className="truncate">Touchpoint</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          className="w-60 space-y-2"
-          onClick={stop}
-          onPointerDown={stop}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Registrar touchpoint"
+          aria-label="Registrar touchpoint"
         >
-          <p className="text-xs font-medium">Registrar touchpoint</p>
-          <Select value={type} onValueChange={(v) => setType(v as TouchpointType)}>
-            <SelectTrigger className="h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TOUCHPOINT_TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Nota (opcional)…"
-            className="h-8"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                register();
-              }
-            }}
-          />
-          <Button
-            size="sm"
-            className="w-full h-8"
-            onClick={register}
-            disabled={logTouchpoint.isPending}
-          >
-            Registrar
-          </Button>
-        </PopoverContent>
-      </Popover>
-    </div>
+          <MessageSquarePlus className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-60 space-y-2" onClick={stop} onPointerDown={stop}>
+        <p className="text-xs font-medium">Registrar touchpoint</p>
+        <Select value={type} onValueChange={(v) => setType(v as TouchpointType)}>
+          <SelectTrigger className="h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TOUCHPOINT_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Nota (opcional)…"
+          className="h-8"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              register();
+            }
+          }}
+        />
+        <Button size="sm" className="h-8 w-full" onClick={register} disabled={logTouchpoint.isPending}>
+          Registrar
+        </Button>
+      </PopoverContent>
+    </Popover>
   );
 }

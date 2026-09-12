@@ -27,6 +27,8 @@ interface OpportunityKanbanColumnProps {
   /** Sprint 11 Wave 2B: collapse state */
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Touch screens: each card offers "Mover para…" (dragging is off). */
+  onMoveCard?: (card: BoardCard) => void;
 }
 
 const formatCompactBRL = (v: number) =>
@@ -57,6 +59,7 @@ export const OpportunityKanbanColumn = ({
   nameOf,
   isCollapsed,
   onToggleCollapse,
+  onMoveCard,
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -180,23 +183,14 @@ export const OpportunityKanbanColumn = ({
               cards.map((card) => (
                 <div key={card.id} className="shrink-0">
                   <OpportunityCard
-                    opportunity={card}
-                    lead={card.lead}
+                    card={card}
                     stage={stage}
                     cardFields={cardFields}
-                    touchpointCount={card.touchpoint_count}
                     nativeFlags={nativeFlags}
-                    leadScore={card.lead_score}
-                    leadScoreBreakdown={
-                      card.lead_score !== null
-                        ? { icp: card.icp_score, velocity: card.velocity }
-                        : undefined
-                    }
                     onClick={() => onCardClick(card, cards)}
                     onOpenContact={onOpenContact}
-                    companies={card.companies}
+                    onMoveRequest={onMoveCard ? () => onMoveCard(card) : undefined}
                     nameOf={nameOf}
-                    ownerName={card.owner_name}
                   />
                 </div>
               ))
