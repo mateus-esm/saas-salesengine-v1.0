@@ -26,6 +26,7 @@ import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { useOpportunities } from "@/hooks/useOpportunities";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
+import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer";
 import { UserAvatar } from "./fields/UserAvatar";
 import type { Opportunity, OpportunityStatus, Pipeline } from "@/types/pipelines";
@@ -228,16 +229,23 @@ const OpportunityRow = ({
       toast.error(errors[0].message);
       return;
     }
+    // Sprint 11 · T28 — the database closes/reopens by the stage.
     onUpdate({
       stage_id: stageId,
       status,
       value: value === "" ? null : Number(value),
       custom_data: customData,
-      closed_at:
-        status === "open"
-          ? null
-          : opportunity.closed_at ?? new Date().toISOString(),
     });
+  };
+
+  const handleStageChange = (id: string) => {
+    setStageId(id);
+    setStatus((current) => statusForStage(stages, id, current));
+  };
+
+  const handleOutcomeChange = (next: OpportunityStatus) => {
+    setStatus(next);
+    setStageId((current) => stageForStatus(stages, current, next));
   };
 
   return (
@@ -306,7 +314,7 @@ const OpportunityRow = ({
               <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 Etapa
               </Label>
-              <Select value={stageId} onValueChange={setStageId}>
+              <Select value={stageId} onValueChange={handleStageChange}>
                 <SelectTrigger className="h-8">
                   <SelectValue />
                 </SelectTrigger>
@@ -324,14 +332,14 @@ const OpportunityRow = ({
             </div>
             <div className="space-y-1">
               <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Status
+                Desfecho
               </Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as OpportunityStatus)}>
+              <Select value={status} onValueChange={(v) => handleOutcomeChange(v as OpportunityStatus)}>
                 <SelectTrigger className="h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="open">Aberta</SelectItem>
+                  <SelectItem value="open">Em andamento</SelectItem>
                   <SelectItem value="won">Ganha</SelectItem>
                   <SelectItem value="lost">Perdida</SelectItem>
                 </SelectContent>

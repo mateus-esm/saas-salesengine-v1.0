@@ -7,6 +7,7 @@ begin;
 -- INSERT em funnel_events). Os gatilhos da Sprint 9 têm de continuar iguais.
 -- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
 -- @include supabase/migrations/20260911000300_sprint11_w2_owner_events.sql
+-- @include supabase/migrations/20260912000100_sprint11_w3_outcome.sql
 
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link)

@@ -1780,7 +1780,7 @@ T28, T30 e T31, nessa ordem.
 
 ### Ledger · Onda 3
 
-- [ ] T28 · A etapa decide o desfecho · XL
+- [x] T28 · A etapa decide o desfecho · XL — `fn_opportunity_outcome` (BEFORE): etapa de ganho/perda fecha com a data (ou a da importação), sair reabre (limpa `closed_at` e motivo), status escrito move para a etapa do tipo (sem etapa, vale). Um evento por desfecho: o caminho da etapa emite; o de status só quando a etapa não é do tipo, e emite `reopened`. **Achado no caminho:** o gatilho de status era `AFTER UPDATE OF status` — gatilho por coluna não vê a mudança feita por outro BEFORE, então a reabertura por movimento de card nunca seria registrada; recriado sem coluna. A mais: quem **nasce** ganho/perdido tem o evento na data do fechamento (antes: na da criação — um ganho de março importado contava no mês da importação). Catálogo de eventos + `reopened`, `recycled`; fonte + `timer`. 8 blocos de teste SQL; os 9 testes da Sprint 9 e Ondas 1–2 rodam sobre a versão nova e passam. Reparo dos 200 negócios ensaiado na produção (0 discordando, 0 evento criado — os 200 já tinham o evento; só o status estava errado). Frontend: `lib/outcome` (7 testes) mantém etapa e desfecho de acordo no modal e na lista de negócios do contato ("Status" → "Desfecho"); o Kanban mostra o desfecho na hora ao soltar o card
 - [ ] T29 · Catálogo · L
 - [ ] T30 · Itens do negócio · L
 - [ ] T31 · Ganho → receita · XL

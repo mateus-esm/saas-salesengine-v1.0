@@ -13,6 +13,7 @@ begin;
 -- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
 -- @include supabase/migrations/20260910000200_sprint11_crm_board.sql
 -- @include supabase/migrations/20260911000100_sprint11_w2_filters.sql
+-- @include supabase/migrations/20260912000100_sprint11_w3_outcome.sql
 
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link) values

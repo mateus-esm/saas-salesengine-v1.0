@@ -12,6 +12,7 @@ begin;
 -- trigger do T2, então as expectativas da Sprint 9 continuam valendo).
 -- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
 -- @include supabase/migrations/20260911000300_sprint11_w2_owner_events.sql
+-- @include supabase/migrations/20260912000100_sprint11_w3_outcome.sql
 
 insert into public.equipes (id, nome, crm_link, suporte_link)
 values ('7e900000-0000-0000-0000-000000000001', 'Teste Relatórios', 'x', 'y');

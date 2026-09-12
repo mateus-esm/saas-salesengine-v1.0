@@ -57,6 +57,7 @@ import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
 import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
 
@@ -172,20 +173,26 @@ export const OpportunityDetailModal = ({
       toast.error(errors[0].message);
       return;
     }
+    // Sprint 11 · T28 — the database closes/reopens by the stage (and dates the
+    // close); the form only keeps stage and outcome in agreement.
     updateOpportunity.mutate({
       id: opportunity.id,
       stage_id: stageId,
       status,
       value: value === "" ? null : Number(value),
       custom_data: customData,
-      // Stage type `won`/`lost` sets closed_at; `open` clears it. (Matches sprint state machine:
-      // status is explicit, but closing the deal should persist the timestamp.)
-      closed_at:
-        status === "open"
-          ? null
-          : opportunity.closed_at ?? new Date().toISOString(),
     });
     onClose();
+  };
+
+  const handleStageChange = (id: string) => {
+    setStageId(id);
+    setStatus((current) => statusForStage(stages, id, current));
+  };
+
+  const handleOutcomeChange = (next: OpportunityStatus) => {
+    setStatus(next);
+    setStageId((current) => stageForStatus(stages, current, next));
   };
 
   // The owner is saved the moment it is chosen (not with "Salvar"): the card and
@@ -289,7 +296,7 @@ export const OpportunityDetailModal = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Etapa</Label>
-                      <Select value={stageId} onValueChange={setStageId}>
+                      <Select value={stageId} onValueChange={handleStageChange}>
                         <SelectTrigger className="h-9">
                           <SelectValue />
                         </SelectTrigger>
@@ -307,13 +314,14 @@ export const OpportunityDetailModal = ({
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Status</Label>
-                      <Select value={status} onValueChange={(v) => setStatus(v as OpportunityStatus)}>
+                      {/* Sprint 11 · T28 — the outcome follows the stage (and moves it). */}
+                      <Label className="text-xs">Desfecho</Label>
+                      <Select value={status} onValueChange={(v) => handleOutcomeChange(v as OpportunityStatus)}>
                         <SelectTrigger className="h-9">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="open">Aberta</SelectItem>
+                          <SelectItem value="open">Em andamento</SelectItem>
                           <SelectItem value="won">Ganha</SelectItem>
                           <SelectItem value="lost">Perdida</SelectItem>
                         </SelectContent>

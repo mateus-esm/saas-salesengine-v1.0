@@ -298,3 +298,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W2B | T26 fechamento: tabelas em lista, modais em tela cheia, cabecalhos | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-11 | 11 W2B | T27 verificacao, handoff da Onda 2, PR | Claude / Opus 5 (PM) | S | R$ 5 |
 | 2026-09-11 | 11 W3 | Plano da Onda 3 (receita e linha configurada) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3A | T28 A etapa decide o desfecho | Claude / Opus 5 (PM) | XL | R$ 28 |
