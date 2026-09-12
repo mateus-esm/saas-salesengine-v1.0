@@ -1451,10 +1451,12 @@ Motores: **Receita v1** (catálogo, itens, ganho → receita, recorrência) · *
     para a etapa alvo, evento `recycled`, webhook da etapa por `pg_net`) e recorrência
     (cria os retornos). Cada execução fica em `crm_timer_runs`. `crm_run_timers(dry_run)`
     responde o que faria sem fazer. O `cycle_pass` do `python-agent` é aposentado.
-17. **Situação do contato vem da receita:** cliente = receita líquida > 0; negociando =
-    negócio aberto; perdido = só perdidos/estornados. `lifecycle_stage` é recalculado
-    para `client` / `opportunity` / `lost` pelos mesmos fatos; `raw`/`mql`/`sql` seguem
-    para quem não tem negócio.
+17. **Situação do contato vem dos ganhos e da receita:** cliente = tem negócio ganho vivo
+    (o mesmo fato que gera a receita — reabrir/perder/apagar tira os dois); negociando =
+    negócio aberto; perdido = só perdidos. *Refinado no T32:* "cliente = receita > 0"
+    rebaixaria 49 clientes — 65 ganhos da produção não têm valor. O **Ganho total** é a
+    receita líquida. `lifecycle_stage` é recalculado para `client` / `opportunity` / `lost`
+    pelos mesmos fatos; `raw`/`mql`/`sql` seguem para quem não tem negócio.
 18. **Naturezas Oferta e Processo** em `pipelines.natures` (jsonb): Oferta = valor livre
     (padrão, o de hoje) ou catálogo (quais itens); Processo = marcos (qualificação,
     reunião, proposta, contrato) ou compra direta. Escolher os marcos gera as etapas
@@ -1784,7 +1786,7 @@ T28, T30 e T31, nessa ordem.
 - [x] T29 · Catálogo · L — `catalog_items` (RLS por equipe, sem DELETE: arquiva) com as regras no banco (fixo exige preço, recorrência inteira, etapa do retorno no pipeline do retorno) e os verbos `crm_save_catalog_item` (edita só o que veio) e `crm_archive_catalog_items`; 3 blocos de teste SQL (regras, vizinho não vê/edita/arquiva, arquivar esconde). Aba "Catálogo" no CRM: lista com busca, pausar/ativar, arquivar com confirmação; formulário com preço fixo/negociável e "volta de tempos em tempos" (a cada N meses/dias, abrir o retorno X dias antes, em qual pipeline/etapa). `lib/catalog` (rótulos + as mesmas regras do banco no formulário), 8 testes
 - [x] T30 · Itens do negócio · L — `opportunity_items` (só leitura para o app; escrita pelo verbo `crm_set_opportunity_items`, security definer com a equipe do token): troca a lista por diferença (linha com id é editada no lugar — a receita lança por linha), preço fixo vem do catálogo (o mandado é ignorado; `price_locked`), negociável usa o mandado ou a sugestão, cópia de nome/preço/recorrência do momento; item pausado/arquivado não entra novo, mas o que já está no negócio continua. `trg_opportunity_value_from_items`: com itens, escrever o valor direto volta à soma; sem itens, livre. 7 blocos de teste SQL. Seção "Itens" no modal do negócio (do catálogo ou avulsa; cada mudança salva a lista; o valor vira "soma dos itens", só leitura) — `lib/dealItems` (6 testes; o arredondamento imita o `round` do banco: 1,5 × 99,99 = 149,99)
 - [x] T31 · Ganho → receita · XL — `revenue_entries` (livro-razão só inserção; o app só lê) e `_crm_sync_revenue`: lança a diferença entre o que o negócio deve (ganho: um por item, ou um pelo valor; na data do ganho; responsável do momento) e o que já está lançado, por linha e período — idempotente. Reabrir/perder/apagar estorna no período de cada lançamento; valor/itens de um ganho ajustam no período do ganho, do mesmo dono; mudar a data do ganho move a receita. Chamada por gatilho no negócio (status, valor, data, apagado) e por gatilho **adiado** nos itens (roda no commit, com a lista pronta). 7 blocos de teste SQL. **Achado no caminho:** o `closed_at` do T28 usava `now()` — fixo na transação: reabrir + ganhar de novo no mesmo lote cairia no instante do primeiro ganho (e no dono errado); virou `clock_timestamp()`. Backfill ensaiado na produção (em rollback, depois do reparo de status): todo ganho com receita = valor, na data do ganho, idempotente. Seção "Receita" no modal (lançamento/ajuste/estorno, item, dono, líquido); os 13 testes SQL da Sprint 9 e das Ondas 1–3 rodam sobre a receita e passam
-- [ ] T32 · Situação e ciclo de vida do contato pela receita · M
+- [x] T32 · Situação e ciclo de vida do contato pela receita · M — Ganho total da Base de Contatos = receita líquida do livro-razão (itens, ajustes e estornos); cliente segue sendo quem tem ganho vivo (decisão 17 refinada: 65 ganhos sem valor). `lifecycle_stage` acompanha os negócios por gatilho (client > opportunity > lost; sem negócio não muda — o sweep do Copilot segue com `mql`). Backfill do ciclo de vida ensaiado na produção (todos os contatos com negócio certos, nenhum sem negócio mudou, idempotente). 3 blocos de teste SQL; os 18 arquivos de teste SQL passam
 - [ ] T33 · Métricas pela receita · L
 - [ ] T34 · Agendador: reciclo e recorrência · XL
 - [ ] T35 · Naturezas Oferta e Processo + marcos · L
