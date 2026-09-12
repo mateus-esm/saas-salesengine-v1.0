@@ -326,3 +326,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W5A | T51 WhatsApp e agente: entrada e anuncio clique-para-WhatsApp | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5B | T52 Telas de Campanhas e Entradas | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W5B | T53 Origem no negocio e no contato; cadastro manual com campanha | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T54 Filtros, quebras e relatorio de campanha (ROI) | Claude / Opus 5 (PM) | L | R$ 20 |

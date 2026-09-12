@@ -16,6 +16,8 @@
 import { Loader2 } from "lucide-react";
 import { ChartCard } from "@/components/dashboard/chart-primitives";
 import { BreakdownView } from "@/components/dashboard/BreakdownView";
+import { CampaignReportTable } from "@/components/crm/campaigns/CampaignResults";
+import { useCampaignReport } from "@/hooks/useCampaigns";
 import { useFunnelBreakdown } from "@/hooks/useDashboardV2";
 import { useDashboardContext } from "./DashboardLayout";
 
@@ -24,6 +26,16 @@ export default function ChannelsPage() {
   const { data: byChannel, isLoading } = useFunnelBreakdown(filters, "channel");
   const { data: byGroup } = useFunnelBreakdown(filters, "origin_group");
   const { data: byContact } = useFunnelBreakdown(filters, "contact_channel");
+  // Sprint 11 · T54 — the lead's first touch.
+  const { data: byCampaign } = useFunnelBreakdown(filters, "campaign");
+  const { data: byPlatform } = useFunnelBreakdown(filters, "platform");
+  const { data: byEntry } = useFunnelBreakdown(filters, "entry");
+  const report = useCampaignReport({
+    from: filters.from.toISOString(),
+    to: filters.to.toISOString(),
+    pipelineIds: filters.pipelineIds,
+    responsibleIds: filters.responsibleIds,
+  });
 
   if (isLoading) {
     return (
@@ -44,6 +56,25 @@ export default function ChannelsPage() {
           metric="won_value"
           emptyMessage="Nenhum lead com origem registrada no período."
         />
+      </ChartCard>
+
+      <ChartCard
+        title="Retorno por campanha"
+        description="A campanha do primeiro toque do lead: receita do livro-razão contra o investimento no período. O investimento é da campanha inteira — os filtros de linha e responsável não o cortam."
+      >
+        <CampaignReportTable rows={report.data ?? []} isLoading={report.isLoading} />
+      </ChartCard>
+
+      <ChartCard title="Campanha" description="O funil de cada campanha: negócios, propostas, reuniões e ganhos.">
+        <BreakdownView rows={byCampaign ?? []} metric="won_value" emptyMessage="Nenhuma campanha no período." />
+      </ChartCard>
+
+      <ChartCard title="Plataforma" description="Meta, Google, TikTok… — de onde veio o clique ou a UTM.">
+        <BreakdownView rows={byPlatform ?? []} metric="new_opportunities" />
+      </ChartCard>
+
+      <ChartCard title="Entrada" description="A porta por onde o lead chegou: formulário, landing page, WhatsApp, agente.">
+        <BreakdownView rows={byEntry ?? []} metric="new_opportunities" />
       </ChartCard>
 
       <ChartCard

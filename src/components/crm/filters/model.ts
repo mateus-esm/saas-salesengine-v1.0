@@ -5,6 +5,7 @@
 // so they are not repeated as chips.
 
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
+import { platformLabel } from "@/lib/attribution";
 import { formatFieldDate } from "@/lib/fields/dateOnly";
 import { getFieldType } from "@/lib/fields/registry";
 import type {
@@ -57,6 +58,22 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL",
 const money = (n: number) => BRL.format(n).replace(/\u00a0/g, " ");
 
 const originLabel = (v: string) => ORIGIN_CATEGORY_OPTIONS.find((o) => o.value === v)?.label ?? v;
+
+/** Sprint 11 · T54 — the first-touch campaign and platform, as chips. */
+export function campaignLabels(ids: string[] | undefined, campaigns: { id: string; name: string }[]): string[] {
+  return (ids ?? []).map((id) => (id === "none" ? "Sem campanha" : campaigns.find((c) => c.id === id)?.name ?? "Campanha removida"));
+}
+
+export function platformLabels(values: string[] | undefined): string[] {
+  return (values ?? []).map((v) => (v === "none" ? "Sem plataforma" : platformLabel(v) ?? v));
+}
+
+function originChips(f: { campaign_ids?: string[]; platforms?: string[] }, campaigns: { id: string; name: string }[]): FilterChip[] {
+  const chips: FilterChip[] = [];
+  if (f.campaign_ids?.length) chips.push({ id: "campaign", label: `Campanha: ${campaignLabels(f.campaign_ids, campaigns).join(", ")}` });
+  if (f.platforms?.length) chips.push({ id: "platform", label: `Plataforma: ${platformLabels(f.platforms).join(", ")}` });
+  return chips;
+}
 
 export function ownerLabels(ids: string[] | undefined, nameOf: (id: string) => string | null): string[] {
   return (ids ?? []).map((id) => (id === "none" ? "Sem responsável" : nameOf(id) ?? "Usuário removido"));
@@ -111,6 +128,7 @@ export interface DealChipContext {
   stages: { id: string; name: string }[];
   fields: CustomFieldSchema[];
   nameOf: (id: string) => string | null;
+  campaigns?: { id: string; name: string }[];
 }
 
 export function dealFilterChips(f: CrmFilters, ctx: DealChipContext): FilterChip[] {
@@ -128,6 +146,7 @@ export function dealFilterChips(f: CrmFilters, ctx: DealChipContext): FilterChip
     chips.push({ id: "value", label: `Valor: ${valueLabel(f.value_min, f.value_max)}` });
   }
   if (f.next_contact) chips.push({ id: "next", label: `Próximo contato: ${NEXT_CONTACT_LABELS[f.next_contact]}` });
+  chips.push(...originChips(f, ctx.campaigns ?? []));
   (f.custom ?? []).forEach((c) => {
     chips.push({
       id: `cf:${c.field_id}`,
@@ -159,6 +178,12 @@ export function removeDealChip(f: CrmFilters, id: string): CrmFilters {
     case "next":
       delete next.next_contact;
       break;
+    case "campaign":
+      delete next.campaign_ids;
+      break;
+    case "platform":
+      delete next.platforms;
+      break;
     default:
       if (id.startsWith("cf:")) {
         const fieldId = id.slice(3);
@@ -182,12 +207,15 @@ export function countDealFilters(f: CrmFilters): number {
   if (f.tags?.length) n++;
   if (f.value_min !== undefined || f.value_max !== undefined) n++;
   if (f.next_contact) n++;
+  if (f.campaign_ids?.length) n++;
+  if (f.platforms?.length) n++;
   n += f.custom?.length ?? 0;
   return n;
 }
 
 export interface ContactChipContext {
   pipelines: { id: string; name: string }[];
+  campaigns?: { id: string; name: string }[];
 }
 
 export function contactFilterChips(f: ContactFilters, ctx: ContactChipContext): FilterChip[] {
@@ -204,6 +232,7 @@ export function contactFilterChips(f: ContactFilters, ctx: ContactChipContext): 
   }
   if (f.tags?.length) chips.push({ id: "tags", label: `Etiquetas: ${f.tags.join(", ")}` });
   if (f.next_contact) chips.push({ id: "next", label: `Próximo contato: ${NEXT_CONTACT_LABELS[f.next_contact]}` });
+  chips.push(...originChips(f, ctx.campaigns ?? []));
   return chips;
 }
 
@@ -214,6 +243,8 @@ export function removeContactChip(f: ContactFilters, id: string): ContactFilters
   if (id === "origin") delete next.origin_categories;
   if (id === "tags") delete next.tags;
   if (id === "next") delete next.next_contact;
+  if (id === "campaign") delete next.campaign_ids;
+  if (id === "platform") delete next.platforms;
   return next;
 }
 
@@ -227,6 +258,8 @@ export function countContactFilters(f: ContactFilters): number {
   if (f.origin_categories?.length) n++;
   if (f.tags?.length) n++;
   if (f.next_contact) n++;
+  if (f.campaign_ids?.length) n++;
+  if (f.platforms?.length) n++;
   return n;
 }
 

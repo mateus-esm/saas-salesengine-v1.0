@@ -7,6 +7,8 @@ import { useRef, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
+import { useCampaigns } from "@/hooks/useCampaigns";
+import { PLATFORMS } from "@/lib/attribution";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import type { SetFilterOptions } from "@/hooks/useUrlFilters";
@@ -43,6 +45,7 @@ interface ContactFilterBarProps {
 export function ContactFilterBar({ filters, onChange, pipelines, resultLabel }: ContactFilterBarProps) {
   const isMobile = useIsMobile();
   const { members, nameOf } = useMemberDirectory();
+  const { campaigns } = useCampaigns();
   const latest = useRef(filters);
   latest.current = filters;
   const set = (patch: Partial<ContactFilters>) => onChange({ ...latest.current, ...patch });
@@ -96,6 +99,35 @@ export function ContactFilterBar({ filters, onChange, pipelines, resultLabel }: 
         />
       ),
     },
+    // Sprint 11 · T54 — the first-touch campaign and platform of the lead.
+    {
+      id: "campaign",
+      label: "Campanha",
+      editor: (close) => (
+        <ChecklistEditor
+          options={[{ value: "none", label: "Sem campanha" }, ...campaigns.map((c) => ({ value: c.id, label: c.name }))]}
+          initial={filters.campaign_ids ?? []}
+          onApply={(v) => {
+            set({ campaign_ids: v.length ? v : undefined });
+            close();
+          }}
+        />
+      ),
+    },
+    {
+      id: "platform",
+      label: "Plataforma",
+      editor: (close) => (
+        <ChecklistEditor
+          options={[{ value: "none", label: "Sem plataforma" }, ...PLATFORMS.map((p) => ({ value: p.value, label: p.label }))]}
+          initial={filters.platforms ?? []}
+          onApply={(v) => {
+            set({ platforms: v.length ? v : undefined });
+            close();
+          }}
+        />
+      ),
+    },
     {
       id: "tags",
       label: "Etiquetas",
@@ -125,7 +157,7 @@ export function ContactFilterBar({ filters, onChange, pipelines, resultLabel }: 
     },
   ];
 
-  const chips = contactFilterChips(filters, { pipelines });
+  const chips = contactFilterChips(filters, { pipelines, campaigns });
   const count = countContactFilters(filters);
 
   const controls = (

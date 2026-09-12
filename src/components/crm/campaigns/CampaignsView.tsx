@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Link2, Loader2, Megaphone, Plus, Waypoints } from "lucide-react";
+import { BarChart3, Link2, Loader2, Megaphone, Plus, Waypoints } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { CampaignDialog } from "./CampaignDialog";
+import { CampaignResults } from "./CampaignResults";
 import { EntryDialog } from "./EntryDialog";
 
 const brl = (v: number) =>
@@ -36,7 +37,7 @@ const ago = (iso: string | null) => {
   }
 };
 
-type Section = "campanhas" | "entradas";
+type Section = "campanhas" | "resultados" | "entradas";
 
 /**
  * Sprint 11 · Onda 5 · T52 — where leads come from. Campaigns: what each brought
@@ -73,13 +74,16 @@ export function CampaignsView() {
         <Tabs value={section} onValueChange={(v) => setSection(v as Section)}>
           <TabsList>
             <TabsTrigger value="campanhas" className="gap-1.5"><Megaphone className="h-4 w-4" />Campanhas</TabsTrigger>
+            <TabsTrigger value="resultados" className="gap-1.5"><BarChart3 className="h-4 w-4" />Resultados</TabsTrigger>
             <TabsTrigger value="entradas" className="gap-1.5"><Waypoints className="h-4 w-4" />Entradas</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        {section === "campanhas" ? (
+        {section === "resultados" ? (
+          <CampaignResults />
+        ) : section === "campanhas" ? (
           isLoading ? (
             <Spinner />
           ) : (

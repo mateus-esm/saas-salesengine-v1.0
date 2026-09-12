@@ -10,6 +10,8 @@ import { useRef, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
+import { useCampaigns } from "@/hooks/useCampaigns";
+import { PLATFORMS } from "@/lib/attribution";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import type { SetFilterOptions } from "@/hooks/useUrlFilters";
@@ -52,6 +54,7 @@ interface DealFilterBarProps {
 export function DealFilterBar({ filters, onChange, stages, fields, resultLabel }: DealFilterBarProps) {
   const isMobile = useIsMobile();
   const { members, nameOf } = useMemberDirectory();
+  const { campaigns } = useCampaigns();
   // The search box fires 300 ms after the last keystroke; read the filters then.
   const latest = useRef(filters);
   latest.current = filters;
@@ -98,6 +101,35 @@ export function DealFilterBar({ filters, onChange, stages, fields, resultLabel }
           initial={filters.origin_categories ?? []}
           onApply={(v) => {
             set({ origin_categories: v.length ? v : undefined });
+            close();
+          }}
+        />
+      ),
+    },
+    // Sprint 11 · T54 — the first-touch campaign and platform of the lead.
+    {
+      id: "campaign",
+      label: "Campanha",
+      editor: (close) => (
+        <ChecklistEditor
+          options={[{ value: "none", label: "Sem campanha" }, ...campaigns.map((c) => ({ value: c.id, label: c.name }))]}
+          initial={filters.campaign_ids ?? []}
+          onApply={(v) => {
+            set({ campaign_ids: v.length ? v : undefined });
+            close();
+          }}
+        />
+      ),
+    },
+    {
+      id: "platform",
+      label: "Plataforma",
+      editor: (close) => (
+        <ChecklistEditor
+          options={[{ value: "none", label: "Sem plataforma" }, ...PLATFORMS.map((p) => ({ value: p.value, label: p.label }))]}
+          initial={filters.platforms ?? []}
+          onApply={(v) => {
+            set({ platforms: v.length ? v : undefined });
             close();
           }}
         />
@@ -163,7 +195,7 @@ export function DealFilterBar({ filters, onChange, stages, fields, resultLabel }
     })),
   ];
 
-  const chips = dealFilterChips(filters, { stages, fields, nameOf });
+  const chips = dealFilterChips(filters, { stages, fields, nameOf, campaigns });
   const count = countDealFilters(filters);
   const owners = filters.owner_ids ?? [];
 

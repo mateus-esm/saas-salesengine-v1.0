@@ -10,6 +10,7 @@ import {
   normalizeMatchKeys,
   type Campaign,
   type CampaignDraft,
+  type CampaignReportRow,
   type UnmatchedUtm,
 } from "@/lib/campaigns";
 
@@ -20,7 +21,23 @@ export const campaignKeys = {
   list: () => ["crm_campaigns", "list"] as const,
   spend: (campaignId: string | null) => ["crm_campaigns", "spend", campaignId] as const,
   unmatched: () => ["crm_campaigns", "unmatched"] as const,
+  report: (args: CampaignReportArgs) =>
+    [
+      "crm_campaigns",
+      "report",
+      args.from,
+      args.to,
+      [...(args.pipelineIds ?? [])].sort().join(","),
+      [...(args.responsibleIds ?? [])].sort().join(","),
+    ] as const,
 };
+
+export interface CampaignReportArgs {
+  from: string;
+  to: string;
+  pipelineIds?: string[];
+  responsibleIds?: string[];
+}
 
 export interface SpendEntry {
   id: string;
@@ -138,4 +155,31 @@ export function useCampaignSpend(campaignId: string | null) {
   });
 
   return { spend: list.data ?? [], isLoading: list.isLoading, add, remove };
+}
+
+/**
+ * Sprint 11 · T54 — what each campaign brought and cost in the period, counted
+ * like the dashboard (same scope, same pipeline and owner filters). Under
+ * campaignKeys.all, so a new spend entry refreshes it.
+ */
+export function useCampaignReport(args: CampaignReportArgs) {
+  return useQuery({
+    queryKey: campaignKeys.report(args),
+    staleTime: 60_000,
+    queryFn: async (): Promise<CampaignReportRow[]> => {
+      const { data, error } = await sb.rpc("crm_campaign_report", {
+        p_from: args.from,
+        p_to: args.to,
+        // null, not [], means "no filter".
+        p_pipeline_ids: args.pipelineIds?.length ? args.pipelineIds : null,
+        p_responsible_ids: args.responsibleIds?.length ? args.responsibleIds : null,
+      });
+      if (error) throw error;
+      return ((data ?? []) as CampaignReportRow[]).map((r) => ({
+        ...r,
+        revenue: Number(r.revenue) || 0,
+        spend: Number(r.spend) || 0,
+      }));
+    },
+  });
 }

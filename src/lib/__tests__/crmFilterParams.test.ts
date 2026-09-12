@@ -134,3 +134,24 @@ describe("sort", () => {
     expect(FILTER_PARAM_KEYS).toContain("cf");
   });
 });
+
+describe("campaign and platform (Sprint 11 · T54)", () => {
+  const campaign = "22222222-2222-4222-8222-222222222222";
+
+  it("round trip on deals and contacts, 'none' included", () => {
+    const deals: CrmFilters = { campaign_ids: ["none", campaign], platforms: ["meta", "none"] };
+    expect(paramsToCrmFilters(crmFiltersToParams(deals))).toEqual(deals);
+    const contacts: ContactFilters = { campaign_ids: [campaign], platforms: ["google"] };
+    expect(paramsToContactFilters(contactFiltersToParams(contacts))).toEqual(contacts);
+  });
+
+  it("drops what is not a campaign id or a known platform", () => {
+    const f = paramsToCrmFilters(new URLSearchParams("campanha=abc,none&plataforma=orkut,meta"));
+    expect(f.campaign_ids).toEqual(["none"]);
+    expect(f.platforms).toEqual(["meta"]);
+  });
+
+  it("a tab switch clears them", () => {
+    expect(FILTER_PARAM_KEYS).toEqual(expect.arrayContaining(["campanha", "plataforma"]));
+  });
+});

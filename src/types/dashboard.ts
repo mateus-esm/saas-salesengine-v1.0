@@ -93,7 +93,11 @@ export type BreakdownDimension =
   | "origin_group"
   | "loss_reason"
   /** Sprint 11 · T33 — revenue per catalog item (the ledger); a deal without items is "Sem item". */
-  | "product";
+  | "product"
+  /** Sprint 11 · T54 — the lead's first touch: campaign, platform, entry. */
+  | "campaign"
+  | "platform"
+  | "entry";
 
 export type SeriesGranularity = "day" | "week" | "month";
 
@@ -148,4 +152,7 @@ export const BREAKDOWN_LABELS: Record<BreakdownDimension, string> = {
   origin_group: "Grupo de origem",
   loss_reason: "Motivo de perda",
   product: "Produto",
+  campaign: "Campanha",
+  platform: "Plataforma",
+  entry: "Entrada",
 };

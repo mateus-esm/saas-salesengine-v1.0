@@ -144,3 +144,87 @@ export interface UnmatchedUtm {
   last_at: string;
   platform: Platform | null;
 }
+
+// ---------------------------------------------------------------------------
+// Sprint 11 · T54 — the campaign report (crm_campaign_report)
+// ---------------------------------------------------------------------------
+
+export type ReportPeriod = "this_month" | "last_month" | "30d" | "90d" | "this_year";
+
+export const REPORT_PERIOD_LABELS: Record<ReportPeriod, string> = {
+  this_month: "Este mês",
+  last_month: "Mês passado",
+  "30d": "Últimos 30 dias",
+  "90d": "Últimos 90 dias",
+  this_year: "Este ano",
+};
+
+/** [from, to) as ISO, in local days. */
+export function reportRange(period: ReportPeriod, now: Date = new Date()): { from: string; to: string } {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const day = (yy: number, mm: number, dd: number) => new Date(yy, mm, dd).toISOString();
+  switch (period) {
+    case "this_month":
+      return { from: day(y, m, 1), to: day(y, m + 1, 1) };
+    case "last_month":
+      return { from: day(y, m - 1, 1), to: day(y, m, 1) };
+    case "30d":
+      return { from: day(y, m, d - 29), to: day(y, m, d + 1) };
+    case "90d":
+      return { from: day(y, m, d - 89), to: day(y, m, d + 1) };
+    case "this_year":
+      return { from: day(y, 0, 1), to: day(y + 1, 0, 1) };
+  }
+}
+
+export interface CampaignReportRow {
+  campaign_id: string | null;
+  name: string;
+  platform: string | null;
+  status: string | null;
+  goal_leads: number | null;
+  leads: number;
+  deals: number;
+  wins: number;
+  losses: number;
+  revenue: number;
+  spend: number;
+  cpl: number | null;
+  cost_per_win: number | null;
+  win_rate: number | null;
+  roas: number | null;
+  roi: number | null;
+}
+
+/** The totals line: sums, and the ratios over the campaigns that had spend. */
+export function reportTotals(rows: CampaignReportRow[]): Omit<CampaignReportRow, "campaign_id" | "name" | "platform" | "status" | "goal_leads"> {
+  const sum = (k: "leads" | "deals" | "wins" | "losses" | "revenue" | "spend") => rows.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+  const leads = sum("leads");
+  const deals = sum("deals");
+  const wins = sum("wins");
+  const losses = sum("losses");
+  const revenue = Math.round(sum("revenue") * 100) / 100;
+  const spend = Math.round(sum("spend") * 100) / 100;
+  // Ratios over the campaigns that had spend (a campaign without spend, or "Sem
+  // campanha", would dilute cost per lead and inflate the return).
+  const paid = rows.filter((r) => Number(r.spend) > 0);
+  const paidLeads = paid.reduce((s, r) => s + r.leads, 0);
+  const paidWins = paid.reduce((s, r) => s + r.wins, 0);
+  const paidRevenue = paid.reduce((s, r) => s + (Number(r.revenue) || 0), 0);
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    leads,
+    deals,
+    wins,
+    losses,
+    revenue,
+    spend,
+    cpl: spend > 0 && paidLeads > 0 ? round2(spend / paidLeads) : null,
+    cost_per_win: spend > 0 && paidWins > 0 ? round2(spend / paidWins) : null,
+    win_rate: wins + losses > 0 ? Math.round((1000 * wins) / (wins + losses)) / 10 : null,
+    roas: spend > 0 ? round2(paidRevenue / spend) : null,
+    roi: spend > 0 ? Math.round((1000 * (paidRevenue - spend)) / spend) / 10 : null,
+  };
+}
