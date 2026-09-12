@@ -174,6 +174,13 @@ begin
   assert (a->>'total')::int = 1 and (a->'touches'->0->>'first')::boolean
          and a->'touches'->0->>'campaign' = 'Usina Verão 2026' and a->'touches'->0->>'entry_name' = 'Manual',
     'T53-4 FAIL: a origem do lead, veio ' || a::text;
+
+  -- T57 — a planilha importada chega pela entrada "Importação / API".
+  insert into public.leads (id, equipe_id, name) values
+    ('5132e000-0000-0000-0000-00000000000b', '5132a000-0000-0000-0000-000000000001', 'Da planilha');
+  r := public.crm_record_touch('5132e000-0000-0000-0000-00000000000b', null, '{"_entry_kind":"import"}');
+  assert (select e.kind from public.crm_entries e where e.id = (r->>'entry_id')::uuid) = 'import',
+    'T57 FAIL: a planilha deveria chegar pela importacao, veio ' || r::text;
 end $$;
 
 reset role;

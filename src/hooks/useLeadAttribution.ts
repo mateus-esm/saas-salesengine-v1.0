@@ -57,3 +57,21 @@ export function useLeadAttribution(leadId: string | null | undefined, enabled: b
     },
   });
 }
+
+/**
+ * Sprint 11 · T57 — a row imported from a spreadsheet is an arrival through the
+ * team's "Importação / API" entry (crm_record_touch picks it). Never throws: the
+ * lead is already saved.
+ */
+export async function recordImportTouch(leadId: string): Promise<void> {
+  try {
+    const { error } = await sb.rpc("crm_record_touch", {
+      p_lead_id: leadId,
+      p_entry_id: null,
+      p_payload: { _entry_kind: "import" },
+    });
+    if (error) console.error("[crm] crm_record_touch:", error.message);
+  } catch (e) {
+    console.error("[crm] crm_record_touch:", e);
+  }
+}

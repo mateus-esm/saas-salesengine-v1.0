@@ -623,8 +623,11 @@ begin
     raise exception 'lead_not_found' using errcode = 'P0002';
   end if;
 
+  -- Sem entrada: a da tela — o cadastro manual, ou a planilha importada
+  -- (`_entry_kind: import` → "Importação / API").
   if p_entry_id is null then
-    p_entry_id := public._crm_entry_for(v_lead.equipe_id, 'manual');
+    p_entry_id := public._crm_entry_for(v_lead.equipe_id,
+                    case when p_payload->>'_entry_kind' = 'import' then 'import' else 'manual' end);
   end if;
   select * into v_entry from public.crm_entries where id = p_entry_id and equipe_id = v_lead.equipe_id;
   if not found then
