@@ -1807,27 +1807,192 @@ modify o editor da tabela (campos do formulário) e a gaveta (copiar link).
   PR e merge.
 - Handoff "Sprint 11 · Onda 4".
 
-### Onda 5 — Entradas e atribuição *(plano detalhado depois)*
+### Onda 5 — Entradas e atribuição
 
-Motores: Entradas v1 · Métricas (ROI sobre a receita).
+Motores: **Entradas v1** (cada porta carimba a origem, guarda o que chegou e escolhe o
+responsável) · **Métricas** (campanha, plataforma e entrada nas quebras; ROI sobre a
+receita da Onda 3) · **Linha** (naturezas Duração e Entradas).
 
-- Naturezas **Duração** (contínuo, ou campanha com início e fim — ao terminar para de
-  receber e o placar vira o relatório da campanha) e **Entradas** (que fontes alimentam
-  a linha) no pipeline.
-- **Atribuição por lead** (primeiro toque): plataforma, campanha, conjunto/anúncio,
-  UTMs, click IDs (`fbclid`, `gclid`, `ctwa_clid`), landing page, formulário,
-  referrer, payload bruto.
-- **Tabela de campanhas:** nome, plataforma, responsável, meta, investimento (manual
-  primeiro) → ROI por campanha sobre a receita (Onda 3).
-- Cada entrada **carimba a própria origem** (Formulário Meta ADS → social pago / Meta /
-  nome do formulário), captura `utm_*` sozinha e pode definir o responsável (fixo ou
-  rodízio).
-- **Spike:** o canal de WhatsApp entrega dado de anúncio clique-para-WhatsApp? Se sim,
-  "Mensagem Whatsapp" ganha a campanha sozinha.
-- Os 639 "Tráfego Pago" antigos ficam como social pago sem plataforma — a campanha não
-  é recuperável.
-- Página de integrações (Meta Ads, Google Ads, ClickSign, Resend, APITemplate) →
-  sprint seguinte.
+#### Achados que moldam a onda (produção, 12/09)
+
+31. **Uma taxonomia boa, meio usada.** `leads.origin_category` (as 12 categorias MECE da
+    Sprint 4: busca paga, social pago, indicação, cold message…) só é preenchida pela
+    importação da Sprint 10 (1.250 da Solo) e pelo cadastro manual. O que chega por
+    webhook vem como `source` "Meta ADS"/"Landing Page - Lead Land" + `origem`
+    "webhook", sem categoria — no dashboard vira "Não informado". Na Casa Flow e na
+    Cinemas Benficas, 100% é "IA": quem **criou** (o agente), não **de onde veio**.
+32. **O webhook de entrada joga o payload fora.** Só os campos mapeados sobrevivem; a
+    querystring é descartada de propósito (`?fbclid=` "sanitizado"); não há log de
+    entrada (`webhook_logs` inbound = 0 linhas). Lead que volta atualiza e-mail/etiquetas,
+    mas a nova chegada (outra campanha) não deixa rastro além de `lead_activities`.
+33. **Lead de webhook nasce sem dono e como "manual".** `creation_source` fica no padrão
+    (`manual`) e o responsável do negócio vem de `leads.responsible_id`, que o webhook
+    nunca preenche → os formulários da Solo caem em "Sem responsável".
+34. **WhatsApp:** nenhuma instância da Solo API na produção (`wpp_instances` = 0); o
+    caminho vivo é o GPT Maker, cujo payload traz canal e contato, não anúncio. O
+    formato Evolution (Solo API) costuma trazer o anúncio clique-para-WhatsApp em
+    `contextInfo.externalAdReply` (`sourceId`, `sourceUrl`, `ctwaClid`) — dá para
+    capturar, **não dá para ver funcionando** até existir uma instância recebendo anúncio.
+35. **O resto já existe e se estende:** quebras do dashboard por `channel`/`origin_group`
+    (via `v_lead_channel`), filtro por `origin_categories`, card com a origem. A onda
+    acrescenta plataforma, campanha e entrada; não troca o que funciona.
+36. **Nenhum pipeline usa naturezas ainda** (`natures = {}` em todos) — Duração e
+    Entradas entram sem migrar nada. `origin_taxonomy` (rótulos por equipe) só tem a
+    WI Advogados (4 rótulos): continua lido, sem tela nova.
+
+#### Decisões da Onda 5
+
+29. **Toque = uma chegada** (`lead_touches`): quando, por qual entrada, categoria,
+    plataforma, campanha, `utm_*`, click IDs (`fbclid`, `gclid`, `ctwa_clid`), anúncio,
+    formulário, landing page, referrer e o **payload bruto** (sem segredos, até 32 KB).
+    Lead que volta ganha um toque, não um lead novo.
+30. **Atribuição v1 = primeiro toque.** O lead carrega o primeiro toque
+    (`first_touch_id`) e, copiados dele para filtro e quebra, `entry_id`, `campaign_id`,
+    `origin_platform` — `origin_category` continua sendo a categoria. O último toque
+    aparece na tela; modelo multi-toque fica para depois.
+31. **Plataforma é lista fechada** (meta, google, tiktok, linkedin, youtube, kwai,
+    pinterest, email, whatsapp, site, outra), deduzida nesta ordem: click ID (`fbclid`/
+    `ctwa_clid` → meta, `gclid` → google) → `utm_source` (facebook/fb/ig/instagram →
+    meta; google/adwords → google…) → padrão da entrada.
+32. **Entrada** (`crm_entries`) = porta com carimbo: cada webhook de entrada
+    (formulário, landing page), o agente/WhatsApp, "Manual", "Importação". Carimbo:
+    categoria, plataforma, campanha padrão, linha (o `pipeline_id` que já existe) e a
+    regra de responsável. Webhook novo ganha a sua entrada sozinho.
+33. **Campanha** (`crm_campaigns`): nome, plataforma, categoria, responsável, metas
+    (leads, negócios, receita), início/fim, status e **chaves** (valores de
+    `utm_campaign`/IDs da plataforma que caem nela). Investimento em lançamentos
+    (`crm_campaign_spend`: dia, valor, fonte `manual` — a API da Meta/Google entra na
+    mesma tabela na sprint de integrações).
+34. **Campanha do toque**, nesta ordem: ID da campanha no payload que bate numa chave →
+    `utm_campaign` que bate numa chave (sem diferenciar maiúsculas) → campanha padrão da
+    entrada → nenhuma. Nada de criar campanha sozinho a partir de UTM desconhecida: o
+    valor fica no toque e a tela de campanhas mostra "UTMs sem campanha" para ligar.
+35. **Responsável pela entrada:** nenhum (hoje) · fixo · rodízio entre usuários
+    escolhidos (pula quem saiu da equipe). Vale para o negócio que a entrada cria; lead
+    que volta com negócio aberto mantém o dono.
+36. **ROI** = receita reconhecida (livro-razão da Onda 3) dos negócios de leads cuja
+    campanha de primeiro toque é X, no período ÷ investimento no período. Junto: CPL
+    (investimento ÷ leads), custo por ganho, taxa de ganho.
+37. **Naturezas:** **Duração** — contínua, ou campanha com início e fim (depois do fim a
+    linha para de receber: o lead e o toque são gravados, o negócio vai para a linha
+    padrão da equipe; o placar mostra o período da campanha). **Entradas** — as entradas
+    que alimentam a linha, listadas no editor de naturezas com o carimbo de cada uma.
+38. **Legado (T56, com aprovação):** um toque por lead existente, na data de criação,
+    com o carimbo deduzido da origem antiga: "Tráfego Pago" → social pago sem plataforma
+    (a campanha não é recuperável), "Google ADS" → busca paga/google, "Meta ADS" → social
+    pago/meta, "Landing Page"/"Site" → direto/marca com o nome da página, "Indicação" →
+    indicação, "Mensagem Whatsapp"/"Base Ativa" → cold message, "Prospecção Ativa" →
+    cold call, "Database"/"Jestor"/"Solo App" → importação; "IA" → entrada do agente,
+    categoria em branco (não sabemos de onde veio).
+39. **Fora da onda:** página de integrações e APIs da Meta/Google (investimento e
+    conversões automáticos) → sprint seguinte; esta onda deixa as portas abertas
+    (click IDs guardados, fonte do investimento).
+
+#### Onda 5A — Modelo e captura
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T48 | Entradas, campanhas e toques (o modelo) | Entradas · Métricas | L |
+| T49 | Responsável pela entrada (fixo, rodízio) | Entradas | M |
+| T50 | Webhook de entrada carimba a origem | Entradas | L |
+| T51 | WhatsApp e agente: entrada e anúncio clique-para-WhatsApp | Entradas | M |
+
+#### T48 · Entradas, campanhas e toques (L)
+
+**Files:** create `supabase/migrations/20260913000100_sprint11_w5_attribution.sql`,
+`supabase/tests/sprint11_w5_attribution.test.sql`, `src/lib/attribution.ts` (+ testes).
+
+- `crm_entries`, `crm_campaigns`, `crm_campaign_spend`, `lead_touches`; `leads.first_touch_id`,
+  `entry_id`, `campaign_id`, `origin_platform`. RLS por equipe; escrita pelos verbos.
+- `_crm_touch_fields(entry, payload)` lê `utm_*` (plano, aninhado em `utm`, e na
+  querystring de `page_url`/`landing_page`), click IDs, anúncio, formulário, referrer;
+  `_crm_platform_from(...)`, `_crm_resolve_campaign(...)`; payload sem segredos.
+- `crm_record_touch(p_lead_id, p_entry_id, p_payload, p_opportunity_id)` — primeiro toque
+  preenche o lead (sem apagar categoria já escrita à mão); gatilho cria a entrada de todo
+  webhook `receive_lead` (e as 7 que existem).
+- `lib/attribution` (gêmeo da dedução de plataforma, rótulos).
+
+#### T49 · Responsável pela entrada (M)
+
+**Files:** migration de atribuição (regra + `_crm_pick_owner`), teste SQL.
+
+- `owner_rule {mode: none|fixed|round_robin, user_ids}` + cursor do rodízio por entrada
+  (atômico); `crm_record_touch` devolve o dono escolhido para o negócio que a entrada criar.
+
+#### T50 · Webhook de entrada carimba a origem (L)
+
+**Files:** modify `supabase/functions/crm-webhook/index.ts`; create
+`supabase/functions/_shared/attribution.ts` (+ teste Deno).
+
+- Guarda payload + querystring no toque (o `?fbclid=` deixa de ser jogado fora);
+  `creation_source = 'webhook'`; lead que volta ganha toque; o negócio novo nasce com o
+  dono da regra da entrada e ligado ao toque.
+
+#### T51 · WhatsApp e agente (M)
+
+**Files:** modify `supabase/functions/solo-wpp-webhook/index.ts`,
+`supabase/functions/gpt-maker-webhook/index.ts`, `_shared/attribution.ts` (+ teste).
+
+- Primeira mensagem de um contato novo = toque da entrada do canal/agente; Evolution:
+  `contextInfo.externalAdReply`/`conversionSource` → meta, `ctwa_clid`, anúncio.
+- Spike registrado: sem instância da Solo API na produção, o caminho fica testado por
+  payload de exemplo e confirmado quando houver anúncio de verdade.
+
+#### Onda 5B — Telas, ROI e linha
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T52 | Telas de Campanhas e Entradas | Entradas · Métricas | L |
+| T53 | Origem no negócio e no contato; cadastro manual com campanha | Entradas | M |
+| T54 | Filtros, quebras e relatório de campanha (ROI) | Métricas | L |
+| T55 | Naturezas Duração e Entradas | Linha | M |
+| T56 | Legado: origem das bases antigas | Entradas | M |
+| T57 | Verificação, deploy (parada) e handoff | — | S |
+
+#### T52 · Telas de Campanhas e Entradas (L)
+
+**Files:** create `src/hooks/useCampaigns.ts`, `src/hooks/useEntries.ts`,
+`src/components/crm/campaigns/*`, `src/components/crm/entries/*`; modify a aba do CRM.
+
+- Campanhas: lista (status, plataforma, responsável, leads, investimento), formulário
+  (metas, datas, chaves de UTM), lançamentos de investimento; "UTMs sem campanha" com
+  "ligar a uma campanha". Entradas: cada porta com o carimbo e a regra de responsável.
+
+#### T53 · Origem no negócio e no contato (M)
+
+**Files:** modify `OpportunityDetailModal.tsx`, `ContactDetailsModal.tsx`,
+`AddContactModal.tsx`; create `src/components/crm/attribution/OriginBlock.tsx`.
+
+- Bloco "Origem": primeiro e último toque (entrada, categoria, plataforma, campanha, UTMs,
+  click IDs, página, formulário) e o histórico de toques; cadastro manual escolhe a
+  campanha (toque da entrada "Manual").
+
+#### T54 · Filtros, quebras e relatório de campanha (L)
+
+**Files:** modify a migration de filtros (campanha, plataforma, entrada), `get_funnel_breakdown`
+(dimensões `campaign`, `platform`, `entry`); create `crm_campaign_report` + tela.
+
+- ROI, CPL, custo por ganho e taxa de ganho por campanha no período; o relatório
+  respeita os mesmos filtros do dashboard.
+
+#### T55 · Naturezas Duração e Entradas (M)
+
+**Files:** modify `crm_save_pipeline_natures`, `lib/natures` (+ testes),
+`PipelineNaturesEditor.tsx`, `crm_record_touch` (linha encerrada).
+
+#### T56 · Legado (M)
+
+**Files:** create `supabase/scripts/2026-09-13_sprint11_backfill_touches.sql` (+ ensaio).
+
+- Um toque por lead existente pelo mapa da decisão 38; idempotente; ensaiado em rollback.
+
+#### T57 · Verificação, deploy e handoff (S)
+
+- Gates; testes SQL/Deno da onda + anteriores.
+- **Ponto de parada — aprovação do founder** para: migrations da onda, redeploy de
+  `crm-webhook`, `solo-wpp-webhook` e `gpt-maker-webhook` (portas vivas de lead — ensaio
+  e fumaça antes), legado, PR e merge.
+- Handoff "Sprint 11 · Onda 5".
 
 ### Fora desta sprint
 
@@ -1893,6 +2058,19 @@ Execução solo e sequencial, branch `claude/sprint11/w4a/artefatos` (T39–T43)
 `claude/sprint11/w4b/automacao-e-formulario` (T44–T47, do 4A). A gaveta do registro e o
 modal do negócio são tocados por várias tarefas, uma de cada vez, na ordem.
 
+
+### Wave map — Onda 5
+
+```
+5A   T48 ─► T49 ─► T50 ─► T51          modelo; responsável; webhook; WhatsApp/agente
+5B   T48 ─► T52 ─► T53                 telas de campanhas/entradas; origem no negócio
+     T48 ─► T54 · T55 · T56            ROI e quebras; naturezas; legado
+     T56 ─► T57                        uma parada: migrations, 3 edges vivas, legado, PR
+```
+
+Execução solo e sequencial, branch `claude/sprint11/w5a/entradas` (T48–T51) e
+`claude/sprint11/w5b/campanhas-e-roi` (T52–T57, do 5A). O `crm-webhook` é a porta
+viva de lead de todos os tenants: teste Deno da captura + ensaio SQL antes da parada.
 ---
 
 ## 📊 Ledger
@@ -1956,3 +2134,16 @@ modal do negócio são tocados por várias tarefas, uma de cada vez, na ordem.
 - [x] T45 · Formulário público por registro · L — `custom_tables.form_config` (ligado, título, texto, campos com obrigatório) pelo verbo `crm_save_form_config` (só tipos que um estranho digita: texto, número, moeda, data, sim/não, seleção, multi-seleção, URL, telefone); `crm_create_form_link` gera o link (token de 32 bytes, **só o hash no banco**, 30 dias) e revoga o anterior; `custom_record_form_links` guarda criação, envio e revogação. Lado público no padrão da casa: edge `public-form` (`verify_jwt = false`, service_role) sobre `_crm_public_form_get` (equipe, título, texto e só os campos do formulário, com o valor atual) e `_crm_public_form_submit` (valida cada tipo no servidor — opção fora da lista, número, data, URL, telefone de 8 a 15 dígitos —, obrigatório vazio recusa o envio inteiro e diz qual campo, grava por `field_id`, fecha o link). 5 blocos de teste SQL (inclusive: campo fora do formulário não vaza nem é escrito pelo público); 3 testes Deno. **Achado no caminho:** "4.500,00" não passava como número no servidor — entrou `_crm_parse_br_number`, gêmeo do `parseBrNumber` do registro de tipos. Frontend: "Formulário" na barra da tabela (liga, título, texto, campos e obrigatórios); na gaveta, "Formulário do cliente" (respondido em…, vale até…, gerar e copiar link — o link só aparece na hora, o banco não tem como mostrá-lo de novo); página pública `/f/:token` pelo mesmo `DynamicFieldRenderer` do negócio, que nomeia o campo a corrigir. `lib/publicForm` 5 testes. Limite registrado: arquivo (foto do RG/CNH) não entra no formulário público na v1
 - [x] T46 · Semente da Solo Energia: Propostas Comerciais e Contratos · M — `supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql` (idempotente, só cria o que não existe): **Propostas Comerciais** (proposta, 24 colunas: os campos do Jestor — fabricante, módulo, nº de módulos, potência, inversor, estrutura, monitoramento, consumo médio, sistema, preço total, condições, extras, adicionais, exclusões, link e PDF — mais consultas a cliente, telefone, e-mail, responsável, itens e valor do negócio; o status é o do artefato) e **Contratos** (contrato, 23 colunas: Dados para Contrato, consultas, link da assinatura e contrato assinado; formulário público ligado com 17 campos, 8 obrigatórios). Slugs `propostas_comerciais`/`contratos` (as tabelas `proposals`/`contracts` do banco são da cobrança). Ensaio sobre a produção em rollback (`sprint11_w4_seed_solo.test.sql`): as duas nascem como artefato, field_id/key únicos, consultas com fonte válida, o formulário só pede tipos aceitos e **abre pelo lado público**, rodar duas vezes cria só as duas, a "Teste" fica. **Achado no caminho:** nenhuma etapa da Solo Energia declara o marco `proposal_sent` ("Envio de Proposta" é uma etapa aberta comum) — marcar a proposta como enviada grava o evento, mas não move o negócio até o founder ligar a etapa ao marco nas configurações do pipeline (decisão dele; a semente não mexe). Os botões de automação (URLs do n8n) ficam para o founder configurar na tela
 - [x] T47 · Verificação, deploy e handoff · S — **gates (12/09):** `tsc -b` limpo, lint 0 erro, build, vitest 306/306, Deno 97/97, 30/30 suítes SQL em rollback contra a produção; dois testes de varredura do `src/` ganharam 30 s (estouravam os 5 s com a suíte em paralelo). **Deploy (12/09, aprovado pelo founder):** ensaio final verde e cópia das tabelas personalizadas antes de mexer; migrations `20260912100100`…`100600` aplicadas **cada uma numa transação junto com o registro no histórico** (6 linhas com nome); edges `artifact-callback` e `public-form` publicadas (`--no-verify-jwt --use-api`) e respondendo (token desconhecido → 404, sem token → 400, GET → 405); semente da Solo aplicada (Propostas Comerciais 24 colunas, Contratos 23 colunas + formulário com 17 campos); PR #17 mergeado (checks verdes) → Netlify servindo o bundle novo; conversão rodada de novo depois do frontend: 0 tabelas alteradas, 0 colunas sem `field_id`, 0 valores presos à key. Conferido como usuário da Solo (em rollback): a "Teste" em páginas (2 registros), o painel do negócio com as duas tabelas. A "Teste" não tinha valor na coluna `oi` — um registro guardava `{data, table_id}` de um bug antigo da tela, intacto. Verificação no navegador pendente (extensão do Chrome desconectada)
+
+### Ledger · Onda 5
+
+- [ ] T48 · Entradas, campanhas e toques (o modelo) · L
+- [ ] T49 · Responsável pela entrada (fixo, rodízio) · M
+- [ ] T50 · Webhook de entrada carimba a origem · L
+- [ ] T51 · WhatsApp e agente: entrada e anúncio clique-para-WhatsApp · M
+- [ ] T52 · Telas de Campanhas e Entradas · L
+- [ ] T53 · Origem no negócio e no contato; cadastro manual com campanha · M
+- [ ] T54 · Filtros, quebras e relatório de campanha (ROI) · L
+- [ ] T55 · Naturezas Duração e Entradas · M
+- [ ] T56 · Legado: origem das bases antigas · M
+- [ ] T57 · Verificação, deploy e handoff · S
