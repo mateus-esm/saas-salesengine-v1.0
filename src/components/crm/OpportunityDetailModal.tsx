@@ -61,6 +61,7 @@ import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
 import { DealItemsSection } from "./deal/DealItemsSection";
+import { DealRevenueSection } from "./deal/DealRevenueSection";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -353,6 +354,9 @@ export const OpportunityDetailModal = ({
                     onValueChange={(v) => setValue(v !== null && v !== undefined ? String(v) : "")}
                     onHasItemsChange={setHasItems}
                   />
+
+                  {/* Sprint 11 · T31 — what the win put in the books. */}
+                  <DealRevenueSection opportunityId={opportunity.id} open={open} />
 
                   {hasCustomFields && (
                     <div className="space-y-3 pt-1">

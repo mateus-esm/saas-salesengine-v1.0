@@ -27,6 +27,10 @@
 --     não a da criação: um ganho de março importado hoje é um ganho de março.
 --   * Catálogo de eventos: + `reopened`, `recycled` (T34). Fonte: + `timer` (T34).
 --
+-- closed_at usa clock_timestamp(), não now(): dentro de uma transação now() é fixo, e
+-- um reabrir + ganhar de novo no mesmo lote (o agendador, um teste) cairia no mesmo
+-- instante do primeiro ganho — a receita (T31) e o dono do momento dependem da hora.
+--
 -- A ordem dos gatilhos BEFORE é alfabética: trg_opportunity_block_archived,
 -- trg_opportunity_default_owner, trg_opportunity_outcome (este),
 -- trg_opportunity_owner_same_team, trg_opportunity_stage_change. Este roda antes
@@ -94,10 +98,10 @@ begin
   if v_type in ('won', 'lost') then
     -- Na etapa de ganho/perda: fechado, com a data de quando fechou.
     if tg_op = 'INSERT' then
-      new.closed_at := coalesce(new.closed_at, now());
+      new.closed_at := coalesce(new.closed_at, clock_timestamp());
     elsif old.status is distinct from v_type or old.closed_at is null then
       new.closed_at := case when new.closed_at is distinct from old.closed_at and new.closed_at is not null
-                            then new.closed_at else now() end;
+                            then new.closed_at else clock_timestamp() end;
     end if;
     new.status := v_type;
   elsif new.status in ('won', 'lost') then
@@ -116,7 +120,7 @@ begin
       new.lost_reason := null;
     end if;
   elsif new.status in ('won', 'lost') and new.closed_at is null then
-    new.closed_at := now();
+    new.closed_at := clock_timestamp();
   end if;
 
   return new;

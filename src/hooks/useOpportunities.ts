@@ -158,6 +158,8 @@ export const useOpportunityMutations = () => {
     // Sprint 11 · Onda 2 — the server-side tables show deals too.
     queryClient.invalidateQueries({ queryKey: ["opp_table", equipeId] });
     queryClient.invalidateQueries({ queryKey: ["contacts_table", equipeId] });
+    // Sprint 11 · T31 — a win, reopen or value change moves the revenue.
+    queryClient.invalidateQueries({ queryKey: ["deal_revenue"] });
   };
 
   const createOpportunity = useMutation({

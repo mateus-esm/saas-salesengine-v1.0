@@ -97,6 +97,8 @@ export function useOpportunityItems(opportunityId: string | null, enabled: boole
       // Column totals and anything that sums values.
       queryClient.invalidateQueries({ queryKey: ["board", equipeId] });
       queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
+      // A won deal's items are its revenue lines (booked at commit).
+      queryClient.invalidateQueries({ queryKey: ["deal_revenue", opportunityId] });
     },
     onError: (e) => toast.error(itemsErrorMessage(e)),
   });
