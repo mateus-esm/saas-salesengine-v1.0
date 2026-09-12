@@ -37,6 +37,7 @@ import {
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { activeColumns, newColumnKey, type RelationChips } from "@/lib/customTables";
 import { columnFromField } from "@/lib/fields/columns";
+import { getFieldType } from "@/lib/fields/registry";
 
 import { CustomRecordDrawer } from "./CustomRecordDrawer";
 
@@ -130,6 +131,35 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
       ),
     );
   }, [allRows, search]);
+
+  // Sprint 11 · T26 — on a phone each record is a line: its first column, then
+  // the next two fields that have a value. A tap opens the record.
+  const renderMobileRow = useCallback(
+    (row: GridRow) => {
+      const fieldCols = columns.filter((c) => c.kind !== "relation");
+      const shown = (c: ColumnDef) => {
+        const spec = getFieldType(c.kind);
+        const v = row[c.key];
+        return spec.isEmpty(v) ? "" : spec.format(v, { options: c.options?.map((o) => o.value), nameOf });
+      };
+      const [first, ...rest] = fieldCols;
+      const facts = rest
+        .map((c) => ({ label: c.label, value: shown(c) }))
+        .filter((f) => f.value)
+        .slice(0, 2);
+      return (
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{(first && shown(first)) || "Sem nome"}</p>
+          {facts.length > 0 && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {facts.map((f) => `${f.label}: ${f.value}`).join(" · ")}
+            </p>
+          )}
+        </div>
+      );
+    },
+    [columns, nameOf],
+  );
 
   // ---- Cell commit ----------------------------------------------------------
   const handleCellCommit = useCallback(
@@ -258,6 +288,8 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           allowColumnResize
           allowColumnHide
           onRowOpen={setOpenRecordId}
+          renderMobileRow={renderMobileRow}
+          mobileEmptyLabel="Nenhum registro ainda."
         />
       </div>
 

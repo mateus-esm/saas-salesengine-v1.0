@@ -69,22 +69,23 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-border bg-card px-4 py-2 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="border-b border-border bg-card px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
           <PipelineSelector />
           <Tabs value={view} onValueChange={setView}>
             <TabsList>
-              <TabsTrigger value="kanban" className="flex items-center gap-2">
+              {/* Sprint 11 · T26 — icons only on a phone. */}
+              <TabsTrigger value="kanban" className="flex items-center gap-2" aria-label="Kanban">
                 <LayoutGrid className="h-4 w-4" />
-                Kanban
+                <span className="hidden sm:inline">Kanban</span>
               </TabsTrigger>
-              <TabsTrigger value="leads" className="flex items-center gap-2">
+              <TabsTrigger value="leads" className="flex items-center gap-2" aria-label="Leads">
                 <Table2 className="h-4 w-4" />
-                Leads
+                <span className="hidden sm:inline">Leads</span>
               </TabsTrigger>
-              <TabsTrigger value="agent" className="flex items-center gap-2">
+              <TabsTrigger value="agent" className="flex items-center gap-2" aria-label="Copilot">
                 <Bot className="h-4 w-4" />
-                Copilot
+                <span className="hidden sm:inline">Copilot</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>

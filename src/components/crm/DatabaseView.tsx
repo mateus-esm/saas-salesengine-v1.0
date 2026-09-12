@@ -33,6 +33,7 @@ import { usePipelines } from "@/hooks/usePipelines";
 import { useContactUrlFilters } from "@/hooks/useUrlFilters";
 import { isTechnicalId } from "@/lib/displayName";
 import { columnFromField } from "@/lib/fields/columns";
+import { formatBRL } from "@/lib/scoreboard";
 import { flattenPages } from "@/lib/tablePages";
 import { cn } from "@/lib/utils";
 import type { ContactRelationship, CrmSort } from "@/types/crmFilters";
@@ -222,6 +223,35 @@ export const DatabaseView = () => {
     [rows, visibleContactFields],
   );
 
+  // Sprint 11 · T26 — on a phone each contact is a line: name; situation ·
+  // deals (the first open one's stage) · phone; total won. A tap opens it.
+  const renderMobileRow = useCallback((row: GridRow) => {
+    const rel = row.relationship as ContactRelationship;
+    const deals = (row.deals as ContactDeal[]) ?? [];
+    const openDeal = deals.find((d) => d.status === "open");
+    const won = Number(row.won_value) || 0;
+    return (
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{(row.name as string) || "—"}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", RELATIONSHIP_STYLE[rel])}>
+              {RELATIONSHIP_LABELS[rel] ?? "—"}
+            </span>
+            {deals.length > 0 && (
+              <span>
+                {deals.length} {deals.length === 1 ? "negócio" : "negócios"}
+                {openDeal ? ` · ${openDeal.stage_name}` : ""}
+              </span>
+            )}
+            {row.phone ? <span>· {row.phone as string}</span> : null}
+          </p>
+        </div>
+        {won > 0 && <span className="shrink-0 text-xs font-semibold text-emerald-600">{formatBRL(won)}</span>}
+      </div>
+    );
+  }, []);
+
   // ---- Sort -----------------------------------------------------------------
   const gridSortKey = sort ? Object.keys(SORTABLE).find((k) => SORTABLE[k] === sort.key) : undefined;
   const handleSort = useCallback(
@@ -360,6 +390,8 @@ export const DatabaseView = () => {
             sortKey={gridSortKey}
             sortDir={sort?.dir ?? null}
             onRowOpen={(id) => setOpenLeadId(id)}
+            renderMobileRow={renderMobileRow}
+            mobileEmptyLabel="Nenhum contato com esses filtros."
             hasMore={!!query.hasNextPage}
             loadingMore={query.isFetchingNextPage}
             onEndReached={() => {

@@ -291,15 +291,22 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="space-y-3 border-b border-border bg-card p-4">
+      <div className="space-y-3 border-b border-border bg-card p-2 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
+          {/* On a phone the pipeline selector above already names it. */}
+          <div className="hidden min-w-0 sm:block">
             <h1 className="truncate text-xl font-bold text-foreground">
               {pipeline?.name ?? "Pipeline"}
             </h1>
             <p className="mt-0.5 text-xs text-muted-foreground">{orderedStages.length} etapas</p>
           </div>
-          <Button variant="outline" size="sm" onClick={openCardConfig} disabled={!pipeline}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openCardConfig}
+            disabled={!pipeline}
+            className="hidden sm:inline-flex"
+          >
             <Settings2 className="mr-1.5 h-4 w-4" />
             Campos do card
           </Button>
@@ -349,6 +356,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 }}
                 onOpenContact={(leadId) => setContactLeadId(leadId)}
                 nameOf={nameOf}
+                onMoveCard={setMoveSheetCard}
+                fill
               />
             </div>
           </div>
@@ -384,23 +393,13 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
             <DragOverlay>
               {activeCard && (
                 <OpportunityCard
-                  opportunity={activeCard}
-                  lead={activeCard.lead}
+                  card={activeCard}
                   stage={orderedStages.find((s) => s.id === activeCard.stage_id)}
                   cardFields={cardFields}
-                  touchpointCount={activeCard.touchpoint_count}
                   nativeFlags={nativeFlags}
-                  leadScore={activeCard.lead_score}
-                  leadScoreBreakdown={
-                    activeCard.lead_score !== null
-                      ? { icp: activeCard.icp_score, velocity: activeCard.velocity }
-                      : undefined
-                  }
                   onClick={() => {}}
                   isDragOverlay
-                  companies={activeCard.companies}
                   nameOf={nameOf}
-                  ownerName={activeCard.owner_name}
                 />
               )}
             </DragOverlay>

@@ -231,7 +231,8 @@ export const OpportunityDetailModal = ({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       {/* Sprint 5.1 EPIC 5 §5.1 — bi-partilhado 60/40 split with two independent
           scroll surfaces. Left = live timeline, right = identity + engineering. */}
-      <DialogContent className="max-w-5xl w-[min(96vw,1100px)] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden">
+      {/* Sprint 11 · T26 — full screen on a phone. */}
+      <DialogContent className="max-w-5xl w-[min(96vw,1100px)] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden max-md:left-0 max-md:top-0 max-md:translate-x-0 max-md:translate-y-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:w-full max-md:max-w-none max-md:rounded-none max-md:border-0">
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3 border-b border-border/60 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1 min-w-0">
@@ -275,7 +276,7 @@ export const OpportunityDetailModal = ({
           />
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-border/60">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-border/60 max-lg:overflow-y-auto">
           {/* ── CENTER (col-span-3): dados da oportunidade + notas ──────── */}
           <div className="lg:col-span-3 min-h-0 flex flex-col">
             <ScrollArea className="flex-1 min-h-0">

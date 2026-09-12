@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildCardModel } from "../cardModel";
 import type { BoardCard } from "@/types/board";
-import type { CustomFieldSchema } from "@/types/pipelines";
+import type { CustomFieldSchema, PipelineStageV2 } from "@/types/pipelines";
 import type { NativeCardFlags } from "@/components/crm/OpportunityCard";
 
 const defaultFlags: NativeCardFlags = {
@@ -93,6 +93,61 @@ describe("buildCardModel", () => {
       label: "Hoje",
       variant: "today",
     });
+  });
+
+  it("a lost deal shows only its outcome — no overdue, no SLA, no time in stage", () => {
+    const today = new Date(2026, 8, 11);
+    const lostCard = {
+      ...baseCard,
+      status: "lost",
+      closed_at: "2026-09-09T12:00:00Z",
+      lead: { ...baseCard.lead!, next_contact: "2026-09-01" },
+    } as BoardCard;
+    const stage = { id: "stage-1", max_idle_hours: 24, max_interactions: 2 } as unknown as PipelineStageV2;
+    const model = buildCardModel(lostCard, stage, defaultFlags, [], today);
+
+    expect(model.status).toBe("lost");
+    expect(model.isOverdue).toBe(false);
+    expect(model.timeInStageText).toBeNull();
+    expect(model.badges.map((b) => b.kind)).toEqual(["lost"]);
+  });
+
+  it("orders the badges: overdue contact, then SLA, then the interaction cap", () => {
+    const today = new Date(2026, 8, 11, 12);
+    const stage = { id: "stage-1", max_idle_hours: 48, max_interactions: 5 } as unknown as PipelineStageV2;
+    const card = { ...baseCard, lead: { ...baseCard.lead!, next_contact: "2026-09-09" } } as BoardCard;
+    const model = buildCardModel(card, stage, defaultFlags, [], today);
+
+    expect(model.slaBreached).toBe(true); // 6 days in a 48 h stage
+    expect(model.interactionsBreached).toBe(true); // 5 of 5
+    expect(model.badges.map((b) => b.kind)).toEqual(["overdue", "sla", "interactions"]);
+    expect(model.badges[1].label).toBe("Acima do SLA (48h)");
+    expect(model.badges[2].label).toBe("5/5 interações");
+  });
+
+  it("no SLA badge inside the limit, nor when the stage has none", () => {
+    const today = new Date(2026, 8, 5, 20); // 10 h after entering
+    const stage = { id: "stage-1", max_idle_hours: 48, max_interactions: null } as unknown as PipelineStageV2;
+    expect(buildCardModel(baseCard, stage, defaultFlags, [], today).slaBreached).toBe(false);
+    expect(buildCardModel(baseCard, undefined, defaultFlags, [], new Date(2027, 0, 1)).slaBreached).toBe(false);
+  });
+
+  it("shows at most three card fields, in the schema's order", () => {
+    const today = new Date(2026, 8, 11);
+    const card = { ...baseCard, custom_data: { a: "1", b: "2", c: "3", d: "4" } } as BoardCard;
+    const fields = ["a", "b", "c", "d"].map(
+      (id, i) => ({ field_id: id, key: id, label: id.toUpperCase(), type: "text", position: i, required: false }) as CustomFieldSchema,
+    );
+    expect(buildCardModel(card, undefined, defaultFlags, fields, today).fields.map((f) => f.field_id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("hides what the pipeline switched off", () => {
+    const today = new Date(2026, 8, 11);
+    const off: NativeCardFlags = { value: false, timeInPhase: false, touchpoints: false, nextContact: false, whatsapp: false };
+    const model = buildCardModel(baseCard, undefined, off, [], today);
+    expect(model.valueText).toBeNull();
+    expect(model.timeInStageText).toBeNull();
+    expect(model.nextContactBadge).toBeNull();
   });
 
   it("omits empty custom fields", () => {

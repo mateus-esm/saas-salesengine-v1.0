@@ -18,7 +18,7 @@ export function StagePicker({
   const summaryMap = new Map(summary.map((s) => [s.stage_id, s.count]));
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 px-3 no-scrollbar select-none">
+    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 px-3 select-none overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {stages.map((stage) => {
         const count = summaryMap.get(stage.id) ?? 0;
         const isActive = stage.id === activeStageId;
@@ -38,7 +38,7 @@ export function StagePicker({
             <span className="truncate max-w-[140px]">{stage.name}</span>
             <span
               className={cn(
-                "px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold",
+                "px-1.5 py-px text-[10px] rounded-full font-mono font-bold",
                 isActive
                   ? "bg-primary-foreground/20 text-primary-foreground"
                   : "bg-background/80 text-foreground/70 border border-border/40",
