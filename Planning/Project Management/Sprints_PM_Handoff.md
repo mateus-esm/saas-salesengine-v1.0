@@ -822,6 +822,52 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 
 ---
 
+# Sprint 11 · Onda 3 — Handoff
+
+> **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
+> **Fechada:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5) em T28–T35; Codex (GPT-5) em T36–T38
+> **Branches:** `claude/sprint11/w3a/receita` (T28–T34) · `claude/sprint11/w3b/linha-configurada` (T35–T38) · **PR #15**
+> **Verificação:** `tsc -b` · lint 0 erros · build · vitest 272/272 · pytest 333 passed/21 skipped · 23/23 suítes SQL em rollback
+
+## 1. O que esta onda entrega
+
+- **Desfecho único:** a etapa decide ganho/perda/reabertura e o evento tem uma fonte.
+- **Receita v1:** catálogo, itens do negócio, valor pela soma, livro-razão append-only,
+  estorno/ajuste e dashboard/placar pela receita reconhecida.
+- **Ciclo de vida:** a Base de Contatos usa ganhos vivos e receita; `lifecycle_stage`
+  acompanha cliente, oportunidade e perdido.
+- **Tempo:** um agendador de banco faz reciclo e recorrência; cada recorrência abre um
+  novo negócio por cadência.
+- **Linha configurada:** Oferta e Processo em `pipelines.natures`, marcos canônicos,
+  quatro modelos prontos e Track Shaper capaz de propor e persistir natureza + marcos.
+
+## 2. Estado da produção
+
+- Migrations `20260912000100` … `20260912000800` e
+  `20260912024524_sprint11_w3_track_shaper_natures` aplicadas e registradas.
+- Reparos aplicados na ordem ensaiada: status pela etapa → receita histórica → ciclo de
+  vida. Verificação final: **0** status divergentes, **0** receitas divergentes do valor
+  ganho e **0** ciclos de vida divergentes para contatos com negócio.
+- `crm-timers`: job **8**, ativo a cada 15 minutos. Corte
+  `2026-09-12T03:06:35.7060700Z`: os 29 reciclos históricos da Casa Flow ficam onde
+  estavam; só vencimentos posteriores ao corte são movidos.
+- `shape_pipeline` continua atômico e agora é executável somente por `service_role`;
+  `authenticated` não tem `EXECUTE`.
+- Frontend (Netlify) e `python-agent` (Dokploy) seguem o merge em `main` do PR #15.
+
+## 3. Gates e observações
+
+- O changelog atual do Supabase não trouxe breaking change aplicável ao deploy hospedado
+  desta onda. As migrations não fixam versão de extensão (prática agora depreciada).
+- O advisor pré-deploy encontrou três erros **anteriores à onda** em views administrativas
+  `SECURITY DEFINER` (`v_tenant_entitlements`, `v_admin_notification_matrix`,
+  `v_admin_team_billing`) e avisos antigos de RLS/índices. Não foram alterados aqui: exigem
+  auditoria própria para não quebrar a leitura administrativa.
+- Warnings não bloqueantes: 87 avisos de lint já existentes, chunk principal de 2,66 MB e
+  depreciação `httpx`/`TestClient`; nenhum erro de lint/build/test.
+
+---
+
 # Sprint 11 · Onda 2 — Handoff
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
