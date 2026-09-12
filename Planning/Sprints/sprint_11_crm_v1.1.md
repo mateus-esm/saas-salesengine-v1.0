@@ -1395,30 +1395,256 @@ horizontal.
 - Handoff "Sprint 11 · Onda 2" (2A + 2B) em `Sprints_PM_Handoff.md`; memória do
   projeto atualizada.
 
-### Onda 3 — Receita e linha configurada *(plano detalhado quando a Onda 2 fechar)*
+### Onda 3 — Receita e linha configurada
 
-Motores: Receita v1 · Processo (naturezas Oferta e Processo, modelos, agendador) ·
-Eventos (receita, ciclo).
+Motores: **Receita v1** (catálogo, itens, ganho → receita, recorrência) · **Processo**
+(a etapa decide o desfecho, naturezas Oferta e Processo, modelos, agendador) · **Eventos**
+(reabertura, reciclo, receita) · **Métricas** (dashboard e placar sobre a receita).
 
-- Naturezas **Oferta** e **Processo** na configuração do pipeline; **modelos** (venda
-  consultiva, clínica com retorno, lançamento, serviço jurídico); o Track Shaper do
-  Copilot preenche as naturezas a partir da descrição do negócio. Escolher os marcos
-  gera etapas que já declaram o `funnel_event`.
-- **Catálogo** de produtos e serviços (preço fixo ou negociável; recorrência opcional
-  por item). Nomes que não colidam com `billing_products` / `proposal_items` /
-  `contract_items` (são da cobrança do SaaS).
-- **Itens do negócio**; valor do negócio = soma dos itens quando há itens (sem itens,
-  continua o valor livre de hoje).
-- **Ganho → lançamento de receita** (um por item; um pelo valor quando não há itens).
-  Negócio fechado não reabre; reabrir por engano estorna a receita.
-- **Recorrência:** item recorrente ganho agenda o próximo ciclo; X dias antes do
-  vencimento nasce um **negócio novo** (mesmo contato, mesmo responsável, mesmos itens,
-  ligado ao anterior, origem "recorrência").
-- **Agendador único** (pg_cron → função) para os timers: Reciclo (o `cycle_pass` nunca
-  rodou — WI Advogados e Casa Flow) e recorrência.
-- Situação do contato passa a vir da receita; `leads.lifecycle_stage` (2.215 em `raw`)
-  aposentado ou recalculado a partir dela.
-- Placar e dashboard passam a ler a receita.
+#### Achados que moldam a onda (produção, 11/09)
+
+22. **Status e etapa discordam em 200 negócios.** Mover um card para uma etapa de ganho
+    ou perda grava o evento (pelo histórico de etapa), mas `opportunities.status` só muda
+    se alguém trocar o "Status" no modal: 197 negócios em etapa de perda e 3 em etapa de
+    ganho seguem `open` (sem `closed_at`). Contam como "em andamento" no placar e como
+    "negociando" na Base de Contatos. E o ganho tem duas fontes que podem gravar dois
+    eventos (`stage_change` e `status_change`) — as consultas se defendem com `distinct on`.
+23. **O Reciclo nunca rodou**: o `cycle_pass` do `python-agent` existe e ninguém o chama.
+    A Casa Flow tem 200 negócios na etapa Reciclo (15 dias) — 29 já vencidos; a WI
+    Advogados tem a etapa (30 dias) vazia. Ligar o agendador move os vencidos de uma vez.
+24. **`pg_cron` e `pg_net` estão instalados** (os crons de cobrança e relatório chamam
+    edge functions). O agendador da onda é uma função do banco chamada pelo cron — sem
+    edge function e sem segredo.
+25. **`leads.lifecycle_stage`**: os 2.221 contatos estão em `raw`; o valor aceita
+    `client`, `opportunity`, `lost`; nenhuma tela lê; o sweep do Copilot lê e regrava
+    `mql`. Recalcular a partir dos negócios e da receita mantém o Copilot funcionando.
+26. Receita hoje é só `opportunities.value`; `billing_products`, `proposal_items`,
+    `contract_items`, `invoice_items` são da cobrança do SaaS. `scheduled_automations`
+    está vazia e é por contato — não serve para timers de negócio.
+
+#### Decisões da Onda 3
+
+11. **A etapa decide o desfecho.** No banco: entrar numa etapa de ganho/perda fecha o
+    negócio (`status`, `closed_at`); sair de uma etapa de ganho/perda para uma aberta ou
+    de reciclo **reabre** (evento `reopened`; a receita é estornada). Escrever o `status`
+    direto (modal, regra do Agente CRM, API) move o negócio para a primeira etapa daquele
+    tipo no pipeline; sem etapa daquele tipo, a escrita vale como está. O evento de
+    ganho/perda tem **uma** fonte: o caminho da etapa (que já traz autor e é idempotente
+    por `source_row_id`); o gatilho de status só emite quando não houve movimento de etapa.
+12. **Receita é um livro-razão** (`revenue_entries`, só inserção): no ganho, um lançamento
+    por item (ou um pelo valor, sem itens), com o **responsável do momento**; reabrir
+    lança o estorno; mudar itens ou valor de um negócio ganho lança o ajuste. Estorno e
+    ajuste ficam no **mesmo período do ganho** (`recognized_at` do lançamento original;
+    `created_at` guarda quando aconteceu): a receita de agosto é "o que foi ganho em
+    agosto, como está hoje". Receita líquida = soma.
+13. **Itens:** com pelo menos um item, `opportunities.value` = soma dos itens (o banco
+    mantém); sem itens, o valor segue livre. O item guarda nome, preço e recorrência do
+    momento em que entrou (o catálogo pode mudar depois).
+14. **Catálogo por equipe** (`catalog_items`): produto ou serviço; preço **fixo** (o item
+    do negócio usa o preço do catálogo) ou **negociável** (preço sugerido, editável);
+    recorrência opcional (a cada N dias/meses; abrir o retorno X dias antes; em qual
+    linha e etapa — padrão: a mesma linha, primeira etapa aberta).
+15. **Recorrência = negócio novo por ciclo** (`opportunities.renewal_of_id`,
+    `opportunities.origin = 'recorrencia'`): mesmo contato, mesmo responsável, os itens
+    recorrentes; um retorno por negócio; o retorno ganho agenda o seguinte.
+16. **Agendador único:** `crm_run_timers()` a cada 15 min pelo `pg_cron` — reciclo (move
+    para a etapa alvo, evento `recycled`, webhook da etapa por `pg_net`) e recorrência
+    (cria os retornos). Cada execução fica em `crm_timer_runs`. `crm_run_timers(dry_run)`
+    responde o que faria sem fazer. O `cycle_pass` do `python-agent` é aposentado.
+17. **Situação do contato vem da receita:** cliente = receita líquida > 0; negociando =
+    negócio aberto; perdido = só perdidos/estornados. `lifecycle_stage` é recalculado
+    para `client` / `opportunity` / `lost` pelos mesmos fatos; `raw`/`mql`/`sql` seguem
+    para quem não tem negócio.
+18. **Naturezas Oferta e Processo** em `pipelines.natures` (jsonb): Oferta = valor livre
+    (padrão, o de hoje) ou catálogo (quais itens); Processo = marcos (qualificação,
+    reunião, proposta, contrato) ou compra direta. Escolher os marcos gera as etapas
+    que já declaram o `funnel_event`. Marcos novos: `contract_sent`, `contract_signed`.
+19. **Modelos** combinam naturezas + etapas + sugestões de catálogo: venda consultiva
+    (solar), clínica com retorno (dentista), lançamento (cinema), serviço jurídico.
+20. **Dado existente só com aprovação, no T38, cada um ensaiado:** (a) os 200 negócios
+    com status ≠ etapa → status da etapa, `closed_at` = entrada na etapa, sem evento novo;
+    (b) receita dos ganhos antigos: um lançamento pelo valor, na data do ganho, com o
+    responsável do momento; (c) o reciclo acumulado da Casa Flow (29 vencidos) — o
+    founder escolhe soltar tudo ou só os que vencerem depois de ligar.
+
+#### Onda 3A — Receita
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T28 | A etapa decide o desfecho | Processo · Eventos | XL |
+| T29 | Catálogo | Receita · Modelo | L |
+| T30 | Itens do negócio | Receita | L |
+| T31 | Ganho → receita (livro-razão, estorno, ajuste) | Receita · Eventos | XL |
+| T32 | Situação e ciclo de vida do contato pela receita | Receita · Consulta | M |
+| T33 | Métricas pela receita | Métricas | L |
+| T34 | Agendador: reciclo e recorrência | Processo · Automação | XL |
+
+#### T28 · A etapa decide o desfecho (XL)
+
+**Files:** create `supabase/migrations/20260912000100_sprint11_w3_outcome.sql`,
+`supabase/tests/sprint11_w3_outcome.test.sql`,
+`supabase/scripts/2026-09-12_sprint11_repair_status_from_stage.sql` (+ ensaio em
+`supabase/tests/sprint11_w3_repair_status.test.sql`); modify
+`src/components/crm/OpportunityDetailModal.tsx` (o "Status" vira "Desfecho": escolher
+Ganha/Perdida move para a etapa daquele tipo; aberta reabre na primeira etapa aberta),
+`src/hooks/useBoard.ts` (mover para etapa de ganho/perda atualiza o status no cache).
+
+- `fn_opportunity_outcome` (BEFORE INSERT/UPDATE): etapa → `status`/`closed_at`; status
+  escrito direto → etapa; reabertura limpa `closed_at` e marca `reopened`.
+- `fn_record_stage_funnel_event` segue emitindo ganho/perda pelo histórico;
+  `fn_record_status_funnel_event` só emite sem movimento de etapa; `reopened` e
+  `recycled` entram no catálogo de eventos.
+
+**Testes SQL:** mover para ganho fecha e emite **um** `won`; status escrito direto move
+para a etapa; sem etapa de ganho, o status vale; reabrir limpa `closed_at` e emite
+`reopened`; a métrica da Sprint 9 conta o mesmo ganho uma vez; RLS do vizinho.
+
+**Aceite:** nenhum negócio com status ≠ etapa depois do reparo (ensaiado em rollback);
+os testes da Sprint 9 e da Onda 2 passam sobre a versão nova.
+
+#### T29 · Catálogo (L)
+
+**Files:** create `supabase/migrations/20260912000200_sprint11_w3_catalog.sql`,
+`supabase/tests/sprint11_w3_catalog.test.sql`, `src/types/revenue.ts`,
+`src/hooks/useCatalog.ts`, `src/components/crm/catalog/CatalogView.tsx`,
+`src/components/crm/catalog/CatalogItemDialog.tsx`; modify `src/pages/CRM.tsx` (aba
+"Catálogo").
+
+**Produces:** `catalog_items` (id, equipe_id, name, kind `product|service`, price,
+price_mode `fixed|negotiable`, recurrence_every, recurrence_unit `day|month`,
+renew_days_before, renew_pipeline_id, renew_stage_id, active, description, timestamps,
+deleted_at); verbos `crm_save_catalog_item(p_item jsonb) → uuid`,
+`crm_archive_catalog_items(p_ids uuid[]) → int`.
+
+**Testes SQL:** fixo exige preço; recorrência exige intervalo e unidade juntos; etapa de
+retorno precisa ser do pipeline de retorno; vizinho não vê; arquivar não apaga itens de
+negócio já vendidos.
+
+#### T30 · Itens do negócio (L)
+
+**Files:** create `supabase/migrations/20260912000300_sprint11_w3_items.sql`,
+`supabase/tests/sprint11_w3_items.test.sql`, `src/lib/dealItems.ts`,
+`src/lib/__tests__/dealItems.test.ts`, `src/hooks/useOpportunityItems.ts`,
+`src/components/crm/deal/DealItemsSection.tsx`; modify
+`src/components/crm/OpportunityDetailModal.tsx` (seção "Itens"; o campo Valor fica só
+leitura quando há itens).
+
+**Produces:** `opportunity_items` (id, equipe_id, opportunity_id, catalog_item_id,
+name, quantity, unit_price, total gerado, recorrência copiada do catálogo, position,
+timestamps, deleted_at); trigger que mantém `opportunities.value` = soma quando há itens;
+verbo `crm_set_opportunity_items(p_opportunity_id uuid, p_items jsonb) → jsonb` (troca a
+lista numa transação; preço fixo vem do catálogo, não do pedido).
+
+**Testes:** vitest do total e das regras de preço; SQL: soma, remover o último item
+devolve o valor livre, preço fixo ignora o preço mandado, item de outro tenant recusado.
+
+#### T31 · Ganho → receita (XL)
+
+**Files:** create `supabase/migrations/20260912000400_sprint11_w3_revenue.sql`,
+`supabase/tests/sprint11_w3_revenue.test.sql`,
+`supabase/scripts/2026-09-12_sprint11_backfill_revenue.sql` (+ ensaio),
+`src/hooks/useDealRevenue.ts`, `src/components/crm/deal/DealRevenueSection.tsx`; modify
+`src/components/crm/OpportunityDetailModal.tsx` (seção "Receita": lançamentos e líquido).
+
+**Produces:** `revenue_entries` (id, equipe_id, opportunity_id, lead_id, pipeline_id,
+opportunity_item_id, catalog_item_id, line_key, amount, kind `booking|adjustment|reversal`,
+recognized_at, owner_id, actor, created_at) só inserção (RLS: select; escrita só pelo
+banco); `_crm_sync_revenue(p_opportunity_id)` — lança a diferença entre o que o negócio
+deve (ganho: itens ou valor; senão nada) e o que já está lançado, por linha.
+
+**Testes SQL:** ganho com 2 itens → 2 lançamentos; sem itens → 1; reabrir → estorno no
+período do ganho; ganhar de novo → novo lançamento; editar valor de um ganho → ajuste;
+responsável do momento; nada muda num negócio aberto; o vizinho não lê.
+
+#### T32 · Situação e ciclo de vida do contato pela receita (M)
+
+**Files:** create `supabase/migrations/20260912000500_sprint11_w3_contact_situation.sql`,
+`supabase/tests/sprint11_w3_contact_situation.test.sql`.
+
+- `_crm_lead_relationship` e o agregado de `crm_contacts_table` passam a ler a receita
+  líquida (Ganho total = receita líquida; Último ganho = último lançamento positivo).
+- `lifecycle_stage` recalculado (`client`/`opportunity`/`lost`) quando negócio ou receita
+  do contato muda; `raw`/`mql`/`sql` intocados para quem não tem negócio.
+
+**Testes SQL:** cliente só com receita líquida > 0; estorno devolve a "perdido" ou
+"negociando"; o sweep do Copilot (`mql`) continua valendo sem negócio.
+
+#### T33 · Métricas pela receita (L)
+
+**Files:** create `supabase/migrations/20260912000600_sprint11_w3_revenue_metrics.sql`,
+`supabase/tests/sprint11_w3_revenue_metrics.test.sql`; modify
+`src/lib/scoreboard.ts` (se o contrato do placar mudar), o catálogo de gráficos do
+dashboard (quebra "Produto").
+
+- Overview, série e quebras da Sprint 9 e `crm_placar` somam a **receita líquida** por
+  `recognized_at` e pelo responsável do momento (hoje: `opportunities.value` do ganho).
+- Nova dimensão de quebra **produto** (receita por item do catálogo).
+
+**Testes SQL:** os da Sprint 9 e da Onda 2 passam; estorno some da métrica do período;
+receita por produto soma o que o negócio vendeu.
+
+#### T34 · Agendador: reciclo e recorrência (XL)
+
+**Files:** create `supabase/migrations/20260912000700_sprint11_w3_timers.sql`,
+`supabase/tests/sprint11_w3_timers.test.sql`,
+`supabase/scripts/2026-09-12_sprint11_schedule_timers.sql` (o `cron.schedule`, aplicado só
+no T38); modify `python-agent/app/routers/cycle_pass.py` (aposentado: responde 410 e
+aponta para o agendador).
+
+**Produces:** `opportunities.renewal_of_id`, `opportunities.origin`; `crm_timer_runs`;
+`crm_run_timers(p_dry_run boolean default false, p_recycle_since timestamptz default null) → jsonb`.
+
+**Testes SQL:** reciclo move só o vencido, emite `recycled`, respeita `p_recycle_since`;
+recorrência cria um retorno X dias antes, com contato, responsável e itens, uma vez só;
+retorno ganho agenda o seguinte; `dry_run` não escreve.
+
+#### Onda 3B — Linha configurada
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T35 | Naturezas Oferta e Processo + marcos | Processo | L |
+| T36 | Modelos de linha | Processo | M |
+| T37 | Track Shaper preenche naturezas e marcos | Processo · Copilot | M |
+| T38 | Verificação, deploy (parada), PR e handoff | — | S |
+
+#### T35 · Naturezas Oferta e Processo + marcos (L)
+
+**Files:** create `supabase/migrations/20260912000800_sprint11_w3_natures.sql`,
+`supabase/tests/sprint11_w3_natures.test.sql`, `src/types/natures.ts`,
+`src/lib/natures.ts`, `src/lib/__tests__/natures.test.ts`,
+`src/components/crm/pipeline-settings/PipelineNaturesEditor.tsx`; modify a tela de
+configuração do pipeline (aba "Natureza").
+
+**Produces:** `pipelines.natures` `{ offer: { mode: 'free'|'catalog', catalog_item_ids },
+process: { mode: 'milestones'|'direct', milestones } }`; `stagesForMilestones(milestones)`
+(puro: as etapas na ordem, cada uma com o `funnel_event`, + ganho e perdido); marcos
+novos `contract_sent`, `contract_signed`.
+
+#### T36 · Modelos de linha (M)
+
+**Files:** create `src/lib/pipelineTemplates.ts`, `src/lib/__tests__/pipelineTemplates.test.ts`;
+modify o diálogo de novo pipeline ("Começar de um modelo").
+
+- Venda consultiva (solar) · Clínica com retorno (dentista) · Lançamento (cinema) ·
+  Serviço jurídico: naturezas + etapas com marcos + sugestões de catálogo.
+
+#### T37 · Track Shaper preenche naturezas e marcos (M)
+
+**Files:** modify `python-agent/app/schemas.py`, `python-agent/app/cascade/track_shaper.py`,
+`python-agent/app/routers/shape.py`, `python-agent/tests/test_track_shaper.py`,
+`src/services/copilot.ts` (tipo do blueprint), `src/components/crm/copilot/TrackShaperDialog.tsx`.
+
+- O blueprint ganha `natures` e `funnel_event` por etapa; o apply grava os dois.
+- O deploy do `python-agent` é manual — entra na parada do T38.
+
+#### T38 · Verificação, deploy e handoff (S)
+
+- Gates; testes SQL da onda + Sprint 9 + Onda 1/2.
+- **Ponto de parada — aprovação do founder** para: (a) aplicar as migrations 0100…0800;
+  (b) reparo dos 200 status (ensaio passou); (c) backfill da receita (ensaio passou);
+  (d) ligar o agendador e o que fazer com o reciclo acumulado da Casa Flow;
+  (e) deploy do `python-agent`; (f) PR e merge.
+- Handoff "Sprint 11 · Onda 3" em `Sprints_PM_Handoff.md`.
 
 ### Onda 4 — Artefatos: Propostas e Contratos *(plano detalhado depois)*
 
@@ -1500,6 +1726,20 @@ Execução solo e sequencial: T11 … T22 (entrega 2A), depois T23 … T27 (entr
 Arquivos compartilhados entre tarefas (`OpportunityKanban.tsx`, `OpportunityTable.tsx`,
 `DatabaseView.tsx`, os modais) só são tocados por uma tarefa de cada vez, na ordem.
 
+### Wave map — Onda 3
+
+```
+3A   T28 ─► T29 ─► T30 ─► T31 ─► T32 ─► T33      o desfecho, o catálogo, os itens, a receita, quem lê
+                          T31 ─► T34              o agendador usa itens e receita
+3B   T35 ─► T36 ─► T37                            naturezas, modelos, Track Shaper
+     T34 + T37 ─► T38                             uma parada só: migrations, dados, cron, python-agent, PR
+```
+
+Execução solo e sequencial, branch `claude/sprint11/w3a/receita` (T28–T34) e
+`claude/sprint11/w3b/linha-configurada` (T35–T37, do 3A). As migrations só vão para a
+produção no T38, antes do merge do frontend. `OpportunityDetailModal.tsx` é tocado por
+T28, T30 e T31, nessa ordem.
+
 ---
 
 ## 📊 Ledger
@@ -1537,4 +1777,18 @@ Arquivos compartilhados entre tarefas (`OpportunityKanban.tsx`, `OpportunityTabl
 - [x] T25 · Placar redesenhado · M — o PR #13 trocou a fonte para `crm_placar` mas deixou a tela antiga (números repetidos em faixa + cartões; por vendedor só quem tinha meta, sem "Sem responsável"). Fechado: `lib/scoreboard` (`placarFromRpc` + `buildScoreboard`, 8 testes): Meta · Realizado · Ritmo · Falta · Conversão · Ciclo, barra fina; ritmo sobre a meta que lidera (antes olhava negócios mesmo com meta de receita); por responsável num detalhe que abre, com avatar, quem vendeu sem meta e "Sem responsável"; fechado é uma linha e nasce fechado no celular. `buildPlacar` e helpers sem uso saíram
 - [x] T26 · CRM no celular · L — o PR #13 entregou o Kanban de uma etapa (`StagePicker`, `pickInitialStage` com 4 testes, `MoveToStageSheet` sem gatilho). Fechado: tabelas viram lista (`SpreadsheetGrid.renderMobileRow` → `MobileRowList`, mesma paginação) na Tabela de Leads, Base de Contatos e tabelas personalizadas; modais do negócio e do contato em tela cheia; cabeçalhos compactos (abas só com ícone, sem título repetido, sem breadcrumb); coluna do celular na largura toda; a classe `no-scrollbar` dos chips não existia. Aceite ao vivo em 390×844 / 360×800 pendente (extensão do Chrome desconectada)
 - [x] T27 · Verificação 2B, deploy, PR e handoff · S — gates no branch de fechamento: `tsc -b` limpo, lint 0 erro, vitest 235/235, build, 10 testes SQL; handoff "Sprint 11 · Onda 2" em `Sprints_PM_Handoff.md`; PR + merge com aprovação do founder ("execute all the 2b wave and finish the wave 2"). O PR #13 tinha fechado este item sem handoff, sem billing e sem os itens acima
+
+### Ledger · Onda 3
+
+- [ ] T28 · A etapa decide o desfecho · XL
+- [ ] T29 · Catálogo · L
+- [ ] T30 · Itens do negócio · L
+- [ ] T31 · Ganho → receita · XL
+- [ ] T32 · Situação e ciclo de vida do contato pela receita · M
+- [ ] T33 · Métricas pela receita · L
+- [ ] T34 · Agendador: reciclo e recorrência · XL
+- [ ] T35 · Naturezas Oferta e Processo + marcos · L
+- [ ] T36 · Modelos de linha · M
+- [ ] T37 · Track Shaper preenche naturezas e marcos · M
+- [ ] T38 · Verificação, deploy e handoff · S
 
