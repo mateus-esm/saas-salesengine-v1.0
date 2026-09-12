@@ -10,6 +10,7 @@ import { useDealArtifacts, type DealArtifactGroup } from "@/hooks/useDealArtifac
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { recordTitle, type ArtifactStatus } from "@/lib/artifacts";
 import { activeColumns, recordValues } from "@/lib/customTables";
+import { formIsOn } from "@/lib/publicForm";
 
 import { ArtifactStatusSelect } from "../customtables/ArtifactStatusSelect";
 import { CustomRecordDrawer } from "../customtables/CustomRecordDrawer";
@@ -157,6 +158,7 @@ function ArtifactDrawer({ group, record, onClose, onSave, onDelete, onStatusChan
       artifactKind={group.table.artifact_kind}
       onStatusChange={onStatusChange}
       actions={group.table.actions}
+      formEnabled={formIsOn(group.table.form_config)}
     />
   );
 }

@@ -51,9 +51,11 @@ import {
   type RelationChips,
 } from "@/lib/customTables";
 import { columnFromField } from "@/lib/fields/columns";
+import { formIsOn } from "@/lib/publicForm";
 import { getFieldType } from "@/lib/fields/registry";
 
 import { ArtifactActionsEditor } from "./ArtifactActionsEditor";
+import { FormConfigEditor } from "./FormConfigEditor";
 import { ArtifactStatusSelect } from "./ArtifactStatusSelect";
 import { CustomRecordDrawer } from "./CustomRecordDrawer";
 
@@ -358,6 +360,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           activeFilterCount={0}
         >
           {artifactKind && <ArtifactActionsEditor tableId={table.id} />}
+          <FormConfigEditor table={table} />
           <ColumnsEditor
             table={table}
             otherTables={tables.filter((t) => t.id !== table.id)}
@@ -406,6 +409,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         artifactKind={artifactKind}
         onStatusChange={(id, status) => setArtifactStatus.mutateAsync({ recordId: id, status })}
         actions={table.actions}
+        formEnabled={formIsOn(table.form_config)}
       />
 
       <AlertDialog open={confirmDeleteIds.length > 0} onOpenChange={(o) => !o && setConfirmDeleteIds([])}>

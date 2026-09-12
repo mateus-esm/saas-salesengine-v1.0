@@ -138,3 +138,6 @@ verify_jwt = false
 
 [functions.artifact-callback]
 verify_jwt = false
+
+[functions.public-form]
+verify_jwt = false

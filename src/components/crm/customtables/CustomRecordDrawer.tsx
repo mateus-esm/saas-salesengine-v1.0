@@ -28,6 +28,7 @@ import { RelationChip } from "../grid/RelationChip";
 import { ArtifactActionsPanel } from "./ArtifactActionsPanel";
 import { ArtifactStatusSelect } from "./ArtifactStatusSelect";
 import { FileField } from "./FileField";
+import { RecordFormLink } from "./RecordFormLink";
 
 interface CustomRecordDrawerProps {
   record: CustomTableRecord | null;
@@ -43,6 +44,8 @@ interface CustomRecordDrawerProps {
   onStatusChange?: (id: string, status: ArtifactStatus) => Promise<unknown>;
   /** Sprint 11 · T44 — the table's automation buttons. */
   actions?: ArtifactAction[];
+  /** Sprint 11 · T45 — the table sends a public form: the record's link lives here. */
+  formEnabled?: boolean;
 }
 
 const fmt = (iso: string) => {
@@ -68,6 +71,7 @@ export function CustomRecordDrawer({
   artifactKind = null,
   onStatusChange,
   actions = [],
+  formEnabled = false,
 }: CustomRecordDrawerProps) {
   const { nameOf } = useMemberDirectory();
   const [status, setStatus] = useState<unknown>(null);
@@ -214,6 +218,8 @@ export function CustomRecordDrawer({
           {record && artifactKind && (
             <ArtifactActionsPanel recordId={record.id} tableId={record.table_id} actions={actions} />
           )}
+
+          {record && formEnabled && <RecordFormLink recordId={record.id} />}
 
           {record && relationColumns.length > 0 && (
             <div className="space-y-3 border-t border-border pt-4">

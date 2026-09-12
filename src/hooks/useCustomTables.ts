@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { actionsFrom, type ArtifactAction } from "@/lib/artifactActions";
 import { isArtifactKind, type ArtifactKind } from "@/lib/artifacts";
 import { withFieldIds } from "@/lib/customTables";
+import { normalizeFormConfig, type FormConfig } from "@/lib/publicForm";
 import { toast } from "sonner";
 
 // custom_tables lags in generated types; scope is enforced via equipe_id + RLS.
@@ -80,6 +81,8 @@ export interface CustomTable {
   artifact_kind: ArtifactKind | null;
   /** Sprint 11 · T44 — the automation buttons (the URL lives in the webhook, not here). */
   actions: ArtifactAction[];
+  /** Sprint 11 · T45 — the public form each record can send to the client. */
+  form_config: FormConfig | null;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +134,7 @@ export const useCustomTables = () => {
         table_schema: withFieldIds(r.table_schema),
         artifact_kind: isArtifactKind(r.artifact_kind) ? r.artifact_kind : null,
         actions: actionsFrom(r.actions),
+        form_config: normalizeFormConfig(r.form_config),
       })) as CustomTable[];
     },
   });

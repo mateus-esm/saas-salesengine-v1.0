@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { actionsFrom } from "@/lib/artifactActions";
 import { isArtifactKind } from "@/lib/artifacts";
 import { withFieldIds } from "@/lib/customTables";
+import { normalizeFormConfig } from "@/lib/publicForm";
 
 import type { CustomTableRecord } from "./useCustomTableRecords";
 import type { CustomTable } from "./useCustomTables";
@@ -41,6 +42,7 @@ function toGroup(raw: Record<string, unknown>): DealArtifactGroup {
       table_schema: withFieldIds(t.table_schema),
       artifact_kind: isArtifactKind(t.artifact_kind) ? t.artifact_kind : null,
       actions: actionsFrom(t.actions),
+      form_config: normalizeFormConfig(t.form_config),
       created_at: "",
       updated_at: "",
     },
