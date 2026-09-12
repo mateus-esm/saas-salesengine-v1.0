@@ -43,6 +43,36 @@ export function artifactKindLabel(kind: ArtifactKind | null | undefined, plural 
   return k ? (plural ? k.plural : k.label) : null;
 }
 
+/** Sprint 11 · T43 — the statuses each kind goes through (the twin of _crm_artifact_statuses). */
+export function artifactStatusesFor(kind: ArtifactKind | null | undefined): ArtifactStatus[] {
+  switch (kind) {
+    case "proposal":
+      return ["draft", "sent", "accepted", "rejected"];
+    case "contract":
+      return ["draft", "sent", "signed", "rejected"];
+    case "document":
+      return ["draft", "sent", "accepted", "signed", "rejected"];
+    default:
+      return [];
+  }
+}
+
+const MILESTONE_LABEL: Record<string, string> = {
+  proposal_sent: "Proposta enviada",
+  contract_sent: "Contrato enviado",
+  contract_signed: "Contrato assinado",
+};
+
+/** The deal's milestone a status proves (the twin of _crm_artifact_milestone), or null. */
+export function artifactMilestone(kind: ArtifactKind | null | undefined, status: ArtifactStatus): string | null {
+  if (kind === "proposal" && status === "sent") return "proposal_sent";
+  if (kind === "contract" && status === "sent") return "contract_sent";
+  if (kind === "contract" && status === "signed") return "contract_signed";
+  return null;
+}
+
+export const milestoneLabel = (event: string | null | undefined) => (event ? MILESTONE_LABEL[event] ?? event : null);
+
 /** A record of an artifact table with no status yet (made before the table was one) is a draft. */
 export function artifactStatusOf(status: unknown): ArtifactStatus {
   return typeof status === "string" && Object.prototype.hasOwnProperty.call(ARTIFACT_STATUS_LABEL, status)

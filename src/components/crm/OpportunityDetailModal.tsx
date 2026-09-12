@@ -368,7 +368,7 @@ export const OpportunityDetailModal = ({
                   <DealRevenueSection opportunityId={opportunity.id} open={open} />
 
                   {/* Sprint 11 · T40 — proposals, contracts and documents held by the deal. */}
-                  <DealArtifactsSection opportunityId={opportunity.id} open={open} />
+                  <DealArtifactsSection opportunityId={opportunity.id} open={open} onDealMoved={handleStageChange} />
 
                   {hasCustomFields && (
                     <div className="space-y-3 pt-1">

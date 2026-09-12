@@ -18,12 +18,13 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import type { CustomTableRecord } from "@/hooks/useCustomTableRecords";
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
-import { recordTitle } from "@/lib/artifacts";
+import { recordTitle, type ArtifactKind, type ArtifactStatus } from "@/lib/artifacts";
 import { formatLookup, recordValues, type RelationChips } from "@/lib/customTables";
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 import { DynamicFieldRenderer, validateCustomData } from "../DynamicFieldRenderer";
 import { RelationChip } from "../grid/RelationChip";
+import { ArtifactStatusSelect } from "./ArtifactStatusSelect";
 import { FileField } from "./FileField";
 
 interface CustomRecordDrawerProps {
@@ -35,6 +36,9 @@ interface CustomRecordDrawerProps {
   onClose: () => void;
   onSave: (id: string, data: Record<string, unknown>) => Promise<unknown>;
   onDelete: (id: string) => void;
+  /** Sprint 11 · T43 — an artifact's status, changed by the verb (it can move the deal). */
+  artifactKind?: ArtifactKind | null;
+  onStatusChange?: (id: string, status: ArtifactStatus) => Promise<unknown>;
 }
 
 const fmt = (iso: string) => {
@@ -50,8 +54,19 @@ const fmt = (iso: string) => {
  * renderer as the deal form, so each type has its editor), the relations, when
  * it was created and changed, and delete. The row's first column opens it.
  */
-export function CustomRecordDrawer({ record, columns, relations, onClose, onSave, onDelete }: CustomRecordDrawerProps) {
+export function CustomRecordDrawer({
+  record,
+  columns,
+  relations,
+  onClose,
+  onSave,
+  onDelete,
+  artifactKind = null,
+  onStatusChange,
+}: CustomRecordDrawerProps) {
   const { nameOf } = useMemberDirectory();
+  const [status, setStatus] = useState<unknown>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -65,6 +80,7 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
   useEffect(() => {
     setDraft(record?.data ?? {});
     persisted.current = record?.data ?? {};
+    setStatus(record?.artifact_status ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordId]);
 
@@ -90,6 +106,20 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
   const fileColumns = columns.filter((c) => c.type === "file");
 
   const dirty = !!record && JSON.stringify(draft) !== JSON.stringify(persisted.current);
+
+  const changeStatus = async (next: ArtifactStatus) => {
+    if (!record || !onStatusChange) return;
+    const before = status;
+    setStatus(next);
+    setStatusSaving(true);
+    try {
+      await onStatusChange(record.id, next);
+    } catch {
+      setStatus(before); // the hook shows the error
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   // Sprint 11 · T42 — a file list is saved as soon as it changes.
   const saveFiles = async (fieldId: string, next: unknown) => {
@@ -123,7 +153,12 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
     <Sheet open={!!record} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b border-border px-5 py-4 text-left">
-          <SheetTitle className="truncate">{title}</SheetTitle>
+          <div className="flex items-center justify-between gap-3 pr-6">
+            <SheetTitle className="truncate">{title}</SheetTitle>
+            {record && artifactKind && onStatusChange && (
+              <ArtifactStatusSelect kind={artifactKind} value={status} onChange={(s) => void changeStatus(s)} disabled={statusSaving} />
+            )}
+          </div>
           {record && (
             <SheetDescription className="text-xs">
               Criado em {fmt(record.created_at)} · Atualizado em {fmt(record.updated_at)}

@@ -37,6 +37,7 @@ import {
   type CustomTableColumnType,
   type LookupSource,
 } from "@/hooks/useCustomTables";
+import { useSetArtifactStatus } from "@/hooks/useArtifactStatus";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import {
   activeColumns,
@@ -49,11 +50,10 @@ import {
   type CustomTableSort,
   type RelationChips,
 } from "@/lib/customTables";
-import { ARTIFACT_STATUS_LABEL, ARTIFACT_STATUS_STYLE, artifactStatusOf } from "@/lib/artifacts";
 import { columnFromField } from "@/lib/fields/columns";
 import { getFieldType } from "@/lib/fields/registry";
-import { cn } from "@/lib/utils";
 
+import { ArtifactStatusSelect } from "./ArtifactStatusSelect";
 import { CustomRecordDrawer } from "./CustomRecordDrawer";
 
 const sb = supabase as any;
@@ -113,6 +113,9 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
 
   const { records, total, isLoading, hasMore, loadingMore, loadMore, createRecord, updateRecord, deleteRecords } =
     useCustomTableRecords(table.id, serverSearch, sort);
+  // Sprint 11 · T43 — the status goes through the verb: it can move the deal.
+  const setArtifactStatus = useSetArtifactStatus();
+  const artifactKind = table.artifact_kind;
 
   const visible = useMemo(() => activeColumns(table.table_schema), [table.table_schema]);
   const relations = useCustomTableRelations(table, visible);
@@ -155,7 +158,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
       const def = columnFromField(col, "data", "field_id", { nameOf });
       return col.field_id === primaryId ? { ...def, primary: true, width: 200 } : def;
     });
-    if (!table.artifact_kind) return fields;
+    if (!artifactKind) return fields;
 
     // Sprint 11 · T40 — an artifact shows the deal holding it and its status.
     const artifactColumns: ColumnDef[] = [
@@ -186,20 +189,20 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         kind: "text",
         source: "native",
         editable: false,
-        width: 110,
-        render: (v) => {
-          const status = artifactStatusOf(v);
-          return (
-            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", ARTIFACT_STATUS_STYLE[status])}>
-              {ARTIFACT_STATUS_LABEL[status]}
-            </span>
-          );
-        },
+        width: 130,
+        render: (v, row) => (
+          <ArtifactStatusSelect
+            kind={artifactKind}
+            value={v}
+            onChange={(status) => setArtifactStatus.mutate({ recordId: row.id, status })}
+            disabled={setArtifactStatus.isPending}
+          />
+        ),
       },
     ];
     const [first, ...rest] = fields;
     return first ? [first, ...artifactColumns, ...rest] : artifactColumns;
-  }, [visible, nameOf, table.artifact_kind, navigate]);
+  }, [visible, nameOf, artifactKind, navigate, setArtifactStatus]);
 
   // ---- Rows (the server already searched and sorted) ------------------------
   const rows: GridRow[] = useMemo(
@@ -398,6 +401,8 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         onClose={() => setOpenRecord(null)}
         onSave={(id, data) => updateRecord.mutateAsync({ id, data })}
         onDelete={(id) => deleteRecords.mutate([id])}
+        artifactKind={artifactKind}
+        onStatusChange={(id, status) => setArtifactStatus.mutateAsync({ recordId: id, status })}
       />
 
       <AlertDialog open={confirmDeleteIds.length > 0} onOpenChange={(o) => !o && setConfirmDeleteIds([])}>

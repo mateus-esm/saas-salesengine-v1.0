@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 
-import { artifactKindLabel, artifactStatusOf, isArtifactKind, recordTitle } from "../artifacts";
+import {
+  artifactKindLabel,
+  artifactMilestone,
+  artifactStatusesFor,
+  artifactStatusOf,
+  isArtifactKind,
+  milestoneLabel,
+  recordTitle,
+} from "../artifacts";
 
 const col = (field_id: string, extra: Partial<CustomTableColumn> = {}): CustomTableColumn => ({
   field_id,
@@ -59,5 +67,22 @@ describe("recordTitle", () => {
   it("falls back when nothing has a value", () => {
     expect(recordTitle({}, columns)).toBe("Sem título");
     expect(recordTitle(null, columns, undefined, "Registro")).toBe("Registro");
+  });
+});
+
+describe("the lifecycle (the database's twin)", () => {
+  it("offers each kind its own statuses: a proposal is not signed, a contract is not accepted", () => {
+    expect(artifactStatusesFor("proposal")).toEqual(["draft", "sent", "accepted", "rejected"]);
+    expect(artifactStatusesFor("contract")).toEqual(["draft", "sent", "signed", "rejected"]);
+    expect(artifactStatusesFor("document")).toContain("signed");
+    expect(artifactStatusesFor(null)).toEqual([]);
+  });
+
+  it("names the milestone a status proves", () => {
+    expect(artifactMilestone("proposal", "sent")).toBe("proposal_sent");
+    expect(artifactMilestone("contract", "signed")).toBe("contract_signed");
+    expect(artifactMilestone("proposal", "accepted")).toBeNull();
+    expect(artifactMilestone("document", "sent")).toBeNull();
+    expect(milestoneLabel("contract_sent")).toBe("Contrato enviado");
   });
 });
