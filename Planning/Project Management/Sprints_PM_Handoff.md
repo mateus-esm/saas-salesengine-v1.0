@@ -828,7 +828,7 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 > **Código fechado:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T48–T57
 > **Branches:** `claude/sprint11/w5a/entradas` (T48–T51) · `claude/sprint11/w5b/campanhas-e-roi` (T52–T57, sobre o 5A)
 > **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 333/333 (39 arquivos) · Deno 136/136 (31 arquivos) · 36/36 suítes SQL em rollback contra a produção (inclui o ensaio do legado)
-> **Deploy:** **aguardando aprovação do founder** (seção 4) — nada da onda está na produção
+> **Deploy:** backend no ar desde 12/09, aprovado pelo founder (seção 4); frontend pelo PR desta branch
 
 ## 1. O que esta onda entrega
 
@@ -905,23 +905,25 @@ Entradas e atribuição: de onde o lead veio, quanto a campanha custou e quanto 
 - A importação de planilha ainda grava `creation_source = 'manual'` no lead (o toque diz
   Importação).
 
-## 4. Deploy — aguardando aprovação do founder
+## 4. Deploy / estado da produção (12/09)
 
-Nada foi aplicado. A ordem importa: as edges novas chamam funções das migrations; o
-frontend novo chama os verbos novos.
+Aprovado pelo founder e feito na ordem (as edges novas chamam funções das migrations;
+o frontend novo chama os verbos novos):
 
-0. **Cópia** da origem dos leads (id, equipe, categoria, `updated_at`) num JSON local do
-   scratchpad — fora do git, fora do banco.
-1. **Migrations** `20260913000100` … `20260913000400`, cada uma numa transação com o seu
-   registro no histórico. A `…000100` cria as entradas dos webhooks de entrada que
-   existem.
-2. **Conferência:** as funções novas existem; nenhum webhook de entrada sem entrada.
-3. **Edge functions vivas** `crm-webhook`, `solo-wpp-webhook`, `gpt-maker-webhook`
-   (`--no-verify-jwt --use-api`, como já estão) e fumaça (cada uma sobe).
-4. **Legado (T56).** Ensaio de 12/09 sobre os dados de verdade: 2.227 leads → 1.282 pela
-   importação, 862 pelo agente, 80 pelo próprio webhook (3 equipes), 3 pelo manual;
-   categoria escrita intacta; `updated_at` intacto. Depois: lead sem toque = 0.
-5. **PR** `claude/sprint11/w5b/campanhas-e-roi` → `main`, checks verdes, merge → Netlify.
+0. **Cópia** da origem dos 2.227 leads (id, equipe, categoria, `updated_at`) num JSON
+   local do scratchpad — fora do git, fora do banco.
+1. **Migrations** `20260913000100` … `20260913000400` aplicadas, cada uma numa transação
+   com o seu registro no histórico. A `…000100` criou as entradas dos 7 webhooks de
+   entrada.
+2. **Conferência:** as 5 funções-chave existem; 0 webhook de entrada sem entrada.
+3. **Edge functions** `crm-webhook`, `solo-wpp-webhook` e `gpt-maker-webhook`
+   publicadas (`--no-verify-jwt --use-api`, como já estavam). Fumaça: as três sobem
+   (OPTIONS → 200).
+4. **Legado (T56)** aplicado numa transação: 2.227 toques — 1.282 pela importação, 862
+   pelo agente, 80 pelo próprio webhook, 3 pelo manual (igual ao ensaio). Conferido
+   contra a cópia: 0 lead sem toque, 0 categoria escrita trocada, 79 categorias vazias
+   preenchidas (leads de webhook com carimbo), 0 `updated_at` mudado; gatilho religado.
+5. **PR** `claude/sprint11/w5b/campanhas-e-roi` → `main` → Netlify.
 6. **Navegador:** Campanhas (criar, lançar investimento, ligar UTM), Origem no negócio,
    Resultados, filtros, naturezas de uma linha-campanha.
 
