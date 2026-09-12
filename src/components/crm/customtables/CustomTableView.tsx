@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Plus, Settings2, Trash2 } from "lucide-react";
 
@@ -27,6 +27,7 @@ import {
   customTableKeys,
   useCustomTableRecords,
   useCustomTableRelations,
+  type CustomTableRecord,
 } from "@/hooks/useCustomTableRecords";
 import {
   useCustomTables,
@@ -35,7 +36,13 @@ import {
   type CustomTableColumnType,
 } from "@/hooks/useCustomTables";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
-import { activeColumns, newColumnKey, type RelationChips } from "@/lib/customTables";
+import {
+  activeColumns,
+  newColumn,
+  toTableSort,
+  type CustomTableSort,
+  type RelationChips,
+} from "@/lib/customTables";
 import { columnFromField } from "@/lib/fields/columns";
 import { getFieldType } from "@/lib/fields/registry";
 
@@ -66,8 +73,9 @@ interface CustomTableViewProps {
 /**
  * Sprint 5.3 T15 / Sprint 11 · T21 — a custom table in the same pattern as the
  * CRM tables: full height, a grid cell per field type (the registry), the first
- * column opens the record, rows deleted one or many, every record (no 1,000 cap)
- * and relation chips resolved per column instead of per cell.
+ * column opens the record, rows deleted one or many, and relation chips resolved
+ * per column instead of per cell. Sprint 11 · T39: columns addressed by field_id;
+ * pages of 50 from the server, which searches and sorts.
  */
 export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const { profile } = useAuth();
@@ -75,23 +83,33 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const queryClient = useQueryClient();
   const { nameOf } = useMemberDirectory();
   const { tables, updateTable } = useCustomTables();
-  const { records, isLoading, createRecord, updateRecord, deleteRecords } = useCustomTableRecords(table.id);
+
+  const [search, setSearch] = useState("");
+  const [serverSearch, setServerSearch] = useState("");
+  const [sort, setSort] = useState<CustomTableSort | null>(null);
+  const [openRecord, setOpenRecord] = useState<CustomTableRecord | null>(null);
+  const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[]>([]);
+
+  // One request once typing stops, not one per key.
+  useEffect(() => {
+    const t = setTimeout(() => setServerSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { records, total, isLoading, hasMore, loadingMore, loadMore, createRecord, updateRecord, deleteRecords } =
+    useCustomTableRecords(table.id, serverSearch, sort);
 
   const visible = useMemo(() => activeColumns(table.table_schema), [table.table_schema]);
   const relations = useCustomTableRelations(table, visible);
   const recordById = useMemo(() => new Map(records.map((r) => [r.id, r])), [records]);
 
-  const [search, setSearch] = useState("");
-  const [openRecordId, setOpenRecordId] = useState<string | null>(null);
-  const [confirmDeleteIds, setConfirmDeleteIds] = useState<string[]>([]);
-
   // ---- Columns --------------------------------------------------------------
   const columns: ColumnDef[] = useMemo(() => {
-    const primaryKey = visible.find((c) => c.type !== "relation")?.key;
+    const primaryId = visible.find((c) => c.type !== "relation")?.field_id;
     return visible.map((col): ColumnDef => {
       if (col.type === "relation") {
         return {
-          key: col.key,
+          key: col.field_id,
           label: col.label,
           kind: "relation",
           source: "jsonb",
@@ -104,33 +122,26 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           },
         };
       }
-      const def = columnFromField(col, "data", "key", { nameOf });
-      return col.key === primaryKey ? { ...def, primary: true, width: 200 } : def;
+      const def = columnFromField(col, "data", "field_id", { nameOf });
+      return col.field_id === primaryId ? { ...def, primary: true, width: 200 } : def;
     });
   }, [visible, nameOf]);
 
-  // ---- Rows -----------------------------------------------------------------
-  const allRows: GridRow[] = useMemo(
+  // ---- Rows (the server already searched and sorted) ------------------------
+  const rows: GridRow[] = useMemo(
     () =>
       records.map((r) => {
         const row: GridRow = { id: r.id, equipe_id: equipeId, ...(r.data ?? {}) };
-        for (const [key, byRow] of Object.entries(relations)) row[key] = byRow[r.id] ?? [];
+        for (const [fieldId, byRow] of Object.entries(relations)) row[fieldId] = byRow[r.id] ?? [];
         return row;
       }),
     [records, relations, equipeId],
   );
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return allRows;
-    return allRows.filter((row) =>
-      Object.values(row).some((v) =>
-        typeof v === "string"
-          ? v.toLowerCase().includes(q)
-          : Array.isArray(v) && v.some((c) => typeof c?.name === "string" && c.name.toLowerCase().includes(q)),
-      ),
-    );
-  }, [allRows, search]);
+  const handleSort = useCallback(
+    (key: string, dir: "asc" | "desc" | null) => setSort(toTableSort(key, dir, visible)),
+    [visible],
+  );
 
   // Sprint 11 · T26 — on a phone each record is a line: its first column, then
   // the next two fields that have a value. A tap opens the record.
@@ -218,8 +229,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   // ---- Rows: add, delete ----------------------------------------------------
   const handleAddRow = async () => {
     try {
-      const created = await createRecord.mutateAsync({});
-      setOpenRecordId(created.id);
+      setOpenRecord(await createRecord.mutateAsync({}));
     } catch {
       // the hook shows the error
     }
@@ -238,7 +248,9 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
     [],
   );
 
-  const openRecord = openRecordId ? recordById.get(openRecordId) ?? null : null;
+  // The open record follows its row while loaded (an inline edit shows in the drawer).
+  const drawerRecord = openRecord ? recordById.get(openRecord.id) ?? openRecord : null;
+  const shownTotal = total ?? records.length;
 
   return (
     <div className="flex h-full flex-col">
@@ -249,7 +261,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           </Button>
           <h2 className="truncate text-lg font-semibold">{table.name}</h2>
           <span className="text-sm text-muted-foreground">
-            {records.length.toLocaleString("pt-BR")} {records.length === 1 ? "registro" : "registros"}
+            {shownTotal.toLocaleString("pt-BR")} {shownTotal === 1 ? "registro" : "registros"}
           </span>
         </div>
 
@@ -287,17 +299,23 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           allowColumnReorder
           allowColumnResize
           allowColumnHide
-          onRowOpen={setOpenRecordId}
+          onSort={handleSort}
+          sortKey={sort?.field_id}
+          sortDir={sort?.dir ?? null}
+          onRowOpen={(id) => setOpenRecord(recordById.get(id) ?? null)}
           renderMobileRow={renderMobileRow}
-          mobileEmptyLabel="Nenhum registro ainda."
+          mobileEmptyLabel={serverSearch ? "Nenhum registro com essa busca." : "Nenhum registro ainda."}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onEndReached={loadMore}
         />
       </div>
 
       <CustomRecordDrawer
-        record={openRecord}
+        record={drawerRecord}
         columns={visible}
         relations={relations}
-        onClose={() => setOpenRecordId(null)}
+        onClose={() => setOpenRecord(null)}
         onSave={(id, data) => updateRecord.mutateAsync({ id, data })}
         onDelete={(id) => deleteRecords.mutate([id])}
       />
@@ -341,8 +359,9 @@ interface ColumnsEditorProps {
 
 /**
  * A new column asks only for its label and type (plus options, or the target
- * table). The key is born from the label and never edited — the same contract as
- * the pipeline's fields. Removing a column hides it; its values stay stored.
+ * table). It gets a field_id that never changes, and a key born from the label —
+ * the same contract as the pipeline's fields. Removing a column hides it; its
+ * values stay stored.
  */
 function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorProps) {
   const [open, setOpen] = useState(false);
@@ -369,11 +388,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
 
   const handleAdd = async () => {
     if (!canAdd) return;
-    const column: CustomTableColumn = {
-      key: newColumnKey(table.table_schema, label.trim()),
-      label: label.trim(),
-      type,
-    };
+    const column = newColumn(table.table_schema, label.trim(), type);
     if (type === "select" || type === "multi_select") {
       column.options = options
         .split(",")
@@ -385,7 +400,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
         targetTable: target.name,
         targetTableSlug: target.slug,
         targetTableId: target.id,
-        displayField: displayField || targetFields[0]?.key || "name",
+        displayField: displayField || targetFields[0]?.field_id || "name",
       };
     }
     try {
@@ -396,8 +411,8 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
     }
   };
 
-  const handleRemove = (key: string) =>
-    onChange(table.table_schema.map((c) => (c.key === key ? { ...c, is_deleted: true } : c))).catch(() => {});
+  const handleRemove = (fieldId: string) =>
+    onChange(table.table_schema.map((c) => (c.field_id === fieldId ? { ...c, is_deleted: true } : c))).catch(() => {});
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -413,7 +428,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
           <div className="max-h-56 space-y-1.5 overflow-y-auto">
             {visible.map((col) => (
               <div
-                key={col.key}
+                key={col.field_id}
                 className="flex items-center justify-between gap-2 rounded border border-border px-3 py-1.5 text-sm"
               >
                 <span className="min-w-0">
@@ -427,7 +442,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0"
-                  onClick={() => void handleRemove(col.key)}
+                  onClick={() => void handleRemove(col.field_id)}
                   disabled={saving}
                   aria-label={`Remover a coluna ${col.label}`}
                 >
@@ -492,13 +507,13 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
                   </SelectContent>
                 </Select>
                 {target && targetFields.length > 0 && (
-                  <Select value={displayField || targetFields[0].key} onValueChange={setDisplayField}>
+                  <Select value={displayField || targetFields[0].field_id} onValueChange={setDisplayField}>
                     <SelectTrigger className="h-7 text-xs">
                       <SelectValue placeholder="Mostrar pelo campo" />
                     </SelectTrigger>
                     <SelectContent>
                       {targetFields.map((c) => (
-                        <SelectItem key={c.key} value={c.key}>
+                        <SelectItem key={c.field_id} value={c.field_id}>
                           Mostrar: {c.label}
                         </SelectItem>
                       ))}

@@ -27,7 +27,7 @@ interface CustomRecordDrawerProps {
   record: CustomTableRecord | null;
   /** The table's columns on screen (removed ones already out). */
   columns: CustomTableColumn[];
-  /** Column key → row id → chips (useCustomTableRelations). */
+  /** Column field_id → row id → chips (useCustomTableRelations). */
   relations: Record<string, Record<string, RelationChips>>;
   onClose: () => void;
   onSave: (id: string, data: Record<string, unknown>) => Promise<unknown>;
@@ -56,14 +56,14 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
     setDraft(record?.data ?? {});
   }, [record]);
 
-  // Records keep their values under the column key; the renderer addresses by
-  // field_id, so the key plays both parts here.
+  // Sprint 11 · T39 — records keep their values under the column's field_id, the
+  // same address the renderer uses for the deal's fields.
   const schema: CustomFieldSchema[] = useMemo(
     () =>
       columns
         .filter((c) => c.type !== "relation")
         .map((c, i) => ({
-          field_id: c.key,
+          field_id: c.field_id,
           key: c.key,
           label: c.label,
           type: c.type as CustomFieldType,
@@ -77,7 +77,7 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
 
   const dirty = !!record && JSON.stringify(draft) !== JSON.stringify(record.data ?? {});
   const first = schema[0];
-  const title = (first && record ? String(record.data?.[first.key] ?? "").trim() : "") || "Registro";
+  const title = (first && record ? String(record.data?.[first.field_id] ?? "").trim() : "") || "Registro";
 
   const handleSave = async () => {
     if (!record) return;
@@ -119,9 +119,9 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
           {record && relationColumns.length > 0 && (
             <div className="space-y-3 border-t border-border pt-4">
               {relationColumns.map((col) => {
-                const chips = relations[col.key]?.[record.id] ?? [];
+                const chips = relations[col.field_id]?.[record.id] ?? [];
                 return (
-                  <div key={col.key} className="space-y-1.5">
+                  <div key={col.field_id} className="space-y-1.5">
                     <p className="text-sm font-medium">{col.label}</p>
                     {chips.length > 0 ? (
                       <div className="flex flex-wrap gap-1">

@@ -22,6 +22,7 @@ begin;
 -- @include supabase/migrations/20260912000600_sprint11_w3_revenue_metrics.sql
 -- @include supabase/migrations/20260912000700_sprint11_w3_timers.sql
 -- @include supabase/migrations/20260912000800_sprint11_w3_natures.sql
+-- @include supabase/migrations/20260912100100_sprint11_w4_custom_tables_field_id.sql
 
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link) values

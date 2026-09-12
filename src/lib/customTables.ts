@@ -5,9 +5,15 @@
 // for the whole table — its links, and the target table's records — and this
 // joins them in the browser, delivered to the grid in the row (resolvedFromRow).
 
+//
+// Sprint 11 · Onda 4 · T39 — columns are addressed by `field_id` (the pipeline
+// fields' contract): the value lives in data[field_id], the key is the public
+// name at the edges. The server pages, searches and sorts (crm_custom_table_page).
+
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 
 import { slugify, uniqueKey } from "./customFieldKeys";
+import { getFieldType } from "./fields/registry";
 
 export interface CustomTableLinkRow {
   from_id: string;
@@ -64,4 +70,41 @@ export function newColumnKey(columns: CustomTableColumn[], label: string): strin
 /** The columns on screen (removed ones keep their key and values, hidden). */
 export function activeColumns(columns: CustomTableColumn[]): CustomTableColumn[] {
   return columns.filter((c) => !c.is_deleted);
+}
+
+/**
+ * Every column with its field_id. The database gives one to every column; a
+ * column read before the conversion has none yet, and its values are still under
+ * the key — so the key addresses it until then.
+ */
+export function withFieldIds(columns: unknown): CustomTableColumn[] {
+  if (!Array.isArray(columns)) return [];
+  return (columns as CustomTableColumn[]).map((c) => (c.field_id ? c : { ...c, field_id: c.key }));
+}
+
+/** A new column: its field_id never changes; its key is born from the label. */
+export function newColumn(
+  columns: CustomTableColumn[],
+  label: string,
+  type: CustomTableColumn["type"],
+  newId: () => string = () => crypto.randomUUID(),
+): CustomTableColumn {
+  return { field_id: newId(), key: newColumnKey(columns, label), label, type };
+}
+
+export interface CustomTableSort {
+  field_id: string;
+  dir: "asc" | "desc";
+}
+
+/** The server's sort for a grid column, or null when the column does not sort (relations, lists, people). */
+export function toTableSort(
+  fieldId: string,
+  dir: "asc" | "desc" | null,
+  columns: CustomTableColumn[],
+): CustomTableSort | null {
+  if (!dir) return null;
+  const col = columns.find((c) => c.field_id === fieldId);
+  if (!col || col.type === "relation" || !getFieldType(col.type).sortAs) return null;
+  return { field_id: fieldId, dir };
 }

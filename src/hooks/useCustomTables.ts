@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { withFieldIds } from "@/lib/customTables";
 import { toast } from "sonner";
 
 // custom_tables lags in generated types; scope is enforced via equipe_id + RLS.
@@ -25,7 +26,13 @@ export type CustomTableColumnType =
   | "relation";
 
 export interface CustomTableColumn {
-  /** Born from the label (uniqueKey) and never edited: records keep their values under it. */
+  /**
+   * Sprint 11 · T39 — the column's address, never changed: records keep their
+   * values under data[field_id]. (withFieldIds fills it with the key for a column
+   * read before the conversion.)
+   */
+  field_id: string;
+  /** Born from the label (uniqueKey) and never edited: the public name at the edges (payload, form). */
   key: string;
   label: string;
   type: CustomTableColumnType;
@@ -38,6 +45,7 @@ export interface CustomTableColumn {
     targetTableSlug: string;
     /** UUID of the target custom table (used to query custom_table_records). */
     targetTableId?: string;
+    /** The field_id of the target column that names a linked record. */
     displayField: string;
   };
 }
@@ -97,7 +105,7 @@ export const useCustomTables = () => {
       if (error) throw error;
       return (data ?? []).map((r: Record<string, unknown>) => ({
         ...r,
-        table_schema: (r.table_schema as CustomTableColumn[] | null) ?? [],
+        table_schema: withFieldIds(r.table_schema),
       })) as CustomTable[];
     },
   });

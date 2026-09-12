@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activeColumns, mapLinksToRows, newColumnKey } from "../customTables";
+import { activeColumns, mapLinksToRows, newColumn, newColumnKey, toTableSort, withFieldIds } from "../customTables";
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 
 const rec = (id: string, data: Record<string, unknown> | null) => ({ id, data });
@@ -54,14 +54,15 @@ describe("mapLinksToRows", () => {
   });
 });
 
-describe("newColumnKey", () => {
-  const col = (key: string, extra: Partial<CustomTableColumn> = {}): CustomTableColumn => ({
-    key,
-    label: key,
-    type: "text",
-    ...extra,
-  });
+const col = (key: string, extra: Partial<CustomTableColumn> = {}): CustomTableColumn => ({
+  field_id: `id-${key}`,
+  key,
+  label: key,
+  type: "text",
+  ...extra,
+});
 
+describe("newColumnKey", () => {
   it("is born from the label", () => {
     expect(newColumnKey([], "Data de Instalação")).toBe("data_de_instalacao");
   });
@@ -78,10 +79,56 @@ describe("newColumnKey", () => {
 
 describe("activeColumns", () => {
   it("hides removed columns", () => {
-    const columns: CustomTableColumn[] = [
-      { key: "a", label: "A", type: "text" },
-      { key: "b", label: "B", type: "text", is_deleted: true },
-    ];
+    const columns: CustomTableColumn[] = [col("a"), col("b", { is_deleted: true })];
     expect(activeColumns(columns).map((c) => c.key)).toEqual(["a"]);
+  });
+});
+
+describe("withFieldIds", () => {
+  it("keeps the field_id the database gave", () => {
+    expect(withFieldIds([col("nome")])).toEqual([col("nome")]);
+  });
+
+  it("addresses a column read before the conversion by its key (its values are still there)", () => {
+    expect(withFieldIds([{ key: "nome", label: "Nome", type: "text" }])).toEqual([
+      { field_id: "nome", key: "nome", label: "Nome", type: "text" },
+    ]);
+  });
+
+  it("reads a missing or broken schema as no columns", () => {
+    expect(withFieldIds(null)).toEqual([]);
+    expect(withFieldIds({ nome: "x" })).toEqual([]);
+  });
+});
+
+describe("newColumn", () => {
+  it("gets a field_id of its own and a key born from the label", () => {
+    expect(newColumn([col("status")], "Status", "select", () => "f-1")).toEqual({
+      field_id: "f-1",
+      key: "status_2",
+      label: "Status",
+      type: "select",
+    });
+  });
+});
+
+describe("toTableSort", () => {
+  const columns = [
+    col("potencia", { type: "number" }),
+    col("usina", { type: "relation" }),
+    col("tags", { type: "multi_select" }),
+    col("nome"),
+  ];
+
+  it("sorts a column by its field_id", () => {
+    expect(toTableSort("id-potencia", "desc", columns)).toEqual({ field_id: "id-potencia", dir: "desc" });
+    expect(toTableSort("id-nome", "asc", columns)).toEqual({ field_id: "id-nome", dir: "asc" });
+  });
+
+  it("does not sort relations, lists, unknown columns, or with no direction", () => {
+    expect(toTableSort("id-usina", "asc", columns)).toBeNull();
+    expect(toTableSort("id-tags", "asc", columns)).toBeNull();
+    expect(toTableSort("id-sumiu", "asc", columns)).toBeNull();
+    expect(toTableSort("id-nome", null, columns)).toBeNull();
   });
 });
