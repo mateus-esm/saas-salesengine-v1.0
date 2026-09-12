@@ -43,6 +43,9 @@ export const useWebhookConfigs = () => {
         .from("webhook_configs")
         .select("*")
         .eq("equipe_id", equipeId)
+        // Sprint 11 · T44 — the automation buttons of artifact tables are webhooks
+        // of the same queue, configured in the table itself.
+        .not("trigger_event", "like", "artifact_action:%")
         .order("created_at", { ascending: false });
 
       if (error) throw error;

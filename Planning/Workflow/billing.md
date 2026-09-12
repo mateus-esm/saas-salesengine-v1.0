@@ -309,3 +309,12 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W3B | T36 Modelos de linha | Codex / GPT-5 | M | R$ 12 |
 | 2026-09-11 | 11 W3B | T37 Track Shaper preenche naturezas e marcos | Codex / GPT-5 | M | R$ 12 |
 | 2026-09-12 | 11 W3 | T38 Verificacao, deploy e handoff | Codex / GPT-5 | S | R$ 5 |
+| 2026-09-12 | 11 W4 | Plano da Onda 4 (artefatos: propostas e contratos) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W4A | T39 Tabelas personalizadas em field_id + pagina no servidor | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W4A | T40 Artefato preso ao negocio + painel no negocio | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W4A | T41 Campos de consulta | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W4A | T42 Campo arquivo (bucket privado) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W4A | T43 Ciclo de vida do artefato -> marco | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W4B | T44 Botao de automacao com retorno (contrato v1) | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-09-12 | 11 W4B | T45 Formulario publico por registro | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W4B | T46 Semente da Solo Energia: Propostas Comerciais e Contratos | Claude / Opus 5 (PM) | M | R$ 12 |

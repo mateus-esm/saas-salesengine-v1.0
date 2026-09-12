@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { actionsFrom, type ArtifactAction } from "@/lib/artifactActions";
+import { isArtifactKind, type ArtifactKind } from "@/lib/artifacts";
+import { withFieldIds } from "@/lib/customTables";
+import { normalizeFormConfig, type FormConfig } from "@/lib/publicForm";
 import { toast } from "sonner";
 
 // custom_tables lags in generated types; scope is enforced via equipe_id + RLS.
@@ -22,10 +26,30 @@ export type CustomTableColumnType =
   | "url"
   | "phone"
   | "user"
-  | "relation";
+  /** Sprint 11 · T42 — files in the private bucket `artifacts` (a list in data[field_id]). */
+  | "file"
+  | "relation"
+  /** Sprint 11 · T41 — read-only, read from the deal holding the record (artifact tables). */
+  | "lookup";
+
+/** What a lookup column reads from the deal holding the record. */
+export type LookupSource =
+  | "contact.name"
+  | "contact.phone"
+  | "contact.email"
+  | "deal.value"
+  | "deal.stage"
+  | "deal.owner"
+  | "deal.items";
 
 export interface CustomTableColumn {
-  /** Born from the label (uniqueKey) and never edited: records keep their values under it. */
+  /**
+   * Sprint 11 · T39 — the column's address, never changed: records keep their
+   * values under data[field_id]. (withFieldIds fills it with the key for a column
+   * read before the conversion.)
+   */
+  field_id: string;
+  /** Born from the label (uniqueKey) and never edited: the public name at the edges (payload, form). */
   key: string;
   label: string;
   type: CustomTableColumnType;
@@ -38,8 +62,11 @@ export interface CustomTableColumn {
     targetTableSlug: string;
     /** UUID of the target custom table (used to query custom_table_records). */
     targetTableId?: string;
+    /** The field_id of the target column that names a linked record. */
     displayField: string;
   };
+  /** Only for lookup: resolved by the server when the row is read, never stored. */
+  lookupConfig?: { source: LookupSource };
 }
 
 export interface CustomTable {
@@ -50,6 +77,12 @@ export interface CustomTable {
   icon: string | null;
   description: string | null;
   table_schema: CustomTableColumn[];
+  /** Sprint 11 · T40 — a table of artifacts: its records are held by a deal. */
+  artifact_kind: ArtifactKind | null;
+  /** Sprint 11 · T44 — the automation buttons (the URL lives in the webhook, not here). */
+  actions: ArtifactAction[];
+  /** Sprint 11 · T45 — the public form each record can send to the client. */
+  form_config: FormConfig | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +93,7 @@ interface CreateCustomTableData {
   icon?: string | null;
   description?: string | null;
   table_schema?: CustomTableColumn[];
+  artifact_kind?: ArtifactKind | null;
 }
 
 interface UpdateCustomTableData {
@@ -97,7 +131,10 @@ export const useCustomTables = () => {
       if (error) throw error;
       return (data ?? []).map((r: Record<string, unknown>) => ({
         ...r,
-        table_schema: (r.table_schema as CustomTableColumn[] | null) ?? [],
+        table_schema: withFieldIds(r.table_schema),
+        artifact_kind: isArtifactKind(r.artifact_kind) ? r.artifact_kind : null,
+        actions: actionsFrom(r.actions),
+        form_config: normalizeFormConfig(r.form_config),
       })) as CustomTable[];
     },
   });
@@ -114,6 +151,7 @@ export const useCustomTables = () => {
           icon: input.icon ?? null,
           description: input.description ?? null,
           table_schema: input.table_schema ?? [],
+          ...(input.artifact_kind ? { artifact_kind: input.artifact_kind } : {}),
         })
         .select()
         .single();

@@ -135,3 +135,9 @@ verify_jwt = false
 # WhatsApp message is not a logged-in user. The token is the authorisation.
 [functions.report-snapshot]
 verify_jwt = false
+
+[functions.artifact-callback]
+verify_jwt = false
+
+[functions.public-form]
+verify_jwt = false

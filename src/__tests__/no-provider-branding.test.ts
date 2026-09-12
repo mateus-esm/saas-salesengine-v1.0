@@ -36,5 +36,7 @@ describe('provider branding', () => {
       (f) => !ALLOWLIST.includes(f) && /gpt\s*maker/i.test(readFileSync(f, 'utf8'))
     );
     expect(offenders).toEqual([]);
-  });
+    // Reads every file of src/: with the whole suite in parallel it passes the
+    // 5 s default and fails for the clock, not for the branding.
+  }, 30_000);
 });

@@ -31,6 +31,7 @@ import BillingPlanPage from "./pages/billing/PlanPage";
 import BillingDataPage from "./pages/billing/BillingDataPage";
 import PublicProposal from "./pages/PublicProposal";
 import PublicReport from "./pages/PublicReport";
+import PublicForm from "./pages/PublicForm";
 import NotificationsPage from "./pages/NotificationsPage";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
@@ -83,6 +84,10 @@ const App = () => (
                     on purpose: whoever opens it just tapped a message and is
                     not logged in. The token is the whole authorisation. */}
                 <Route path="/relatorio/:token" element={<PublicReport />} />
+                {/* Sprint 11 · T45 — the client fills their own data ("Dados para
+                    Contrato") from the seller's link. Public: the token is the
+                    whole authorisation. */}
+                <Route path="/f/:token" element={<PublicForm />} />
 
                 {/* Authenticated shell — mounted once; children swap via <Outlet/> */}
                 <Route

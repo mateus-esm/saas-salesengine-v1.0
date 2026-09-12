@@ -59,15 +59,16 @@ export function RelationPicker({
         // Virtual custom table: rows live in custom_table_records keyed by table_id.
         // Display value is read from data[displayField] (JSONB). Sprint 11 · T21:
         // the search runs on the server — it used to filter the first 50 records
-        // in the browser, so a record past them could never be found.
-        let query = sb
-          .from("custom_table_records")
-          .select("id, data")
-          .eq("table_id", targetTableId)
-          .is("deleted_at", null);
-        if (search.trim()) query = query.ilike(`data->>${displayField}`, `%${search.trim()}%`);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const { data } = await query.order("id", { ascending: true }).limit(50);
+        // in the browser, so a record past them could never be found. T39: the
+        // table's own page (displayField is a field_id now), in the display
+        // field's order, finding a record by any of its values.
+        const { data } = await sb.rpc("crm_custom_table_page", {
+          p_table_id: targetTableId,
+          p_search: search.trim() || null,
+          p_sort: { field_id: displayField, dir: "asc" },
+          p_limit: 50,
+          p_offset: 0,
+        });
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return ((data ?? []) as any[]).map((r: any) => ({
           id: r.id as string,

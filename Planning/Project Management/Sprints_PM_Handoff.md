@@ -822,6 +822,107 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 
 ---
 
+# Sprint 11 · Onda 4 — Handoff
+
+> **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
+> **Código fechado:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T39–T46
+> **Branches:** `claude/sprint11/w4a/artefatos` (T39–T43) · `claude/sprint11/w4b/automacao-e-formulario` (T44–T47, sobre o 4A)
+> **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 306/306 (37 arquivos) · Deno 97/97 (`_shared`) · 30/30 suítes SQL em rollback contra a produção
+> **Deploy:** **parado no T47 — aguarda aprovação do founder** (seção 4)
+
+## 1. O que esta onda entrega
+
+Artefatos: propostas e contratos presos ao negócio, com automação e formulário.
+
+- **Modelo (T39).** Tabelas personalizadas no contrato dos campos do pipeline: cada
+  coluna tem `field_id`, o valor mora em `data[field_id]`, a `key` é o nome público
+  nas bordas. A tabela vem em páginas de 50 do servidor (`crm_custom_table_page`), que
+  busca em qualquer valor e ordena pelo tipo da coluna.
+- **Artefato (T40).** Tabela marcada como proposta · contrato · documento; o registro
+  fica preso a um negócio por coluna de verdade (`opportunity_id`). O modal do negócio
+  mostra "Propostas (3)", cria já preso e abre a mesma gaveta da tabela.
+- **Consulta (T41).** Coluna que lê do negócio na hora da leitura (contato, valor,
+  etapa, responsável, itens) — nunca copiada.
+- **Arquivo (T42).** Bucket **privado** `artifacts`, pasta da equipe, URL assinada de 1
+  minuto; cada mudança de arquivo salva na hora.
+- **Ciclo de vida → marco (T43).** Rascunho → enviado → aceito/assinado · recusado, só
+  pelo verbo. Proposta enviada = `proposal_sent`; contrato enviado/assinado =
+  `contract_sent`/`contract_signed`: com a etapa do marco à frente, o negócio anda (o
+  evento sai pela etapa); senão o evento é gravado direto (fonte `artifact`), uma vez.
+- **Automação (T44).** Botões por tabela (rótulo + URL). O clique manda o payload v1
+  (registro por key, negócio, contato, itens, token de retorno) pela **fila de saída
+  que já existia**; o n8n responde na edge `artifact-callback` com status, campos e
+  arquivos. Contrato: `Planning/Architecture/contrato_artefato_v1.md`.
+- **Formulário público (T45).** A tabela escolhe os campos; cada registro gera um link
+  `/f/:token` (30 dias ou até o envio) que o cliente preenche sem login; o servidor
+  valida cada tipo.
+- **Semente da Solo Energia (T46).** "Propostas Comerciais" (os campos do Jestor) e
+  "Contratos" (Dados para Contrato no formulário), ensaiadas em rollback.
+
+## 2. Achados que não estavam no plano
+
+1. **Gatilho × tela antiga (T39).** Com o gatilho que dá `field_id` a coluna nova, uma
+   tela antiga gravando por key depois da migration deixaria o valor preso à key. A
+   conversão cobre toda coluna e é idempotente — **rodar de novo depois do deploy do
+   frontend** (seção 4, passo 5).
+2. **Registro em tabela de outra equipe (T40).** A RLS dos registros olha só a equipe
+   do registro; dava para gravar numa tabela alheia. A guarda nova exige a equipe da
+   tabela e a do negócio.
+3. **"Salvar" do modal desfazia o marco (T43).** O modal manda sempre a etapa do estado
+   local: se a proposta movesse o negócio com o modal aberto, salvar o devolveria. O
+   verbo devolve a etapa nova e o modal acompanha.
+4. **ClickSign não cabia no token de uso único (T44).** "Enviado" agora e "assinado"
+   dias depois são duas respostas → `keep_open: true` mantém o token até vencer.
+5. **"4.500,00" não era número no servidor (T45)** → `_crm_parse_br_number`, gêmeo do
+   `parseBrNumber` do registro de tipos.
+6. **A Solo Energia não declara o marco da proposta (T46).** "Envio de Proposta" é uma
+   etapa aberta comum: marcar a proposta como enviada grava o evento mas não move o
+   negócio. **Decisão do founder:** ligar a etapa ao marco `proposal_sent` nas
+   configurações do pipeline (um clique; a partir daí entrar na etapa também conta).
+7. **Riscos registrados, fora da onda:** `chat-attachments` é público (achado 29) e a
+   política "Allow authenticated delete" dele deixa qualquer usuário logado apagar anexo
+   de qualquer equipe.
+8. **Gate:** dois testes que leem todo o `src/` (marca, provedor) estouravam os 5 s do
+   vitest com a suíte em paralelo — ganharam 30 s. O `sebill002_credit_consumption` é
+   teste de psql (sem marcador PASS), fora do runner desde 09/09.
+
+## 3. Limites da v1 (anotados no contrato e no ledger)
+
+- A automação não baixa arquivos do CRM (armazenamento privado; URL assinada no payload
+  fica para a v2 do contrato).
+- O formulário público não recebe arquivo (foto do RG/CNH) na v1.
+- A busca da tabela olha os valores gravados; consultas e nomes de relação não entram.
+- O link do formulário só aparece na hora de gerar (o banco guarda o hash); reenviar =
+  gerar outro (o anterior deixa de valer).
+
+## 4. Deploy — ponto de parada (aprovação do founder)
+
+Nada desta onda está na produção. A ordem importa (o frontend novo chama as funções
+novas; a tela antiga não sabe de `field_id`):
+
+1. **Migrations** `20260912100100` … `20260912100600`, na ordem, registradas no
+   histórico. A `…100100` já converte a "Teste" da Solo Energia (1 coluna, 2 registros)
+   — ensaiado: nenhuma coluna sem `field_id`, nenhum valor preso à key.
+2. **Edge functions novas:** `artifact-callback` e `public-form` (ambas
+   `verify_jwt = false`, já no `config.toml`). `deliver-crm-webhook` não muda.
+3. **Semente** `supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql` (ensaio
+   `sprint11_w4_seed_solo.test.sql`).
+4. **PR + merge** do branch `claude/sprint11/w4b/automacao-e-formulario` → Netlify.
+5. Depois do frontend no ar: `select public._crm_custom_tables_to_field_id();` (idempotente).
+6. Verificação no navegador: tabela "Teste" em páginas; criar uma proposta num negócio
+   da Solo, anexar PDF, marcar como enviada; gerar o link do formulário de um contrato e
+   preencher em aba anônima.
+
+## 5. Fica para depois
+
+- Configurar os botões do n8n (APITemplate, ClickSign) nas tabelas da Solo — os fluxos
+  se adaptam ao contrato v1.
+- Ligar "Envio de Proposta" ao marco `proposal_sent` (achado 6).
+- Contrato v2: arquivos do CRM para a automação; retorno sem clique (evento).
+- Formulário com arquivo; "selecionar todos" os filtrados (v1.2).
+
+---
+
 # Sprint 11 · Onda 3 — Handoff
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`

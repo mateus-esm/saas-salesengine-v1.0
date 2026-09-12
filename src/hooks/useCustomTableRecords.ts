@@ -1,5 +1,14 @@
 import { useMemo } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient, type QueryObserverResult } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+  type QueryKey,
+  type QueryObserverResult,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,61 +16,105 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   mapLinksToRows,
   type CustomTableLinkRow,
+  type CustomTableSort,
   type CustomTableTargetRecord,
   type RelationChips,
 } from "@/lib/customTables";
 import { fetchAllPages } from "@/lib/fetchAllPages";
+import { flattenPages, nextOffset, patchRowInCache, removeRowsFromPages, type TablePages } from "@/lib/tablePages";
 
 import type { CustomTable, CustomTableColumn } from "./useCustomTables";
 
 // custom_table_records lags in generated types; scope is enforced via RLS.
 const sb = supabase as any;
 
+export const CUSTOM_TABLE_PAGE_SIZE = 50;
+
 export interface CustomTableRecord {
   id: string;
   equipe_id: string;
   table_id: string;
+  /** Values by field_id (Sprint 11 · T39). */
   data: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  /** Sprint 11 · T40 — the deal holding the record (artifacts). */
+  opportunity_id?: string | null;
+  artifact_status?: string | null;
+  deal?: { id: string; name: string | null; pipeline_id: string } | null;
+  /** Sprint 11 · T41 — lookup column field_id → what it reads from the deal now. */
+  lookups?: Record<string, unknown>;
 }
 
 export const customTableKeys = {
+  /** Every loaded list of a table, whatever the search and sort. */
   records: (tableId: string | null) => ["custom_table_records", tableId] as const,
-  relation: (tableId: string, columnKey: string) => ["custom_table_relation", tableId, columnKey] as const,
+  page: (tableId: string | null, search: string, sort: CustomTableSort | null) =>
+    ["custom_table_records", tableId, search, sort] as const,
+  count: (tableId: string | null, search: string) => ["custom_table_count", tableId, search] as const,
+  relation: (tableId: string, fieldId: string) => ["custom_table_relation", tableId, fieldId] as const,
 };
 
+type Snapshot = [QueryKey, unknown][];
+
 /**
- * Sprint 5.3 T15 — records for a single custom table. Sprint 11 · T21: every
- * record (the API stops at 1,000 rows without a word — pages until one comes
- * short, ordered by id last so no row repeats or goes missing); edits and
- * deletes change the list before the server answers; success is silent (the row
- * shows it), an error always shows.
+ * Sprint 5.3 T15 — records for a single custom table. Sprint 11 · T39: pages of
+ * 50 from the server (crm_custom_table_page), which also searches and sorts by
+ * the column's type — the browser used to load every record and filter them
+ * itself. Edits and deletes change every loaded list before the server answers
+ * (and put them back on error); success is silent, an error always shows.
  */
-export const useCustomTableRecords = (tableId: string | null) => {
+export const useCustomTableRecords = (tableId: string | null, search = "", sort: CustomTableSort | null = null) => {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const equipeId = profile?.equipe_id;
-  const key = customTableKeys.records(tableId);
+  const q = search.trim();
+  const lists = customTableKeys.records(tableId);
 
-  const recordsQuery = useQuery({
-    queryKey: key,
+  const recordsQuery = useInfiniteQuery({
+    queryKey: customTableKeys.page(tableId, q, sort),
+    initialPageParam: 0,
     enabled: !!tableId,
-    queryFn: (): Promise<CustomTableRecord[]> =>
-      fetchAllPages<CustomTableRecord>((from, to) =>
-        sb
-          .from("custom_table_records")
-          .select("*")
-          .eq("table_id", tableId)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: true })
-          .order("id", { ascending: true })
-          .range(from, to),
-      ),
+    queryFn: async ({ pageParam }): Promise<CustomTableRecord[]> => {
+      const { data, error } = await sb.rpc("crm_custom_table_page", {
+        p_table_id: tableId,
+        p_search: q || null,
+        p_sort: sort,
+        p_limit: CUSTOM_TABLE_PAGE_SIZE,
+        p_offset: pageParam,
+      });
+      if (error) throw error;
+      return (data ?? []) as CustomTableRecord[];
+    },
+    getNextPageParam: (last, all) => nextOffset(last, all, CUSTOM_TABLE_PAGE_SIZE),
+    // Keep the old rows on screen while a new search or sort is loading.
+    placeholderData: keepPreviousData,
   });
 
-  const setRecords = (fn: (rows: CustomTableRecord[]) => CustomTableRecord[]) =>
-    queryClient.setQueryData<CustomTableRecord[]>(key, (rows) => (rows ? fn(rows) : rows));
+  const countQuery = useQuery({
+    queryKey: customTableKeys.count(tableId, q),
+    enabled: !!tableId,
+    queryFn: async (): Promise<number> => {
+      const { data, error } = await sb.rpc("crm_custom_table_count", { p_table_id: tableId, p_search: q || null });
+      if (error) throw error;
+      return Number(data ?? 0);
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const records = useMemo(() => flattenPages(recordsQuery.data), [recordsQuery.data]);
+
+  const snapshot = async (): Promise<Snapshot> => {
+    await queryClient.cancelQueries({ queryKey: lists });
+    return queryClient.getQueriesData({ queryKey: lists });
+  };
+  const restore = (previous: Snapshot | undefined) => previous?.forEach(([k, d]) => queryClient.setQueryData(k, d));
+  const patchLists = (id: string, patch: Record<string, unknown>) =>
+    queryClient.setQueriesData({ queryKey: lists }, (d: unknown) => patchRowInCache(d, id, patch));
+  const refreshTotals = () => {
+    void queryClient.invalidateQueries({ queryKey: lists });
+    void queryClient.invalidateQueries({ queryKey: ["custom_table_count", tableId] });
+  };
 
   const createRecord = useMutation({
     mutationFn: async (rowData: Record<string, unknown>): Promise<CustomTableRecord> => {
@@ -75,7 +128,8 @@ export const useCustomTableRecords = (tableId: string | null) => {
       if (error) throw error;
       return data as CustomTableRecord;
     },
-    onSuccess: (row) => setRecords((rows) => [...rows, row]),
+    // Where the new row lands depends on the sort: the server says.
+    onSuccess: refreshTotals,
     onError: (error: Error) => toast.error("Erro ao criar registro: " + error.message),
   });
 
@@ -91,14 +145,13 @@ export const useCustomTableRecords = (tableId: string | null) => {
       return data as CustomTableRecord;
     },
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<CustomTableRecord[]>(key);
-      setRecords((rows) => rows.map((r) => (r.id === id ? { ...r, data } : r)));
+      const previous = await snapshot();
+      patchLists(id, { data });
       return { previous };
     },
-    onSuccess: (row) => setRecords((rows) => rows.map((r) => (r.id === row.id ? row : r))),
+    onSuccess: (row) => patchLists(row.id, row as unknown as Record<string, unknown>),
     onError: (error: Error, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+      restore(ctx?.previous);
       toast.error("Erro ao atualizar registro: " + error.message);
     },
   });
@@ -115,24 +168,35 @@ export const useCustomTableRecords = (tableId: string | null) => {
       if (error) throw error;
     },
     onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<CustomTableRecord[]>(key);
-      const drop = new Set(ids);
-      setRecords((rows) => rows.filter((r) => !drop.has(r.id)));
+      const previous = await snapshot();
+      queryClient.setQueriesData({ queryKey: lists }, (d: unknown) =>
+        d && typeof d === "object" && Array.isArray((d as { pages?: unknown }).pages)
+          ? removeRowsFromPages(d as TablePages<CustomTableRecord>, ids)
+          : d,
+      );
       return { previous };
     },
     onError: (error: Error, _ids, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
+      restore(ctx?.previous);
       toast.error("Erro ao excluir: " + error.message);
     },
-    // A relation column elsewhere may point at these rows.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["custom_table_relation"] }),
+    onSettled: () => {
+      refreshTotals();
+      // A relation column elsewhere may point at these rows.
+      void queryClient.invalidateQueries({ queryKey: ["custom_table_relation"] });
+    },
   });
 
   return {
-    records: recordsQuery.data ?? [],
+    records,
+    total: countQuery.data ?? null,
     isLoading: recordsQuery.isLoading,
     error: recordsQuery.error,
+    hasMore: !!recordsQuery.hasNextPage,
+    loadingMore: recordsQuery.isFetchingNextPage,
+    loadMore: () => {
+      if (recordsQuery.hasNextPage && !recordsQuery.isFetchingNextPage) void recordsQuery.fetchNextPage();
+    },
     createRecord,
     updateRecord,
     deleteRecords,
@@ -145,7 +209,7 @@ const pickData = (results: QueryObserverResult<Record<string, RelationChips>>[])
 /**
  * Sprint 11 · T21 — the chips of every relation column, resolved per column:
  * two requests each (the column's links; the target table's records), joined by
- * mapLinksToRows. Returns column key → row id → chips, for `resolvedFromRow`.
+ * mapLinksToRows. Returns column field_id → row id → chips, for `resolvedFromRow`.
  * Before: two requests per cell.
  */
 export function useCustomTableRelations(table: CustomTable, columns: CustomTableColumn[]) {
@@ -159,7 +223,7 @@ export function useCustomTableRelations(table: CustomTable, columns: CustomTable
 
   const data = useQueries({
     queries: relationColumns.map((col) => ({
-      queryKey: customTableKeys.relation(table.id, col.key),
+      queryKey: customTableKeys.relation(table.id, col.field_id),
       enabled: !!equipeId,
       queryFn: async (): Promise<Record<string, RelationChips>> => {
         const targetTableId = col.relationConfig!.targetTableId;
@@ -170,7 +234,7 @@ export function useCustomTableRelations(table: CustomTable, columns: CustomTable
               .select("from_id, to_id")
               .eq("equipe_id", equipeId)
               .eq("from_table", table.slug)
-              .eq("relation_key", col.key)
+              .eq("relation_key", col.field_id)
               .is("deleted_at", null)
               .order("id", { ascending: true })
               .range(from, to),
@@ -194,7 +258,7 @@ export function useCustomTableRelations(table: CustomTable, columns: CustomTable
   return useMemo(() => {
     const byColumn: Record<string, Record<string, RelationChips>> = {};
     relationColumns.forEach((col, i) => {
-      byColumn[col.key] = data[i] ?? {};
+      byColumn[col.field_id] = data[i] ?? {};
     });
     return byColumn;
   }, [relationColumns, data]);

@@ -1,19 +1,25 @@
 import { useState } from "react";
-import { Plus, Table2, Trash2, ChevronRight } from "lucide-react";
+import { Plus, Table2, Trash2, ChevronRight, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCustomTables, type CustomTable } from "@/hooks/useCustomTables";
+import { ARTIFACT_KINDS, artifactKindLabel, isArtifactKind } from "@/lib/artifacts";
 import { activeColumns } from "@/lib/customTables";
 
 interface CustomTableManagerProps {
   onSelectTable: (table: CustomTable) => void;
 }
 
+const COMMON = "common";
+
 export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
   const { tables, isLoading, createTable, deleteTable } = useCustomTables();
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  // Sprint 11 · T40 — a table of artifacts holds each record in a deal.
+  const [kind, setKind] = useState<string>(COMMON);
   // Slug is derived from the name automatically — the founder never types it
   // (point 16: "the slug is the name adapted for it").
   const derivedSlug = newName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -23,9 +29,11 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
     await createTable.mutateAsync({
       name: newName.trim(),
       slug: derivedSlug,
+      artifact_kind: isArtifactKind(kind) ? kind : null,
     });
     setShowCreate(false);
     setNewName("");
+    setKind(COMMON);
   };
 
   return (
@@ -52,6 +60,19 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
                 Identificador: <span className="font-mono">{derivedSlug}</span>
               </p>
             )}
+            <Select value={kind} onValueChange={setKind}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={COMMON}>Tabela comum</SelectItem>
+                {ARTIFACT_KINDS.map((k) => (
+                  <SelectItem key={k.value} value={k.value}>
+                    Artefato: {k.label.toLowerCase()} (presa ao negócio)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -88,8 +109,17 @@ export function CustomTableManager({ onSelectTable }: CustomTableManagerProps) {
             >
               <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Table2 className="h-4 w-4 text-muted-foreground" />
+                  {table.artifact_kind ? (
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Table2 className="h-4 w-4 text-muted-foreground" />
+                  )}
                   {table.name}
+                  {table.artifact_kind && (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-normal text-muted-foreground">
+                      {artifactKindLabel(table.artifact_kind)}
+                    </span>
+                  )}
                 </CardTitle>
                 <div className="flex items-center gap-1">
                   <Button

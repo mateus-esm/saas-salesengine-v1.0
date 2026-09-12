@@ -34,7 +34,9 @@ describe("marca", () => {
       (f) => !ALLOWLIST.includes(f) && /sales\s*engine/i.test(readFileSync(f, "utf8")),
     );
     expect(offenders).toEqual([]);
-  });
+    // Reads every file of src/: with the whole suite in parallel it passes the
+    // 5 s default and fails for the clock, not for the brand.
+  }, 30_000);
 
   it("produto e empresa são nomes diferentes", () => {
     // Colapsar os dois quebraria a nota fiscal: quem fatura é a Solo Ventures,

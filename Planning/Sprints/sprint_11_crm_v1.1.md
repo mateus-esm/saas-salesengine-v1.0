@@ -1650,27 +1650,162 @@ modify o diálogo de novo pipeline ("Começar de um modelo").
   (e) deploy do `python-agent`; (f) PR e merge.
 - Handoff "Sprint 11 · Onda 3" em `Sprints_PM_Handoff.md`.
 
-### Onda 4 — Artefatos: Propostas e Contratos *(plano detalhado depois)*
+### Onda 4 — Artefatos: Propostas e Contratos
 
-Motores: Artefatos v1 · Modelo (N:1 com o negócio, lookup, arquivo) · Automação
-(botão → webhook → retorno).
+Motores: **Artefatos v1** (documento preso ao negócio, ciclo de vida, arquivo) ·
+**Modelo** (tabelas em `field_id`, N:1 com o negócio, consulta, arquivo) · **Automação**
+(botão → webhook → retorno) · **Entradas** (formulário público) · **Eventos** (o artefato
+prova o marco).
 
-- Campo **Negócio (N:1)** em tabela personalizada + painel reverso no negócio
-  ("Propostas (3)"), criando já vinculado.
-- **Campos de consulta** (lookup): nome e telefone do cliente vindos do negócio; itens
-  vindos do catálogo (Onda 3) — a proposta da Solo cota módulo e inversor do catálogo.
-- **Campo arquivo** (Storage, isolado por tenant).
-- **Ciclo de vida do artefato** (rascunho → enviado → aceito/assinado/recusado), que
-  emite o marco ("proposta enviada" = uma Proposta chegou em *enviada*).
-- **Botão de automação** → webhook de saída com registro + negócio + contato + URL de
-  retorno com token → o n8n devolve campos e arquivos → o registro é atualizado
-  (status, link do PDF, arquivo).
-- **Formulário público** para preencher um registro (Dados para Contrato), ligado ao
-  negócio.
-- Tabelas personalizadas passam para `field_id` e ganham página no servidor.
-- Semente da Solo Energia: "Propostas Comerciais" (campos do Jestor) e "Contratos".
-- **Pré-requisito:** ver os fluxos atuais do n8n (APITemplate / ClickSign) para fixar
-  o contrato do payload.
+#### Achados que moldam a onda (produção, 12/09)
+
+27. **Tabelas personalizadas quase vazias:** uma só na produção ("Teste" da Solo Energia,
+    1 coluna, 2 registros, 0 vínculos). Passar para `field_id` é barato agora — e caro
+    depois que as propostas entrarem.
+28. **A fila de webhooks de saída já existe:** `enqueue_crm_webhooks` → `deliver-crm-webhook`
+    (edge) → `webhook_logs` (com `dispatch_token`). O botão de automação usa a mesma fila;
+    não nasce outro caminho de saída.
+29. **Os dois buckets do Storage são públicos** (`agent-training-docs`, `chat-attachments`):
+    quem tem a URL lê. Proposta e contrato carregam CPF, endereço e valores — o arquivo do
+    artefato vai para um bucket **privado**, com a pasta da equipe e URL assinada.
+    (`chat-attachments` público fica registrado como risco, fora desta onda.)
+30. **Os fluxos do n8n (APITemplate / ClickSign) não estão visíveis daqui** (o MCP do n8n
+    pede login do founder). O pré-requisito do plano não se cumpre por dentro: esta onda
+    **fixa o contrato v1** do payload e do retorno; os fluxos da Solo se adaptam a ele (ou
+    o founder mostra os fluxos e o mapeamento entra no T44).
+
+#### Decisões da Onda 4
+
+21. **Artefato = registro de uma tabela personalizada marcada como artefato**
+    (`custom_tables.artifact_kind`: `proposal` · `contract` · `document`), preso a um
+    negócio por coluna de verdade (`custom_table_records.opportunity_id`, N:1), não por
+    vínculo solto. A espinha entende: painel reverso no negócio ("Propostas (3)"),
+    consulta, ciclo de vida, marco. Tabela que não é artefato continua granular.
+22. **Tabelas personalizadas em `field_id`** (o contrato dos campos do pipeline): cada
+    coluna ganha `field_id`, o valor mora em `data[field_id]`, a `key` é o nome público
+    nas bordas (payload, formulário). Página no servidor (`crm_custom_table_page`).
+23. **Campo de consulta** (`lookup`): coluna só leitura que lê do negócio ligado —
+    nome, telefone, e-mail do contato; valor, etapa, responsável do negócio; os itens
+    do catálogo. Resolvido no servidor na leitura (nunca copiado: o negócio muda, a
+    proposta mostra o de agora; o que precisa congelar vai para um campo comum).
+24. **Campo arquivo**: bucket privado `artifacts`, caminho `{equipe}/{tabela}/{registro}/`,
+    RLS do Storage pela pasta da equipe; o valor guarda caminho, nome, tamanho e tipo; ver
+    é por URL assinada de curta duração.
+25. **Ciclo de vida do artefato** (`artifact_status`): rascunho → enviado →
+    aceito/assinado · recusado, pelo verbo `crm_set_artifact_status`. O artefato prova o
+    marco: Proposta *enviada* = `proposal_sent`; Contrato *enviado* = `contract_sent`;
+    *assinado* = `contract_signed`. Se o pipeline tem a etapa que declara o marco e o
+    negócio está antes dela, o negócio avança para ela (o evento sai pelo caminho da
+    etapa — uma fonte só); senão o evento é gravado direto (fonte `artifact`). Nunca
+    volta etapa, nunca mexe em negócio fechado.
+26. **Botão de automação → webhook → retorno** (contrato **v1**): o clique chama
+    `crm_run_artifact_action` → payload `{ version: 1, action, record (por key), deal,
+    contact, items, callback: { url, token } }` pela fila de saída. O n8n devolve em
+    `artifact-callback` (edge, pública, só com o token): `status`, `fields` (por key) e
+    `files` (URL → baixado para o bucket privado). Token de uso único, validade de 7 dias,
+    guardado como hash.
+27. **Formulário público por registro** (Dados para Contrato): a tabela escolhe os
+    campos do formulário; cada registro tem um link com token (`/f/:token`); o cliente
+    preenche sem login; o registro recebe os valores e a hora do envio; o token vale até
+    o envio ou 30 dias.
+28. **Dado existente só com aprovação, no T47**: converter "Teste" para `field_id`;
+    criar as tabelas da Solo Energia ("Propostas Comerciais", "Contratos") — ensaiadas em
+    rollback.
+
+#### Onda 4A — Modelo e artefato
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T39 | Tabelas personalizadas em `field_id` + página no servidor | Modelo · Consulta | L |
+| T40 | Artefato preso ao negócio + painel no negócio | Artefatos · Modelo | L |
+| T41 | Campos de consulta | Modelo | M |
+| T42 | Campo arquivo (bucket privado) | Modelo · Artefatos | L |
+| T43 | Ciclo de vida do artefato → marco | Artefatos · Eventos | M |
+
+#### T39 · Tabelas personalizadas em `field_id` + página no servidor (L)
+
+**Files:** create `supabase/migrations/20260912100100_sprint11_w4_custom_tables_field_id.sql`,
+`supabase/tests/sprint11_w4_custom_tables.test.sql`; modify `src/hooks/useCustomTables.ts`,
+`src/hooks/useCustomTableRecords.ts`, `src/lib/customTables.ts` (+ testes),
+`src/components/crm/customtables/CustomTableView.tsx`, `CustomRecordDrawer.tsx`.
+
+- Coluna nova ganha `field_id` (uuid); a migração dá `field_id` às colunas que não têm
+  e reescreve `data[key]` → `data[field_id]` (idempotente; ensaiada sobre "Teste").
+- `crm_custom_table_page(p_table_id, p_search, p_sort, p_limit, p_offset)` e
+  `crm_custom_table_count` (busca em texto, ordenação por coluna sem SQL dinâmico).
+- Vínculos (`custom_table_links.relation_key`) passam a `field_id`.
+
+#### T40 · Artefato preso ao negócio + painel no negócio (L)
+
+**Files:** create `supabase/migrations/20260912100200_sprint11_w4_artifacts.sql`,
+`supabase/tests/sprint11_w4_artifacts.test.sql`, `src/hooks/useDealArtifacts.ts`,
+`src/components/crm/deal/DealArtifactsSection.tsx`; modify o criador de tabela
+(tipo "Artefato: proposta/contrato/documento"), `OpportunityDetailModal.tsx`.
+
+- `custom_tables.artifact_kind`; `custom_table_records.opportunity_id` (+ índice) e
+  `artifact_status`; verbo `crm_create_artifact(p_table_id, p_opportunity_id, p_data)`.
+- Painel no negócio: uma seção por tabela de artefato ("Propostas (3)"), criar já
+  ligado, abrir o registro.
+
+#### T41 · Campos de consulta (M)
+
+**Files:** modify a migration de página (`lookup` resolvido no servidor), o registro de
+tipos (`lookup`), o editor de colunas; `lib/customTables` (+ testes).
+
+- Fontes: `contact.name|phone|email`, `deal.value|stage|owner`, `deal.items`.
+
+#### T42 · Campo arquivo (L)
+
+**Files:** create `supabase/migrations/20260912100300_sprint11_w4_artifact_files.sql`
+(bucket privado + políticas do Storage), `src/hooks/useArtifactFiles.ts`,
+`src/components/crm/customtables/FileField.tsx`; modify o registro de tipos (`file`) e a gaveta.
+
+#### T43 · Ciclo de vida do artefato → marco (M)
+
+**Files:** create `supabase/migrations/20260912100400_sprint11_w4_artifact_lifecycle.sql`,
+`supabase/tests/sprint11_w4_artifact_lifecycle.test.sql`; modify o painel e a gaveta
+(seletor de status).
+
+- `crm_set_artifact_status(p_record_id, p_status)`; fonte `artifact` no catálogo de
+  eventos; avança o negócio para a etapa do marco quando ele está antes.
+
+#### Onda 4B — Automação e bordas
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T44 | Botão de automação com retorno (contrato v1) | Automação · Artefatos | XL |
+| T45 | Formulário público por registro | Entradas · Artefatos | L |
+| T46 | Semente da Solo Energia: Propostas Comerciais e Contratos | Artefatos | M |
+| T47 | Verificação, deploy (parada), PR e handoff | — | S |
+
+#### T44 · Botão de automação com retorno (XL)
+
+**Files:** create `supabase/migrations/20260912100500_sprint11_w4_artifact_actions.sql`,
+`supabase/functions/artifact-callback/index.ts` (+ teste Deno),
+`supabase/tests/sprint11_w4_artifact_actions.test.sql`,
+`Planning/Architecture/contrato_artefato_v1.md` (payload e retorno, com exemplos);
+modify o editor da tabela (ações: rótulo + URL) e a gaveta (botões).
+
+#### T45 · Formulário público por registro (L)
+
+**Files:** create `supabase/migrations/20260912100600_sprint11_w4_public_forms.sql`,
+`supabase/functions/public-form/index.ts`, `src/pages/PublicForm.tsx` (rota `/f/:token`);
+modify o editor da tabela (campos do formulário) e a gaveta (copiar link).
+
+#### T46 · Semente da Solo Energia (M)
+
+**Files:** create `supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql` (+ ensaio).
+
+- "Propostas Comerciais" (os campos do Jestor, em `field_id`, com consulta ao contato e
+  aos itens) e "Contratos" (Dados para Contrato no formulário público).
+
+#### T47 · Verificação, deploy e handoff (S)
+
+- Gates; testes SQL da onda + anteriores; teste Deno do retorno.
+- **Ponto de parada — aprovação do founder** para: migrations 1001…1006, conversão da
+  "Teste", semente da Solo, deploy das edge functions `artifact-callback` e `public-form`,
+  PR e merge.
+- Handoff "Sprint 11 · Onda 4".
 
 ### Onda 5 — Entradas e atribuição *(plano detalhado depois)*
 
@@ -1744,6 +1879,20 @@ Execução solo e sequencial, branch `claude/sprint11/w3a/receita` (T28–T34) e
 produção no T38, antes do merge do frontend. `OpportunityDetailModal.tsx` é tocado por
 T28, T30 e T31, nessa ordem.
 
+
+### Wave map — Onda 4
+
+```
+4A   T39 ─► T40 ─► T41                 field_id e página; artefato no negócio; consulta
+            T40 ─► T42 ─► T43          arquivo; ciclo de vida → marco
+4B   T43 ─► T44 ─► T45 ─► T46          botão com retorno; formulário; semente da Solo
+     T46 ─► T47                        uma parada: migrations, dados, edge functions, PR
+```
+
+Execução solo e sequencial, branch `claude/sprint11/w4a/artefatos` (T39–T43) e
+`claude/sprint11/w4b/automacao-e-formulario` (T44–T47, do 4A). A gaveta do registro e o
+modal do negócio são tocados por várias tarefas, uma de cada vez, na ordem.
+
 ---
 
 ## 📊 Ledger
@@ -1795,3 +1944,15 @@ T28, T30 e T31, nessa ordem.
 - [x] T36 · Modelos de linha · M — quatro modelos puros em `lib/pipelineTemplates` (venda consultiva, clínica com retorno, lançamento e serviço jurídico), cada um com Oferta/Processo, etapas já ligadas aos marcos e sugestões de catálogo. O diálogo “Nova Pipeline” ganhou “Começar de um modelo”, mostra o que será criado e persiste linha + etapas sem depender do Copilot; produtos e preços ficam como sugestão para confirmação na aba Catálogo. No caminho, a normalização de pipelines passou a preservar `loss_reasons` e `natures` (3 testes); 7 testes dos modelos e `tsc -b` passam
 - [x] T37 · Track Shaper preenche naturezas e marcos · M — `PipelineBlueprint` ganhou Oferta/Processo e `funnel_event` por etapa, com validação de ordem, unicidade e coerência; o prompt ensina o catálogo canônico e a prévia mostra natureza + marcos. O apply continua atômico no `shape_pipeline`, agora persiste `pipelines.natures`, descrição e marco de cada etapa pela migration `20260912024524`; a borda `SECURITY DEFINER` foi fechada para `service_role` (antes conservava o EXECUTE implícito de PUBLIC). 24 testes Python, `tsc -b` e o teste SQL em rollback passam
 - [x] T38 · Verificação, deploy e handoff · S — gates limpos (`tsc -b`, lint 0 erros, build, 272 TS, 333 Python + 21 skips esperados, 23 SQL em rollback); 9 migrations aplicadas e registradas; reparos de status, receita e ciclo de vida aplicados com 0 divergências finais. `crm-timers` ativo a cada 15 min (job 8), com corte em 2026-09-12T03:06:35.7060700Z para preservar os 29 reciclos históricos da Casa Flow. Handoff escrito; branch publicado no PR #15 para merge/deploy automático de Netlify e Dokploy
+
+### Ledger · Onda 4
+
+- [x] T39 · Tabelas personalizadas em field_id + página no servidor · L — `_crm_custom_tables_to_field_id` (idempotente) dá `field_id` a toda coluna e leva junto valores (`data[key]` → `data[field_id]`), vínculos (`relation_key`) e o campo de exibição das relações; gatilho dá `field_id` a coluna nova sem um. `crm_custom_table_page`/`crm_custom_table_count` (security invoker): busca em qualquer valor do registro, ordenação pelo tipo da coluna (número/moeda como número, data como data), páginas de 50. 4 blocos de teste SQL + ensaio sobre a produção (nenhuma coluna sem `field_id`, nenhum valor preso à key); o teste das tabelas da Onda 2 roda sobre a versão nova. Frontend: colunas, células, gaveta, vínculos e o campo de exibição por `field_id`; tabela em páginas do servidor com contagem, busca com debounce e ordenação no cabeçalho; edição e exclusão otimistas em toda lista carregada. `lib/customTables` + `withFieldIds`, `newColumn`, `toTableSort` (15 testes). **Achado no caminho:** com o gatilho ligado, uma tela antiga que grava por key depois da migration deixaria o valor preso à key — o mapa da conversão cobre toda coluna (não só as que ganharam `field_id` agora) e **roda de novo no T47, depois do deploy do frontend**; e a tela nova funciona antes da migration (`withFieldIds` usa a key quando falta `field_id`). Desvios: o seletor de relação usa a página do servidor (o `field_id` no caminho JSON do PostgREST é frágil) e acha o registro por qualquer valor; a busca da tabela olha os valores do registro (o nome do chip de relação mora em outra tabela); "+ Linha" abre o registro devolvido (a página dele pode não estar carregada)
+- [x] T40 · Artefato preso ao negócio + painel no negócio · L — `custom_tables.artifact_kind` (proposta · contrato · documento), `custom_table_records.opportunity_id` (N:1, índice parcial) e `artifact_status` (rascunho ao nascer numa tabela de artefato). Verbos `crm_create_artifact` (preso ao negócio, em rascunho, só as colunas da tabela) e `crm_deal_artifacts` (toda tabela de artefato da equipe, com os registros do negócio). A linha da tabela carrega o negócio e o status (`_crm_custom_table_row_json`, a peça que as próximas tarefas estendem sem reescrever a página). 4 blocos de teste SQL. **Achado no caminho:** a RLS dos registros olha só a equipe do registro — dava para gravar um registro da própria equipe numa tabela de outra; a guarda `trg_custom_record_guard` exige a equipe da tabela e a do negócio (também na gravação direta). Frontend: "Nova tabela" escolhe o tipo (comum ou artefato); seção de artefatos no modal do negócio ("Propostas (3)", status, data; "Nova" cria já preso e abre a gaveta; a gaveta é a mesma da tabela); na tabela de artefato, colunas Negócio (abre o negócio no Kanban) e Status. `lib/artifacts` (rótulos, `recordTitle`), 6 testes — um deles pegou `"toString" in objeto` lendo como status válido
+- [x] T41 · Campos de consulta · M — coluna `lookup` (`lookupConfig.source`: nome, telefone e e-mail do contato; valor, etapa, responsável e itens do negócio), resolvida no servidor na leitura (`_crm_lookup_value`, security invoker) e entregue na linha em `lookups` — nunca em `data`: o verbo de criar descarta o que vier para uma consulta. 2 blocos de teste SQL (as seis fontes; mudar o contato muda a proposta; o painel do negócio traz as consultas). Frontend: "Consulta (do negócio)" só aparece em tabela de artefato (tabela comum não tem negócio); célula só de exibição (dinheiro para o valor, "Usina × 2, Manutenção" para os itens); na gaveta, bloco "Do negócio" só leitura; o nome do registro pode vir de uma consulta (`recordTitle` sobre `recordValues`); consulta não ordena nem vira campo de exibição de relação. `formatLookup`/`recordValues` + 5 testes. Desvio: não entrou no registro de tipos (`FieldType` é o dos campos do pipeline; o tipo lá apareceria no editor de campos do negócio) — é tipo só da tabela personalizada. A busca da tabela olha `data`, não as consultas
+- [x] T42 · Campo arquivo (bucket privado) · L — bucket **privado** `artifacts` (25 MB por arquivo) com as quatro políticas do Storage pela pasta da equipe (primeira do caminho `{equipe}/{tabela}/{registro}/{id}-{nome}`); teste SQL com a RLS de verdade: a equipe grava e lê a própria pasta, não grava na do vizinho, o vizinho e o anônimo não leem. Coluna "Arquivo" na tabela personalizada: o valor é a lista (caminho, nome, tamanho, tipo, quando entrou); na gaveta, `FileField` anexa um ou vários, abre por URL assinada de 1 minuto (a aba abre antes de pedir o link — depois de um `await` o navegador bloqueia como popup) e remove. Cada mudança de arquivo **salva na hora** (arquivo no bucket sem estar no registro é arquivo que ninguém acha); se salvar falha, o que subiu é apagado. A gaveta só zera o rascunho quando troca de registro — salvar um arquivo no meio da edição não apaga o que foi digitado nos outros campos. `lib/artifactFiles` (caminho, nome seguro, leitura do valor em qualquer formato — inclusive o link de importação —, tamanho), 6 testes. Na grade, o arquivo aparece pelo nome (registro de tipos: `file`, só leitura). Achado registrado: a política "Allow authenticated delete" de `chat-attachments` deixa qualquer usuário logado apagar anexo de qualquer equipe (fora desta onda, junto do achado 29)
+- [x] T43 · Ciclo de vida do artefato → marco · M — `crm_set_artifact_status` (confere a equipe pelo token) sobre `_crm_apply_artifact_status` (a regra; o retorno do n8n no T44 usa com autor "automation"): status por tipo (proposta não se assina, contrato não se aceita); proposta enviada = `proposal_sent`, contrato enviado/assinado = `contract_sent`/`contract_signed`; com a etapa do marco à frente, o negócio avança e o evento sai pela etapa (histórico com quem enviou); sem ela, ou com o negócio já depois, o evento é gravado direto com a fonte nova `artifact`, uma vez por negócio; nunca volta etapa; negócio fechado não se mexe (o status do artefato muda). A gravação direta de `artifact_status` é recusada (`trg_custom_record_status_guard`). 4 blocos de teste SQL + um mutante (guarda desligada → o teste falha). **Achado no caminho:** o "Salvar" do modal do negócio manda sempre a etapa do estado local — se a proposta movesse o negócio com o modal aberto, salvar o devolveria à etapa de antes; o verbo devolve `stage_id` e o painel passa a etapa nova ao modal. Frontend: seletor de status (pílula com os status do tipo e o marco que cada um prova) no painel do negócio, na gaveta e na coluna Status da tabela de artefato; mudar o status atualiza Kanban, tabela e contatos quando o negócio andou, com o aviso "Negócio movido: Proposta enviada". `artifactStatusesFor`/`artifactMilestone` (gêmeos do banco), 2 testes
+- [x] T44 · Botão de automação com retorno (contrato v1) · XL — cada ação (rótulo + URL) é um `webhook_configs` com evento próprio (`artifact_action:<id>`) e modelo `"{{artifact}}"`: o clique (`crm_run_artifact_action`) entra na **fila que já existe** (`enqueue_crm_webhooks` → `deliver-crm-webhook` → `webhook_logs`) sem mudar edge nem copiar chave; a tela de webhooks esconde esses. Payload v1 (`_crm_artifact_payload`): registro por key (consulta com o valor de agora, relação como `[{id,label}]`, arquivo como metadado), negócio (valor, etapa, linha, responsável, campos por key), contato, itens, `callback {url, token, expires_at}`. `artifact_action_runs` guarda só o **hash** do token (7 dias). Retorno: edge pública `artifact-callback` (`verify_jwt = false`) → `_crm_artifact_callback_claim` (token, uso, validade, uma chamada por vez) → confere o corpo com o que o registro aceita **antes de baixar** → baixa os arquivos (https, host público, redirecionamentos conferidos a cada salto, 25 MB) para o bucket privado → `_crm_artifact_callback_finish` numa transação: campos graváveis por key (consulta/relação/arquivo e key desconhecida são ignorados e listados), arquivos, status pela regra do T43 com autor "automation". Corpo inválido ou download que falha **solta** a execução (o token continua valendo) e apaga o que subiu. Contrato em `Planning/Architecture/contrato_artefato_v1.md` (payload, resposta, códigos HTTP, exemplos APITemplate/ClickSign). 5 blocos de teste SQL; 10 testes Deno da lógica pura (`_shared/artifact-callback.ts`); `lib/artifactActions` 4 testes. **Achado no caminho:** com token de uso único, o fluxo do ClickSign não fecha — "enviado" agora e "assinado" dias depois são duas respostas; entrou `keep_open: true` (aplica e mantém o token até vencer, cada resposta no histórico da execução). Frontend: "Ações" na barra da tabela de artefato (editor de botões), bloco "Automações" na gaveta (botões + últimas execuções: aguardando, respondido, concluído, falhou), que pergunta de novo a cada 5 s enquanto espera e relê o registro quando a automação responde. Limite registrado: a automação não baixa arquivos do CRM na v1 (armazenamento privado; URL assinada no payload fica para a v2)
+- [x] T45 · Formulário público por registro · L — `custom_tables.form_config` (ligado, título, texto, campos com obrigatório) pelo verbo `crm_save_form_config` (só tipos que um estranho digita: texto, número, moeda, data, sim/não, seleção, multi-seleção, URL, telefone); `crm_create_form_link` gera o link (token de 32 bytes, **só o hash no banco**, 30 dias) e revoga o anterior; `custom_record_form_links` guarda criação, envio e revogação. Lado público no padrão da casa: edge `public-form` (`verify_jwt = false`, service_role) sobre `_crm_public_form_get` (equipe, título, texto e só os campos do formulário, com o valor atual) e `_crm_public_form_submit` (valida cada tipo no servidor — opção fora da lista, número, data, URL, telefone de 8 a 15 dígitos —, obrigatório vazio recusa o envio inteiro e diz qual campo, grava por `field_id`, fecha o link). 5 blocos de teste SQL (inclusive: campo fora do formulário não vaza nem é escrito pelo público); 3 testes Deno. **Achado no caminho:** "4.500,00" não passava como número no servidor — entrou `_crm_parse_br_number`, gêmeo do `parseBrNumber` do registro de tipos. Frontend: "Formulário" na barra da tabela (liga, título, texto, campos e obrigatórios); na gaveta, "Formulário do cliente" (respondido em…, vale até…, gerar e copiar link — o link só aparece na hora, o banco não tem como mostrá-lo de novo); página pública `/f/:token` pelo mesmo `DynamicFieldRenderer` do negócio, que nomeia o campo a corrigir. `lib/publicForm` 5 testes. Limite registrado: arquivo (foto do RG/CNH) não entra no formulário público na v1
+- [x] T46 · Semente da Solo Energia: Propostas Comerciais e Contratos · M — `supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql` (idempotente, só cria o que não existe): **Propostas Comerciais** (proposta, 24 colunas: os campos do Jestor — fabricante, módulo, nº de módulos, potência, inversor, estrutura, monitoramento, consumo médio, sistema, preço total, condições, extras, adicionais, exclusões, link e PDF — mais consultas a cliente, telefone, e-mail, responsável, itens e valor do negócio; o status é o do artefato) e **Contratos** (contrato, 23 colunas: Dados para Contrato, consultas, link da assinatura e contrato assinado; formulário público ligado com 17 campos, 8 obrigatórios). Slugs `propostas_comerciais`/`contratos` (as tabelas `proposals`/`contracts` do banco são da cobrança). Ensaio sobre a produção em rollback (`sprint11_w4_seed_solo.test.sql`): as duas nascem como artefato, field_id/key únicos, consultas com fonte válida, o formulário só pede tipos aceitos e **abre pelo lado público**, rodar duas vezes cria só as duas, a "Teste" fica. **Achado no caminho:** nenhuma etapa da Solo Energia declara o marco `proposal_sent` ("Envio de Proposta" é uma etapa aberta comum) — marcar a proposta como enviada grava o evento, mas não move o negócio até o founder ligar a etapa ao marco nas configurações do pipeline (decisão dele; a semente não mexe). Os botões de automação (URLs do n8n) ficam para o founder configurar na tela
+- [ ] T47 · Verificação, deploy e handoff · S — **gates ✔ (12/09):** `tsc -b` limpo, lint 0 erro, build, vitest 306/306, Deno 97/97, 30/30 suítes SQL em rollback contra a produção (as 7 da onda + as anteriores rodando sobre as migrations novas); dois testes de varredura do `src/` ganharam 30 s (estouravam os 5 s com a suíte em paralelo). Handoff "Sprint 11 · Onda 4" escrito. **Parado no deploy, aguardando o founder:** migrations 1001…1006 (a 1001 converte a "Teste"), edge functions `artifact-callback` e `public-form`, semente da Solo, PR/merge e, depois do frontend, rodar a conversão de novo
