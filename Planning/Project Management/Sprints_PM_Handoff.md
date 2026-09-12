@@ -825,10 +825,10 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 # Sprint 11 · Onda 4 — Handoff
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
-> **Código fechado:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T39–T46
-> **Branches:** `claude/sprint11/w4a/artefatos` (T39–T43) · `claude/sprint11/w4b/automacao-e-formulario` (T44–T47, sobre o 4A)
+> **Fechada:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T39–T47
+> **Branches:** `claude/sprint11/w4a/artefatos` (T39–T43) · `claude/sprint11/w4b/automacao-e-formulario` (T44–T47, sobre o 4A) · **PR #17**
 > **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 306/306 (37 arquivos) · Deno 97/97 (`_shared`) · 30/30 suítes SQL em rollback contra a produção
-> **Deploy:** **parado no T47 — aguarda aprovação do founder** (seção 4)
+> **Deploy:** no ar desde 12/09 (seção 4)
 
 ## 1. O que esta onda entrega
 
@@ -895,23 +895,31 @@ Artefatos: propostas e contratos presos ao negócio, com automação e formulár
 - O link do formulário só aparece na hora de gerar (o banco guarda o hash); reenviar =
   gerar outro (o anterior deixa de valer).
 
-## 4. Deploy — ponto de parada (aprovação do founder)
+## 4. Deploy / estado da produção (12/09)
 
-Nada desta onda está na produção. A ordem importa (o frontend novo chama as funções
-novas; a tela antiga não sabe de `field_id`):
+Aprovado pelo founder e feito na ordem (o frontend novo chama as funções novas; a
+tela antiga não sabe de `field_id`):
 
-1. **Migrations** `20260912100100` … `20260912100600`, na ordem, registradas no
-   histórico. A `…100100` já converte a "Teste" da Solo Energia (1 coluna, 2 registros)
-   — ensaiado: nenhuma coluna sem `field_id`, nenhum valor preso à key.
-2. **Edge functions novas:** `artifact-callback` e `public-form` (ambas
-   `verify_jwt = false`, já no `config.toml`). `deliver-crm-webhook` não muda.
-3. **Semente** `supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql` (ensaio
-   `sprint11_w4_seed_solo.test.sql`).
-4. **PR + merge** do branch `claude/sprint11/w4b/automacao-e-formulario` → Netlify.
-5. Depois do frontend no ar: `select public._crm_custom_tables_to_field_id();` (idempotente).
-6. Verificação no navegador: tabela "Teste" em páginas; criar uma proposta num negócio
-   da Solo, anexar PDF, marcar como enviada; gerar o link do formulário de um contrato e
-   preencher em aba anônima.
+1. **Migrations** `20260912100100` … `20260912100600`: cada uma aplicada numa transação
+   junto com o seu registro em `supabase_migrations.schema_migrations` (nome +
+   statements). Antes: ensaio final verde e cópia das tabelas personalizadas. A
+   `…100100` converteu a "Teste" da Solo Energia: a coluna `oi` ganhou `field_id`;
+   nenhum registro tinha valor nela (um guardava `{data, table_id}` de um bug antigo da
+   tela — intacto).
+2. **Edge functions** `artifact-callback` e `public-form` publicadas
+   (`--no-verify-jwt --use-api`). Fumaça: token desconhecido → 404, sem token → 400,
+   GET → 405. `deliver-crm-webhook` não mudou.
+3. **Semente** aplicada: "Propostas Comerciais" (proposta, 24 colunas) e "Contratos"
+   (contrato, 23 colunas, formulário com 17 campos). Botões de automação: nenhum ainda.
+4. **PR #17** mergeado com os checks verdes (`27a1967`); o Netlify serve o bundle novo.
+5. **Conversão de novo** depois do frontend: 0 tabelas alteradas, 0 colunas sem
+   `field_id`, 0 valores presos à key.
+6. Conferido como usuário da Solo Energia (em rollback): a "Teste" vem em páginas (2
+   registros), o painel do negócio mostra Propostas Comerciais e Contratos.
+
+**Pendente:** verificação no navegador (extensão do Chrome desconectada) — criar uma
+proposta num negócio da Solo, anexar PDF, marcar como enviada; gerar o link do
+formulário de um contrato e preencher em aba anônima.
 
 ## 5. Fica para depois
 

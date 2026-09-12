@@ -318,3 +318,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W4B | T44 Botao de automacao com retorno (contrato v1) | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-09-12 | 11 W4B | T45 Formulario publico por registro | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W4B | T46 Semente da Solo Energia: Propostas Comerciais e Contratos | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W4 | T47 Verificacao, deploy e handoff | Claude / Opus 5 (PM) | S | R$ 5 |
