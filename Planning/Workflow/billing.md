@@ -329,3 +329,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W5B | T54 Filtros, quebras e relatorio de campanha (ROI) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W5B | T55 Naturezas Duracao e Entradas | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5B | T56 Legado: origem das bases antigas (script + ensaio) | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T57 Verificacao e handoff (deploy aguardando aprovacao) | Claude / Opus 5 (PM) | S | R$ 5 |
