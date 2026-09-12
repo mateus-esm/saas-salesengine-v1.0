@@ -17,7 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { CustomTableRecord } from "@/hooks/useCustomTableRecords";
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
-import type { RelationChips } from "@/lib/customTables";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { recordTitle } from "@/lib/artifacts";
+import { formatLookup, recordValues, type RelationChips } from "@/lib/customTables";
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 import { DynamicFieldRenderer, validateCustomData } from "../DynamicFieldRenderer";
@@ -48,6 +50,7 @@ const fmt = (iso: string) => {
  * it was created and changed, and delete. The row's first column opens it.
  */
 export function CustomRecordDrawer({ record, columns, relations, onClose, onSave, onDelete }: CustomRecordDrawerProps) {
+  const { nameOf } = useMemberDirectory();
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -61,7 +64,7 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
   const schema: CustomFieldSchema[] = useMemo(
     () =>
       columns
-        .filter((c) => c.type !== "relation")
+        .filter((c) => c.type !== "relation" && c.type !== "lookup")
         .map((c, i) => ({
           field_id: c.field_id,
           key: c.key,
@@ -74,10 +77,10 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
     [columns],
   );
   const relationColumns = columns.filter((c) => c.type === "relation");
+  const lookupColumns = columns.filter((c) => c.type === "lookup");
 
   const dirty = !!record && JSON.stringify(draft) !== JSON.stringify(record.data ?? {});
-  const first = schema[0];
-  const title = (first && record ? String(record.data?.[first.field_id] ?? "").trim() : "") || "Registro";
+  const title = record ? recordTitle(recordValues(record), columns, { nameOf }, "Registro") : "Registro";
 
   const handleSave = async () => {
     if (!record) return;
@@ -114,6 +117,27 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
             <DynamicFieldRenderer schema={schema} value={draft} onChange={setDraft} />
           ) : (
             <p className="text-sm text-muted-foreground">Esta tabela ainda não tem colunas.</p>
+          )}
+
+          {/* Sprint 11 · T41 — read from the deal holding the record, now. */}
+          {record && lookupColumns.length > 0 && (
+            <div className="space-y-2 border-t border-border pt-4">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Do negócio</p>
+              {record.opportunity_id ? (
+                <dl className="space-y-1.5">
+                  {lookupColumns.map((col) => (
+                    <div key={col.field_id} className="flex items-baseline justify-between gap-3 text-sm">
+                      <dt className="shrink-0 text-muted-foreground">{col.label}</dt>
+                      <dd className="min-w-0 text-right">
+                        {formatLookup(col.lookupConfig?.source, record.lookups?.[col.field_id]) || "—"}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sem negócio: as consultas leem do negócio que prende o registro.</p>
+              )}
+            </div>
           )}
 
           {record && relationColumns.length > 0 && (

@@ -6,6 +6,7 @@
 
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 
+import { formatLookup } from "./customTables";
 import { getFieldType, type FieldContext } from "./fields/registry";
 
 export type ArtifactKind = "proposal" | "contract" | "document";
@@ -51,21 +52,27 @@ export function artifactStatusOf(status: unknown): ArtifactStatus {
 
 /**
  * The name of a record: the first column (not a relation) that has a value,
- * written by its field type; the fallback when none has.
+ * written by its field type — a lookup by what it reads from the deal —; the
+ * fallback when none has. `values` is recordValues(record): data and lookups.
  */
 export function recordTitle(
-  data: Record<string, unknown> | null | undefined,
+  values: Record<string, unknown> | null | undefined,
   columns: CustomTableColumn[],
   context?: FieldContext,
   fallback = "Sem título",
 ): string {
   for (const col of columns) {
     if (col.is_deleted || col.type === "relation") continue;
-    const spec = getFieldType(col.type);
-    const v = data?.[col.field_id];
-    if (spec.isEmpty(v)) continue;
-    const text = spec.format(v, { ...context, options: col.options }).trim();
-    if (text) return text;
+    const v = values?.[col.field_id];
+    let text: string;
+    if (col.type === "lookup") {
+      text = formatLookup(col.lookupConfig?.source, v);
+    } else {
+      const spec = getFieldType(col.type);
+      if (spec.isEmpty(v)) continue;
+      text = spec.format(v, { ...context, options: col.options });
+    }
+    if (text.trim()) return text.trim();
   }
   return fallback;
 }

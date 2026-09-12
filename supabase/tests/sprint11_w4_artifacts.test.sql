@@ -37,20 +37,36 @@ insert into public.pipeline_stages_v2 (id, equipe_id, pipeline_id, name, positio
   ('5121d000-0000-0000-0000-000000000001', '5121a000-0000-0000-0000-000000000001', '5121c000-0000-0000-0000-000000000001', 'Novo', 0, 'open'),
   ('5121d000-0000-0000-0000-000000000002', '5121a000-0000-0000-0000-000000000002', '5121c000-0000-0000-0000-000000000002', 'Novo', 0, 'open');
 
-insert into public.leads (id, equipe_id, name) values
-  ('5121e000-0000-0000-0000-000000000001', '5121a000-0000-0000-0000-000000000001', 'Usina do Joao'),
-  ('5121e000-0000-0000-0000-000000000002', '5121a000-0000-0000-0000-000000000002', 'Contato do Vizinho');
+insert into public.leads (id, equipe_id, name, phone, email) values
+  ('5121e000-0000-0000-0000-000000000001', '5121a000-0000-0000-0000-000000000001', 'Usina do Joao', '5511999990000', 'joao@usina.test'),
+  ('5121e000-0000-0000-0000-000000000002', '5121a000-0000-0000-0000-000000000002', 'Contato do Vizinho', null, null);
 
-insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id) values
+insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id, owner_id, value) values
   ('5121f000-0000-0000-0000-000000000001', '5121a000-0000-0000-0000-000000000001', '5121e000-0000-0000-0000-000000000001',
-   '5121c000-0000-0000-0000-000000000001', '5121d000-0000-0000-0000-000000000001'),
+   '5121c000-0000-0000-0000-000000000001', '5121d000-0000-0000-0000-000000000001', '5121b000-0000-0000-0000-00000000000a', 45000),
   ('5121f000-0000-0000-0000-000000000002', '5121a000-0000-0000-0000-000000000002', '5121e000-0000-0000-0000-000000000002',
-   '5121c000-0000-0000-0000-000000000002', '5121d000-0000-0000-0000-000000000002');
+   '5121c000-0000-0000-0000-000000000002', '5121d000-0000-0000-0000-000000000002', null, null);
+
+insert into public.opportunity_items (equipe_id, opportunity_id, name, quantity, unit_price, position) values
+  ('5121a000-0000-0000-0000-000000000001', '5121f000-0000-0000-0000-000000000001', 'Usina 8 kWp', 2, 22500, 0);
+set constraints all immediate;
 
 insert into public.custom_tables (id, equipe_id, name, slug, artifact_kind, table_schema) values
   ('51210000-0000-0000-0000-0000000000c1', '5121a000-0000-0000-0000-000000000001', 'Propostas', 'propostas_w4', 'proposal',
    jsonb_build_array(jsonb_build_object('field_id', 'f-titulo', 'key', 'titulo', 'label', 'Título', 'type', 'text'),
-                     jsonb_build_object('field_id', 'f-valor', 'key', 'valor', 'label', 'Valor', 'type', 'currency'))),
+                     jsonb_build_object('field_id', 'f-valor', 'key', 'valor', 'label', 'Valor', 'type', 'currency'),
+                     jsonb_build_object('field_id', 'f-cliente', 'key', 'cliente', 'label', 'Cliente', 'type', 'lookup',
+                                        'lookupConfig', jsonb_build_object('source', 'contact.name')),
+                     jsonb_build_object('field_id', 'f-tel', 'key', 'telefone', 'label', 'Telefone', 'type', 'lookup',
+                                        'lookupConfig', jsonb_build_object('source', 'contact.phone')),
+                     jsonb_build_object('field_id', 'f-etapa', 'key', 'etapa', 'label', 'Etapa', 'type', 'lookup',
+                                        'lookupConfig', jsonb_build_object('source', 'deal.stage')),
+                     jsonb_build_object('field_id', 'f-dono', 'key', 'responsavel', 'label', 'Responsável', 'type', 'lookup',
+                                        'lookupConfig', jsonb_build_object('source', 'deal.owner')),
+                     jsonb_build_object('field_id', 'f-negvalor', 'key', 'valor_negocio', 'label', 'Valor do negócio', 'type', 'lookup',
+                                        'lookupConfig', jsonb_build_object('source', 'deal.value')),
+                     jsonb_build_object('field_id', 'f-itens', 'key', 'itens', 'label', 'Itens', 'type', 'lookup',
+                                        'lookupConfig', jsonb_build_object('source', 'deal.items')))),
   ('51210000-0000-0000-0000-0000000000c2', '5121a000-0000-0000-0000-000000000001', 'Contratos', 'contratos_w4', 'contract',
    jsonb_build_array(jsonb_build_object('field_id', 'f-numero', 'key', 'numero', 'label', 'Número', 'type', 'text'))),
   ('51210000-0000-0000-0000-0000000000c3', '5121a000-0000-0000-0000-000000000001', 'Notas', 'notas_w4', null,
@@ -68,7 +84,7 @@ do $$
 declare v jsonb; v_failed boolean;
 begin
   v := public.crm_create_artifact('51210000-0000-0000-0000-0000000000c1', '5121f000-0000-0000-0000-000000000001',
-         '{"f-titulo":"Proposta 1","f-valor":"45000","campo_que_nao_existe":"x"}');
+         '{"f-titulo":"Proposta 1","f-valor":"45000","campo_que_nao_existe":"x","f-cliente":"consulta nao se grava"}');
   assert v->>'opportunity_id' = '5121f000-0000-0000-0000-000000000001', 'T40-1 FAIL: o artefato deveria nascer preso ao negocio';
   assert v->>'artifact_status' = 'draft', 'T40-1 FAIL: o artefato deveria nascer em rascunho';
   assert v->'data' = '{"f-titulo":"Proposta 1","f-valor":"45000"}'::jsonb,
@@ -139,6 +155,37 @@ begin
 
   v_page := public.crm_custom_table_page('51210000-0000-0000-0000-0000000000c1', null, null, 50, 0);
   assert v_page->0->'deal'->>'name' = 'Usina do Joao', 'T40-3 FAIL: a linha da tabela deveria carregar o negocio';
+end $$;
+
+-- ============================================================================
+-- 3b. T41 — as consultas leem do negócio na hora da leitura, nunca copiadas.
+-- ============================================================================
+do $$
+declare v jsonb; l jsonb;
+begin
+  v := public.crm_custom_table_page('51210000-0000-0000-0000-0000000000c1', null, null, 50, 0);
+  l := v->0->'lookups';
+  assert l->>'f-cliente' = 'Usina do Joao', 'T41-1 FAIL: consulta do nome do contato, veio ' || coalesce(l::text, 'null');
+  assert l->>'f-tel' = '5511999990000', 'T41-1 FAIL: consulta do telefone do contato';
+  assert l->>'f-etapa' = 'Novo', 'T41-1 FAIL: consulta da etapa do negocio';
+  assert l->>'f-dono' = 'Chefe', 'T41-1 FAIL: consulta do responsavel do negocio';
+  assert (l->>'f-negvalor')::numeric = 45000, 'T41-1 FAIL: consulta do valor do negocio, veio ' || coalesce(l->>'f-negvalor', 'null');
+  assert l->'f-itens'->0->>'name' = 'Usina 8 kWp' and (l->'f-itens'->0->>'quantity')::numeric = 2,
+    'T41-1 FAIL: consulta dos itens do negocio';
+  assert not (v->0->'data' ? 'f-cliente'), 'T41-1 FAIL: consulta nao deveria ser gravada em data';
+end $$;
+
+reset role;
+update public.leads set name = 'Joao da Usina' where id = '5121e000-0000-0000-0000-000000000001';
+set local role authenticated;
+do $$
+begin
+  assert public.crm_custom_table_page('51210000-0000-0000-0000-0000000000c1', null, null, 50, 0)->0->'lookups'->>'f-cliente'
+         = 'Joao da Usina',
+    'T41-2 FAIL: a consulta deveria mostrar o contato de agora';
+  assert (public.crm_deal_artifacts('5121f000-0000-0000-0000-000000000001')->0->'records'->0->'lookups'->>'f-cliente')
+         = 'Joao da Usina',
+    'T41-2 FAIL: o painel do negocio deveria trazer as consultas';
 end $$;
 
 -- ============================================================================

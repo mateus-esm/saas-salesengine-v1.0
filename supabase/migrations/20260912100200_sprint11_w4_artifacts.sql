@@ -1,4 +1,5 @@
--- Sprint 11 · Onda 4 · T40 — o artefato preso ao negócio (decisão 21).
+-- Sprint 11 · Onda 4 · T40 — o artefato preso ao negócio (decisão 21) — e T41, os
+-- campos de consulta que leem desse negócio (decisão 23, seção 3).
 --
 -- Um artefato (proposta, contrato, documento) é um registro de uma tabela
 -- personalizada marcada como artefato (`custom_tables.artifact_kind`), preso a um
@@ -77,7 +78,41 @@ create trigger trg_custom_record_guard
   for each row execute function public.fn_custom_record_guard();
 
 -- ============================================================================
--- 3. A LINHA CARREGA O NEGÓCIO E O STATUS
+-- 3. CAMPOS DE CONSULTA (T41 · decisão 23)
+-- ============================================================================
+--
+-- Uma coluna `lookup` (`lookupConfig.source`) lê do negócio que prende o
+-- registro: nome, telefone e e-mail do contato; valor, etapa e responsável do
+-- negócio; os itens. Resolvida aqui, na leitura — nunca copiada para `data`: o
+-- negócio muda e a proposta mostra o de agora (o que precisa congelar vai para
+-- um campo comum). Security invoker: quem lê só vê o negócio da própria equipe.
+
+create or replace function public._crm_lookup_value(p_opportunity_id uuid, p_source text)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select case p_source
+    when 'contact.name'  then (select to_jsonb(l.name)  from public.opportunities o join public.leads l on l.id = o.lead_id where o.id = p_opportunity_id)
+    when 'contact.phone' then (select to_jsonb(l.phone) from public.opportunities o join public.leads l on l.id = o.lead_id where o.id = p_opportunity_id)
+    when 'contact.email' then (select to_jsonb(l.email) from public.opportunities o join public.leads l on l.id = o.lead_id where o.id = p_opportunity_id)
+    when 'deal.value'    then (select to_jsonb(o.value) from public.opportunities o where o.id = p_opportunity_id)
+    when 'deal.stage'    then (select to_jsonb(s.name)  from public.opportunities o join public.pipeline_stages_v2 s on s.id = o.stage_id where o.id = p_opportunity_id)
+    when 'deal.owner'    then (select to_jsonb(pr.nome_completo) from public.opportunities o join public.profiles pr on pr.id = o.owner_id where o.id = p_opportunity_id)
+    when 'deal.items'    then (select jsonb_agg(jsonb_build_object('name', i.name, 'quantity', i.quantity,
+                                                                   'unit_price', i.unit_price, 'total', i.total)
+                                                order by i.position, i.created_at, i.id)
+                                 from public.opportunity_items i
+                                where i.opportunity_id = p_opportunity_id and i.deleted_at is null)
+  end;
+$$;
+
+revoke all on function public._crm_lookup_value(uuid, text) from public, anon;
+grant execute on function public._crm_lookup_value(uuid, text) to authenticated;
+
+-- ============================================================================
+-- 4. A LINHA CARREGA O NEGÓCIO, O STATUS E AS CONSULTAS
 -- ============================================================================
 
 create or replace function public._crm_custom_table_row_json(p public.custom_table_records)
@@ -94,15 +129,23 @@ as $$
            'deal', (select jsonb_build_object('id', o.id, 'name', l.name, 'pipeline_id', o.pipeline_id)
                       from public.opportunities o
                       join public.leads l on l.id = o.lead_id
-                     where o.id = p.opportunity_id));
+                     where o.id = p.opportunity_id),
+           'lookups', coalesce((select jsonb_object_agg(c->>'field_id',
+                                                        public._crm_lookup_value(p.opportunity_id, c->'lookupConfig'->>'source'))
+                                  from public.custom_tables t, jsonb_array_elements(t.table_schema) c
+                                 where t.id = p.table_id
+                                   and jsonb_typeof(t.table_schema) = 'array'
+                                   and c->>'type' = 'lookup'
+                                   and nullif(c->>'field_id', '') is not null
+                                   and p.opportunity_id is not null), '{}'::jsonb));
 $$;
 
 -- ============================================================================
--- 4. OS VERBOS
+-- 5. OS VERBOS
 -- ============================================================================
 
 -- Cria um artefato já preso ao negócio, em rascunho. Só guarda valores das
--- colunas da tabela (por field_id).
+-- colunas da tabela (por field_id) — consulta não se grava.
 create or replace function public.crm_create_artifact(
   p_table_id       uuid,
   p_opportunity_id uuid,
@@ -131,7 +174,8 @@ begin
 
   select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) into v_data
     from jsonb_each(case when jsonb_typeof(p_data) = 'object' then p_data else '{}'::jsonb end) e
-   where e.key in (select c->>'field_id' from jsonb_array_elements(v_t.table_schema) c);
+   where e.key in (select c->>'field_id' from jsonb_array_elements(v_t.table_schema) c
+                    where coalesce(c->>'type', '') <> 'lookup');
 
   insert into public.custom_table_records (equipe_id, table_id, data, opportunity_id, artifact_status)
   values (v_t.equipe_id, v_t.id, v_data, p_opportunity_id, 'draft')

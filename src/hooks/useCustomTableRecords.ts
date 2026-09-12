@@ -42,6 +42,8 @@ export interface CustomTableRecord {
   opportunity_id?: string | null;
   artifact_status?: string | null;
   deal?: { id: string; name: string | null; pipeline_id: string } | null;
+  /** Sprint 11 · T41 — lookup column field_id → what it reads from the deal now. */
+  lookups?: Record<string, unknown>;
 }
 
 export const customTableKeys = {

@@ -13,7 +13,7 @@ import {
   artifactStatusOf,
   recordTitle,
 } from "@/lib/artifacts";
-import { activeColumns } from "@/lib/customTables";
+import { activeColumns, recordValues } from "@/lib/customTables";
 import { cn } from "@/lib/utils";
 
 import { CustomRecordDrawer } from "../customtables/CustomRecordDrawer";
@@ -94,7 +94,7 @@ export function DealArtifactsSection({ opportunityId, open }: DealArtifactsSecti
                         onClick={() => setOpened({ group, record })}
                         className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/50"
                       >
-                        <span className="min-w-0 truncate font-medium">{recordTitle(record.data, columns, { nameOf })}</span>
+                        <span className="min-w-0 truncate font-medium">{recordTitle(recordValues(record), columns, { nameOf })}</span>
                         <span className="flex shrink-0 items-center gap-2">
                           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", ARTIFACT_STATUS_STYLE[status])}>
                             {ARTIFACT_STATUS_LABEL[status]}

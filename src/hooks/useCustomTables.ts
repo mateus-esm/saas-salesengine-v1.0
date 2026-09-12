@@ -24,7 +24,19 @@ export type CustomTableColumnType =
   | "url"
   | "phone"
   | "user"
-  | "relation";
+  | "relation"
+  /** Sprint 11 · T41 — read-only, read from the deal holding the record (artifact tables). */
+  | "lookup";
+
+/** What a lookup column reads from the deal holding the record. */
+export type LookupSource =
+  | "contact.name"
+  | "contact.phone"
+  | "contact.email"
+  | "deal.value"
+  | "deal.stage"
+  | "deal.owner"
+  | "deal.items";
 
 export interface CustomTableColumn {
   /**
@@ -49,6 +61,8 @@ export interface CustomTableColumn {
     /** The field_id of the target column that names a linked record. */
     displayField: string;
   };
+  /** Only for lookup: resolved by the server when the row is read, never stored. */
+  lookupConfig?: { source: LookupSource };
 }
 
 export interface CustomTable {

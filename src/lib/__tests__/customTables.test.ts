@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { activeColumns, mapLinksToRows, newColumn, newColumnKey, toTableSort, withFieldIds } from "../customTables";
+import {
+  activeColumns,
+  formatLookup,
+  mapLinksToRows,
+  newColumn,
+  newColumnKey,
+  recordValues,
+  toTableSort,
+  withFieldIds,
+} from "../customTables";
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 
 const rec = (id: string, data: Record<string, unknown> | null) => ({ id, data });
@@ -125,10 +134,42 @@ describe("toTableSort", () => {
     expect(toTableSort("id-nome", "asc", columns)).toEqual({ field_id: "id-nome", dir: "asc" });
   });
 
-  it("does not sort relations, lists, unknown columns, or with no direction", () => {
+  it("does not sort relations, lookups, lists, unknown columns, or with no direction", () => {
     expect(toTableSort("id-usina", "asc", columns)).toBeNull();
+    expect(toTableSort("id-cliente", "asc", [...columns, col("cliente", { type: "lookup" })])).toBeNull();
     expect(toTableSort("id-tags", "asc", columns)).toBeNull();
     expect(toTableSort("id-sumiu", "asc", columns)).toBeNull();
     expect(toTableSort("id-nome", null, columns)).toBeNull();
+  });
+});
+
+describe("formatLookup", () => {
+  it("writes the deal's value as money", () => {
+    expect(formatLookup("deal.value", 45000)).toBe("R$ 45.000,00");
+    expect(formatLookup("deal.value", "abc")).toBe("");
+  });
+
+  it("writes the items with their quantity when it is not one", () => {
+    expect(
+      formatLookup("deal.items", [
+        { name: "Usina 8 kWp", quantity: 2 },
+        { name: "Manutenção", quantity: 1 },
+        { name: "", quantity: 3 },
+      ]),
+    ).toBe("Usina 8 kWp × 2, Manutenção");
+    expect(formatLookup("deal.items", null)).toBe("");
+  });
+
+  it("writes the phone the Brazilian way and the rest as it came", () => {
+    expect(formatLookup("contact.phone", "5511999990000")).not.toBe("");
+    expect(formatLookup("contact.name", "Usina do João")).toBe("Usina do João");
+    expect(formatLookup("deal.stage", undefined)).toBe("");
+  });
+});
+
+describe("recordValues", () => {
+  it("joins what the record stores with what its lookups read now (the lookup wins)", () => {
+    expect(recordValues({ data: { a: 1, cliente: "velho" }, lookups: { cliente: "João" } })).toEqual({ a: 1, cliente: "João" });
+    expect(recordValues({ data: null })).toEqual({});
   });
 });

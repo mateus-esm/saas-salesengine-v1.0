@@ -35,11 +35,16 @@ import {
   type CustomTable,
   type CustomTableColumn,
   type CustomTableColumnType,
+  type LookupSource,
 } from "@/hooks/useCustomTables";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import {
   activeColumns,
+  formatLookup,
+  LOOKUP_SOURCES,
+  lookupSourceLabel,
   newColumn,
+  recordValues,
   toTableSort,
   type CustomTableSort,
   type RelationChips,
@@ -65,6 +70,7 @@ const COLUMN_TYPES: { value: CustomTableColumnType; label: string }[] = [
   { value: "phone", label: "Telefone" },
   { value: "user", label: "Usuário (membro da equipe)" },
   { value: "relation", label: "Relação (outra tabela)" },
+  { value: "lookup", label: "Consulta (do negócio)" },
 ];
 const TYPE_LABEL = Object.fromEntries(COLUMN_TYPES.map((t) => [t.value, t.label])) as Record<string, string>;
 
@@ -113,8 +119,23 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
 
   // ---- Columns --------------------------------------------------------------
   const columns: ColumnDef[] = useMemo(() => {
-    const primaryId = visible.find((c) => c.type !== "relation")?.field_id;
+    const primaryId = visible.find((c) => c.type !== "relation" && c.type !== "lookup")?.field_id;
     const fields = visible.map((col): ColumnDef => {
+      // Sprint 11 · T41 — read from the deal by the server, shown, never edited.
+      if (col.type === "lookup") {
+        const source = col.lookupConfig?.source;
+        return {
+          key: col.field_id,
+          label: col.label,
+          kind: "text",
+          source: "jsonb",
+          jsonbField: "data",
+          editable: false,
+          width: source === "deal.items" ? 220 : 160,
+          render: (v) =>
+            formatLookup(source, v) || <span className="text-xs text-muted-foreground">—</span>,
+        };
+      }
       if (col.type === "relation") {
         return {
           key: col.field_id,
@@ -186,7 +207,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         const row: GridRow = {
           id: r.id,
           equipe_id: equipeId,
-          ...(r.data ?? {}),
+          ...recordValues(r),
           [ARTIFACT_DEAL_COL]: r.deal ?? null,
           [ARTIFACT_STATUS_COL]: r.artifact_status ?? null,
         };
@@ -428,10 +449,16 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
   const [options, setOptions] = useState("");
   const [targetTableId, setTargetTableId] = useState("");
   const [displayField, setDisplayField] = useState("");
+  const [lookupSource, setLookupSource] = useState<LookupSource>("contact.name");
 
   const visible = activeColumns(table.table_schema);
   const target = otherTables.find((t) => t.id === targetTableId);
-  const targetFields = target ? activeColumns(target.table_schema).filter((c) => c.type !== "relation") : [];
+  // The display field is a stored value: a lookup lives in no record.
+  const targetFields = target
+    ? activeColumns(target.table_schema).filter((c) => c.type !== "relation" && c.type !== "lookup")
+    : [];
+  // A lookup reads from the deal holding the record: only artifact tables have one.
+  const types = COLUMN_TYPES.filter((t) => t.value !== "lookup" || !!table.artifact_kind);
 
   const reset = () => {
     setLabel("");
@@ -439,6 +466,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
     setOptions("");
     setTargetTableId("");
     setDisplayField("");
+    setLookupSource("contact.name");
   };
 
   const canAdd =
@@ -461,6 +489,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
         displayField: displayField || targetFields[0]?.field_id || "name",
       };
     }
+    if (type === "lookup") column.lookupConfig = { source: lookupSource };
     try {
       await onChange([...table.table_schema, column]);
       reset();
@@ -494,6 +523,7 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
                   <span className="block truncate text-[10px] text-muted-foreground">
                     {TYPE_LABEL[col.type] ?? col.type}
                     {col.type === "relation" && col.relationConfig && ` → ${col.relationConfig.targetTable}`}
+                    {col.type === "lookup" && ` · ${lookupSourceLabel(col.lookupConfig?.source)}`}
                   </span>
                 </span>
                 <Button
@@ -530,13 +560,33 @@ function ColumnsEditor({ table, otherTables, onChange, saving }: ColumnsEditorPr
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {COLUMN_TYPES.map((t) => (
+                {types.map((t) => (
                   <SelectItem key={t.value} value={t.value}>
                     {t.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            {type === "lookup" && (
+              <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2">
+                <Select value={lookupSource} onValueChange={(v) => setLookupSource(v as LookupSource)}>
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOOKUP_SOURCES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Lida do negócio a cada vez: mostra sempre o de agora. O que precisa ficar congelado vai num campo comum.
+                </p>
+              </div>
+            )}
 
             {(type === "select" || type === "multi_select") && (
               <div className="space-y-1">

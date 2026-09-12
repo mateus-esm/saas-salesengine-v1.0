@@ -50,6 +50,12 @@ describe("recordTitle", () => {
     expect(recordTitle({ titulo: "  ", valor: 45000 }, columns)).toMatch(/^R\$\s?45\.000,00$/);
   });
 
+  it("names by a lookup when it comes first (what it reads from the deal)", () => {
+    const withLookup = [col("cliente", { type: "lookup", lookupConfig: { source: "contact.name" } }), col("titulo")];
+    expect(recordTitle({ cliente: "Usina do João", titulo: "P-7" }, withLookup)).toBe("Usina do João");
+    expect(recordTitle({ titulo: "P-7" }, withLookup)).toBe("P-7");
+  });
+
   it("falls back when nothing has a value", () => {
     expect(recordTitle({}, columns)).toBe("Sem título");
     expect(recordTitle(null, columns, undefined, "Registro")).toBe("Registro");

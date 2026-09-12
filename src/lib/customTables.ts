@@ -10,7 +10,7 @@
 // fields' contract): the value lives in data[field_id], the key is the public
 // name at the edges. The server pages, searches and sorts (crm_custom_table_page).
 
-import type { CustomTableColumn } from "@/hooks/useCustomTables";
+import type { CustomTableColumn, LookupSource } from "@/hooks/useCustomTables";
 
 import { slugify, uniqueKey } from "./customFieldKeys";
 import { getFieldType } from "./fields/registry";
@@ -97,7 +97,10 @@ export interface CustomTableSort {
   dir: "asc" | "desc";
 }
 
-/** The server's sort for a grid column, or null when the column does not sort (relations, lists, people). */
+/**
+ * The server's sort for a grid column, or null when the column does not sort
+ * (relations, lookups — read from the deal, not stored —, lists, people).
+ */
 export function toTableSort(
   fieldId: string,
   dir: "asc" | "desc" | null,
@@ -105,6 +108,57 @@ export function toTableSort(
 ): CustomTableSort | null {
   if (!dir) return null;
   const col = columns.find((c) => c.field_id === fieldId);
-  if (!col || col.type === "relation" || !getFieldType(col.type).sortAs) return null;
+  if (!col || col.type === "relation" || col.type === "lookup" || !getFieldType(col.type).sortAs) return null;
   return { field_id: fieldId, dir };
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 11 · T41 — lookup columns: read from the deal holding the record
+// ---------------------------------------------------------------------------
+
+export const LOOKUP_SOURCES: { value: LookupSource; label: string }[] = [
+  { value: "contact.name", label: "Nome do contato" },
+  { value: "contact.phone", label: "Telefone do contato" },
+  { value: "contact.email", label: "E-mail do contato" },
+  { value: "deal.value", label: "Valor do negócio" },
+  { value: "deal.stage", label: "Etapa do negócio" },
+  { value: "deal.owner", label: "Responsável do negócio" },
+  { value: "deal.items", label: "Itens do negócio" },
+];
+
+export const lookupSourceLabel = (source: string | undefined) =>
+  LOOKUP_SOURCES.find((s) => s.value === source)?.label ?? "Consulta";
+
+const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+/** A lookup's value as text: money for the value, the items as "Usina × 2, Manutenção". */
+export function formatLookup(source: string | undefined, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (source === "contact.phone") return getFieldType("phone").format(value);
+  if (source === "deal.value") {
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? BRL.format(n).replace(/\u00a0/g, " ") : "";
+  }
+  if (source === "deal.items") {
+    if (!Array.isArray(value)) return "";
+    return value
+      .map((item) => {
+        const it = (item ?? {}) as { name?: unknown; quantity?: unknown };
+        const name = typeof it.name === "string" ? it.name.trim() : "";
+        const qty = Number(it.quantity);
+        if (!name) return "";
+        return Number.isFinite(qty) && qty !== 1 ? `${name} × ${qty.toLocaleString("pt-BR")}` : name;
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+  return String(value);
+}
+
+/** Every value of a record by field_id: what it stores, and what its lookups read now. */
+export function recordValues(record: {
+  data?: Record<string, unknown> | null;
+  lookups?: Record<string, unknown> | null;
+}): Record<string, unknown> {
+  return { ...(record.data ?? {}), ...(record.lookups ?? {}) };
 }
