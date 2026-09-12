@@ -165,6 +165,20 @@ as $$
                       where strpos(lower(e.value), lower(btrim(p_search))) > 0));
 $$;
 
+-- A linha que a página devolve. Função própria para as tarefas seguintes da onda
+-- acrescentarem o que a linha carrega (negócio, status, consultas) sem reescrever
+-- a página.
+create or replace function public._crm_custom_table_row_json(p public.custom_table_records)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select jsonb_build_object(
+           'id', p.id, 'equipe_id', p.equipe_id, 'table_id', p.table_id, 'data', p.data,
+           'created_at', p.created_at, 'updated_at', p.updated_at);
+$$;
+
 create or replace function public.crm_custom_table_page(
   p_table_id uuid,
   p_search   text default null,
@@ -200,7 +214,7 @@ as $$
       cross join col
   ),
   ranked as (
-    select k.*,
+    select k.id,
            row_number() over (order by
              case when k.dir = 'asc'  then k.sk_num  end asc  nulls last,
              case when k.dir = 'desc' then k.sk_num  end desc nulls last,
@@ -211,10 +225,9 @@ as $$
              k.created_at asc, k.id asc) as rn
       from keyed k
   )
-  select coalesce(jsonb_agg(jsonb_build_object(
-           'id', r.id, 'equipe_id', r.equipe_id, 'table_id', r.table_id, 'data', r.data,
-           'created_at', r.created_at, 'updated_at', r.updated_at) order by r.rn), '[]'::jsonb)
+  select coalesce(jsonb_agg(public._crm_custom_table_row_json(rec) order by r.rn), '[]'::jsonb)
     from ranked r
+    join public.custom_table_records rec on rec.id = r.id
    where r.rn > greatest(p_offset, 0)
      and r.rn <= greatest(p_offset, 0) + least(greatest(p_limit, 1), 500);
 $$;
@@ -228,6 +241,8 @@ as $$
   select count(*)::int from public._crm_custom_table_rows(p_table_id, p_search);
 $$;
 
+revoke all on function public._crm_custom_table_row_json(public.custom_table_records) from public, anon;
+grant execute on function public._crm_custom_table_row_json(public.custom_table_records) to authenticated;
 revoke all on function public._crm_custom_table_rows(uuid, text) from public, anon;
 revoke all on function public.crm_custom_table_page(uuid, text, jsonb, int, int) from public, anon;
 revoke all on function public.crm_custom_table_count(uuid, text) from public, anon;

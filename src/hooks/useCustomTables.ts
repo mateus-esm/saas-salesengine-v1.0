@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { isArtifactKind, type ArtifactKind } from "@/lib/artifacts";
 import { withFieldIds } from "@/lib/customTables";
 import { toast } from "sonner";
 
@@ -58,6 +59,8 @@ export interface CustomTable {
   icon: string | null;
   description: string | null;
   table_schema: CustomTableColumn[];
+  /** Sprint 11 · T40 — a table of artifacts: its records are held by a deal. */
+  artifact_kind: ArtifactKind | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +71,7 @@ interface CreateCustomTableData {
   icon?: string | null;
   description?: string | null;
   table_schema?: CustomTableColumn[];
+  artifact_kind?: ArtifactKind | null;
 }
 
 interface UpdateCustomTableData {
@@ -106,6 +110,7 @@ export const useCustomTables = () => {
       return (data ?? []).map((r: Record<string, unknown>) => ({
         ...r,
         table_schema: withFieldIds(r.table_schema),
+        artifact_kind: isArtifactKind(r.artifact_kind) ? r.artifact_kind : null,
       })) as CustomTable[];
     },
   });
@@ -122,6 +127,7 @@ export const useCustomTables = () => {
           icon: input.icon ?? null,
           description: input.description ?? null,
           table_schema: input.table_schema ?? [],
+          ...(input.artifact_kind ? { artifact_kind: input.artifact_kind } : {}),
         })
         .select()
         .single();

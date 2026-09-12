@@ -311,3 +311,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W3 | T38 Verificacao, deploy e handoff | Codex / GPT-5 | S | R$ 5 |
 | 2026-09-12 | 11 W4 | Plano da Onda 4 (artefatos: propostas e contratos) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W4A | T39 Tabelas personalizadas em field_id + pagina no servidor | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W4A | T40 Artefato preso ao negocio + painel no negocio | Claude / Opus 5 (PM) | L | R$ 20 |

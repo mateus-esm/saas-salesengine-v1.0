@@ -38,6 +38,10 @@ export interface CustomTableRecord {
   data: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  /** Sprint 11 · T40 — the deal holding the record (artifacts). */
+  opportunity_id?: string | null;
+  artifact_status?: string | null;
+  deal?: { id: string; name: string | null; pipeline_id: string } | null;
 }
 
 export const customTableKeys = {

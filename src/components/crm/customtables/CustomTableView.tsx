@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Loader2, Plus, Settings2, Trash2 } from "lucide-react";
 
@@ -43,8 +44,10 @@ import {
   type CustomTableSort,
   type RelationChips,
 } from "@/lib/customTables";
+import { ARTIFACT_STATUS_LABEL, ARTIFACT_STATUS_STYLE, artifactStatusOf } from "@/lib/artifacts";
 import { columnFromField } from "@/lib/fields/columns";
 import { getFieldType } from "@/lib/fields/registry";
+import { cn } from "@/lib/utils";
 
 import { CustomRecordDrawer } from "./CustomRecordDrawer";
 
@@ -65,6 +68,10 @@ const COLUMN_TYPES: { value: CustomTableColumnType; label: string }[] = [
 ];
 const TYPE_LABEL = Object.fromEntries(COLUMN_TYPES.map((t) => [t.value, t.label])) as Record<string, string>;
 
+// Row keys of the artifact columns: never a field_id (those are uuids or keys).
+const ARTIFACT_DEAL_COL = "__deal";
+const ARTIFACT_STATUS_COL = "__artifact_status";
+
 interface CustomTableViewProps {
   table: CustomTable;
   onBack: () => void;
@@ -81,6 +88,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   const { profile } = useAuth();
   const equipeId = profile?.equipe_id ?? "";
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { nameOf } = useMemberDirectory();
   const { tables, updateTable } = useCustomTables();
 
@@ -106,7 +114,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   // ---- Columns --------------------------------------------------------------
   const columns: ColumnDef[] = useMemo(() => {
     const primaryId = visible.find((c) => c.type !== "relation")?.field_id;
-    return visible.map((col): ColumnDef => {
+    const fields = visible.map((col): ColumnDef => {
       if (col.type === "relation") {
         return {
           key: col.field_id,
@@ -125,13 +133,63 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
       const def = columnFromField(col, "data", "field_id", { nameOf });
       return col.field_id === primaryId ? { ...def, primary: true, width: 200 } : def;
     });
-  }, [visible, nameOf]);
+    if (!table.artifact_kind) return fields;
+
+    // Sprint 11 · T40 — an artifact shows the deal holding it and its status.
+    const artifactColumns: ColumnDef[] = [
+      {
+        key: ARTIFACT_DEAL_COL,
+        label: "Negócio",
+        kind: "text",
+        source: "native",
+        editable: false,
+        width: 180,
+        render: (v) => {
+          const deal = v as CustomTableRecord["deal"];
+          if (!deal) return <span className="text-xs text-muted-foreground">—</span>;
+          return (
+            <button
+              type="button"
+              className="truncate text-left text-sm text-primary hover:underline"
+              onClick={() => navigate(`/crm?tab=pipeline&pipeline=${deal.pipeline_id}&view=kanban&opp=${deal.id}`)}
+            >
+              {deal.name || "Negócio"}
+            </button>
+          );
+        },
+      },
+      {
+        key: ARTIFACT_STATUS_COL,
+        label: "Status",
+        kind: "text",
+        source: "native",
+        editable: false,
+        width: 110,
+        render: (v) => {
+          const status = artifactStatusOf(v);
+          return (
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", ARTIFACT_STATUS_STYLE[status])}>
+              {ARTIFACT_STATUS_LABEL[status]}
+            </span>
+          );
+        },
+      },
+    ];
+    const [first, ...rest] = fields;
+    return first ? [first, ...artifactColumns, ...rest] : artifactColumns;
+  }, [visible, nameOf, table.artifact_kind, navigate]);
 
   // ---- Rows (the server already searched and sorted) ------------------------
   const rows: GridRow[] = useMemo(
     () =>
       records.map((r) => {
-        const row: GridRow = { id: r.id, equipe_id: equipeId, ...(r.data ?? {}) };
+        const row: GridRow = {
+          id: r.id,
+          equipe_id: equipeId,
+          ...(r.data ?? {}),
+          [ARTIFACT_DEAL_COL]: r.deal ?? null,
+          [ARTIFACT_STATUS_COL]: r.artifact_status ?? null,
+        };
         for (const [fieldId, byRow] of Object.entries(relations)) row[fieldId] = byRow[r.id] ?? [];
         return row;
       }),
@@ -147,7 +205,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
   // the next two fields that have a value. A tap opens the record.
   const renderMobileRow = useCallback(
     (row: GridRow) => {
-      const fieldCols = columns.filter((c) => c.kind !== "relation");
+      const fieldCols = columns.filter((c) => c.kind !== "relation" && !c.render);
       const shown = (c: ColumnDef) => {
         const spec = getFieldType(c.kind);
         const v = row[c.key];
