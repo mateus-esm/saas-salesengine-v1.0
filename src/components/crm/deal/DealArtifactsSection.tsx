@@ -156,6 +156,7 @@ function ArtifactDrawer({ group, record, onClose, onSave, onDelete, onStatusChan
       onDelete={onDelete}
       artifactKind={group.table.artifact_kind}
       onStatusChange={onStatusChange}
+      actions={group.table.actions}
     />
   );
 }

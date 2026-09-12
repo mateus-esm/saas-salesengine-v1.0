@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { actionsFrom, type ArtifactAction } from "@/lib/artifactActions";
 import { isArtifactKind, type ArtifactKind } from "@/lib/artifacts";
 import { withFieldIds } from "@/lib/customTables";
 import { toast } from "sonner";
@@ -77,6 +78,8 @@ export interface CustomTable {
   table_schema: CustomTableColumn[];
   /** Sprint 11 · T40 — a table of artifacts: its records are held by a deal. */
   artifact_kind: ArtifactKind | null;
+  /** Sprint 11 · T44 — the automation buttons (the URL lives in the webhook, not here). */
+  actions: ArtifactAction[];
   created_at: string;
   updated_at: string;
 }
@@ -127,6 +130,7 @@ export const useCustomTables = () => {
         ...r,
         table_schema: withFieldIds(r.table_schema),
         artifact_kind: isArtifactKind(r.artifact_kind) ? r.artifact_kind : null,
+        actions: actionsFrom(r.actions),
       })) as CustomTable[];
     },
   });

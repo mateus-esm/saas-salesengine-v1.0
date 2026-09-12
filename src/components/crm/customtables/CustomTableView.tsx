@@ -53,6 +53,7 @@ import {
 import { columnFromField } from "@/lib/fields/columns";
 import { getFieldType } from "@/lib/fields/registry";
 
+import { ArtifactActionsEditor } from "./ArtifactActionsEditor";
 import { ArtifactStatusSelect } from "./ArtifactStatusSelect";
 import { CustomRecordDrawer } from "./CustomRecordDrawer";
 
@@ -356,6 +357,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
           onClearFilters={() => {}}
           activeFilterCount={0}
         >
+          {artifactKind && <ArtifactActionsEditor tableId={table.id} />}
           <ColumnsEditor
             table={table}
             otherTables={tables.filter((t) => t.id !== table.id)}
@@ -403,6 +405,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         onDelete={(id) => deleteRecords.mutate([id])}
         artifactKind={artifactKind}
         onStatusChange={(id, status) => setArtifactStatus.mutateAsync({ recordId: id, status })}
+        actions={table.actions}
       />
 
       <AlertDialog open={confirmDeleteIds.length > 0} onOpenChange={(o) => !o && setConfirmDeleteIds([])}>

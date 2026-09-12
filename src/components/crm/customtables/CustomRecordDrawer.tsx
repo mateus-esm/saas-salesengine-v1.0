@@ -18,12 +18,14 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import type { CustomTableRecord } from "@/hooks/useCustomTableRecords";
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import type { ArtifactAction } from "@/lib/artifactActions";
 import { recordTitle, type ArtifactKind, type ArtifactStatus } from "@/lib/artifacts";
 import { formatLookup, recordValues, type RelationChips } from "@/lib/customTables";
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 import { DynamicFieldRenderer, validateCustomData } from "../DynamicFieldRenderer";
 import { RelationChip } from "../grid/RelationChip";
+import { ArtifactActionsPanel } from "./ArtifactActionsPanel";
 import { ArtifactStatusSelect } from "./ArtifactStatusSelect";
 import { FileField } from "./FileField";
 
@@ -39,6 +41,8 @@ interface CustomRecordDrawerProps {
   /** Sprint 11 · T43 — an artifact's status, changed by the verb (it can move the deal). */
   artifactKind?: ArtifactKind | null;
   onStatusChange?: (id: string, status: ArtifactStatus) => Promise<unknown>;
+  /** Sprint 11 · T44 — the table's automation buttons. */
+  actions?: ArtifactAction[];
 }
 
 const fmt = (iso: string) => {
@@ -63,6 +67,7 @@ export function CustomRecordDrawer({
   onDelete,
   artifactKind = null,
   onStatusChange,
+  actions = [],
 }: CustomRecordDrawerProps) {
   const { nameOf } = useMemberDirectory();
   const [status, setStatus] = useState<unknown>(null);
@@ -204,6 +209,10 @@ export function CustomRecordDrawer({
                 <p className="text-xs text-muted-foreground">Sem negócio: as consultas leem do negócio que prende o registro.</p>
               )}
             </div>
+          )}
+
+          {record && artifactKind && (
+            <ArtifactActionsPanel recordId={record.id} tableId={record.table_id} actions={actions} />
           )}
 
           {record && relationColumns.length > 0 && (

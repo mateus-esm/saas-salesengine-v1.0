@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { actionsFrom } from "@/lib/artifactActions";
 import { isArtifactKind } from "@/lib/artifacts";
 import { withFieldIds } from "@/lib/customTables";
 
@@ -39,6 +40,7 @@ function toGroup(raw: Record<string, unknown>): DealArtifactGroup {
       description: null,
       table_schema: withFieldIds(t.table_schema),
       artifact_kind: isArtifactKind(t.artifact_kind) ? t.artifact_kind : null,
+      actions: actionsFrom(t.actions),
       created_at: "",
       updated_at: "",
     },

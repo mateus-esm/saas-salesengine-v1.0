@@ -315,3 +315,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W4A | T41 Campos de consulta | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W4A | T42 Campo arquivo (bucket privado) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W4A | T43 Ciclo de vida do artefato -> marco | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W4B | T44 Botao de automacao com retorno (contrato v1) | Claude / Opus 5 (PM) | XL | R$ 28 |
