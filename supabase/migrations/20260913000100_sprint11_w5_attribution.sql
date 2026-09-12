@@ -423,6 +423,38 @@ revoke all on function public._crm_entry_for(uuid, text) from public, anon, auth
 -- As edges pedem a entrada do agente (gpt-maker) e a de API (rota com segredo).
 grant execute on function public._crm_entry_for(uuid, text) to service_role;
 
+-- A entrada de um número de WhatsApp (instância da Solo API), criada na primeira vez.
+create or replace function public._crm_entry_for_instance(p_instance_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid;
+  w    public.wpp_instances;
+begin
+  select id into v_id from public.crm_entries where wpp_instance_id = p_instance_id;
+  if v_id is not null then
+    return v_id;
+  end if;
+  select * into w from public.wpp_instances where id = p_instance_id;
+  if not found then
+    return null;
+  end if;
+  insert into public.crm_entries (equipe_id, kind, name, wpp_instance_id, platform)
+  values (w.equipe_id, 'whatsapp',
+          'WhatsApp · ' || coalesce(nullif(btrim(w.display_name), ''), nullif(btrim(w.phone), ''), w.instance_name),
+          w.id, 'whatsapp')
+  on conflict (wpp_instance_id) do nothing
+  returning id into v_id;
+  return coalesce(v_id, (select id from public.crm_entries where wpp_instance_id = p_instance_id));
+end;
+$$;
+
+revoke all on function public._crm_entry_for_instance(uuid) from public, anon, authenticated;
+grant execute on function public._crm_entry_for_instance(uuid) to service_role;
+
 -- O nome de um webhook diz de onde ele vem ("Formulário Meta ADS", "Landing
 -- Page"): carimbo inicial, que o founder corrige na tela de entradas.
 create or replace function public._crm_guess_stamp(p_name text)

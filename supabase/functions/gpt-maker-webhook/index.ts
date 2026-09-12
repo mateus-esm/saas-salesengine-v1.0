@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
+import { entryOfKind, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { normalizePhone } from "../_shared/phone.ts"
 
 declare const EdgeRuntime: {
@@ -417,6 +418,17 @@ serve(async (req) => {
         })
         if (opp?.created) {
           console.log('[Webhook] Opportunity criada para lead:', lead.id, '→', opp.opportunity_id)
+        }
+        // Sprint 11 · T51 — a new contact (or a new deal for one who came back)
+        // is an arrival through the team's AI-agent entry; the ad, if the message
+        // carries one. Not every message: only arrivals.
+        if (leadIsNew || opp?.created) {
+          await recordTouch(supabase, {
+            leadId: lead.id,
+            entryId: await entryOfKind(supabase, equipeId, 'agent'),
+            payload: messageTouchPayload({ channel, agentName, raw: payload }),
+            opportunityId: opp?.opportunity_id ?? null,
+          }, '[Webhook]')
         }
       } catch (oppErr) {
         // Não derruba o webhook — mensagem precisa ser salva mesmo que a

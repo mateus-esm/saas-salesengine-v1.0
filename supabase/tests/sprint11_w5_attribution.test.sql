@@ -215,6 +215,29 @@ begin
     'T50-6 FAIL: o toque pela edge, veio ' || r::text;
 end $$;
 
+-- T51 — o número de WhatsApp tem a sua entrada; o anúncio clique-para-WhatsApp vira
+-- toque pago da Meta com o anúncio e a página.
+do $$
+declare v_entry uuid; r jsonb; t public.lead_touches;
+begin
+  insert into public.wpp_instances (id, equipe_id, instance_name, display_name, status)
+  values ('5130f000-0000-0000-0000-000000000001', '5130a000-0000-0000-0000-000000000001', 's11w5-inst', 'Comercial', 'connected');
+  v_entry := public._crm_entry_for_instance('5130f000-0000-0000-0000-000000000001');
+  assert v_entry is not null and public._crm_entry_for_instance('5130f000-0000-0000-0000-000000000001') = v_entry
+     and (select name || '|' || kind || '|' || platform from public.crm_entries where id = v_entry) = 'WhatsApp · Comercial|whatsapp|whatsapp',
+    'T51-6 FAIL: o numero deveria ganhar uma entrada so';
+
+  insert into public.leads (id, equipe_id, name) values
+    ('5130e000-0000-0000-0000-000000000007', '5130a000-0000-0000-0000-000000000001', 'Clicou no anuncio');
+  r := public.crm_record_touch('5130e000-0000-0000-0000-000000000007', v_entry, jsonb_build_object(
+         'channel', 'whatsapp', 'utm_source', 'facebook', 'utm_medium', 'paid_social', 'whatsapp_ad', 'true',
+         'ctwa_clid', 'ARAk-1', 'ad_id', '120211', 'ad_name', 'Energia sem entrada', 'source_url', 'https://fb.me/abc'));
+  select * into t from public.lead_touches where id = (r->>'touch_id')::uuid;
+  assert t.platform = 'meta' and t.origin_category = 'paid_social' and t.ctwa_clid = 'ARAk-1'
+         and t.ad_id = '120211' and t.landing_page = 'https://fb.me/abc',
+    'T51-6 FAIL: o anuncio clique-para-WhatsApp, veio ' || r::text;
+end $$;
+
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"5130b000-0000-0000-0000-00000000000a","role":"authenticated"}';

@@ -25,6 +25,67 @@ export function inboundTouchPayload(body: unknown, searchParams: URLSearchParams
   return out;
 }
 
+const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : typeof v === "number" ? String(v) : null);
+
+/**
+ * Sprint 11 · T51 — the click-to-WhatsApp ad, if the message carries one. Two
+ * shapes: the Cloud API's `referral` ({ source_type, source_id, source_url,
+ * headline, ctwa_clid }) and Evolution/Baileys' `contextInfo.externalAdReply`
+ * ({ sourceType, sourceId, sourceUrl, title, ctwaClid }, with
+ * `conversionSource: "FB_Ads"`), at the top of the event or inside the message.
+ * Returns the touch keys the database reads (a CTWA click is a paid Meta ad);
+ * nothing when there is no ad.
+ */
+export function whatsappAdReferral(raw: unknown): Record<string, string> {
+  if (!isObject(raw)) return {};
+  const candidates: Record<string, unknown>[] = [];
+  const push = (v: unknown) => { if (isObject(v)) candidates.push(v); };
+
+  push(raw.referral);
+  const ctx = [raw.contextInfo];
+  if (isObject(raw.message)) {
+    for (const part of Object.values(raw.message)) if (isObject(part)) ctx.push(part.contextInfo);
+  }
+  let conversion: string | null = null;
+  for (const c of ctx) {
+    if (!isObject(c)) continue;
+    push(c.externalAdReply);
+    conversion = conversion ?? text(c.conversionSource) ?? text(c.entryPointConversionSource);
+  }
+
+  for (const ad of candidates) {
+    const ctwa = text(ad.ctwa_clid) ?? text(ad.ctwaClid);
+    const type = (text(ad.source_type) ?? text(ad.sourceType) ?? "").toLowerCase();
+    const isAd = !!ctwa || type === "ad" || /ads?$/i.test(conversion ?? "");
+    if (!isAd) continue;
+    const out: Record<string, string> = { utm_source: "facebook", utm_medium: "paid_social", whatsapp_ad: "true" };
+    if (ctwa) out.ctwa_clid = ctwa;
+    const adId = text(ad.source_id) ?? text(ad.sourceId);
+    if (adId) out.ad_id = adId;
+    const title = text(ad.headline) ?? text(ad.title);
+    if (title) out.ad_name = title;
+    const url = text(ad.source_url) ?? text(ad.sourceUrl);
+    if (url) out.source_url = url;
+    return out;
+  }
+  return {};
+}
+
+/** What a WhatsApp/agent arrival keeps: the channel, the agent, the ad if any — never the message text. */
+export function messageTouchPayload(args: {
+  channel: string | null;
+  agentName?: string | null;
+  instance?: string | null;
+  raw: unknown;
+}): Record<string, unknown> {
+  return {
+    ...(args.channel ? { channel: args.channel } : {}),
+    ...(args.agentName ? { agent_name: args.agentName } : {}),
+    ...(args.instance ? { instance: args.instance } : {}),
+    ...whatsappAdReferral(args.raw),
+  };
+}
+
 export interface RecordedTouch {
   touch_id: string;
   first: boolean;
@@ -40,6 +101,16 @@ export async function entryOfKind(db: Db, equipeId: string, kind: "agent" | "imp
   const { data, error } = await db.rpc("_crm_entry_for", { p_equipe_id: equipeId, p_kind: kind });
   if (error) {
     console.error("[attribution] _crm_entry_for:", error.message);
+    return null;
+  }
+  return (data as string | null) ?? null;
+}
+
+/** The entry of a WhatsApp number (Solo API instance); the database creates it the first time. */
+export async function entryForInstance(db: Db, instanceId: string): Promise<string | null> {
+  const { data, error } = await db.rpc("_crm_entry_for_instance", { p_instance_id: instanceId });
+  if (error) {
+    console.error("[attribution] _crm_entry_for_instance:", error.message);
     return null;
   }
   return (data as string | null) ?? null;

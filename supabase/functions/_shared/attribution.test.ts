@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { inboundTouchPayload, recordTouch } from "./attribution.ts";
+import { inboundTouchPayload, messageTouchPayload, recordTouch, whatsappAdReferral } from "./attribution.ts";
 
 // Sprint 11 · T50 — o que a chegada guarda. A querystring da chamada (onde
 // formulários e landing pages costumam pôr utm_* e fbclid) era jogada fora.
@@ -44,4 +44,59 @@ Deno.test("recordTouch devolve o toque gravado", async () => {
   const db = { rpc: (_fn: string, args: Record<string, unknown>) => Promise.resolve({ data: { ...touch, got: args.p_lead_id }, error: null }) };
   const r = await recordTouch(db, { leadId: "l-1", entryId: "e", payload: { a: 1 }, opportunityId: "o" });
   assertEquals(r?.touch_id, "t");
+});
+
+// Sprint 11 · T51 — o anúncio clique-para-WhatsApp. Sem instância da Solo API na
+// produção (12/09), estes formatos são o que o teste consegue provar.
+Deno.test("whatsappAdReferral lê o referral da Cloud API", () => {
+  assertEquals(
+    whatsappAdReferral({
+      referral: {
+        source_type: "ad",
+        source_id: "120211",
+        source_url: "https://fb.me/abc",
+        headline: "Energia solar sem entrada",
+        ctwa_clid: "ARAk-xyz",
+      },
+    }),
+    {
+      utm_source: "facebook",
+      utm_medium: "paid_social",
+      whatsapp_ad: "true",
+      ctwa_clid: "ARAk-xyz",
+      ad_id: "120211",
+      ad_name: "Energia solar sem entrada",
+      source_url: "https://fb.me/abc",
+    },
+  );
+});
+
+Deno.test("whatsappAdReferral lê o externalAdReply do Evolution, no topo ou dentro da mensagem", () => {
+  const top = whatsappAdReferral({
+    contextInfo: { conversionSource: "FB_Ads", externalAdReply: { title: "Usina", sourceId: "77", sourceUrl: "https://fb.me/u" } },
+  });
+  assertEquals(top.ad_id, "77");
+  assertEquals(top.utm_medium, "paid_social");
+  const nested = whatsappAdReferral({
+    message: { extendedTextMessage: { text: "Oi", contextInfo: { externalAdReply: { ctwaClid: "c-1", sourceType: "ad" } } } },
+  });
+  assertEquals(nested.ctwa_clid, "c-1");
+});
+
+Deno.test("whatsappAdReferral: post impulsionado sem prova de anúncio e mensagem comum não viram anúncio", () => {
+  assertEquals(whatsappAdReferral({ referral: { source_type: "post", source_url: "https://fb.me/p" } }), {});
+  assertEquals(whatsappAdReferral({ message: { conversation: "Oi" } }), {});
+  assertEquals(whatsappAdReferral(null), {});
+});
+
+Deno.test("messageTouchPayload guarda canal, agente e anúncio — nunca o texto", () => {
+  const p = messageTouchPayload({
+    channel: "whatsapp",
+    agentName: "Sol",
+    raw: { message: { conversation: "meu cpf é 123" }, referral: { ctwa_clid: "c-9" } },
+  });
+  assertEquals(p.channel, "whatsapp");
+  assertEquals(p.agent_name, "Sol");
+  assertEquals(p.ctwa_clid, "c-9");
+  assertEquals(JSON.stringify(p).includes("cpf"), false);
 });

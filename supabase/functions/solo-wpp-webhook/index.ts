@@ -19,6 +19,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
+import { entryForInstance, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { normalizePhone } from "../_shared/phone.ts"
 
 declare const EdgeRuntime: {
@@ -578,6 +579,16 @@ async function handleMessagesUpsert(
           })
           if (opp?.created) {
             console.log('[solo-wpp] Opportunity criada para lead:', lead.id, '->', opp.opportunity_id)
+          }
+          // Sprint 11 · T51 — a new contact (or a new deal) is an arrival through
+          // this number's entry; a click-to-WhatsApp ad comes in contextInfo.
+          if (leadIsNew || opp?.created) {
+            await recordTouch(supabase, {
+              leadId: lead.id,
+              entryId: await entryForInstance(supabase, instance.id),
+              payload: messageTouchPayload({ channel: 'whatsapp', raw: data }),
+              opportunityId: opp?.opportunity_id ?? null,
+            }, '[solo-wpp]')
           }
         } catch (oppErr) {
           console.error('[solo-wpp] Falha ao garantir opportunity:', oppErr)
