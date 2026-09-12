@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { inboundTouchPayload, messageTouchPayload, recordTouch, whatsappAdReferral } from "./attribution.ts";
+import { entryLine, inboundTouchPayload, messageTouchPayload, recordTouch, whatsappAdReferral } from "./attribution.ts";
 
 // Sprint 11 · T50 — o que a chegada guarda. A querystring da chamada (onde
 // formulários e landing pages costumam pôr utm_* e fbclid) era jogada fora.
@@ -99,4 +99,26 @@ Deno.test("messageTouchPayload guarda canal, agente e anúncio — nunca o texto
   assertEquals(p.agent_name, "Sol");
   assertEquals(p.ctwa_clid, "c-9");
   assertEquals(JSON.stringify(p).includes("cpf"), false);
+});
+
+// Sprint 11 · T55 — a linha do negócio novo de uma entrada (número, agente).
+const oneRow = (row: unknown, error: unknown = null) => {
+  const asked: unknown[] = [];
+  const b = {
+    select: () => b,
+    eq: (_c: string, v: unknown) => (asked.push(v), b),
+    maybeSingle: () => Promise.resolve({ data: row, error }),
+  };
+  return { db: { from: () => b }, asked };
+};
+
+Deno.test("entryLine devolve a linha da entrada; sem entrada, sem linha, ou erro → null (a padrão)", async () => {
+  const withLine = oneRow({ pipeline_id: "pipe-wpp" });
+  assertEquals(await entryLine(withLine.db, "e-1"), "pipe-wpp");
+  assertEquals(withLine.asked, ["e-1"]);
+  assertEquals(await entryLine(oneRow({ pipeline_id: null }).db, "e-1"), null);
+  assertEquals(await entryLine(oneRow(null, { message: "rede" }).db, "e-1"), null);
+  const untouched = oneRow({ pipeline_id: "x" });
+  assertEquals(await entryLine(untouched.db, null), null);
+  assertEquals(untouched.asked, []);
 });

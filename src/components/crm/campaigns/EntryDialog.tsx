@@ -56,6 +56,9 @@ export function EntryDialog({ entry, campaigns, saving, onClose, onSave }: Entry
 
   if (!entry) return null;
   const isWebhook = entry.kind === "webhook";
+  // Sprint 11 · T55 — the number and the agent send a new deal to their line;
+  // manual and import pick the line on the spot; a webhook's is the webhook's.
+  const routesToLine = entry.kind === "whatsapp" || entry.kind === "agent";
   const toggleUser = (id: string, on: boolean) =>
     setUsers((u) => (on ? (u.includes(id) ? u : [...u, id]) : u.filter((x) => x !== id)));
   const ownerMissing = mode !== "none" && users.length === 0;
@@ -67,7 +70,8 @@ export function EntryDialog({ entry, campaigns, saving, onClose, onSave }: Entry
       campaign_id: campaignId,
       owner_rule: { mode, user_ids: mode === "fixed" ? users.slice(0, 1) : mode === "round_robin" ? users : [] },
       active,
-      ...(isWebhook ? {} : { name: name.trim(), pipeline_id: pipelineId }),
+      ...(isWebhook ? {} : { name: name.trim() }),
+      ...(routesToLine ? { pipeline_id: pipelineId } : {}),
     };
     try {
       await onSave(entry.id, patch);
@@ -128,10 +132,10 @@ export function EntryDialog({ entry, campaigns, saving, onClose, onSave }: Entry
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Linha</Label>
+              <Label>Linha do negócio novo</Label>
               {isWebhook ? (
                 <p className="flex h-10 items-center text-sm text-muted-foreground">{entry.pipeline_name ?? "Padrão da equipe"} · no webhook</p>
-              ) : (
+              ) : routesToLine ? (
                 <Select value={pipelineId ?? NONE} onValueChange={(v) => setPipelineId(v === NONE ? null : v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -139,6 +143,8 @@ export function EntryDialog({ entry, campaigns, saving, onClose, onSave }: Entry
                     {pipelines.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              ) : (
+                <p className="flex h-10 items-center text-sm text-muted-foreground">A escolhida no cadastro</p>
               )}
             </div>
           </div>

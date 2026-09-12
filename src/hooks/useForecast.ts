@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { durationWindow, normalizeNatures } from "@/lib/natures";
 import { computeRunRate, placarFromRpc, type OwnerGoal, type Placar } from "@/lib/scoreboard";
 
 /** Start (inclusive) and end (exclusive) of the current month or quarter, local time. */
@@ -57,7 +58,10 @@ interface ConversionRate {
 export interface ForecastData {
   goal_deals: number;
   goal_revenue: number;
-  period: "month" | "quarter";
+  /** campaign = a campaign line (Sprint 11 · T55): the placar is the campaign's, start to end. */
+  period: "month" | "quarter" | "campaign";
+  /** The campaign's days and whether it is on (period = campaign). */
+  campaign: { starts_on: string; ends_on: string; state: "upcoming" | "running" | "ended" } | null;
   /** null when there isn't enough data to compute an honest number. */
   required_inbound: number | null;
   opportunities_needed: number | null;
@@ -89,7 +93,7 @@ export function useForecast(pipelineId: string | null) {
       // 1. Get pipeline revenue_config
       const { data: pipe, error: pipeError } = await sb
         .from("pipelines")
-        .select("revenue_config")
+        .select("revenue_config, natures")
         .eq("id", pipelineId)
         .single();
       if (pipeError) throw pipeError;
@@ -97,7 +101,12 @@ export function useForecast(pipelineId: string | null) {
       const config = pipe?.revenue_config ?? {};
       const goal_deals = config.goal_deals ?? 0;
       const goal_revenue = config.goal_revenue ?? 0;
-      const period: "month" | "quarter" = config.period ?? "month";
+      const configured: "month" | "quarter" = config.period ?? "month";
+      // Sprint 11 · T55 — a campaign line's placar is the campaign's: its goal
+      // over its days, start to end (and, after the end, the campaign's result).
+      const duration = normalizeNatures(pipe?.natures).duration;
+      const window = durationWindow(duration);
+      const period: ForecastData["period"] = window ? "campaign" : configured;
       const overrides = config.conversion_overrides ?? {};
       const owner_goals = config.owner_goals ?? [];
 
@@ -121,7 +130,7 @@ export function useForecast(pipelineId: string | null) {
       // 3. The placar of this period: crm_placar counts wins and losses by the
       //    owner at the moment they happened (the dashboard's rule) — one call
       //    instead of every deal of the pipeline.
-      const bounds = periodBounds(period);
+      const bounds = window ? { start: window.start, end: window.end } : periodBounds(configured);
       const { data: placarData, error: placarError } = await sb.rpc("crm_placar", {
         p_pipeline_id: pipelineId,
         p_from: bounds.start.toISOString(),
@@ -169,6 +178,10 @@ export function useForecast(pipelineId: string | null) {
         goal_deals,
         goal_revenue,
         period,
+        campaign:
+          window && duration.starts_on && duration.ends_on
+            ? { starts_on: duration.starts_on, ends_on: duration.ends_on, state: window.state }
+            : null,
         required_inbound,
         opportunities_needed,
         proposals_needed,
@@ -178,8 +191,8 @@ export function useForecast(pipelineId: string | null) {
         sufficient_data,
         placar,
         owner_goals,
-        elapsed_days: daysElapsed(period),
-        total_days: daysInPeriod(period),
+        elapsed_days: window ? window.elapsedDays : daysElapsed(configured),
+        total_days: window ? window.totalDays : daysInPeriod(configured),
       };
       return result;
     },

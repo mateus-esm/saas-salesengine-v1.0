@@ -4,7 +4,7 @@
 // without the Copilot service, while the same nature/stage contract remains
 // reusable by onboarding and future API surfaces.
 
-import { stagesForProcess } from "@/lib/natures";
+import { DEFAULT_NATURES, stagesForProcess } from "@/lib/natures";
 import type { PipelineNatures } from "@/types/natures";
 import type { CatalogKind, PriceMode, RecurrenceUnit } from "@/types/revenue";
 
@@ -36,10 +36,13 @@ export interface PipelineTemplate {
   catalog_suggestions: CatalogSuggestion[];
 }
 
+// A model has no dates: every one starts continuous (Duração, Sprint 11 · T55);
+// a campaign's start and end are set on the line after it is created.
 const template = (
-  value: Omit<PipelineTemplate, "stages">,
+  value: Omit<PipelineTemplate, "stages" | "natures"> & { natures: Omit<PipelineNatures, "duration"> },
 ): PipelineTemplate => ({
   ...value,
+  natures: { ...value.natures, duration: DEFAULT_NATURES.duration },
   stages: stagesForProcess(value.natures.process),
 });
 

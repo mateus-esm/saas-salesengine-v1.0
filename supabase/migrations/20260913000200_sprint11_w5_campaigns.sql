@@ -222,6 +222,9 @@ $$;
 -- 2. ENTRADAS
 -- ============================================================================
 
+-- A linha em que a entrada põe o negócio novo (T55): o webhook, a do webhook; o
+-- número de WhatsApp e o agente, a da entrada; null = a linha padrão da equipe.
+-- Cadastro manual e importação: a linha escolhida na hora (null aqui).
 create or replace function public.crm_entry_list()
 returns jsonb
 language sql
@@ -229,8 +232,8 @@ stable
 set search_path = public
 as $$
   select coalesce(jsonb_agg(to_jsonb(e) - 'owner_cursor' || jsonb_build_object(
-           'pipeline_id', coalesce(w.pipeline_id, e.pipeline_id),
-           'pipeline_name', (select p.name from public.pipelines p where p.id = coalesce(w.pipeline_id, e.pipeline_id)),
+           'pipeline_id', x.line_id,
+           'pipeline_name', (select p.name from public.pipelines p where p.id = x.line_id),
            'webhook_active', w.active,
            'campaign_name', (select c.name from public.crm_campaigns c where c.id = e.campaign_id),
            'leads', (select count(*) from public.leads l where l.entry_id = e.id and l.deleted_at is null),
@@ -241,6 +244,9 @@ as $$
                   e.name), '[]'::jsonb)
     from public.crm_entries e
     left join public.webhook_configs w on w.id = e.webhook_config_id
+    cross join lateral (select case e.kind when 'webhook' then w.pipeline_id
+                                           when 'whatsapp' then e.pipeline_id
+                                           when 'agent' then e.pipeline_id end as line_id) x
    where e.equipe_id = (select pr.equipe_id from public.profiles pr where pr.id = auth.uid());
 $$;
 
@@ -275,8 +281,10 @@ begin
          origin_category = case when p ? 'origin_category' then nullif(p->>'origin_category', '') else e.origin_category end,
          platform = case when p ? 'platform' then nullif(p->>'platform', '') else e.platform end,
          campaign_id = case when p ? 'campaign_id' then nullif(p->>'campaign_id', '')::uuid else e.campaign_id end,
-         -- A linha de um webhook é a do próprio webhook (tela de webhooks).
-         pipeline_id = case when p ? 'pipeline_id' and e.kind <> 'webhook' then nullif(p->>'pipeline_id', '')::uuid else e.pipeline_id end,
+         -- A linha de um webhook é a do próprio webhook (tela de webhooks); a do
+         -- número e a do agente, esta; manual e importação escolhem na hora.
+         pipeline_id = case when p ? 'pipeline_id' and e.kind in ('whatsapp', 'agent')
+                            then nullif(p->>'pipeline_id', '')::uuid else e.pipeline_id end,
          owner_rule = case when p ? 'owner_rule' then public._crm_normalize_owner_rule(v_equipe, p->'owner_rule') else e.owner_rule end,
          active = case when p ? 'active' then coalesce((p->>'active')::boolean, e.active) else e.active end,
          updated_at = now()

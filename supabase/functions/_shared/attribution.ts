@@ -116,6 +116,20 @@ export async function entryForInstance(db: Db, instanceId: string): Promise<stri
   return (data as string | null) ?? null;
 }
 
+/**
+ * Sprint 11 · T55 — the line where an entry's new deals go (a WhatsApp number,
+ * the AI agent); null = the team default. Never throws: no line, default line.
+ */
+export async function entryLine(db: Db, entryId: string | null): Promise<string | null> {
+  if (!entryId) return null;
+  const { data, error } = await db.from("crm_entries").select("pipeline_id").eq("id", entryId).maybeSingle();
+  if (error) {
+    console.error("[attribution] entryLine:", error.message);
+    return null;
+  }
+  return (data?.pipeline_id as string | null | undefined) ?? null;
+}
+
 /** The entry of an inbound webhook (the database creates one per webhook). */
 export async function entryForWebhook(db: Db, webhookConfigId: string): Promise<string | null> {
   const { data } = await db.from("crm_entries").select("id").eq("webhook_config_id", webhookConfigId).maybeSingle();

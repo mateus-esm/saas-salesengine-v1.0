@@ -96,7 +96,8 @@ create table if not exists public.crm_entries (
   name              text not null,
   webhook_config_id uuid unique references public.webhook_configs(id) on delete set null,
   wpp_instance_id   uuid unique references public.wpp_instances(id) on delete set null,
-  -- A linha de uma entrada de webhook é o `pipeline_id` do próprio webhook.
+  -- A linha do negócio novo do número de WhatsApp e do agente (null = a padrão da
+  -- equipe). A de uma entrada de webhook é o `pipeline_id` do próprio webhook.
   pipeline_id       uuid references public.pipelines(id) on delete set null,
   origin_category   text check (origin_category is null or origin_category = any (public._crm_origin_categories())),
   platform          text check (platform is null or platform = any (public._crm_platforms())),
