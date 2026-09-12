@@ -23,6 +23,11 @@ begin;
 -- @include supabase/migrations/20260912000700_sprint11_w3_timers.sql
 -- @include supabase/migrations/20260912000800_sprint11_w3_natures.sql
 -- @include supabase/migrations/20260912100100_sprint11_w4_custom_tables_field_id.sql
+-- @include supabase/migrations/20260912100200_sprint11_w4_artifacts.sql
+-- @include supabase/migrations/20260912100300_sprint11_w4_artifact_files.sql
+-- @include supabase/migrations/20260912100400_sprint11_w4_artifact_lifecycle.sql
+-- @include supabase/migrations/20260912100500_sprint11_w4_artifact_actions.sql
+-- @include supabase/migrations/20260912100600_sprint11_w4_public_forms.sql
 
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link) values
