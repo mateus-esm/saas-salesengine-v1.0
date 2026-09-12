@@ -64,6 +64,7 @@ import { UserPicker } from "./fields/UserPicker";
 import { DealItemsSection } from "./deal/DealItemsSection";
 import { DealRevenueSection } from "./deal/DealRevenueSection";
 import { DealArtifactsSection } from "./deal/DealArtifactsSection";
+import { OriginBlock } from "./attribution/OriginBlock";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -366,6 +367,9 @@ export const OpportunityDetailModal = ({
 
                   {/* Sprint 11 · T31 — what the win put in the books. */}
                   <DealRevenueSection opportunityId={opportunity.id} open={open} />
+
+                  {/* Sprint 11 · T53 — where the contact of this deal came from. */}
+                  <OriginBlock leadId={opportunity.lead_id} open={open} />
 
                   {/* Sprint 11 · T40 — proposals, contracts and documents held by the deal. */}
                   <DealArtifactsSection opportunityId={opportunity.id} open={open} onDealMoved={handleStageChange} />

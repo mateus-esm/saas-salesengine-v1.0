@@ -158,6 +158,44 @@ begin
 end $$;
 
 -- ============================================================================
+-- 4b. T53 — pela tela: a campanha escolhida e a categoria valem; a origem do lead.
+-- ============================================================================
+do $$
+declare r jsonb; a jsonb; v_c text := (select val from pg_temp.t52 where k = 'verao');
+begin
+  insert into public.leads (id, equipe_id, name) values
+    ('5132e000-0000-0000-0000-000000000009', '5132a000-0000-0000-0000-000000000001', 'Cadastro manual');
+  r := public.crm_record_touch('5132e000-0000-0000-0000-000000000009', null,
+         jsonb_build_object('_origin_category', 'referral', '_platform', 'site', 'campaign_id', v_c));
+  assert r->>'origin_category' = 'referral' and r->>'platform' = 'site' and r->>'campaign_id' = v_c,
+    'T53-4 FAIL: a escolha da tela deveria valer, veio ' || r::text;
+
+  a := public.crm_lead_attribution('5132e000-0000-0000-0000-000000000009');
+  assert (a->>'total')::int = 1 and (a->'touches'->0->>'first')::boolean
+         and a->'touches'->0->>'campaign' = 'Usina Verão 2026' and a->'touches'->0->>'entry_name' = 'Manual',
+    'T53-4 FAIL: a origem do lead, veio ' || a::text;
+end $$;
+
+reset role;
+set local role service_role;
+set local request.jwt.claims = '{"role":"service_role"}';
+do $$
+declare r jsonb;
+begin
+  insert into public.leads (id, equipe_id, name) values
+    ('5132e000-0000-0000-0000-00000000000a', '5132a000-0000-0000-0000-000000000001', 'Pela edge');
+  r := public.crm_record_touch('5132e000-0000-0000-0000-00000000000a',
+         (select id from public.crm_entries where webhook_config_id = '5132c000-0000-0000-0000-0000000000f1'),
+         '{"_origin_category":"referral","_platform":"site"}');
+  assert r->>'origin_category' is distinct from 'referral' and r->>'platform' = 'meta',
+    'T53-4 FAIL: a edge nao escolhe categoria nem plataforma pelo atalho da tela, veio ' || r::text;
+end $$;
+
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"5132b000-0000-0000-0000-00000000000a","role":"authenticated"}';
+
+-- ============================================================================
 -- 5. O vizinho não vê nem mexe.
 -- ============================================================================
 set local request.jwt.claims = '{"sub":"5132b000-0000-0000-0000-00000000000d","role":"authenticated"}';
@@ -165,7 +203,8 @@ do $$
 declare v_failed boolean;
 begin
   assert public.crm_campaign_list() = '[]'::jsonb and public.crm_entry_list() = '[]'::jsonb
-     and public.crm_unmatched_utms() = '[]'::jsonb,
+     and public.crm_unmatched_utms() = '[]'::jsonb
+     and public.crm_lead_attribution('5132e000-0000-0000-0000-000000000009') is null,
     'T52-5 FAIL: o vizinho ve campanhas, entradas ou UTMs da equipe A';
 
   v_failed := false;

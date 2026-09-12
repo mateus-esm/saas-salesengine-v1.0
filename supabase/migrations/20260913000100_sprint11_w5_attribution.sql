@@ -346,7 +346,8 @@ as $$
   from (select lower(btrim(coalesce(p_fields->>'utm_medium', ''))) as m) x;
 $$;
 
--- A campanha: ID → utm_campaign → nome da campanha → padrão da entrada.
+-- A campanha: a nossa campanha pelo id (a tela escolhe) → ID da plataforma →
+-- utm_campaign → nome da campanha → padrão da entrada.
 create or replace function public._crm_resolve_campaign(p_equipe_id uuid, p_fields jsonb, p_entry_campaign uuid)
 returns uuid
 language sql
@@ -354,6 +355,10 @@ stable
 set search_path = public
 as $$
   select coalesce(
+    (select c.id from public.crm_campaigns c
+      where p_fields->>'campaign_ref' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        and c.id = (p_fields->>'campaign_ref')::uuid
+        and c.equipe_id = p_equipe_id and c.status <> 'archived'),
     (select c.id from public.crm_campaigns c
       where c.equipe_id = p_equipe_id and c.status <> 'archived'
         and lower(btrim(p_fields->>'campaign_ref')) = any (c.match_keys)
@@ -634,6 +639,17 @@ begin
   v_platform := public._crm_platform_from(v_fields, v_entry.platform);
   v_category := public._crm_category_from(v_fields, v_platform, v_entry.origin_category);
   v_campaign := public._crm_resolve_campaign(v_lead.equipe_id, v_fields, v_entry.campaign_id);
+
+  -- O que a pessoa escolheu na tela (cadastro manual) vale mais que a dedução.
+  -- Só pela tela: uma edge nunca manda `_origin_category`/`_platform`.
+  if coalesce(auth.role(), '') = 'authenticated' then
+    if p_payload->>'_origin_category' = any (public._crm_origin_categories()) then
+      v_category := p_payload->>'_origin_category';
+    end if;
+    if p_payload->>'_platform' = any (public._crm_platforms()) then
+      v_platform := p_payload->>'_platform';
+    end if;
+  end if;
 
   insert into public.lead_touches (
     equipe_id, lead_id, opportunity_id, entry_id, occurred_at, origin_category, platform, campaign_id,

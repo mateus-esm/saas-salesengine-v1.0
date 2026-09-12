@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { categoryFrom, isPlatform, platformFrom, platformLabel } from "../attribution";
+import { categoryFrom, isPlatform, platformFrom, platformLabel, touchSummary } from "../attribution";
 
 // The same cases as supabase/tests/sprint11_w5_attribution.test.sql §1: the two
 // sides are copies, and a copy without a mirrored test drifts in silence.
@@ -49,5 +49,15 @@ describe("platform names", () => {
     expect(platformLabel(null)).toBeNull();
     expect(isPlatform("google")).toBe(true);
     expect(isPlatform("orkut")).toBe(false);
+  });
+});
+
+describe("touchSummary", () => {
+  it("says the door, the category, the platform and the campaign — or the UTM when no campaign", () => {
+    expect(
+      touchSummary({ entry_name: "Formulário Meta", origin_category: "paid_social", platform: "meta", campaign: "Usina Verão" }),
+    ).toBe("Formulário Meta · Social Pago · Meta (Facebook/Instagram) · Campanha: Usina Verão");
+    expect(touchSummary({ entry_name: "Landing Page", utm_campaign: "bf" })).toBe("Landing Page · utm: bf");
+    expect(touchSummary({})).toBe("");
   });
 });

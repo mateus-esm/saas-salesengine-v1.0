@@ -288,7 +288,41 @@ end;
 $$;
 
 -- ============================================================================
--- 3. PERMISSÕES
+-- 3. A ORIGEM DE UM LEAD (T53)
+-- ============================================================================
+
+-- As chegadas de um lead (as 50 últimas), com a entrada e a campanha por nome, e
+-- qual delas é o primeiro toque. RLS: só o lead da própria equipe.
+create or replace function public.crm_lead_attribution(p_lead_id uuid)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'first_touch_id', l.first_touch_id,
+    'total', (select count(*) from public.lead_touches t where t.lead_id = l.id),
+    'touches', coalesce((
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+               'id', t.id, 'occurred_at', t.occurred_at, 'first', t.id = l.first_touch_id,
+               'entry_name', e.name, 'entry_kind', e.kind,
+               'origin_category', t.origin_category, 'platform', t.platform,
+               'campaign_id', t.campaign_id, 'campaign', c.name,
+               'utm_source', t.utm_source, 'utm_medium', t.utm_medium, 'utm_campaign', t.utm_campaign,
+               'utm_content', t.utm_content, 'utm_term', t.utm_term,
+               'fbclid', t.fbclid, 'gclid', t.gclid, 'ctwa_clid', t.ctwa_clid,
+               'campaign_name', t.campaign_name, 'adset_name', t.adset_name, 'ad_name', t.ad_name, 'ad_id', t.ad_id,
+               'form_name', t.form_name, 'landing_page', t.landing_page, 'referrer', t.referrer))
+             order by t.occurred_at desc)
+        from (select * from public.lead_touches t0 where t0.lead_id = l.id order by t0.occurred_at desc limit 50) t
+        left join public.crm_entries e on e.id = t.entry_id
+        left join public.crm_campaigns c on c.id = t.campaign_id), '[]'::jsonb))
+  from public.leads l
+  where l.id = p_lead_id;
+$$;
+
+-- ============================================================================
+-- 4. PERMISSÕES
 -- ============================================================================
 
 revoke all on function public.crm_save_campaign(jsonb) from public, anon;
@@ -307,3 +341,5 @@ grant execute on function public.crm_unmatched_utms(integer) to authenticated;
 grant execute on function public.crm_link_utm(uuid, text) to authenticated;
 grant execute on function public.crm_entry_list() to authenticated;
 grant execute on function public.crm_save_entry(uuid, jsonb) to authenticated;
+revoke all on function public.crm_lead_attribution(uuid) from public, anon;
+grant execute on function public.crm_lead_attribution(uuid) to authenticated;

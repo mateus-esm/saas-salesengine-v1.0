@@ -6,6 +6,7 @@
 // and to preview what a payload would become. Keep them in lockstep with
 // _crm_platforms / _crm_platform_from / _crm_category_from.
 
+import { originLabel } from "@/config/originTaxonomy";
 import type { OriginCategory } from "@/types/crm";
 
 export type Platform =
@@ -98,4 +99,22 @@ export function categoryFrom(
   }
   if (["referral", "indicacao"].includes(m)) return "referral";
   return null;
+}
+
+/** One line that says where an arrival came from: entry · category · platform · campaign. */
+export function touchSummary(t: {
+  entry_name?: string | null;
+  origin_category?: string | null;
+  platform?: string | null;
+  campaign?: string | null;
+  utm_campaign?: string | null;
+}): string {
+  return [
+    t.entry_name,
+    t.origin_category ? originLabel(t.origin_category as OriginCategory) : null,
+    platformLabel(t.platform),
+    t.campaign ? `Campanha: ${t.campaign}` : t.utm_campaign ? `utm: ${t.utm_campaign}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

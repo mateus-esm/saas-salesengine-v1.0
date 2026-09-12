@@ -45,6 +45,7 @@ import { toast } from "sonner";
 
 import type { Lead, ContactType, OriginCategory } from "@/types/crm";
 import { LeadOpportunitiesSection } from "./LeadOpportunitiesSection";
+import { OriginBlock } from "./attribution/OriginBlock";
 import { DynamicFieldRenderer } from "./DynamicFieldRenderer";
 import { CompanySection } from "./companies/CompanySection";
 import { PropertySection } from "./properties/PropertySection";
@@ -402,6 +403,13 @@ export const ContactDetailsModal = ({
                     />
                   </div>
                 </div>
+
+                {/* Sprint 11 · T53 — every arrival of this contact (entry, campaign, UTMs). */}
+                {lead?.id && (
+                  <div className="pt-4 border-t border-border">
+                    <OriginBlock leadId={lead.id} open={open} />
+                  </div>
+                )}
 
                 {/* Enrichment block — personal_custom_data via DynamicFieldRenderer */}
                 <div className="pt-4 border-t border-border">
