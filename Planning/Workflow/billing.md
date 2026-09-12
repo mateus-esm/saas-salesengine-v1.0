@@ -300,3 +300,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W3 | Plano da Onda 3 (receita e linha configurada) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-11 | 11 W3A | T28 A etapa decide o desfecho | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-09-11 | 11 W3A | T29 Catalogo | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3A | T30 Itens do negocio | Claude / Opus 5 (PM) | L | R$ 20 |

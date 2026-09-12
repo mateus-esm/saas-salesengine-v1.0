@@ -63,6 +63,8 @@ export function useCatalog() {
   const query = useQuery({
     queryKey: key,
     enabled: !!equipeId,
+    // Read by every open deal (the items picker): a minute of cache is plenty.
+    staleTime: 60_000,
     queryFn: async (): Promise<CatalogItem[]> => {
       const { data, error } = await sb
         .from("catalog_items")

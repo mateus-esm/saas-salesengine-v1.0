@@ -60,6 +60,7 @@ import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
+import { DealItemsSection } from "./deal/DealItemsSection";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -124,6 +125,8 @@ export const OpportunityDetailModal = ({
   const [status, setStatus] = useState<OpportunityStatus>("open");
   const [value, setValue] = useState<string>("");
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
+  // Sprint 11 · T30 — with items, the value is their sum (the database keeps it).
+  const [hasItems, setHasItems] = useState(false);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [decisionsOpen, setDecisionsOpen] = useState(false);
@@ -179,7 +182,7 @@ export const OpportunityDetailModal = ({
       id: opportunity.id,
       stage_id: stageId,
       status,
-      value: value === "" ? null : Number(value),
+      ...(hasItems ? {} : { value: value === "" ? null : Number(value) }),
       custom_data: customData,
     });
     onClose();
@@ -329,7 +332,7 @@ export const OpportunityDetailModal = ({
                     </div>
 
                     <div className="space-y-1.5 col-span-2">
-                      <Label className="text-xs">Valor (R$)</Label>
+                      <Label className="text-xs">{hasItems ? "Valor (R$) — soma dos itens" : "Valor (R$)"}</Label>
                       <Input
                         type="number"
                         step="0.01"
@@ -337,9 +340,19 @@ export const OpportunityDetailModal = ({
                         onChange={(e) => setValue(e.target.value)}
                         placeholder="0,00"
                         className="h-9 font-mono"
+                        readOnly={hasItems}
+                        aria-readonly={hasItems}
                       />
                     </div>
                   </div>
+
+                  {/* Sprint 11 · T30 — what the deal sells; with items, the value is their sum. */}
+                  <DealItemsSection
+                    opportunityId={opportunity.id}
+                    open={open}
+                    onValueChange={(v) => setValue(v !== null && v !== undefined ? String(v) : "")}
+                    onHasItemsChange={setHasItems}
+                  />
 
                   {hasCustomFields && (
                     <div className="space-y-3 pt-1">

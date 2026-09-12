@@ -25,3 +25,20 @@ export interface CatalogItem {
   created_at: string;
   updated_at: string;
 }
+
+/** A line of a deal (opportunity_items). Name, price and recurrence are copies from when it was added. */
+export interface OpportunityItem {
+  id: string;
+  opportunity_id: string;
+  catalog_item_id: string | null;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  /** A fixed catalog price: not editable on the deal. */
+  price_locked: boolean;
+  recurrence_every: number | null;
+  recurrence_unit: RecurrenceUnit | null;
+  renew_days_before: number;
+  position: number;
+}
