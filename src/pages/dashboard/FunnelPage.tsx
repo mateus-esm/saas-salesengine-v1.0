@@ -17,6 +17,7 @@ export default function FunnelPage() {
   const { filters } = useDashboardContext();
   const { data: overview, isLoading } = useFunnelOverview(filters);
   const { data: byPipeline } = useFunnelBreakdown(filters, "pipeline");
+  const { data: byProduct } = useFunnelBreakdown(filters, "product");
 
   if (isLoading) {
     return (
@@ -48,6 +49,14 @@ export default function FunnelPage() {
 
       <ChartCard title="Por pipeline" description="Volume e conversão de cada processo comercial.">
         <BreakdownView rows={byPipeline ?? []} metric="won_value" />
+      </ChartCard>
+
+      {/* Sprint 11 · T33 — the ledger cut by catalog item. */}
+      <ChartCard
+        title="Receita por produto"
+        description={'O que cada item do catálogo vendeu no período. Negócio sem itens aparece como "Sem item".'}
+      >
+        <BreakdownView rows={byProduct ?? []} metric="won_value" />
       </ChartCard>
     </div>
   );

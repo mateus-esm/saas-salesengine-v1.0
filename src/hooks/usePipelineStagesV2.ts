@@ -101,6 +101,8 @@ export const usePipelineStagesV2 = (pipelineId?: string) => {
           stage_type: input.stage_type || "open",
           max_idle_hours: input.max_idle_hours ?? null,
           max_interactions: input.max_interactions ?? null,
+          funnel_event: input.funnel_event ?? null,
+          description: input.description ?? null,
         })
         .select()
         .single();

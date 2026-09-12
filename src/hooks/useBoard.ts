@@ -149,6 +149,8 @@ export function useBoardRealtime(pipelineId: string | undefined) {
 interface MoveVars {
   card: BoardCard;
   toStageId: string;
+  /** Sprint 11 · T28 — the status the deal takes there (lib/outcome); the database decides it too. */
+  toStatus?: BoardCard["status"];
 }
 
 /**
@@ -169,7 +171,7 @@ export function useMoveBoardCard(pipelineId: string | undefined, filters: CrmFil
         .eq("id", card.id);
       if (error) throw error;
     },
-    onMutate: async ({ card, toStageId }: MoveVars) => {
+    onMutate: async ({ card, toStageId, toStatus }: MoveVars) => {
       const fromKey = boardKeys.stage(equipeId, pipelineId, card.stage_id, f);
       const toKey = boardKeys.stage(equipeId, pipelineId, toStageId, f);
       const summaryKey = boardKeys.summary(equipeId, pipelineId, f);
@@ -188,10 +190,15 @@ export function useMoveBoardCard(pipelineId: string | undefined, filters: CrmFil
       const { pages: fromPages } = removeCardFromPages(previous.from, card.id);
       if (fromPages) queryClient.setQueryData(fromKey, fromPages);
 
+      const now = new Date().toISOString();
+      const status = toStatus ?? card.status;
       const moved: BoardCard = {
         ...card,
         stage_id: toStageId,
-        stage_entered_at: new Date().toISOString(),
+        stage_entered_at: now,
+        status,
+        closed_at: status === "open" ? null : card.status === status ? card.closed_at : now,
+        lost_reason: status === "open" ? null : card.lost_reason,
       };
       const toPages = prependCardToPages(previous.to, moved);
       if (toPages) queryClient.setQueryData(toKey, toPages);

@@ -14,6 +14,14 @@ begin;
 -- Onda 2 (T14): a versão nova da quebra (dono do negócio, nome no campo usuário).
 -- @include supabase/migrations/20260910000100_sprint11_opportunity_owner.sql
 -- @include supabase/migrations/20260911000300_sprint11_w2_owner_events.sql
+-- @include supabase/migrations/20260912000100_sprint11_w3_outcome.sql
+-- @include supabase/migrations/20260912000200_sprint11_w3_catalog.sql
+-- @include supabase/migrations/20260912000300_sprint11_w3_items.sql
+-- @include supabase/migrations/20260912000400_sprint11_w3_revenue.sql
+-- @include supabase/migrations/20260912000500_sprint11_w3_contact_situation.sql
+-- @include supabase/migrations/20260912000600_sprint11_w3_revenue_metrics.sql
+-- @include supabase/migrations/20260912000700_sprint11_w3_timers.sql
+-- @include supabase/migrations/20260912000800_sprint11_w3_natures.sql
 
 insert into public.equipes (id, nome, crm_link, suporte_link) values
   ('5118a000-0000-0000-0000-000000000001', 'S11 Quebra', 'x', 'y');

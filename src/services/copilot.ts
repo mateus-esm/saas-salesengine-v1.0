@@ -5,6 +5,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import type { CustomFieldType, StageType } from "@/types/pipelines";
+import type { Milestone, PipelineNatures } from "@/types/natures";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -28,12 +29,14 @@ export interface StageBlueprint {
   max_idle_hours?: number | null;
   cadence_value?: number | null;
   cadence_unit?: "hours" | "days" | null;
+  funnel_event?: Milestone | null;
 }
 
 /** Mirrors python-agent/app/schemas.py::PipelineBlueprint (§P4) */
 export interface PipelineBlueprint {
   pipeline_name: string;
   description?: string;
+  natures: PipelineNatures;
   stages: StageBlueprint[];
   custom_fields: CustomFieldBlueprint[];
 }

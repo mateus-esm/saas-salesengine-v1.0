@@ -93,6 +93,10 @@ export interface Pipeline {
   card_field_ids: string[];        // which custom fields show on Kanban cards
   /** Sprint 6.9 R4.1: Revenue predictability config (goal_deals, period, conversion_overrides, hidden_scoreboard_metrics, etc.). */
   revenue_config: Record<string, unknown>;
+  /** Sprint 9: the reasons a deal can be lost for (LossReasonOption[]); chosen in the loss dialog. */
+  loss_reasons?: unknown[];
+  /** Sprint 11 · T35 — the line's natures (Oferta, Processo); read with lib/natures normalizeNatures. */
+  natures?: unknown;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
@@ -173,6 +177,9 @@ export interface CreatePipelineData {
   cadence_days?: number | null;
   custom_fields_schema?: CustomFieldSchema[];
   card_field_ids?: string[];
+  /** Sprint 11 · T36: templates can create a ready line without the Copilot service. */
+  natures?: import("./natures").PipelineNatures;
+  stages?: Omit<CreateStageV2Data, "pipeline_id">[];
 }
 
 export interface UpdatePipelineData {
@@ -194,6 +201,8 @@ export interface CreateStageV2Data {
   stage_type?: StageType;
   max_idle_hours?: number | null;
   max_interactions?: number | null;
+  funnel_event?: string | null;
+  description?: string;
 }
 
 export interface UpdateStageV2Data {

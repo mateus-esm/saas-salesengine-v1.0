@@ -26,13 +26,19 @@ interface PipelineRow {
   custom_fields_schema: CustomFieldSchema[] | null;
   card_field_ids: string[] | null;
   revenue_config: Record<string, unknown> | null;
+  loss_reasons?: unknown;
+  natures?: unknown;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
 
-const normalizePipeline = (row: PipelineRow): Pipeline => ({
+// Sprint 11 · T36 — every column the screens read must pass through here. The
+// first version listed fields one by one and dropped `loss_reasons`: the Kanban's
+// loss dialog and the stages editor always saw an empty list (0 of 504 lost deals
+// had a reason in 11/09, with 7 pipelines configured).
+export const normalizePipeline = (row: PipelineRow): Pipeline => ({
   id: row.id,
   equipe_id: row.equipe_id,
   name: row.name,
@@ -43,6 +49,8 @@ const normalizePipeline = (row: PipelineRow): Pipeline => ({
     : [],
   card_field_ids: Array.isArray(row.card_field_ids) ? row.card_field_ids : [],
   revenue_config: row.revenue_config ?? {},
+  loss_reasons: Array.isArray(row.loss_reasons) ? row.loss_reasons : [],
+  natures: row.natures && typeof row.natures === "object" ? row.natures : {},
   icp_weights: (row as any).icp_weights ?? [],
   is_archived: !!row.is_archived,
   created_at: row.created_at,
@@ -99,10 +107,34 @@ export const usePipelines = () => {
           cadence_days: input.cadence_days ?? null,
           custom_fields_schema: input.custom_fields_schema ?? [],
           card_field_ids: input.card_field_ids ?? [],
+          ...(input.natures ? { natures: input.natures } : {}),
         })
         .select()
         .single();
       if (error) throw error;
+
+      if (input.stages?.length) {
+        const { error: stagesError } = await sb.from("pipeline_stages_v2").insert(
+          input.stages.map((stage) => ({
+            equipe_id: equipeId,
+            pipeline_id: data.id,
+            name: stage.name,
+            color: stage.color ?? "#64748b",
+            position: stage.position,
+            stage_type: stage.stage_type ?? "open",
+            max_idle_hours: stage.max_idle_hours ?? null,
+            max_interactions: stage.max_interactions ?? null,
+            funnel_event: stage.funnel_event ?? null,
+            description: stage.description ?? null,
+          })),
+        );
+        if (stagesError) {
+          // The line did not finish being created. Hide the fresh, empty parent
+          // so a retry cannot leave an orphan in the user's pipeline list.
+          await sb.from(TABLE).update({ deleted_at: new Date().toISOString() }).eq("id", data.id);
+          throw stagesError;
+        }
+      }
       return normalizePipeline(data as PipelineRow);
     },
     onSuccess: () => {

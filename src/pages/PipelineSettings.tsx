@@ -14,7 +14,9 @@ import {
   StarOff,
   Tag,
   GitBranch,
+  Layers,
   Target,
+  WandSparkles,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -55,11 +57,13 @@ import { usePipelines } from "@/hooks/usePipelines";
 import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
 import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
 import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
+import { PipelineNaturesEditor } from "@/components/crm/pipeline-settings/PipelineNaturesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
 import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
 import { OriginTaxonomyEditor } from "@/components/crm/pipeline-settings/OriginTaxonomyEditor";
 import { ContactFieldsEditor } from "@/components/crm/pipeline-settings/ContactFieldsEditor";
 import { RevenueGoalsForm } from "@/components/crm/revenue/RevenueGoalsForm";
+import { PIPELINE_TEMPLATES, getPipelineTemplate } from "@/lib/pipelineTemplates";
 import type { CustomFieldSchema, Pipeline } from "@/types/pipelines";
 
 const PipelineSettings = () => {
@@ -83,6 +87,7 @@ const PipelineSettings = () => {
   const [creatingOpen, setCreatingOpen] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftDesc, setDraftDesc] = useState("");
+  const [draftTemplateId, setDraftTemplateId] = useState<string | null>(null);
 
   // Keep URL in sync when selection changes
   const setSelectedId = (id: string | null) => {
@@ -113,19 +118,35 @@ const PipelineSettings = () => {
 
   const handleCreate = async () => {
     if (!draftName.trim()) return;
+    const selectedTemplate = draftTemplateId ? getPipelineTemplate(draftTemplateId) : undefined;
     try {
       const created = await createPipeline.mutateAsync({
         name: draftName.trim(),
         description: draftDesc.trim() || undefined,
+        natures: selectedTemplate?.natures,
+        stages: selectedTemplate?.stages,
       });
       setSelectedId(created.id);
       setTab("active");
       setDraftName("");
       setDraftDesc("");
+      setDraftTemplateId(null);
       setCreatingOpen(false);
     } catch {
       // toast handled in hook
     }
+  };
+
+  const chooseTemplate = (id: string | null) => {
+    setDraftTemplateId(id);
+    const selectedTemplate = id ? getPipelineTemplate(id) : undefined;
+    setDraftName(selectedTemplate?.name ?? "");
+    setDraftDesc(selectedTemplate?.description ?? "");
+  };
+
+  const handleCreateOpenChange = (open: boolean) => {
+    setCreatingOpen(open);
+    if (!open) chooseTemplate(null);
   };
 
   return (
@@ -215,12 +236,59 @@ const PipelineSettings = () => {
       </div>
 
       {/* Create dialog */}
-      <Dialog open={creatingOpen} onOpenChange={setCreatingOpen}>
-        <DialogContent>
+      <Dialog open={creatingOpen} onOpenChange={handleCreateOpenChange}>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nova Pipeline</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Começar de um modelo</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => chooseTemplate(null)}
+                  className={`rounded-md border p-3 text-left transition-colors ${
+                    draftTemplateId === null ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Plus className="h-4 w-4" /> Em branco
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Configure cada etapa depois.</span>
+                </button>
+                {PIPELINE_TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => chooseTemplate(template.id)}
+                    className={`rounded-md border p-3 text-left transition-colors ${
+                      draftTemplateId === template.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/40"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      <WandSparkles className="h-4 w-4 text-primary" /> {template.name}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{template.audience}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {draftTemplateId && (() => {
+              const selectedTemplate = getPipelineTemplate(draftTemplateId);
+              if (!selectedTemplate) return null;
+              return (
+                <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs">
+                  <p className="font-medium">A linha nasce com {selectedTemplate.stages.length} etapas e os marcos do processo.</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Sugestões para o catálogo: {selectedTemplate.catalog_suggestions.map((item) => item.name).join(" · ")}.
+                    Você confirma produtos e preços na aba Catálogo.
+                  </p>
+                </div>
+              );
+            })()}
             <div>
               <Label>Nome *</Label>
               <Input
@@ -241,7 +309,7 @@ const PipelineSettings = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreatingOpen(false)}>
+            <Button variant="outline" onClick={() => handleCreateOpenChange(false)}>
               Cancelar
             </Button>
             <Button onClick={handleCreate} disabled={!draftName.trim() || createPipeline.isPending}>
@@ -285,6 +353,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   // All sections start collapsed — clean first impression
   const [identidadeOpen, setIdentidadeOpen] = useState(false);
   const [etapasOpen, setEtapasOpen] = useState(false);
+  const [naturezaOpen, setNaturezaOpen] = useState(false);
   const [metasOpen, setMetasOpen] = useState(false);
   const [automacoesOpen, setAutomacoesOpen] = useState(false);
   const [origemOpen, setOrigemOpen] = useState(false);
@@ -420,6 +489,33 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                   A descrição ajuda o copiloto a entender o contexto e classificar leads corretamente.
                 </p>
               </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── Natureza (Sprint 11 · T35): o que a linha vende e como vende ── */}
+      <Collapsible open={naturezaOpen} onOpenChange={setNaturezaOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Natureza</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!naturezaOpen && (
+                <CardDescription className="mt-1">
+                  O que a linha vende (valor livre ou catálogo) e como vende (marcos ou compra direta).
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <PipelineNaturesEditor pipeline={pipeline} />
             </CardContent>
           </CollapsibleContent>
         </Card>

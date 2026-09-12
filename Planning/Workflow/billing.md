@@ -297,3 +297,15 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W2B | T25 fechamento: placar (lib/scoreboard) | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-11 | 11 W2B | T26 fechamento: tabelas em lista, modais em tela cheia, cabecalhos | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-11 | 11 W2B | T27 verificacao, handoff da Onda 2, PR | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-11 | 11 W3 | Plano da Onda 3 (receita e linha configurada) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3A | T28 A etapa decide o desfecho | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-09-11 | 11 W3A | T29 Catalogo | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3A | T30 Itens do negocio | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3A | T31 Ganho -> receita (livro-razao) | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-09-11 | 11 W3A | T32 Situacao e ciclo de vida do contato pela receita | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-11 | 11 W3A | T33 Metricas pela receita | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3A | T34 Agendador: reciclo e recorrencia | Claude / Opus 5 (PM) | XL | R$ 28 |
+| 2026-09-11 | 11 W3B | T35 Naturezas Oferta e Processo + marcos | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-11 | 11 W3B | T36 Modelos de linha | Codex / GPT-5 | M | R$ 12 |
+| 2026-09-11 | 11 W3B | T37 Track Shaper preenche naturezas e marcos | Codex / GPT-5 | M | R$ 12 |
+| 2026-09-12 | 11 W3 | T38 Verificacao, deploy e handoff | Codex / GPT-5 | S | R$ 5 |

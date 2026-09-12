@@ -53,6 +53,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { StagePicker } from "./mobile/StagePicker";
 import { MoveToStageSheet } from "./mobile/MoveToStageSheet";
 import { pickInitialStage } from "@/lib/mobileBoard";
+import { statusForStage } from "@/lib/outcome";
 
 interface OpportunityKanbanProps {
   pipelineId: string;
@@ -222,7 +223,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     if (targetStageId === card.stage_id) return;
 
     moveCard.mutate(
-      { card, toStageId: targetStageId },
+      { card, toStageId: targetStageId, toStatus: statusForStage(orderedStages, targetStageId, card.status) },
       {
         onSuccess: () => {
           const target = orderedStages.find((s) => s.id === targetStageId);
@@ -237,7 +238,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const handleMobileMove = (card: BoardCard, targetStageId: string) => {
     if (targetStageId === card.stage_id) return;
     moveCard.mutate(
-      { card, toStageId: targetStageId },
+      { card, toStageId: targetStageId, toStatus: statusForStage(orderedStages, targetStageId, card.status) },
       {
         onSuccess: () => {
           const target = orderedStages.find((s) => s.id === targetStageId);

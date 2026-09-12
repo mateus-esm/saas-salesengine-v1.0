@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useTrackShaper } from "@/hooks/useTrackShaper";
+import { MILESTONES, normalizeNatures } from "@/lib/natures";
 
 // ── Stage type colour hints ───────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export function TrackShaperDialog({
     applyBlueprint,
     reset,
   } = useTrackShaper();
+  const natures = blueprint ? normalizeNatures(blueprint.natures) : null;
 
   const handleClose = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -144,6 +146,22 @@ export function TrackShaperDialog({
               )}
             </div>
 
+            {natures && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                <Badge variant="outline" className="border-zinc-700 text-zinc-300">
+                  Oferta: {natures.offer.mode === "catalog" ? "catálogo" : "valor livre"}
+                </Badge>
+                <Badge variant="outline" className="border-zinc-700 text-zinc-300">
+                  Processo: {natures.process.mode === "direct" ? "compra direta" : "com marcos"}
+                </Badge>
+                {natures.process.milestones.map((milestone) => (
+                  <span key={milestone} className="text-[10px] text-violet-300">
+                    {MILESTONES.find((item) => item.key === milestone)?.label ?? milestone}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Stages */}
             <div className="space-y-2">
               <p className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center gap-1.5">
@@ -176,6 +194,11 @@ export function TrackShaperDialog({
                       {stage.max_idle_hours != null && (
                         <span className="text-[9px] text-zinc-500">
                           SLA {stage.max_idle_hours}h
+                        </span>
+                      )}
+                      {stage.funnel_event && (
+                        <span className="text-[9px] text-violet-300">
+                          {MILESTONES.find((item) => item.key === stage.funnel_event)?.label ?? stage.funnel_event}
                         </span>
                       )}
                     </div>
