@@ -58,6 +58,7 @@ import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
 import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { stageForStatus, statusForStage } from "@/lib/outcome";
+import { normalizeNatures } from "@/lib/natures";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
 import { DealItemsSection } from "./deal/DealItemsSection";
@@ -145,6 +146,12 @@ export const OpportunityDetailModal = ({
     () => (pipeline?.custom_fields_schema ?? []).filter((f) => !f.is_deleted),
     [pipeline],
   );
+
+  // Sprint 11 · T35 — a line that sells from the catalog offers its own items.
+  const offerItemIds = useMemo(() => {
+    const offer = normalizeNatures(pipeline?.natures).offer;
+    return offer.mode === "catalog" && offer.catalog_item_ids.length > 0 ? offer.catalog_item_ids : null;
+  }, [pipeline?.natures]);
 
   // Sprint 5.1 §5.2 — paddle-shifter navigation across the parent's ordered list.
   const { prevId, nextId, canPrev, canNext, indexLabel } = useSiblingNavigation(
@@ -353,6 +360,7 @@ export const OpportunityDetailModal = ({
                     open={open}
                     onValueChange={(v) => setValue(v !== null && v !== undefined ? String(v) : "")}
                     onHasItemsChange={setHasItems}
+                    offerItemIds={offerItemIds}
                   />
 
                   {/* Sprint 11 · T31 — what the win put in the books. */}

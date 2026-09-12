@@ -34,6 +34,8 @@ interface DealItemsSectionProps {
   onValueChange?: (value: number | null) => void;
   /** Tells the modal whether the value is the sum (read-only) or free. */
   onHasItemsChange?: (hasItems: boolean) => void;
+  /** Sprint 11 · T35 — the line's offer (catalog mode): only these items are offered; null = all. */
+  offerItemIds?: string[] | null;
 }
 
 /**
@@ -41,7 +43,7 @@ interface DealItemsSectionProps {
  * (fixed price stays fixed) or free lines; each change saves the whole list at
  * once and the deal value becomes the sum. With no lines the value stays free.
  */
-export function DealItemsSection({ opportunityId, open, onValueChange, onHasItemsChange }: DealItemsSectionProps) {
+export function DealItemsSection({ opportunityId, open, onValueChange, onHasItemsChange, offerItemIds }: DealItemsSectionProps) {
   const { items, isLoading, save } = useOpportunityItems(opportunityId, open);
   const { items: catalog } = useCatalog();
   const [lines, setLines] = useState<DealLine[]>([]);
@@ -50,7 +52,7 @@ export function DealItemsSection({ opportunityId, open, onValueChange, onHasItem
     () => new Map(items.map((i) => [i.id, recurrenceLabel(i.recurrence_every, i.recurrence_unit)])),
     [items],
   );
-  const offerable = catalog.filter((c) => c.active);
+  const offerable = catalog.filter((c) => c.active && (!offerItemIds || offerItemIds.includes(c.id)));
 
   useEffect(() => {
     setLines(items.map(toLine));

@@ -14,6 +14,7 @@ import {
   StarOff,
   Tag,
   GitBranch,
+  Layers,
   Target,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ import { usePipelines } from "@/hooks/usePipelines";
 import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
 import { PipelineList } from "@/components/crm/pipeline-settings/PipelineList";
 import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
+import { PipelineNaturesEditor } from "@/components/crm/pipeline-settings/PipelineNaturesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
 import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
 import { OriginTaxonomyEditor } from "@/components/crm/pipeline-settings/OriginTaxonomyEditor";
@@ -285,6 +287,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   // All sections start collapsed — clean first impression
   const [identidadeOpen, setIdentidadeOpen] = useState(false);
   const [etapasOpen, setEtapasOpen] = useState(false);
+  const [naturezaOpen, setNaturezaOpen] = useState(false);
   const [metasOpen, setMetasOpen] = useState(false);
   const [automacoesOpen, setAutomacoesOpen] = useState(false);
   const [origemOpen, setOrigemOpen] = useState(false);
@@ -420,6 +423,33 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
                   A descrição ajuda o copiloto a entender o contexto e classificar leads corretamente.
                 </p>
               </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── Natureza (Sprint 11 · T35): o que a linha vende e como vende ── */}
+      <Collapsible open={naturezaOpen} onOpenChange={setNaturezaOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Natureza</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!naturezaOpen && (
+                <CardDescription className="mt-1">
+                  O que a linha vende (valor livre ou catálogo) e como vende (marcos ou compra direta).
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <PipelineNaturesEditor pipeline={pipeline} />
             </CardContent>
           </CollapsibleContent>
         </Card>

@@ -93,6 +93,8 @@ export interface Pipeline {
   card_field_ids: string[];        // which custom fields show on Kanban cards
   /** Sprint 6.9 R4.1: Revenue predictability config (goal_deals, period, conversion_overrides, hidden_scoreboard_metrics, etc.). */
   revenue_config: Record<string, unknown>;
+  /** Sprint 11 · T35 — the line's natures (Oferta, Processo); read with lib/natures normalizeNatures. */
+  natures?: unknown;
   is_archived: boolean;
   created_at: string;
   updated_at: string;

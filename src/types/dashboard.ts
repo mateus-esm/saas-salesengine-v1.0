@@ -122,8 +122,12 @@ export const FUNNEL_EVENT_LABELS: Record<string, string> = {
   meeting_scheduled: "Reunião agendada",
   meeting_done: "Reunião realizada",
   no_show: "No-show",
+  contract_sent: "Contrato enviado",
+  contract_signed: "Contrato assinado",
   won: "Ganho",
   lost: "Perdido",
+  reopened: "Reaberto",
+  recycled: "Reciclado",
 };
 
 export const MAPPABLE_FUNNEL_EVENTS = [
@@ -132,6 +136,8 @@ export const MAPPABLE_FUNNEL_EVENTS = [
   "meeting_scheduled",
   "meeting_done",
   "no_show",
+  "contract_sent",
+  "contract_signed",
 ] as const;
 
 export const BREAKDOWN_LABELS: Record<BreakdownDimension, string> = {

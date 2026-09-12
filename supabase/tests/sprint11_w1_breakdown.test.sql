@@ -21,6 +21,7 @@ begin;
 -- @include supabase/migrations/20260912000500_sprint11_w3_contact_situation.sql
 -- @include supabase/migrations/20260912000600_sprint11_w3_revenue_metrics.sql
 -- @include supabase/migrations/20260912000700_sprint11_w3_timers.sql
+-- @include supabase/migrations/20260912000800_sprint11_w3_natures.sql
 
 insert into public.equipes (id, nome, crm_link, suporte_link) values
   ('5118a000-0000-0000-0000-000000000001', 'S11 Quebra', 'x', 'y');

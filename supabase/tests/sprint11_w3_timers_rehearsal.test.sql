@@ -16,6 +16,7 @@ begin;
 -- @include supabase/migrations/20260912000500_sprint11_w3_contact_situation.sql
 -- @include supabase/migrations/20260912000600_sprint11_w3_revenue_metrics.sql
 -- @include supabase/migrations/20260912000700_sprint11_w3_timers.sql
+-- @include supabase/migrations/20260912000800_sprint11_w3_natures.sql
 -- @include supabase/scripts/2026-09-12_sprint11_repair_status_from_stage.sql
 -- @include supabase/scripts/2026-09-12_sprint11_backfill_revenue.sql
 -- @include supabase/scripts/2026-09-12_sprint11_backfill_lifecycle.sql
