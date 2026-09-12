@@ -232,7 +232,8 @@ export const ContactDetailsModal = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden">
+      {/* Sprint 11 · T26 — full screen on a phone. */}
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col overflow-hidden max-md:left-0 max-md:top-0 max-md:translate-x-0 max-md:translate-y-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:w-full max-md:max-w-none max-md:rounded-none max-md:border-0">
         <DialogHeader className="p-6 pb-0 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             Detalhes do Contato

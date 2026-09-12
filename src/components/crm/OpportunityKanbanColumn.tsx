@@ -29,6 +29,8 @@ interface OpportunityKanbanColumnProps {
   onToggleCollapse?: () => void;
   /** Touch screens: each card offers "Mover para…" (dragging is off). */
   onMoveCard?: (card: BoardCard) => void;
+  /** The phone's one-stage view: the column takes the screen's width. */
+  fill?: boolean;
 }
 
 const formatCompactBRL = (v: number) =>
@@ -60,6 +62,7 @@ export const OpportunityKanbanColumn = ({
   isCollapsed,
   onToggleCollapse,
   onMoveCard,
+  fill,
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -117,16 +120,17 @@ export const OpportunityKanbanColumn = ({
   return (
     <div
       className={cn(
-        "flex flex-col min-w-[300px] max-w-[300px] rounded-lg bg-card border border-border transition-all duration-200",
+        "flex flex-col rounded-lg bg-card border border-border transition-all duration-200",
+        fill ? "w-full min-w-0" : "min-w-[300px] max-w-[300px]",
         isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background",
         dimmed && "opacity-80",
       )}
     >
       <div
-        className="p-3 border-b border-border rounded-t-lg group cursor-pointer"
+        className={cn("p-3 border-b border-border rounded-t-lg group", onToggleCollapse && "cursor-pointer")}
         style={{ borderTopColor: stage.color, borderTopWidth: "3px" }}
         onClick={onToggleCollapse}
-        title="Clique para recolher esta coluna"
+        title={onToggleCollapse ? "Clique para recolher esta coluna" : undefined}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
@@ -177,7 +181,7 @@ export const OpportunityKanbanColumn = ({
               </div>
             ) : cards.length === 0 ? (
               <div className="flex items-center justify-center h-24 text-xs text-muted-foreground border-2 border-dashed border-muted rounded-md">
-                Arraste leads aqui
+                {onMoveCard ? "Nenhum negócio nesta etapa" : "Arraste leads aqui"}
               </div>
             ) : (
               cards.map((card) => (

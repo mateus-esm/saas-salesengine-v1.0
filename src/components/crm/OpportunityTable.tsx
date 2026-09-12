@@ -51,11 +51,13 @@ import { formatDisplayName } from "@/lib/displayName";
 import { columnFromField } from "@/lib/fields/columns";
 import { getFieldType } from "@/lib/fields/registry";
 import { flattenPages } from "@/lib/tablePages";
+import { formatBRL } from "@/lib/scoreboard";
 import type { CrmSort } from "@/types/crmFilters";
 import type { OppTableRow } from "@/types/crmTables";
 import type { CustomFieldSchema, Opportunity, OpportunityStatus } from "@/types/pipelines";
 
 import { ContactDetailsModal } from "./ContactDetailsModal";
+import { UserAvatar } from "./fields/UserAvatar";
 import { UserPicker } from "./fields/UserPicker";
 import { DealFilterBar } from "./filters/DealFilterBar";
 import { countDealFilters } from "./filters/model";
@@ -261,6 +263,36 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
 
   const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
+  // Sprint 11 · T26 — on a phone each deal is a line: name; stage · value ·
+  // next contact; the owner. A tap opens the deal.
+  const renderMobileRow = useCallback(
+    (row: GridRow) => {
+      const stage = stagesById.get(row.stage_id as string);
+      const value = row.value as number | null;
+      const next = row.next_contact as string | null;
+      const ownerId = (row.owner_id as string | null) ?? null;
+      return (
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{row.lead_name as string}</p>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+              {stage && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
+                  {stage.name}
+                </span>
+              )}
+              {value !== null && value !== undefined && <span>· {formatBRL(value)}</span>}
+              {next && <span>· Próx. {next.slice(8, 10)}/{next.slice(5, 7)}</span>}
+            </p>
+          </div>
+          <UserAvatar userId={ownerId} name={ownerId ? nameOf(ownerId) : null} size="sm" />
+        </div>
+      );
+    },
+    [stagesById, nameOf],
+  );
+
   // ---- Sort -----------------------------------------------------------------
   const gridSort = toGridSort(sort);
   const handleSort = useCallback(
@@ -427,6 +459,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             allowColumnResize
             allowColumnHide
             showLeadScore
+            renderMobileRow={renderMobileRow}
+            mobileEmptyLabel="Nenhum negócio com esses filtros."
             onRowOpen={(id) => {
               const r = rowById.get(id);
               if (r) setSelectedOpp(r);

@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileRowList } from "./MobileRowList";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Plus, Columns2, GripVertical } from "lucide-react";
@@ -55,6 +57,13 @@ export interface SpreadsheetGridProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onEndReached?: () => void;
+  /**
+   * Sprint 11 · T26 — below 768 px the grid becomes a list and each row is
+   * drawn by this (the screen knows which facts matter). Omit to keep the grid.
+   */
+  renderMobileRow?: (row: GridRow) => ReactNode;
+  /** Shown by the mobile list when there are no rows. */
+  mobileEmptyLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +142,7 @@ function LeadScoreHeader({
 // Component
 // ---------------------------------------------------------------------------
 
-export function SpreadsheetGrid({
+function DesktopGrid({
   rows,
   columns,
   onCellCommit,
@@ -637,4 +646,27 @@ export function SpreadsheetGrid({
       />
     </div>
   );
+}
+
+/**
+ * The spreadsheet on a desktop; on a phone, when the screen gives a row
+ * renderer, a list (MobileRowList) — same rows, same paging, a tap opens.
+ */
+export function SpreadsheetGrid(props: SpreadsheetGridProps) {
+  const isMobile = useIsMobile();
+  if (isMobile && props.renderMobileRow) {
+    return (
+      <MobileRowList
+        rows={props.rows}
+        renderRow={props.renderMobileRow}
+        onRowOpen={props.onRowOpen}
+        loading={props.loading}
+        hasMore={props.hasMore}
+        loadingMore={props.loadingMore}
+        onEndReached={props.onEndReached}
+        emptyLabel={props.mobileEmptyLabel}
+      />
+    );
+  }
+  return <DesktopGrid {...props} />;
 }

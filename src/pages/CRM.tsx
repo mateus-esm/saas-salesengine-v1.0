@@ -92,8 +92,8 @@ const CRM = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-border bg-card px-4 py-2">
-        <Breadcrumb className="mb-2">
+      <div className="border-b border-border bg-card px-2 sm:px-4 py-2">
+        <Breadcrumb className="mb-2 hidden sm:block">
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbPage className="text-sm font-medium">CRM</BreadcrumbPage>
