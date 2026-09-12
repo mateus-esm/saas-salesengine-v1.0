@@ -22,6 +22,7 @@ from app.routers.shape import router
 from app.schemas import (
     CustomFieldBlueprint,
     PipelineBlueprint,
+    PipelineNatures,
     StageBlueprint,
 )
 from app.security import TenantContext
@@ -52,9 +53,15 @@ def _make_blueprint() -> PipelineBlueprint:
     return PipelineBlueprint(
         pipeline_name="Pipeline de Teste",
         description="Um pipeline de teste para o shape router",
+        natures=PipelineNatures.model_validate(
+            {
+                "offer": {"mode": "free", "catalog_item_ids": []},
+                "process": {"mode": "milestones", "milestones": ["qualified"]},
+            }
+        ),
         stages=[
             StageBlueprint(name="Prospeccao", position=0),
-            StageBlueprint(name="Qualificacao", position=1),
+            StageBlueprint(name="Qualificacao", position=1, funnel_event="qualified"),
             StageBlueprint(name="Fechamento", position=2, stage_type="won"),
         ],
         custom_fields=[
@@ -226,6 +233,8 @@ def test_apply_passes_full_blueprint_payload_to_rpc() -> None:
     rpc_params = mock_client.rpc.call_args.args[1]
     assert rpc_params["p_payload"]["pipeline_name"] == blueprint.pipeline_name
     assert len(rpc_params["p_payload"]["stages"]) == len(blueprint.stages)
+    assert rpc_params["p_payload"]["natures"]["process"]["milestones"] == ["qualified"]
+    assert rpc_params["p_payload"]["stages"][1]["funnel_event"] == "qualified"
 
 
 # ---------------------------------------------------------------------------

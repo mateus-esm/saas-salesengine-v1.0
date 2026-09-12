@@ -19,7 +19,52 @@ CustomFieldType = Literal[
     "property_ref",
     "company_ref",
     "contact_ref",
+    "user",
 ]
+
+Milestone = Literal[
+    "qualified",
+    "meeting_scheduled",
+    "meeting_done",
+    "proposal_sent",
+    "contract_sent",
+    "contract_signed",
+]
+
+_MILESTONE_ORDER: dict[str, int] = {
+    "qualified": 0,
+    "meeting_scheduled": 1,
+    "meeting_done": 2,
+    "proposal_sent": 3,
+    "contract_sent": 4,
+    "contract_signed": 5,
+}
+
+
+class OfferNature(BaseModel):
+    mode: Literal["free", "catalog"] = "free"
+    catalog_item_ids: list[str] = Field(default_factory=list)
+
+
+class ProcessNature(BaseModel):
+    mode: Literal["milestones", "direct"] = "milestones"
+    milestones: list[Milestone] = Field(default_factory=list)
+
+    @field_validator("milestones")
+    @classmethod
+    def canonical_milestone_order(cls, values: list[Milestone]) -> list[Milestone]:
+        return sorted(set(values), key=lambda value: _MILESTONE_ORDER[value])
+
+    @model_validator(mode="after")
+    def direct_has_no_milestones(self) -> "ProcessNature":
+        if self.mode == "direct" and self.milestones:
+            raise ValueError("direct process cannot declare milestones")
+        return self
+
+
+class PipelineNatures(BaseModel):
+    offer: OfferNature = Field(default_factory=OfferNature)
+    process: ProcessNature = Field(default_factory=ProcessNature)
 
 
 class CustomFieldBlueprint(BaseModel):
@@ -48,17 +93,21 @@ class StageBlueprint(BaseModel):
     max_idle_hours: int | None = Field(None, gt=0)
     cadence_value: int | None = Field(None, gt=0)
     cadence_unit: Literal["hours", "days"] | None = None
+    funnel_event: Milestone | None = None
 
     @model_validator(mode="after")
     def cadence_pair(self) -> "StageBlueprint":
         if (self.cadence_value is None) != (self.cadence_unit is None):
             raise ValueError("cadence_value and cadence_unit must be set together")
+        if self.stage_type != "open" and self.funnel_event is not None:
+            raise ValueError("only open stages can declare a funnel_event")
         return self
 
 
 class PipelineBlueprint(BaseModel):
     pipeline_name: str
     description: str | None = None
+    natures: PipelineNatures = Field(default_factory=PipelineNatures)
     stages: list[StageBlueprint] = Field(..., min_length=1)
     custom_fields: list[CustomFieldBlueprint] = Field(default_factory=list)
 
@@ -68,6 +117,22 @@ class PipelineBlueprint(BaseModel):
             raise ValueError("stage positions must be contiguous from 0")
         if sorted(field.position for field in self.custom_fields) != list(range(len(self.custom_fields))):
             raise ValueError("custom field positions must be contiguous from 0")
+
+        stage_events = [
+            stage.funnel_event
+            for stage in sorted(self.stages, key=lambda stage: stage.position)
+            if stage.funnel_event is not None
+        ]
+        if len(stage_events) != len(set(stage_events)):
+            raise ValueError("stage funnel_event values must be unique")
+
+        expected_events = (
+            self.natures.process.milestones
+            if self.natures.process.mode == "milestones"
+            else []
+        )
+        if stage_events != expected_events:
+            raise ValueError("nature milestones must match stage funnel_event values")
         return self
 
 

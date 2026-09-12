@@ -13,6 +13,7 @@ from app.cascade.track_shaper import shape_track
 from app.schemas import (
     CustomFieldBlueprint,
     PipelineBlueprint,
+    PipelineNatures,
     StageBlueprint,
 )
 
@@ -200,6 +201,68 @@ async def test_locale_parameter_accepted() -> None:
         result = await shape_track(prompt="test process", locale="en-US", model_id="gpt-4o")
 
     assert isinstance(result, PipelineBlueprint)
+
+
+def test_blueprint_preserves_natures_and_stage_milestones() -> None:
+    blueprint = PipelineBlueprint(
+        pipeline_name="Venda Solar",
+        natures=PipelineNatures.model_validate(
+            {
+                "offer": {"mode": "catalog", "catalog_item_ids": []},
+                "process": {
+                    "mode": "milestones",
+                    "milestones": ["qualified", "proposal_sent", "contract_signed"],
+                },
+            }
+        ),
+        stages=[
+            StageBlueprint(name="Novo", position=0),
+            StageBlueprint(name="Qualificado", position=1, funnel_event="qualified"),
+            StageBlueprint(name="Proposta", position=2, funnel_event="proposal_sent"),
+            StageBlueprint(name="Contrato", position=3, funnel_event="contract_signed"),
+            StageBlueprint(name="Ganho", position=4, stage_type="won"),
+            StageBlueprint(name="Perdido", position=5, stage_type="lost"),
+        ],
+    )
+
+    payload = blueprint.model_dump()
+    assert payload["natures"]["offer"]["mode"] == "catalog"
+    assert payload["stages"][2]["funnel_event"] == "proposal_sent"
+
+
+def test_blueprint_rejects_nature_milestone_without_a_stage() -> None:
+    with pytest.raises(ValidationError, match="milestones must match stage funnel_event"):
+        PipelineBlueprint.model_validate(
+            {
+                "pipeline_name": "Broken",
+                "natures": {
+                    "offer": {"mode": "free", "catalog_item_ids": []},
+                    "process": {"mode": "milestones", "milestones": ["qualified"]},
+                },
+                "stages": [
+                    {"name": "Novo", "position": 0},
+                    {"name": "Ganho", "position": 1, "stage_type": "won"},
+                ],
+            }
+        )
+
+
+def test_blueprint_rejects_duplicate_stage_milestones() -> None:
+    with pytest.raises(ValidationError, match="stage funnel_event values must be unique"):
+        PipelineBlueprint.model_validate(
+            {
+                "pipeline_name": "Broken",
+                "natures": {
+                    "offer": {"mode": "free", "catalog_item_ids": []},
+                    "process": {"mode": "milestones", "milestones": ["qualified"]},
+                },
+                "stages": [
+                    {"name": "Qualificado A", "position": 0, "funnel_event": "qualified"},
+                    {"name": "Qualificado B", "position": 1, "funnel_event": "qualified"},
+                    {"name": "Ganho", "position": 2, "stage_type": "won"},
+                ],
+            }
+        )
 
 
 # ---------------------------------------------------------------------------

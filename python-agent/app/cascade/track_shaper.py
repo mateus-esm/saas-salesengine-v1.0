@@ -17,32 +17,45 @@ REGRAS OBRIGATÓRIAS — nunca as viole:
 3. A última etapa bem-sucedida deve ter `stage_type: "won"`.
    Se o processo menciona rejeição ou perda, adicione uma etapa `stage_type: "lost"`.
    Todas as outras etapas têm `stage_type: "open"`.
-4. Extraia pelo menos 2 campos customizados (custom_fields) dos dados mencionados no
+4. Defina `natures.offer`: use `catalog` quando o negócio vende produtos/serviços
+   identificáveis; use `free` quando há apenas um valor livre.
+5. Defina `natures.process`: use `direct` apenas para compra imediata. Nos demais casos,
+   use `milestones` e liste somente estes marcos canônicos, na ordem do funil:
+   `qualified`, `meeting_scheduled`, `meeting_done`, `proposal_sent`,
+   `contract_sent`, `contract_signed`.
+6. Cada marco de `natures.process.milestones` deve aparecer em EXATAMENTE uma etapa
+   aberta como `funnel_event`. Etapas de ganho/perda usam `funnel_event: null`.
+7. Extraia pelo menos 2 campos customizados (custom_fields) dos dados mencionados no
    processo (ex: número de quartos, valor, metragem, CNPJ, capacidade, etc.).
-5. O `key` de cada campo customizado DEVE ser snake_case: apenas letras minúsculas,
+8. O `key` de cada campo customizado DEVE ser snake_case: apenas letras minúsculas,
    números e underscore, começando com letra (ex: `numero_quartos`, `valor_contrato`).
-6. O `position` dos campos customizados deve ser contínuo a partir de 0.
-7. Quando o processo mencionar prazo (ex: "24 horas", "2 dias"), defina `max_idle_hours`
+9. O `position` dos campos customizados deve ser contínuo a partir de 0.
+10. Quando o processo mencionar prazo (ex: "24 horas", "2 dias"), defina `max_idle_hours`
    na etapa correspondente com o valor em horas.
-8. Quando houver cadência/follow-up mencionada, defina `cadence_value` e `cadence_unit`
+11. Quando houver cadência/follow-up mencionada, defina `cadence_value` e `cadence_unit`
    (`"hours"` ou `"days"`) em par — nunca apenas um deles.
-9. Use `"number"` para quantidades inteiras, `"currency"` para valores monetários,
+12. Use `"number"` para quantidades inteiras, `"currency"` para valores monetários,
    `"date"` para datas, `"boolean"` para sim/não, `"text"` para texto livre,
    `"phone"` para telefone, `"select"` quando houver opções predefinidas.
-10. Para campos `select` ou `multi_select`, preencha `options` com as opções possíveis.
-11. Responda APENAS com o JSON do blueprint — sem texto adicional, sem markdown.
-12. O JSON deve ser diretamente deserializável no schema PipelineBlueprint.
+13. Para campos `select` ou `multi_select`, preencha `options` com as opções possíveis.
+14. Responda APENAS com o JSON do blueprint — sem texto adicional, sem markdown.
+15. O JSON deve ser diretamente deserializável no schema PipelineBlueprint.
 
 SCHEMA DE SAÍDA:
 {
   "pipeline_name": "string",
   "description": "string | null",
+  "natures": {
+    "offer": {"mode": "free|catalog", "catalog_item_ids": []},
+    "process": {"mode": "milestones|direct", "milestones": ["qualified", "..."]}
+  },
   "stages": [
     {
       "name": "string",
       "position": 0,
       "stage_type": "open" | "won" | "lost",
       "color": "#hex",
+      "funnel_event": "qualified|meeting_scheduled|meeting_done|proposal_sent|contract_sent|contract_signed|null",
       "max_idle_hours": int | null,
       "cadence_value": int | null,
       "cadence_unit": "hours" | "days" | null

@@ -89,7 +89,9 @@ async def apply(
         "shape_pipeline",
         {
             "p_equipe_id": ctx.equipe_id,
-            "p_payload": blueprint.model_dump(),
+            # JSON mode keeps this payload identical to the public HTTP contract;
+            # shape_pipeline persists natures and each stage's funnel_event.
+            "p_payload": blueprint.model_dump(mode="json"),
         },
     ).execute()
 
