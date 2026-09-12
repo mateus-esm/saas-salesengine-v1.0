@@ -319,3 +319,14 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W4B | T45 Formulario publico por registro | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W4B | T46 Semente da Solo Energia: Propostas Comerciais e Contratos | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W4 | T47 Verificacao, deploy e handoff | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-12 | 11 W5 | Plano da Onda 5 (entradas e atribuicao) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W5A | T48 Entradas, campanhas e toques (o modelo) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W5A | T49 Responsavel pela entrada (fixo, rodizio) | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5A | T50 Webhook de entrada carimba a origem | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W5A | T51 WhatsApp e agente: entrada e anuncio clique-para-WhatsApp | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T52 Telas de Campanhas e Entradas | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W5B | T53 Origem no negocio e no contato; cadastro manual com campanha | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T54 Filtros, quebras e relatorio de campanha (ROI) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-12 | 11 W5B | T55 Naturezas Duracao e Entradas | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T56 Legado: origem das bases antigas (script + ensaio) | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T57 Verificacao e handoff (deploy aguardando aprovacao) | Claude / Opus 5 (PM) | S | R$ 5 |

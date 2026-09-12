@@ -96,6 +96,8 @@ interface RoutingPayload {
 export interface CreateContactAtomicInput {
   contact: ContactPayload;
   routing?: RoutingPayload;
+  /** Sprint 11 · T53 — the campaign chosen in the form (the manual entry's touch). */
+  campaignId?: string | null;
 }
 
 export interface CreateContactAtomicResult {
@@ -112,7 +114,23 @@ export const useCreateContactAtomic = () => {
     mutationFn: async (input: CreateContactAtomicInput): Promise<CreateContactAtomicResult> => {
       if (!equipeId) throw new Error("No equipe_id");
 
-      const { contact, routing } = input;
+      const { contact, routing, campaignId } = input;
+
+      // Sprint 11 · T53 — a contact made by hand arrives through the team's
+      // "Manual" entry: the touch keeps the category and the campaign chosen here.
+      // It never fails the creation (the contact is already saved).
+      const recordManualTouch = async (leadId: string, opportunityId: string | null) => {
+        const { error } = await sb.rpc("crm_record_touch", {
+          p_lead_id: leadId,
+          p_entry_id: null,
+          p_payload: {
+            ...(contact.origin_category ? { _origin_category: contact.origin_category } : {}),
+            ...(campaignId ? { campaign_id: campaignId } : {}),
+          },
+          p_opportunity_id: opportunityId,
+        });
+        if (error) console.error("[crm] crm_record_touch:", error.message);
+      };
       const rollbackStamp = new Date().toISOString();
 
       const { data: lead, error: leadError } = await sb
@@ -142,6 +160,7 @@ export const useCreateContactAtomic = () => {
       const leadId = lead.id as string;
 
       if (!routing) {
+        await recordManualTouch(leadId, null);
         return { leadId, opportunityId: null };
       }
 
@@ -179,6 +198,7 @@ export const useCreateContactAtomic = () => {
 
         if (opportunityError) throw opportunityError;
 
+        await recordManualTouch(leadId, opportunity.id as string);
         return { leadId, opportunityId: opportunity.id as string };
       } catch (error) {
         await sb.from("leads").update({ deleted_at: rollbackStamp }).eq("id", leadId);

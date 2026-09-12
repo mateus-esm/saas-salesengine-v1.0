@@ -17,8 +17,13 @@ begin;
 -- @include supabase/migrations/20260912100500_sprint11_w4_artifact_actions.sql
 -- @include supabase/migrations/20260912100600_sprint11_w4_public_forms.sql
 
+-- Antes do deploy da Onda 4 as duas tabelas faltavam; depois dele já existem (a
+-- semente foi aplicada em 12/09). O ensaio vale nos dois momentos: cria só as que
+-- faltam, e nunca duplica.
 create temp table pg_temp.before_seed as
-  select count(*) as tables from public.custom_tables where equipe_id = '939d7dd8-592c-4fda-946e-3568f2909904';
+  select count(*) as tables,
+         2 - count(*) filter (where slug in ('propostas_comerciais', 'contratos') and deleted_at is null) as missing
+    from public.custom_tables where equipe_id = '939d7dd8-592c-4fda-946e-3568f2909904';
 
 -- @include supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql
 -- @include supabase/scripts/2026-09-12_sprint11_seed_solo_artifacts.sql
@@ -38,8 +43,8 @@ begin
   assert v_prop.artifact_kind = 'proposal' and v_cont.artifact_kind = 'contract',
     'SEED FAIL: as duas tabelas deveriam nascer como artefato';
   assert (select count(*) from public.custom_tables where equipe_id = '939d7dd8-592c-4fda-946e-3568f2909904')
-         = (select tables from pg_temp.before_seed) + 2,
-    'SEED FAIL: rodar duas vezes deveria criar so as duas tabelas';
+         = (select tables + missing from pg_temp.before_seed),
+    'SEED FAIL: rodar duas vezes deveria criar so as tabelas que faltam';
 
   -- field_id e key únicos; nenhuma coluna sem os dois.
   assert (select count(distinct c->>'field_id') = count(*) and count(distinct c->>'key') = count(*)

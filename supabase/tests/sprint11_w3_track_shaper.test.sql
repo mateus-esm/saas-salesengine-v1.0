@@ -7,6 +7,7 @@ begin;
 -- @include supabase/migrations/20260912000200_sprint11_w3_catalog.sql
 -- @include supabase/migrations/20260912000800_sprint11_w3_natures.sql
 -- @include supabase/migrations/20260912024524_sprint11_w3_track_shaper_natures.sql
+-- @include supabase/migrations/20260913000400_sprint11_w5_line_natures.sql
 
 insert into public.equipes (id, nome, crm_link, suporte_link) values
   ('537ea000-0000-0000-0000-000000000001', 'S11W3 Shaper', 'x', 'y');

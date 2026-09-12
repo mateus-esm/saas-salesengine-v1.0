@@ -822,6 +822,125 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 
 ---
 
+# Sprint 11 · Onda 5 — Handoff
+
+> **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
+> **Código fechado:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T48–T57
+> **Branches:** `claude/sprint11/w5a/entradas` (T48–T51) · `claude/sprint11/w5b/campanhas-e-roi` (T52–T57, sobre o 5A)
+> **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 333/333 (39 arquivos) · Deno 136/136 (31 arquivos) · 36/36 suítes SQL em rollback contra a produção (inclui o ensaio do legado)
+> **Deploy:** backend no ar desde 12/09, aprovado pelo founder (seção 4); frontend pelo PR desta branch
+
+## 1. O que esta onda entrega
+
+Entradas e atribuição: de onde o lead veio, quanto a campanha custou e quanto voltou.
+
+- **Toque (T48).** Cada chegada é um toque (`lead_touches`): entrada, categoria,
+  plataforma, campanha, UTMs, click IDs, anúncio, formulário, página, payload sem
+  segredo. O primeiro toque carimba o lead (`first_touch_id`, `entry_id`,
+  `campaign_id`, `origin_platform`) sem apagar a categoria escrita à mão. Plataforma
+  pelo click ID → `utm_source` → a entrada; categoria só com prova (**`fbclid` não
+  prova anúncio**); campanha pelo id → ID da plataforma → `utm_campaign` → nome → a
+  padrão da entrada. UTM desconhecida fica no toque e não cria campanha.
+- **Entradas (T48–T49).** Cada porta tem carimbo (categoria, plataforma, campanha
+  padrão) e regra de responsável: ninguém · fixo · rodízio (cursor atômico, pula quem
+  saiu da equipe). Todo webhook de entrada ganha a sua entrada sozinho.
+- **Portas vivas (T50–T51).** `crm-webhook` guarda corpo **e querystring** (antes jogada
+  fora) e marca `creation_source = 'webhook'` (ficava `manual`); `gpt-maker-webhook` e
+  `solo-wpp-webhook` gravam a chegada (contato novo ou negócio novo, nunca cada
+  mensagem, nunca o texto) e leem o anúncio clique-para-WhatsApp. O toque nunca derruba
+  a porta.
+- **Telas (T52–T53).** CRM › **Campanhas**: campanhas (metas, datas, chaves de UTM,
+  investimento), "UTMs sem campanha" com "Ligar a…" (reclassifica o que já chegou),
+  Entradas (carimbo e quem pega). Bloco **Origem** no negócio e no contato; o cadastro
+  manual escolhe a campanha.
+- **Métricas (T54).** Filtros de campanha, plataforma e entrada (Kanban, Tabela de
+  Leads, Base de Contatos, URL); quebras por campanha, plataforma e entrada no
+  dashboard; **relatório de campanha** — leads, negócios, ganhos, receita do
+  livro-razão, investimento, CPL, custo por ganho, taxa de ganho, ROAS, ROI — na aba
+  Resultados e no cartão "Retorno por campanha" da página Canais, com o escopo e os
+  filtros do dashboard.
+- **Linha (T55).** Natureza **Duração**: contínua ou campanha; depois do fim a linha
+  não recebe negócio novo (vai para a padrão) e o placar vira o da campanha. Natureza
+  **Entradas**: as portas cujo negócio novo nasce na linha; o número de WhatsApp e o
+  agente passam a ter linha própria.
+- **Legado (T56).** Script idempotente: um toque por lead antigo pelo mapa da decisão
+  38, ensaiado em rollback sobre os dados de verdade.
+
+## 2. Achados que não estavam no plano
+
+1. **`fbclid` não prova anúncio (T48).** O Facebook põe o parâmetro em todo link, orgânico
+   também; só `gclid`/`ctwa_clid`/meio pago provam.
+2. **Leads de webhook marcados como `manual` (T50).** O `crm-webhook` gravava
+   `creation_source = 'manual'`; agora `webhook`. O legado trata o rastro antigo.
+3. **A linha da entrada não fazia nada (T52 → T55).** A tela oferecia linha para o
+   número de WhatsApp e o agente, mas as edges criavam sempre na padrão. Agora vale, do
+   jeito conservador: quem tem negócio aberto em qualquer linha continua nele; só o
+   negócio novo vai para a linha da entrada; entrada sem linha = a padrão, igual a hoje.
+   Manual e importação escolhem a linha na hora (a entrada deixou de oferecer).
+4. **Linha encerrada: a regra mora onde o negócio nasce (T55, desvio do plano).** O plano
+   punha no `crm_record_touch`; mover o negócio depois do toque daria dois negócios
+   abertos a quem volta. `crm_intake_pipeline` decide antes de criar, e o resolvedor
+   reaproveita o negócio aberto na linha de destino.
+5. **Webhook apontando para linha apagada (T55).** Podia criar negócio numa linha
+   apagada (invisível). Agora vai para a padrão; linha de outra equipe também.
+6. **A planilha importada não era chegada (T57).** A importação da Base de Contatos criava
+   o lead sem toque; agora entra pela "Importação / API".
+7. **O ensaio da semente da Onda 4 supunha a produção de antes (T57).** A semente já está
+   no ar; o ensaio agora espera só as tabelas que faltam.
+8. **`updated_at` no legado (T56).** Carimbar 2.227 leads subiria todos para o topo de
+   "atualizado recentemente"; o gatilho é desligado só dentro da transação do script.
+9. **Spike registrado (T51):** sem instância da Solo API na produção e com o GPT Maker sem
+   dado de anúncio, o clique-para-WhatsApp está provado por formato, não por anúncio real.
+10. **`analyze-message`** usa o mesmo resolvedor de negócio; pega a regra da linha
+    encerrada no próximo deploy dele (hoje cria na padrão — sem risco).
+
+## 3. Limites da v1
+
+- Investimento só por lançamento manual; APIs da Meta/Google (investimento e conversões)
+  na sprint de integrações — a tabela já tem a fonte.
+- Atribuição de **primeiro toque**; as chegadas seguintes ficam no histórico, sem modelo
+  multitoque.
+- No relatório, o investimento é da campanha inteira: os filtros de linha e responsável
+  cortam negócios, ganhos e receita, não o investimento (escrito no cartão).
+- A importação de planilha ainda grava `creation_source = 'manual'` no lead (o toque diz
+  Importação).
+
+## 4. Deploy / estado da produção (12/09)
+
+Aprovado pelo founder e feito na ordem (as edges novas chamam funções das migrations;
+o frontend novo chama os verbos novos):
+
+0. **Cópia** da origem dos 2.227 leads (id, equipe, categoria, `updated_at`) num JSON
+   local do scratchpad — fora do git, fora do banco.
+1. **Migrations** `20260913000100` … `20260913000400` aplicadas, cada uma numa transação
+   com o seu registro no histórico. A `…000100` criou as entradas dos 7 webhooks de
+   entrada.
+2. **Conferência:** as 5 funções-chave existem; 0 webhook de entrada sem entrada.
+3. **Edge functions** `crm-webhook`, `solo-wpp-webhook` e `gpt-maker-webhook`
+   publicadas (`--no-verify-jwt --use-api`, como já estavam). Fumaça: as três sobem
+   (OPTIONS → 200).
+4. **Legado (T56)** aplicado numa transação: 2.227 toques — 1.282 pela importação, 862
+   pelo agente, 80 pelo próprio webhook, 3 pelo manual (igual ao ensaio). Conferido
+   contra a cópia: 0 lead sem toque, 0 categoria escrita trocada, 79 categorias vazias
+   preenchidas (leads de webhook com carimbo), 0 `updated_at` mudado; gatilho religado.
+5. **PR** `claude/sprint11/w5b/campanhas-e-roi` → `main` → Netlify.
+6. **Navegador:** Campanhas (criar, lançar investimento, ligar UTM), Origem no negócio,
+   Resultados, filtros, naturezas de uma linha-campanha.
+
+**Desfazer:** legado → apagar os toques com `raw->>'backfill' = 'sprint11_t56'` e limpar
+`first_touch_id`/`entry_id`/`origin_platform` desses leads (a categoria volta pela
+cópia do passo 0); edges → publicar de novo a versão do `main`.
+
+## 5. Fica para depois
+
+- Integrações Meta/Google (investimento e conversões automáticos).
+- Conferir o clique-para-WhatsApp com um anúncio de verdade (spike do achado 9).
+- Da Onda 4: ligar "Envio de Proposta" ao marco `proposal_sent`; verificação no navegador.
+- `creation_source` da importação de planilha; publicar o `analyze-message` quando for
+  conveniente.
+
+---
+
 # Sprint 11 · Onda 4 — Handoff
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`

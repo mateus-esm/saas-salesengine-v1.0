@@ -28,6 +28,9 @@ begin;
 -- @include supabase/migrations/20260912100400_sprint11_w4_artifact_lifecycle.sql
 -- @include supabase/migrations/20260912100500_sprint11_w4_artifact_actions.sql
 -- @include supabase/migrations/20260912100600_sprint11_w4_public_forms.sql
+-- @include supabase/migrations/20260913000100_sprint11_w5_attribution.sql
+-- @include supabase/migrations/20260913000200_sprint11_w5_campaigns.sql
+-- @include supabase/migrations/20260913000300_sprint11_w5_attribution_metrics.sql
 
 -- ---------------------------------------------------------------- fixtures --
 insert into public.equipes (id, nome, crm_link, suporte_link) values

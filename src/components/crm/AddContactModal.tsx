@@ -31,6 +31,7 @@ import { useLeadDuplicateCheck } from "@/hooks/useLeadDuplicateCheck";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { useCreateContactAtomic, type CreateContactAtomicResult } from "@/hooks/useCreateContactAtomic";
+import { useCampaigns } from "@/hooks/useCampaigns";
 import { toast } from "sonner";
 
 interface AddContactModalProps {
@@ -64,6 +65,10 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
 
   // Sprint 5.1 T4 — pipeline routing state
   const [routeToPipeline, setRouteToPipeline] = useState(false);
+  // Sprint 11 · T53 — the campaign this contact came from (optional).
+  const [campaignId, setCampaignId] = useState<string>("");
+  const { campaigns } = useCampaigns();
+  const openCampaigns = campaigns.filter((c) => c.status === "active" || c.status === "paused");
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [selectedStageId, setSelectedStageId] = useState<string>("");
 
@@ -88,6 +93,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
     setRouteToPipeline(false);
     setSelectedPipelineId("");
     setSelectedStageId("");
+    setCampaignId("");
   };
 
   const handleSubmit = () => {
@@ -112,6 +118,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
         routing: routeToPipeline
           ? { pipelineId: selectedPipelineId, stageId: selectedStageId || null }
           : undefined,
+        campaignId: campaignId || null,
       },
       {
         onSuccess: (result) => {
@@ -256,6 +263,25 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
               placeholder="Ex.: nome da campanha, evento, indicador..."
             />
           </div>
+
+          {openCampaigns.length > 0 && (
+            <div>
+              <Label htmlFor="add-campaign">Campanha</Label>
+              <Select value={campaignId || "__none__"} onValueChange={(v) => setCampaignId(v === "__none__" ? "" : v)}>
+                <SelectTrigger id="add-campaign" className="mt-1.5">
+                  <SelectValue placeholder="Nenhuma" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhuma</SelectItem>
+                  {openCampaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="add-observations">Observações</Label>

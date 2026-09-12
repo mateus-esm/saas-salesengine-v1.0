@@ -61,6 +61,10 @@ export interface CrmFilters {
   next_contact?: NextContactBucket;
   /** Declared fields of the pipeline; all of them must match. */
   custom?: CustomFieldFilter[];
+  /** Sprint 11 · T54 — the lead's first-touch campaign (ids); "none" = no campaign. */
+  campaign_ids?: string[];
+  /** Sprint 11 · T54 — the lead's first-touch platform; "none" = no platform. */
+  platforms?: string[];
 }
 
 export const EMPTY_CRM_FILTERS: CrmFilters = {};
@@ -84,6 +88,9 @@ export interface ContactFilters {
   pipeline_ids?: string[];
   /** Has a deal owned by one of these profiles; "none" = has a deal without owner. */
   deal_owner_ids?: string[];
+  /** Sprint 11 · T54 — first-touch campaign / platform, as in the deals. */
+  campaign_ids?: string[];
+  platforms?: string[];
 }
 
 export const EMPTY_CONTACT_FILTERS: ContactFilters = {};

@@ -28,6 +28,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useLeads } from "@/hooks/useLeads";
+import { recordImportTouch } from "@/hooks/useLeadAttribution";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -157,7 +158,10 @@ export const ImportModal = ({
           leadData.tags = row[columnMapping.tags].split(",").map((t: string) => t.trim()).filter(Boolean);
         }
 
-        await createLead.mutateAsync(leadData as import("@/types/crm").CreateLeadData);
+        const lead = await createLead.mutateAsync(leadData as import("@/types/crm").CreateLeadData);
+        // Sprint 11 · T57 — the imported row is an arrival through the team's
+        // "Importação / API" entry. Never fails the import.
+        if (lead?.id) await recordImportTouch(lead.id);
         success++;
       } catch (error) {
         errors++;

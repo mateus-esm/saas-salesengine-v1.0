@@ -12,6 +12,10 @@ vi.mock("@/hooks/useMemberDirectory", () => ({
   }),
 }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+// Sprint 11 · T54 — the bar offers the team's campaigns as a filter.
+vi.mock("@/hooks/useCampaigns", () => ({
+  useCampaigns: () => ({ campaigns: [{ id: "22222222-2222-4222-8222-222222222222", name: "Usina Verão", status: "active" }] }),
+}));
 
 import { DealFilterBar } from "../DealFilterBar";
 import { dealFilterChips, matchPreset, presetRange, removeDealChip } from "../model";
@@ -112,5 +116,24 @@ describe("DealFilterBar", () => {
     expect(screen.getByText("12 encontrados")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Limpar" }));
     expect(onChange).toHaveBeenCalledWith({});
+  });
+});
+
+describe("campaign and platform chips (Sprint 11 · T54)", () => {
+  const ctx = {
+    stages: [],
+    fields: [],
+    nameOf: () => null,
+    campaigns: [{ id: "22222222-2222-4222-8222-222222222222", name: "Usina Verão" }],
+  };
+
+  it("names the campaign and the platform, and removes each one alone", () => {
+    const f: CrmFilters = { campaign_ids: ["none", "22222222-2222-4222-8222-222222222222"], platforms: ["meta", "none"], tags: ["a"] };
+    expect(dealFilterChips(f, ctx).map((c) => c.label)).toEqual([
+      "Etiquetas: a",
+      "Campanha: Sem campanha, Usina Verão",
+      "Plataforma: Meta (Facebook/Instagram), Sem plataforma",
+    ]);
+    expect(removeDealChip(f, "campaign")).toEqual({ platforms: ["meta", "none"], tags: ["a"] });
   });
 });

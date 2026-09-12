@@ -1,17 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ORIGIN_CATEGORY_OPTIONS } from "@/config/originTaxonomy";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useCatalog } from "@/hooks/useCatalog";
+import { useDefaultPipeline } from "@/hooks/useDefaultPipeline";
+import { useEntries } from "@/hooks/useEntries";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
-import { MILESTONES, missingMilestones, normalizeNatures } from "@/lib/natures";
+import { platformLabel } from "@/lib/attribution";
+import { ENTRY_KIND_LABEL, ownerRuleLabel, type Entry } from "@/lib/campaigns";
+import {
+  MILESTONES,
+  durationError,
+  durationWindow,
+  entriesFeedingLine,
+  missingMilestones,
+  normalizeNatures,
+} from "@/lib/natures";
 import type { Milestone, PipelineNatures } from "@/types/natures";
 import type { Pipeline } from "@/types/pipelines";
 
@@ -21,6 +36,13 @@ interface PipelineNaturesEditorProps {
   pipeline: Pipeline;
 }
 
+const categoryLabel = (v: string | null) => (v ? ORIGIN_CATEGORY_OPTIONS.find((o) => o.value === v)?.label ?? v : null);
+
+/** An entry's stamp in one line: category · platform · default campaign. */
+const stampOf = (e: Entry) =>
+  [categoryLabel(e.origin_category), e.platform ? platformLabel(e.platform) : null, e.campaign_name].filter(Boolean).join(" · ") ||
+  "Sem carimbo";
+
 /**
  * Sprint 11 · Onda 3 · T35 — what the line sells and how it sells.
  *
@@ -29,6 +51,11 @@ interface PipelineNaturesEditorProps {
  * a consultative sale (each becomes a stage that declares it, so the dashboard
  * counts it from day one) or a one-touch purchase. Saved on its own, apart from
  * the page's "Salvar".
+ *
+ * Onda 5 · T55 — Duração: continuous, or a campaign with a start and an end
+ * (after the end, new deals go to the team's default line; the placar becomes
+ * the campaign's). Entradas: the doors whose new deals land here, with their
+ * stamp — edited where they live (webhooks; CRM › Campanhas › Entradas).
  */
 export function PipelineNaturesEditor({ pipeline }: PipelineNaturesEditorProps) {
   const queryClient = useQueryClient();
@@ -40,6 +67,11 @@ export function PipelineNaturesEditor({ pipeline }: PipelineNaturesEditorProps) 
   const [creating, setCreating] = useState(false);
   const { items: catalog } = useCatalog();
   const { stages } = usePipelineStagesV2(pipeline.id);
+  const { entries } = useEntries();
+  const { defaultPipelineId } = useDefaultPipeline();
+  const { nameOf } = useMemberDirectory();
+  const feeding = entriesFeedingLine(entries, pipeline.id, defaultPipelineId);
+  const isDefault = defaultPipelineId === pipeline.id;
 
   useEffect(() => setDraft(stored), [stored]);
 
@@ -49,6 +81,10 @@ export function PipelineNaturesEditor({ pipeline }: PipelineNaturesEditorProps) 
 
   const setOffer = (patch: Partial<PipelineNatures["offer"]>) => setDraft((d) => ({ ...d, offer: { ...d.offer, ...patch } }));
   const setProcess = (patch: Partial<PipelineNatures["process"]>) => setDraft((d) => ({ ...d, process: { ...d.process, ...patch } }));
+  const setDuration = (patch: Partial<PipelineNatures["duration"]>) => setDraft((d) => ({ ...d, duration: { ...d.duration, ...patch } }));
+  const durationErr = durationError(draft.duration);
+  const campaignWindow = durationWindow(draft.duration);
+  const closedNow = durationWindow(stored.duration)?.state === "ended";
 
   const toggleMilestone = (m: Milestone, on: boolean) =>
     setProcess({ milestones: on ? [...draft.process.milestones, m] : draft.process.milestones.filter((x) => x !== m) });
@@ -64,7 +100,12 @@ export function PipelineNaturesEditor({ pipeline }: PipelineNaturesEditorProps) 
       await queryClient.invalidateQueries({ queryKey: ["pipelines", equipeId] });
       toast.success("Natureza da linha salva");
     } catch (e) {
-      toast.error("Não foi possível salvar a natureza: " + (e instanceof Error ? e.message : String(e)));
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error(
+        message.includes("invalid_duration")
+          ? "A campanha precisa de início e fim, com o fim depois do início."
+          : "Não foi possível salvar a natureza: " + message,
+      );
     } finally {
       setSaving(false);
     }
@@ -86,6 +127,75 @@ export function PipelineNaturesEditor({ pipeline }: PipelineNaturesEditorProps) 
 
   return (
     <div className="space-y-6">
+      {/* ── Duração ── */}
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Duração — até quando a linha recebe</h3>
+          <p className="text-xs text-muted-foreground">
+            Numa campanha, depois do fim os negócios novos vão para a linha padrão da equipe; quem já está aqui continua.
+          </p>
+        </div>
+        <RadioGroup
+          value={draft.duration.mode}
+          onValueChange={(v) => setDuration({ mode: v as PipelineNatures["duration"]["mode"] })}
+          className="grid gap-2 sm:grid-cols-2"
+        >
+          <Label className="flex cursor-pointer items-start gap-2 rounded-md border border-border p-3 font-normal">
+            <RadioGroupItem value="continuous" className="mt-0.5" />
+            <span>
+              <span className="block text-sm font-medium">Contínua</span>
+              <span className="block text-xs text-muted-foreground">Recebe sempre.</span>
+            </span>
+          </Label>
+          <Label className="flex cursor-pointer items-start gap-2 rounded-md border border-border p-3 font-normal">
+            <RadioGroupItem value="campaign" className="mt-0.5" />
+            <span>
+              <span className="block text-sm font-medium">Campanha</span>
+              <span className="block text-xs text-muted-foreground">Início e fim; o placar vira o da campanha.</span>
+            </span>
+          </Label>
+        </RadioGroup>
+        {draft.duration.mode === "campaign" && (
+          <div className="grid gap-3 rounded-md border border-border/60 p-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="line-starts-on">Início</Label>
+              <Input
+                id="line-starts-on"
+                type="date"
+                value={draft.duration.starts_on ?? ""}
+                onChange={(e) => setDuration({ starts_on: e.target.value || null })}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="line-ends-on">Fim (último dia)</Label>
+              <Input
+                id="line-ends-on"
+                type="date"
+                value={draft.duration.ends_on ?? ""}
+                onChange={(e) => setDuration({ ends_on: e.target.value || null })}
+              />
+            </div>
+            {durationErr ? (
+              <p className="text-xs text-destructive sm:col-span-2">{durationErr}</p>
+            ) : campaignWindow ? (
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {campaignWindow.state === "ended"
+                  ? "Encerrada: os negócios novos vão para a linha padrão da equipe."
+                  : campaignWindow.state === "upcoming"
+                    ? "Ainda não começou — a linha já recebe."
+                    : `No ar: dia ${campaignWindow.elapsedDays} de ${campaignWindow.totalDays}.`}
+              </p>
+            ) : null}
+            {isDefault && (
+              <p className="text-xs text-amber-600 sm:col-span-2">
+                Esta é a linha padrão da equipe: depois do fim ela continua recebendo, porque não há outra para onde
+                mandar. Escolha outra linha padrão antes do fim.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* ── Oferta ── */}
       <section className="space-y-3">
         <div>
@@ -194,11 +304,64 @@ export function PipelineNaturesEditor({ pipeline }: PipelineNaturesEditorProps) 
       </section>
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={save} disabled={!dirty || saving}>
+        <Button size="sm" onClick={save} disabled={!dirty || saving || !!durationErr}>
           {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
           Salvar natureza
         </Button>
       </div>
+
+      {/* ── Entradas ── */}
+      <section className="space-y-3 border-t border-border/60 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold">Entradas — quem alimenta a linha</h3>
+          <p className="text-xs text-muted-foreground">
+            As portas cujo negócio novo nasce aqui, com o carimbo de cada uma. Cadastro manual e importação escolhem a
+            linha na hora.
+          </p>
+        </div>
+        {feeding.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma entrada põe negócio novo nesta linha. Aponte um webhook para ela, ou um número de WhatsApp ou o
+            agente em{" "}
+            <Link to="/crm?tab=campanhas" className="underline underline-offset-2 hover:text-foreground">
+              CRM › Campanhas › Entradas
+            </Link>
+            .
+          </p>
+        ) : (
+          <>
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {feeding.map((e) => (
+                <li key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
+                  <span className="min-w-0 text-sm">
+                    <span className="font-medium">{e.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {" "}· {ENTRY_KIND_LABEL[e.kind]}
+                      {!e.active && " · desativada"}
+                      {!e.pipeline_id && " · pela linha padrão"}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {stampOf(e)} · {ownerRuleLabel(e.owner_rule, nameOf)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {closedNow && !isDefault && (
+              <p className="text-xs text-amber-600">
+                Campanha encerrada: estas entradas já mandam o negócio novo para a linha padrão da equipe.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              O carimbo e quem pega o negócio se editam em{" "}
+              <Link to="/crm?tab=campanhas" className="underline underline-offset-2 hover:text-foreground">
+                CRM › Campanhas › Entradas
+              </Link>
+              .
+            </p>
+          </>
+        )}
+      </section>
     </div>
   );
 }

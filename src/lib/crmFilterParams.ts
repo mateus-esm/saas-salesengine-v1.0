@@ -22,7 +22,8 @@ import type { OpportunityStatus } from "@/types/pipelines";
 
 /** Every param the filter bars own. A top-tab switch clears them all. */
 export const FILTER_PARAM_KEYS = [
-  "q", "criado", "resp", "etapa", "status", "origem", "tags", "valor", "prox", "cf", "situacao", "linha", "ordem",
+  "q", "criado", "resp", "etapa", "status", "origem", "tags", "valor", "prox", "cf", "situacao", "linha", "campanha",
+  "plataforma", "ordem",
 ] as const;
 
 /** The filter params (not the sort): what writing a filter object replaces. */
@@ -33,6 +34,9 @@ const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const STATUSES: OpportunityStatus[] = ["open", "won", "lost"];
 const BUCKETS: NextContactBucket[] = ["overdue", "today", "week", "none"];
 const RELATIONSHIPS: ContactRelationship[] = ["sem_negocio", "negociando", "cliente", "perdido"];
+const PLATFORM_VALUES = ["meta", "google", "tiktok", "linkedin", "youtube", "kwai", "pinterest", "email", "whatsapp",
+  "site", "outra", "none"];
+const readPlatforms = (v: string | null) => readList(v).filter((x) => PLATFORM_VALUES.includes(x));
 const OPS: CustomFieldFilterOp[] = [
   "any_of", "contains", "between_number", "between_date", "is_true", "is_false", "empty", "not_empty",
 ];
@@ -206,6 +210,8 @@ export function crmFiltersToParams(f: CrmFilters, into: URLSearchParams = new UR
   setOrDelete(into, "tags", writeList(f.tags));
   setOrDelete(into, "valor", writeNumberRange(f.value_min, f.value_max));
   setOrDelete(into, "prox", f.next_contact);
+  setOrDelete(into, "campanha", writeList(f.campaign_ids));
+  setOrDelete(into, "plataforma", writeList(f.platforms));
   for (const c of f.custom ?? []) into.append("cf", writeCustom(c));
   return into;
 }
@@ -244,6 +250,11 @@ export function paramsToCrmFilters(p: URLSearchParams): CrmFilters {
     .map(readCustom)
     .filter((c): c is CustomFieldFilter => c !== null);
   if (custom.length) f.custom = custom;
+
+  const campaigns = readIds(p.get("campanha"), true);
+  if (campaigns.length) f.campaign_ids = campaigns;
+  const platforms = readPlatforms(p.get("plataforma"));
+  if (platforms.length) f.platforms = platforms;
   return f;
 }
 
@@ -264,6 +275,8 @@ export function contactFiltersToParams(
   setOrDelete(into, "situacao", writeList(f.relationship));
   setOrDelete(into, "linha", writeList(f.pipeline_ids));
   setOrDelete(into, "resp", writeList(f.deal_owner_ids));
+  setOrDelete(into, "campanha", writeList(f.campaign_ids));
+  setOrDelete(into, "plataforma", writeList(f.platforms));
   return into;
 }
 
@@ -292,6 +305,10 @@ export function paramsToContactFilters(p: URLSearchParams): ContactFilters {
   if (pipelines.length) f.pipeline_ids = pipelines;
   const owners = readIds(p.get("resp"), true);
   if (owners.length) f.deal_owner_ids = owners;
+  const campaigns = readIds(p.get("campanha"), true);
+  if (campaigns.length) f.campaign_ids = campaigns;
+  const platforms = readPlatforms(p.get("plataforma"));
+  if (platforms.length) f.platforms = platforms;
   return f;
 }
 

@@ -103,7 +103,12 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
   if (isLoading) return <div className="mx-4 mt-2 h-8 animate-pulse rounded-md bg-muted/60" />;
   if (!data || !board) return null;
 
-  const periodLabel = data.period === "month" ? "do mês" : "do trimestre";
+  const periodLabel = data.period === "campaign" ? "da campanha" : data.period === "month" ? "do mês" : "do trimestre";
+  // Sprint 11 · T55 — a campaign line says its days and whether it is still on.
+  const campaignNote = data.campaign
+    ? `${data.campaign.starts_on.split("-").reverse().slice(0, 2).join("/")} a ${data.campaign.ends_on.split("-").reverse().join("/")}` +
+      (data.campaign.state === "ended" ? " · encerrada" : data.campaign.state === "upcoming" ? " · ainda não começou" : "")
+    : null;
   const ritmoText = board.ritmoPct !== null ? `${Math.min(board.ritmoPct, 999)}%` : "—";
 
   const metrics: { key: MetricKey; label: string; value: string; className?: string; title?: string }[] = [
@@ -146,6 +151,11 @@ export function PipelineScoreboard({ pipelineId }: PipelineScoreboardProps) {
         >
           <BarChart3 className="h-3 w-3 shrink-0" />
           <span className="shrink-0 font-medium">Placar {periodLabel}</span>
+          {campaignNote && (
+            <span className={cn("hidden shrink-0 sm:inline", data.campaign?.state === "ended" && "text-amber-600")}>
+              {campaignNote}
+            </span>
+          )}
           {!open && (
             <span className={cn("min-w-0 truncate", board.ritmoStatus && PACE_COLOR[board.ritmoStatus])}>{summary}</span>
           )}

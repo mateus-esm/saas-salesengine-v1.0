@@ -46,6 +46,13 @@ export interface OpportunityLookupResult {
  * reverted stage types to English and missed this file, so from 23/06 no inbound
  * lead became a deal (~300 leads never reached a Kanban). And an inbound webhook
  * configured for a specific pipeline had its leads created in the team default.
+ *
+ * Sprint 11 · T55: the line of a NEW deal is the database's call
+ * (crm_intake_pipeline) — a campaign line that ended takes no new deal, it goes to
+ * the team default; a deleted line or another team's never takes one. An open
+ * deal in the requested line is still reused: the line stops receiving, not
+ * working. `createIn` is the entry's line (a WhatsApp number, the AI agent), asked
+ * only when a deal is about to be created.
  */
 export async function resolveActiveOpportunity(
   supabase: SupabaseClient,
@@ -55,11 +62,13 @@ export async function resolveActiveOpportunity(
     createIfMissing?: boolean;
     /** Target pipeline (e.g. the one an inbound webhook is configured for). Defaults to the team's. */
     pipeline_id?: string | null;
+    /** Where a new deal goes when there is no pipeline_id and no open deal anywhere (the entry's line). */
+    createIn?: () => Promise<string | null>;
   },
 ): Promise<OpportunityLookupResult | null> {
-  const { equipe_id, lead_id, createIfMissing = false, pipeline_id = null } = params;
+  const { equipe_id, lead_id, createIfMissing = false, pipeline_id = null, createIn } = params;
 
-  const findOpen = () => {
+  const findOpen = (inPipeline: string | null) => {
     let q = supabase
       .from("opportunities")
       .select("id, pipeline_id, stage_id")
@@ -67,12 +76,12 @@ export async function resolveActiveOpportunity(
       .eq("equipe_id", equipe_id)
       .eq("status", "open")
       .is("deleted_at", null);
-    if (pipeline_id) q = q.eq("pipeline_id", pipeline_id);
+    if (inPipeline) q = q.eq("pipeline_id", inPipeline);
     return q.order("updated_at", { ascending: false }).limit(1).maybeSingle();
   };
 
   // 1. Look for an existing open opportunity.
-  const { data: existing, error: existingErr } = await findOpen();
+  const { data: existing, error: existingErr } = await findOpen(pipeline_id);
 
   if (existingErr) {
     console.error("[opportunities] Erro buscando opportunity ativa:", existingErr);
@@ -90,10 +99,20 @@ export async function resolveActiveOpportunity(
 
   if (!createIfMissing) return null;
 
-  // 2. Resolve the target pipeline (explicit, else the team default) + its
-  //    first open stage.
+  // 2. Resolve the target pipeline (explicit, else the entry's, else the team
+  //    default — the database decides, see crm_intake_pipeline) + its first
+  //    open stage.
   let target_pipeline_id = pipeline_id;
-  if (!target_pipeline_id) {
+  if (!target_pipeline_id && createIn) {
+    target_pipeline_id = await createIn().catch((e) => {
+      console.error("[opportunities] Linha da entrada indisponível; seguindo sem ela:", e);
+      return null;
+    });
+  }
+  const intake = await intakePipeline(supabase, equipe_id, target_pipeline_id);
+  if (intake) {
+    target_pipeline_id = intake.pipeline_id;
+  } else if (!target_pipeline_id) {
     const { data: equipe, error: equipeErr } = await supabase
       .from("equipes")
       .select("default_pipeline_id")
@@ -136,8 +155,10 @@ export async function resolveActiveOpportunity(
   }
 
   // 3. Race-safe create: re-check open opportunity before insert, because two
-  //    concurrent webhook deliveries may both reach this point.
-  const { data: recheck } = await findOpen();
+  //    concurrent webhook deliveries may both reach this point. When the
+  //    requested line was swapped (it ended), the check is in the line the deal
+  //    goes to — an open deal there is reused, not duplicated.
+  const { data: recheck } = await findOpen(pipeline_id ? target_pipeline_id : null);
 
   if (recheck) {
     return {
@@ -175,6 +196,29 @@ export async function resolveActiveOpportunity(
     stage_id: inserted.stage_id,
     created: true,
   };
+}
+
+/**
+ * Sprint 11 · T55 — the line a new deal is created in, from the database
+ * (crm_intake_pipeline). null result = the call failed: the caller falls back to
+ * the old rule (requested line, else team default) — the door never breaks.
+ */
+async function intakePipeline(
+  supabase: SupabaseClient,
+  equipe_id: string,
+  pipeline_id: string | null,
+): Promise<{ pipeline_id: string | null } | null> {
+  try {
+    const { data, error } = await supabase.rpc("crm_intake_pipeline", {
+      p_equipe_id: equipe_id,
+      p_pipeline_id: pipeline_id,
+    });
+    if (error) throw error;
+    return { pipeline_id: (data as string | null) ?? null };
+  } catch (e) {
+    console.error("[opportunities] crm_intake_pipeline falhou; seguindo sem ele:", e);
+    return null;
+  }
 }
 
 /**

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
+import { entryLine, entryOfKind, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { normalizePhone } from "../_shared/phone.ts"
 
 declare const EdgeRuntime: {
@@ -410,13 +411,29 @@ serve(async (req) => {
     // Opportunity aberta para o lead. Mensagens de agente NÃO disparam.
     if (senderType === 'customer') {
       try {
+        // Sprint 11 · T55 — the agent's entry, looked up once: a new deal goes
+        // to its line (none = the team default), and the touch goes through it.
+        let agentEntry: Promise<string | null> | null = null
+        const agentEntryId = () => (agentEntry ??= entryOfKind(supabase, equipeId, 'agent'))
         const opp = await resolveActiveOpportunity(supabase, {
           equipe_id: equipeId,
           lead_id: lead.id,
           createIfMissing: true,
+          createIn: async () => entryLine(supabase, await agentEntryId()),
         })
         if (opp?.created) {
           console.log('[Webhook] Opportunity criada para lead:', lead.id, '→', opp.opportunity_id)
+        }
+        // Sprint 11 · T51 — a new contact (or a new deal for one who came back)
+        // is an arrival through the team's AI-agent entry; the ad, if the message
+        // carries one. Not every message: only arrivals.
+        if (leadIsNew || opp?.created) {
+          await recordTouch(supabase, {
+            leadId: lead.id,
+            entryId: await agentEntryId(),
+            payload: messageTouchPayload({ channel, agentName, raw: payload }),
+            opportunityId: opp?.opportunity_id ?? null,
+          }, '[Webhook]')
         }
       } catch (oppErr) {
         // Não derruba o webhook — mensagem precisa ser salva mesmo que a
