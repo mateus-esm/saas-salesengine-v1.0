@@ -473,12 +473,81 @@ select c.equipe_id, 'webhook', c.name, c.id,
 on conflict (webhook_config_id) do nothing;
 
 -- ============================================================================
--- 8. O VERBO: GRAVAR UM TOQUE
+-- 8. RESPONSÁVEL PELA ENTRADA (T49 · decisão 35)
+-- ============================================================================
+--
+-- `owner_rule`: { mode: none | fixed | round_robin, user_ids: [...] }. Só conta
+-- quem ainda é da equipe. O rodízio anda um passo por negócio (o cursor sobe numa
+-- atualização da própria linha — duas chegadas ao mesmo tempo não pegam o mesmo).
+
+create or replace function public._crm_normalize_owner_rule(p_equipe_id uuid, p_rule jsonb)
+returns jsonb
+language sql
+stable
+set search_path = public
+as $$
+  select case
+    when coalesce(p_rule->>'mode', 'none') not in ('fixed', 'round_robin') then '{"mode": "none"}'::jsonb
+    else jsonb_build_object(
+      'mode', p_rule->>'mode',
+      'user_ids', coalesce((
+        select jsonb_agg(u.id order by u.o)
+          from (select distinct on (x.v) x.v::uuid as id, x.o
+                  from jsonb_array_elements_text(case when jsonb_typeof(p_rule->'user_ids') = 'array'
+                                                      then p_rule->'user_ids' else '[]'::jsonb end)
+                       with ordinality x(v, o)
+                 where x.v ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                 order by x.v, x.o) u
+          join public.profiles p on p.id = u.id and p.equipe_id = p_equipe_id
+       ), '[]'::jsonb))
+  end;
+$$;
+
+create or replace function public._crm_pick_owner(p_entry_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_entry  public.crm_entries;
+  v_users  uuid[];
+  v_cursor integer;
+begin
+  select * into v_entry from public.crm_entries where id = p_entry_id;
+  if not found or coalesce(v_entry.owner_rule->>'mode', 'none') = 'none' then
+    return null;
+  end if;
+
+  -- Só quem ainda é da equipe, na ordem escolhida.
+  select array_agg(x.v::uuid order by x.o) into v_users
+    from jsonb_array_elements_text(coalesce(v_entry.owner_rule->'user_ids', '[]'::jsonb)) with ordinality x(v, o)
+    join public.profiles p on p.id = x.v::uuid and p.equipe_id = v_entry.equipe_id;
+  if coalesce(array_length(v_users, 1), 0) = 0 then
+    return null;
+  end if;
+
+  if v_entry.owner_rule->>'mode' = 'fixed' then
+    return v_users[1];
+  end if;
+
+  update public.crm_entries set owner_cursor = owner_cursor + 1
+   where id = p_entry_id
+  returning owner_cursor into v_cursor;
+  return v_users[((v_cursor - 1) % array_length(v_users, 1)) + 1];
+end;
+$$;
+
+revoke all on function public._crm_pick_owner(uuid) from public, anon, authenticated;
+
+-- ============================================================================
+-- 9. O VERBO: GRAVAR UM TOQUE
 -- ============================================================================
 --
 -- Chamado pelas edges (service_role: webhook, WhatsApp, agente) e pela tela
 -- (usuário da equipe: cadastro manual). Devolve o toque, se foi o primeiro, e o
--- carimbo resolvido.
+-- carimbo resolvido. Com um negócio sem responsável, a regra da entrada escolhe um
+-- (T49) — negócio que já tem dono fica com ele.
 
 create or replace function public.crm_record_touch(
   p_lead_id        uuid,
@@ -501,6 +570,7 @@ declare
   v_campaign uuid;
   v_touch    uuid;
   v_first    boolean;
+  v_owner    uuid;
 begin
   select * into v_lead from public.leads where id = p_lead_id and deleted_at is null for update;
   if not found then
@@ -558,13 +628,24 @@ begin
      where id = v_lead.id;
   end if;
 
+  -- O negócio que esta chegada trouxe, sem dono: a regra da entrada escolhe.
+  if p_opportunity_id is not null
+     and exists (select 1 from public.opportunities o
+                  where o.id = p_opportunity_id and o.owner_id is null and o.deleted_at is null) then
+    v_owner := public._crm_pick_owner(v_entry.id);
+    if v_owner is not null then
+      update public.opportunities set owner_id = v_owner where id = p_opportunity_id and owner_id is null;
+    end if;
+  end if;
+
   return jsonb_build_object(
     'touch_id', v_touch,
     'first', v_first,
     'entry_id', v_entry.id,
     'origin_category', v_category,
     'platform', v_platform,
-    'campaign_id', v_campaign);
+    'campaign_id', v_campaign,
+    'owner_id', v_owner);
 end;
 $$;
 
