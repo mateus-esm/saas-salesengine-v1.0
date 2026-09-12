@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
 import { resolveCustomDataKeys, type SchemaField } from "../_shared/custom-fields.ts";
+import { entryForWebhook, entryOfKind, inboundTouchPayload, recordTouch } from "../_shared/attribution.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -498,6 +499,9 @@ if (import.meta.main) {
           phone: checkPhone || leadData.phone || null,
           source: leadData.source || 'webhook_inbound',
           origem: 'webhook',
+          // Sprint 11 · T50 — it was left to the default ('manual').
+          creation_source: 'webhook',
+          created_by_type: 'webhook',
           atendido_por_agente: false,
           tags: leadData.tags || [],
           observations: leadData.observations || null,
@@ -568,6 +572,17 @@ if (import.meta.main) {
         }
       }
 
+      // 5b. Sprint 11 · T50 — the arrival is a touch: the entry of this webhook,
+      // the UTMs and click IDs (body and query string), the payload. The first
+      // touch stamps the lead; a returning lead gets a new touch, not a new lead;
+      // a deal with no owner gets one from the entry's rule. Never breaks the door.
+      const touch = await recordTouch(supabase, {
+        leadId,
+        entryId: await entryForWebhook(supabase, config.id),
+        payload: inboundTouchPayload(payload, url.searchParams),
+        opportunityId,
+      }, '[crm-webhook]');
+
       // 6. Log activity
       await supabase.from('lead_activities').insert({
         lead_id: leadId,
@@ -577,6 +592,7 @@ if (import.meta.main) {
           config_id: config.id,
           opportunity_id: opportunityId,
           is_new: isNewLead,
+          ...(touch ? { touch_id: touch.touch_id, campaign_id: touch.campaign_id, platform: touch.platform } : {}),
           // Sprint 11: mapped fields the pipeline does not declare. Kept in
           // custom_data under the name they came with — listed here so someone
           // can declare them instead of the data sitting invisible.
@@ -647,6 +663,9 @@ if (import.meta.main) {
         phone: payload.phone || null,
         source: payload.source || 'webhook',
         origem: 'webhook',
+        // Sprint 11 · T50 — it was left to the default ('manual').
+        creation_source: 'webhook',
+        created_by_type: 'webhook',
         atendido_por_agente: false,
         tags: payload.tags || [],
         observations: payload.observations || null,
@@ -734,11 +753,24 @@ if (import.meta.main) {
         }
       }
 
+      // Sprint 11 · T50 — the API route is the team's "Importação / API" entry.
+      const touch = await recordTouch(supabase, {
+        leadId: lead.id,
+        entryId: await entryOfKind(supabase, equipe.id, 'import'),
+        payload: inboundTouchPayload(body, url.searchParams),
+        opportunityId,
+      }, '[crm-webhook]');
+
       await supabase.from('lead_activities').insert({
         lead_id: lead.id,
         tipo: 'webhook',
         descricao: isNewLead ? 'Lead criado via webhook' : 'Lead voltou via webhook (atualizado)',
-        metadata: { source: payload.source || 'webhook', opportunity_id: opportunityId, is_new: isNewLead },
+        metadata: {
+          source: payload.source || 'webhook',
+          opportunity_id: opportunityId,
+          is_new: isNewLead,
+          ...(touch ? { touch_id: touch.touch_id, campaign_id: touch.campaign_id } : {}),
+        },
       });
 
       return new Response(

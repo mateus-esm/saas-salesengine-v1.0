@@ -322,3 +322,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W5 | Plano da Onda 5 (entradas e atribuicao) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W5A | T48 Entradas, campanhas e toques (o modelo) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W5A | T49 Responsavel pela entrada (fixo, rodizio) | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5A | T50 Webhook de entrada carimba a origem | Claude / Opus 5 (PM) | L | R$ 20 |

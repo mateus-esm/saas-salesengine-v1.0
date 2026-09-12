@@ -407,7 +407,7 @@ begin
   if v_id is null then
     insert into public.crm_entries (equipe_id, kind, name, origin_category)
     values (p_equipe_id, p_kind,
-            case p_kind when 'manual' then 'Manual' when 'import' then 'Importação' else 'Agente de IA' end,
+            case p_kind when 'manual' then 'Manual' when 'import' then 'Importação / API' else 'Agente de IA' end,
             case p_kind when 'import' then 'api_import' end)
     on conflict (equipe_id, kind) where kind in ('manual', 'import', 'agent') do nothing
     returning id into v_id;
@@ -420,6 +420,8 @@ end;
 $$;
 
 revoke all on function public._crm_entry_for(uuid, text) from public, anon, authenticated;
+-- As edges pedem a entrada do agente (gpt-maker) e a de API (rota com segredo).
+grant execute on function public._crm_entry_for(uuid, text) to service_role;
 
 -- O nome de um webhook diz de onde ele vem ("Formulário Meta ADS", "Landing
 -- Page"): carimbo inicial, que o founder corrige na tela de entradas.

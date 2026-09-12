@@ -194,5 +194,39 @@ begin
     'T48-5 FAIL: o vizinho le toques, campanhas ou entradas da equipe A';
 end $$;
 
+-- ============================================================================
+-- 6. Como a edge chama (service_role): a entrada de API e o toque em qualquer equipe;
+--    o app não pede a entrada por conta própria.
+-- ============================================================================
+reset role;
+set local role service_role;
+set local request.jwt.claims = '{"role":"service_role"}';
+do $$
+declare v_entry uuid; r jsonb;
+begin
+  v_entry := public._crm_entry_for('5130a000-0000-0000-0000-000000000001', 'import');
+  assert (select name from public.crm_entries where id = v_entry) = 'Importação / API'
+     and public._crm_entry_for('5130a000-0000-0000-0000-000000000001', 'import') = v_entry,
+    'T50-6 FAIL: a entrada de API da equipe deveria nascer uma vez';
+  insert into public.leads (id, equipe_id, name) values
+    ('5130e000-0000-0000-0000-000000000006', '5130a000-0000-0000-0000-000000000001', 'Via API');
+  r := public.crm_record_touch('5130e000-0000-0000-0000-000000000006', v_entry, '{"utm_source":"google","utm_medium":"cpc"}');
+  assert (r->>'first')::boolean and r->>'origin_category' = 'paid_search' and r->>'platform' = 'google',
+    'T50-6 FAIL: o toque pela edge, veio ' || r::text;
+end $$;
+
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"5130b000-0000-0000-0000-00000000000a","role":"authenticated"}';
+do $$
+declare v_failed boolean := false;
+begin
+  begin
+    perform public._crm_entry_for('5130a000-0000-0000-0000-000000000001', 'agent');
+  exception when insufficient_privilege then v_failed := true;
+  end;
+  assert v_failed, 'T50-6 FAIL: o app nao deveria criar entradas por conta propria';
+end $$;
+
 rollback;
 select 'PASS' as result;
