@@ -819,3 +819,90 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 - O modelo do lead score (ICP sem critério + contagem de atividade) — com o Copilot.
 - Leads anteriores a 23/06 sem negócio (outras equipes) têm outra causa; não mexidos.
 - Avaliar obrigação de LGPD pela exposição dos backups (decisão do founder).
+
+---
+
+# Sprint 11 · Onda 2 — Handoff
+
+> **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
+> **Fechada:** 2026-09-11 · **PM + Engineer:** Claude (Opus 5); T22 (deploy) e o PR #13 (2B parcial) por outra sessão
+> **Branches:** `w2a/achar-filtrar-atribuir` (PR #12) · `w2b/claro-e-celular` (PR #13) · `w2b/fecha-a-onda` (fechamento)
+> **Verificação:** `tsc -b` limpo · lint 0 erro · vitest 235/235 · `npm run build` · 10 testes SQL em rollback contra a produção
+
+## 1. O que esta onda era
+
+Achar, filtrar e atribuir: o Kanban e as tabelas leem do servidor com um filtro só
+(inclusive por campo personalizado), os filtros moram na URL, o responsável mora no
+**negócio** (o contato não tem dono) e as métricas contam cada ganho pelo dono **do
+momento**. A 2B deixa o card e o placar claros e leva o CRM ao celular.
+
+## 2. Entregue
+
+**2A (PR #12)**
+- **T12/T13** filtro compilado no servidor (`_crm_compile_*`, lido uma vez) com campo
+  personalizado, próximo contato e situação do contato; `crm_opp_table`,
+  `crm_contacts_table/count` e os verbos `crm_update/delete_opportunities`,
+  `crm_delete_leads`, `crm_create_opportunities`, `crm_delete_custom_records` (ids no
+  corpo do POST). Na Solo Energia: resumo do Kanban 8 ms, maior coluna 78 ms, Tabela de
+  Leads 153 ms, Base de Contatos 35 ms.
+- **T14** `funnel_events.owner_id` (dono do momento) + histórico de dono; overview,
+  série, quebras, motivos e `crm_placar` seguem o negócio.
+- **T15/T16** registro de tipos de campo (15 tipos) e a grade certa por tipo; campo Usuário.
+- **T17** barra de filtros única, filtros na URL (link compartilhável), folha no celular.
+- **T18/T19** Tabela de Leads e Base de Contatos no servidor (páginas de 50); a base
+  mostra Situação, Negócios (com o responsável de cada um), Ganho total, Último ganho.
+- **T20** responsável no cabeçalho do negócio, salvo na hora; modal leve.
+- **T21** tabelas personalizadas no mesmo padrão (gaveta do registro, relação por coluna,
+  sem teto de 1.000, remover coluna esconde).
+
+**2B (PR #13 + fechamento)**
+- **T24** card desenhado pelo `cardModel`: nome + responsável; valor · tempo na etapa ·
+  interações · próximo contato (editável); selos em ordem; até 3 campos, etiquetas,
+  empresas; ações no hover (mouse) ou sempre (toque). Coluna recolhível.
+- **T25** placar pelo `crm_placar`: Meta · Realizado · Ritmo · Falta · Conversão · Ciclo,
+  barra fina, detalhe por responsável com "Sem responsável"; uma linha quando fechado.
+- **T26** celular: Kanban de uma etapa com chips e "Mover para…", tabelas em lista,
+  modais em tela cheia, cabeçalhos compactos.
+
+## 3. Achados que não estavam no plano
+
+1. **A 1ª versão do filtro deixou o Kanban 3× mais lento** (590 ms) e "clientes" em 2 s:
+   relia o jsonb em cada linha. O filtro compilado resolveu (8 ms / 25 ms).
+2. **A 2B entrou pela metade** (PR #13): `cardModel` sem uso (o card não mudou), placar
+   com a tela antiga e **mover card no celular impossível** (o "Mover para…" não tinha
+   gatilho). Fechado em `w2b/fecha-a-onda`; o ledger foi reescrito para dizer o que
+   cada PR entregou.
+3. **Chave duplicada `reuniao_agendada`** no pipeline da Solo Energia (Sim/Não ativo +
+   seleção apagada): a apagada virou `reuniao_agendada_deleted` no T22. Nenhum pipeline
+   tem chave repetida hoje (conferido 11/09).
+4. **Tabela personalizada:** apagar coluna e recriar com o mesmo nome ressuscitava os
+   valores antigos; agora remover esconde (`is_deleted`) e a chave não volta.
+5. **`.in()` com ids na URL** em exclusões em lote (custom tables e um
+   `bulkDeleteOpportunities` morto): "selecionar todos" estouraria a URL — virou verbo.
+6. **O teste `sprint9_w1_funnel_events` falhava contra a produção** antes da onda (contava
+   eventos reais); agora conta só a equipe do teste.
+7. **Uma edição pendente de `docs/billing-runbook.md` sumiu** num `git reset` da outra
+   sessão. Conferido: era só reformatação (tabelas alinhadas, quebras de linha), sem
+   conteúdo novo.
+
+## 4. Deploy / estado da produção (11/09)
+
+- **Migrations** `20260911000100` (filtros), `…0200` (tabelas + verbos), `…0300` (dono
+  do momento): aplicadas e registradas em `supabase_migrations.schema_migrations`
+  (a coluna `name` ficou vazia nas três — só cosmético). Conferido na produção: as 11
+  funções novas existem; `funnel_events.owner_id` preenchido em 454 de 1.092 eventos, e
+  **0** evento sem dono cujo negócio tem dono (os 638 restantes são de negócios sem
+  responsável); `opportunity_owner_history` com 614 linhas.
+- **Frontend:** PRs #12 e #13 no main; o fechamento vai pelo PR de `w2b/fecha-a-onda` → Netlify.
+- A 2B não muda edge function nem banco.
+
+## 5. Fica para depois
+
+- **Verificação no navegador** (extensão do Chrome desconectada em toda a onda): Base de
+  Contatos = 1.254; ≤ 10 requisições até as primeiras linhas; abrir negócio ≤ 8; celular
+  em 390×844 e 360×800 sem rolagem horizontal; tabela "Teste" da Solo Energia; dashboard
+  filtrado por um responsável.
+- **Billing:** as linhas do T22 e do PR #13 (outra sessão) não foram lançadas — agente
+  não identificado.
+- "Selecionar todos" cobre as linhas carregadas; todos os filtrados fica para a v1.2.
+- **Onda 3 — Receita e linha configurada** é a próxima.
