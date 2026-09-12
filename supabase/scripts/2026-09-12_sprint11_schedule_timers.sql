@@ -1,0 +1,23 @@
+-- Sprint 11 · Onda 3 · T34 — ligar o agendador (pg_cron → crm_run_timers).
+--
+-- QUANDO: no T38, depois das migrations 0100–0700 e dos scripts de dado, com a
+-- escolha do founder sobre o reciclo acumulado. Ensaio do que a primeira
+-- execução faria: supabase/tests/sprint11_w3_timers_rehearsal.test.sql.
+--
+-- Uma das duas opções (a data da opção A é a hora de ligar, preenchida no T38):
+--
+-- A) Só recicla o que vencer a partir de agora — o acumulado da Casa Flow
+--    (29 negócios vencidos na etapa Reciclo, 11/09) fica onde está.
+--
+--    select cron.schedule('crm-timers', '*/15 * * * *',
+--      $cron$select public.crm_run_timers(false, '<HORA_DE_LIGAR>'::timestamptz)$cron$);
+--
+-- B) Solta o acumulado: na primeira execução os vencidos voltam para a etapa
+--    alvo (evento `recycled`; a etapa da Casa Flow não tem webhook).
+--
+--    select cron.schedule('crm-timers', '*/15 * * * *',
+--      $cron$select public.crm_run_timers(false, null)$cron$);
+--
+-- Desligar:  select cron.unschedule('crm-timers');
+-- Ver:       select * from public.crm_timer_runs order by id desc limit 20;
+-- Uma equipe à mão (operação): select public.crm_run_timers(false, null, '<equipe_id>');
