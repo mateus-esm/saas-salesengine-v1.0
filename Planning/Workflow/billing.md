@@ -303,3 +303,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-11 | 11 W3A | T30 Itens do negocio | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-11 | 11 W3A | T31 Ganho -> receita (livro-razao) | Claude / Opus 5 (PM) | XL | R$ 28 |
 | 2026-09-11 | 11 W3A | T32 Situacao e ciclo de vida do contato pela receita | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-11 | 11 W3A | T33 Metricas pela receita | Claude / Opus 5 (PM) | L | R$ 20 |
