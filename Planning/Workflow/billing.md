@@ -324,3 +324,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W5A | T49 Responsavel pela entrada (fixo, rodizio) | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5A | T50 Webhook de entrada carimba a origem | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-12 | 11 W5A | T51 WhatsApp e agente: entrada e anuncio clique-para-WhatsApp | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-12 | 11 W5B | T52 Telas de Campanhas e Entradas | Claude / Opus 5 (PM) | L | R$ 20 |
