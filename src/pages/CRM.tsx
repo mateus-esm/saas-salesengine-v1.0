@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bot, Building2, Calendar, Home, LayoutGrid, ListChecks, Plus, Table2, Users } from "lucide-react";
+import { Bot, Building2, Calendar, Home, LayoutGrid, ListChecks, Package, Plus, Table2, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -25,11 +25,12 @@ import { CustomTableManager } from "@/components/crm/customtables/CustomTableMan
 import { CustomTableView } from "@/components/crm/customtables/CustomTableView";
 import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActivationGrid";
 import { AgendaView } from "@/components/crm/AgendaView";
+import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { FILTER_PARAM_KEYS } from "@/lib/crmFilterParams";
 
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "tasks" | "copilot" | "tabelas" | "agenda";
+type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "catalogo" | "tasks" | "copilot" | "tabelas" | "agenda";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "tasks", "copilot", "tabelas", "agenda"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "catalogo", "tasks", "copilot", "tabelas", "agenda"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
@@ -38,6 +39,7 @@ const TAB_LABELS: Record<TopTab, string> = {
   contacts: "Base de Contatos",
   companies: "Empresas",
   properties: "Imóveis",
+  catalogo: "Catálogo",
   tasks: "Tarefas",
   copilot: "Copilot",
   tabelas: "Tabelas",
@@ -125,6 +127,10 @@ const CRM = () => {
               <Home className="h-4 w-4" />
               Imóveis
             </TabsTrigger>
+            <TabsTrigger value="catalogo" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Catálogo
+            </TabsTrigger>
             <TabsTrigger value="tasks" className="flex items-center gap-2">
               <ListChecks className="h-4 w-4" />
               Tarefas
@@ -155,6 +161,8 @@ const CRM = () => {
           <CompaniesDatabaseView />
         ) : tab === "properties" ? (
           <PropertiesDatabaseView />
+        ) : tab === "catalogo" ? (
+          <CatalogView />
         ) : tab === "tasks" ? (
           <TasksView />
         ) : tab === "copilot" ? (
