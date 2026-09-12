@@ -67,6 +67,7 @@ const COLUMN_TYPES: { value: CustomTableColumnType; label: string }[] = [
   { value: "select", label: "Seleção" },
   { value: "multi_select", label: "Multi-seleção" },
   { value: "url", label: "URL" },
+  { value: "file", label: "Arquivo" },
   { value: "phone", label: "Telefone" },
   { value: "user", label: "Usuário (membro da equipe)" },
   { value: "relation", label: "Relação (outra tabela)" },

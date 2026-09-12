@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 import { DynamicFieldRenderer, validateCustomData } from "../DynamicFieldRenderer";
 import { RelationChip } from "../grid/RelationChip";
+import { FileField } from "./FileField";
 
 interface CustomRecordDrawerProps {
   record: CustomTableRecord | null;
@@ -54,17 +55,25 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // What the server has for this record: a file is saved at once, and the next
+  // file (or Save) builds on it — not on a copy of the record from before.
+  const persisted = useRef<Record<string, unknown>>({});
 
+  // Only another record resets the draft: saving a file mid-edit must not wipe
+  // what was typed in the other fields.
+  const recordId = record?.id ?? null;
   useEffect(() => {
     setDraft(record?.data ?? {});
-  }, [record]);
+    persisted.current = record?.data ?? {};
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordId]);
 
   // Sprint 11 · T39 — records keep their values under the column's field_id, the
   // same address the renderer uses for the deal's fields.
   const schema: CustomFieldSchema[] = useMemo(
     () =>
       columns
-        .filter((c) => c.type !== "relation" && c.type !== "lookup")
+        .filter((c) => c.type !== "relation" && c.type !== "lookup" && c.type !== "file")
         .map((c, i) => ({
           field_id: c.field_id,
           key: c.key,
@@ -78,8 +87,18 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
   );
   const relationColumns = columns.filter((c) => c.type === "relation");
   const lookupColumns = columns.filter((c) => c.type === "lookup");
+  const fileColumns = columns.filter((c) => c.type === "file");
 
-  const dirty = !!record && JSON.stringify(draft) !== JSON.stringify(record.data ?? {});
+  const dirty = !!record && JSON.stringify(draft) !== JSON.stringify(persisted.current);
+
+  // Sprint 11 · T42 — a file list is saved as soon as it changes.
+  const saveFiles = async (fieldId: string, next: unknown) => {
+    if (!record) return;
+    const data = { ...persisted.current, [fieldId]: next };
+    await onSave(record.id, data);
+    persisted.current = data;
+    setDraft((d) => ({ ...d, [fieldId]: next }));
+  };
   const title = record ? recordTitle(recordValues(record), columns, { nameOf }, "Registro") : "Registro";
 
   const handleSave = async () => {
@@ -116,8 +135,20 @@ export function CustomRecordDrawer({ record, columns, relations, onClose, onSave
           {schema.length > 0 ? (
             <DynamicFieldRenderer schema={schema} value={draft} onChange={setDraft} />
           ) : (
-            <p className="text-sm text-muted-foreground">Esta tabela ainda não tem colunas.</p>
+            fileColumns.length === 0 && <p className="text-sm text-muted-foreground">Esta tabela ainda não tem colunas.</p>
           )}
+
+          {record &&
+            fileColumns.map((col) => (
+              <FileField
+                key={col.field_id}
+                label={col.label}
+                value={draft[col.field_id]}
+                onChange={(next) => saveFiles(col.field_id, next)}
+                target={{ equipeId: record.equipe_id, tableId: record.table_id, recordId: record.id }}
+                disabled={saving}
+              />
+            ))}
 
           {/* Sprint 11 · T41 — read from the deal holding the record, now. */}
           {record && lookupColumns.length > 0 && (

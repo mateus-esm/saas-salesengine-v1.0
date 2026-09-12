@@ -24,6 +24,8 @@ export type CustomTableColumnType =
   | "url"
   | "phone"
   | "user"
+  /** Sprint 11 · T42 — files in the private bucket `artifacts` (a list in data[field_id]). */
+  | "file"
   | "relation"
   /** Sprint 11 · T41 — read-only, read from the deal holding the record (artifact tables). */
   | "lookup";
