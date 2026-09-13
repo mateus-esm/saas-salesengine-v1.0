@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import * as copilot from "@/services/copilot";
 import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
@@ -55,7 +54,6 @@ import type {
 } from "@/types/pipelines";
 import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
-import { useCopilotDecisions } from "@/hooks/useCopilotDecisions";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { normalizeNatures } from "@/lib/natures";
@@ -65,6 +63,8 @@ import { DealItemsSection } from "./deal/DealItemsSection";
 import { DealRevenueSection } from "./deal/DealRevenueSection";
 import { DealArtifactsSection } from "./deal/DealArtifactsSection";
 import { OriginBlock } from "./attribution/OriginBlock";
+import { DealCopilotPanel } from "./copilot/DealCopilotPanel";
+import { SyncButton } from "./copilot/SyncButton";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -125,7 +125,6 @@ export const OpportunityDetailModal = ({
   const crmAgentEnabled = equipe?.is_crm_agent_enabled ?? false;
 
   const [stageId, setStageId] = useState<string>("");
-  const [syncLoading, setSyncLoading] = useState(false);
   const [status, setStatus] = useState<OpportunityStatus>("open");
   const [value, setValue] = useState<string>("");
   const [customData, setCustomData] = useState<Record<string, unknown>>({});
@@ -168,15 +167,6 @@ export const OpportunityDetailModal = ({
   const agendaQuery = useLeadAgendaEvents(opportunity?.lead_id ?? null, open && agendaOpen);
   const cardEvents = agendaQuery.data ?? [];
 
-  // Sprint 6.10 T2 — Decisões do Copilot: external API may be unconfigured; handle gracefully.
-  const decisionsQuery = useCopilotDecisions({
-    pipelineId: opportunity?.pipeline_id,
-    enabled: open && decisionsOpen,
-  });
-  const cardDecisions = useMemo(
-    () => (decisionsQuery.data ?? []).filter((d) => d.opportunity_id === opportunity?.id),
-    [decisionsQuery.data, opportunity?.id],
-  );
 
   if (!opportunity) return null;
 
@@ -222,27 +212,6 @@ export const OpportunityDetailModal = ({
     if (!confirm("Excluir este lead?")) return;
     deleteOpportunity.mutate(opportunity.id);
     onClose();
-  };
-
-  const handleSync = async () => {
-    if (!opportunity.lead_id) {
-      toast.error("Esta oportunidade não tem lead vinculado.");
-      return;
-    }
-    setSyncLoading(true);
-    try {
-      await copilot.syncOpportunity({
-        lead_id: opportunity.lead_id,
-        opportunity_id: opportunity.id,
-        pipeline_id: opportunity.pipeline_id,
-      });
-      toast.success("Copilot sincronizou o card");
-      queryClient.invalidateQueries({ queryKey: ["opportunities", equipeId] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao sincronizar com o Copilot");
-    } finally {
-      setSyncLoading(false);
-    }
   };
 
   const hasCustomFields = schema.length > 0;
@@ -503,41 +472,21 @@ export const OpportunityDetailModal = ({
                   </CollapsibleContent>
                 </Collapsible>
 
-                {/* Decisões do Copilot */}
-                <Collapsible open={decisionsOpen} onOpenChange={setDecisionsOpen}>
-                  <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md px-2 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
-                    <span className="flex items-center gap-2">
-                      <Bot className="h-3.5 w-3.5 shrink-0" />
-                      Decisões do Copilot
-                    </span>
-                    <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="px-2 pb-2">
-                    {decisionsQuery.isLoading ? (
-                      <p className="text-xs text-muted-foreground py-2">Carregando…</p>
-                    ) : decisionsQuery.isError || cardDecisions.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic py-2">Sem decisões recentes.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {cardDecisions.map((d) => (
-                          <div key={d.id} className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground/70">
-                              {d.decision_type ?? d.field ?? "Decisão"}
-                            </span>
-                            <span className="ml-1">
-                              {new Date(d.created_at).toLocaleString("pt-BR", {
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CollapsibleContent>
-                </Collapsible>
+                {/* Sprint 11 · Onda 6 · T65 — o Copilot neste negócio */}
+                {crmAgentEnabled && (
+                  <Collapsible open={decisionsOpen} onOpenChange={setDecisionsOpen}>
+                    <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md px-2 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
+                      <span className="flex items-center gap-2">
+                        <Bot className="h-3.5 w-3.5 shrink-0" />
+                        Copilot
+                      </span>
+                      <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="px-2 pb-2">
+                      <DealCopilotPanel opportunityId={opportunity.id} enabled={open && decisionsOpen} />
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </div>
             </ScrollArea>
           </div>
@@ -554,21 +503,14 @@ export const OpportunityDetailModal = ({
             Excluir
           </Button>
           <div className="flex gap-2">
-            {crmAgentEnabled && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSync}
-                disabled={syncLoading}
-                className="h-8"
-              >
-                {syncLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Sync com Copilot
-              </Button>
+            {crmAgentEnabled && opportunity.lead_id && (
+              <SyncButton
+                mode="single"
+                variant="chat"
+                leadId={opportunity.lead_id}
+                opportunityId={opportunity.id}
+                pipelineId={opportunity.pipeline_id}
+              />
             )}
             <Button variant="outline" size="sm" onClick={onClose} className="h-8">
               Cancelar

@@ -14,24 +14,16 @@ const sb = supabase as any;
 
 export const copilotFeedKey = ["copilot", "feed"] as const;
 
-export function useCopilotFeed(enabled = true) {
+/** Approve / reject a suggestion and undo an action — the home and the deal panel share these. */
+export function useCopilotDecisionActions() {
   const queryClient = useQueryClient();
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: copilotFeedKey });
     void queryClient.invalidateQueries({ queryKey: ["copilot", "deal"] });
+    void queryClient.invalidateQueries({ queryKey: ["copilot", "approvals"] });
     void queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+    void queryClient.invalidateQueries({ queryKey: ["board"] });
   };
-
-  const feed = useQuery({
-    queryKey: copilotFeedKey,
-    enabled,
-    refetchInterval: 30_000,
-    queryFn: async (): Promise<CopilotFeed> => {
-      const { data, error } = await sb.rpc("crm_copilot_feed", { p_limit: 60 });
-      if (error) throw error;
-      return { ...EMPTY_FEED, ...(data ?? {}) } as CopilotFeed;
-    },
-  });
 
   const resolve = useMutation({
     mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
@@ -62,6 +54,22 @@ export function useCopilotFeed(enabled = true) {
     },
     onError: (e: Error) => toast.error("Não deu para desfazer: " + e.message),
   });
+
+  return { resolve, undo };
+}
+
+export function useCopilotFeed(enabled = true) {
+  const feed = useQuery({
+    queryKey: copilotFeedKey,
+    enabled,
+    refetchInterval: 30_000,
+    queryFn: async (): Promise<CopilotFeed> => {
+      const { data, error } = await sb.rpc("crm_copilot_feed", { p_limit: 60 });
+      if (error) throw error;
+      return { ...EMPTY_FEED, ...(data ?? {}) } as CopilotFeed;
+    },
+  });
+  const { resolve, undo } = useCopilotDecisionActions();
 
   return { feed: feed.data ?? EMPTY_FEED, isLoading: feed.isLoading, resolve, undo };
 }
