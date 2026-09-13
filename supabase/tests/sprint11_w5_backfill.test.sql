@@ -17,6 +17,23 @@ begin;
 -- @include supabase/migrations/20260913000300_sprint11_w5_attribution_metrics.sql
 -- @include supabase/migrations/20260913000400_sprint11_w5_line_natures.sql
 
+-- Depois do deploy da Onda 5 a produção já não tem lead sem toque: o ensaio traz os
+-- seus próprios leads antigos, um de cada origem, para o script continuar provado.
+insert into public.equipes (id, nome, crm_link, suporte_link) values
+  ('513fa000-0000-0000-0000-000000000001', 'S11 T56 legado sintético', 'x', 'y');
+insert into public.webhook_configs (id, equipe_id, name, url, trigger_event, inbound_function, field_mappings) values
+  ('513fc000-0000-0000-0000-0000000000f1', '513fa000-0000-0000-0000-000000000001', 'Form legado', 'inbound', 'lead_received', 'receive_lead', '[]');
+insert into public.leads (id, equipe_id, name, origem, source, creation_source, origin_category) values
+  ('513fe000-0000-0000-0000-000000000001', '513fa000-0000-0000-0000-000000000001', 'Pela IA',   'IA',                'IA',                'ai_agent', null),
+  ('513fe000-0000-0000-0000-000000000002', '513fa000-0000-0000-0000-000000000001', 'Google',    'Google ADS',        'Google ADS',        'import',   'paid_search'),
+  ('513fe000-0000-0000-0000-000000000003', '513fa000-0000-0000-0000-000000000001', 'Tráfego',   'Tráfego Pago',      'Tráfego Pago',      'import',   'paid_social'),
+  ('513fe000-0000-0000-0000-000000000004', '513fa000-0000-0000-0000-000000000001', 'Página',    'Landing Page - LL', 'Landing Page - LL', 'import',   'direct_brand'),
+  ('513fe000-0000-0000-0000-000000000005', '513fa000-0000-0000-0000-000000000001', 'Webhook',   'webhook',           'webhook',           'manual',   null),
+  ('513fe000-0000-0000-0000-000000000006', '513fa000-0000-0000-0000-000000000001', 'À mão',     'Prospecção Ativa',  'Prospecção Ativa',  'import',   'referral');
+insert into public.lead_activities (lead_id, tipo, descricao, metadata) values
+  ('513fe000-0000-0000-0000-000000000005', 'webhook_inbound', 'Lead criado via inbound webhook',
+   jsonb_build_object('config_id', '513fc000-0000-0000-0000-0000000000f1'));
+
 create temp table _t56_before as
 select l.id, l.equipe_id, l.created_at, l.updated_at, l.origin_category, l.origin_detail,
        nullif(btrim(coalesce(l.origem, l.source)), '') as legacy, l.creation_source
@@ -99,6 +116,15 @@ begin
                       where t.raw->>'backfill' is distinct from 'sprint11_t56'
                          or t.raw->>'legacy_origin' is distinct from b.legacy),
     'T56 FAIL: o toque nao diz que veio do legado';
+
+  -- 7b. Os leads sintéticos, um de cada origem.
+  assert (select e.kind from public.lead_touches t join public.crm_entries e on e.id = t.entry_id
+           where t.lead_id = '513fe000-0000-0000-0000-000000000001') = 'agent'
+     and (select e.webhook_config_id from public.lead_touches t join public.crm_entries e on e.id = t.entry_id
+           where t.lead_id = '513fe000-0000-0000-0000-000000000005') = '513fc000-0000-0000-0000-0000000000f1'
+     and (select t.origin_category from public.lead_touches t where t.lead_id = '513fe000-0000-0000-0000-000000000006') = 'referral'
+     and (select t.platform from public.lead_touches t where t.lead_id = '513fe000-0000-0000-0000-000000000002') = 'google',
+    'T56 FAIL: os leads sinteticos (IA -> agente, webhook -> o proprio webhook, categoria escrita vence, Google)';
 
   -- 8. Entradas novas: só as singulares (agente, manual, importação), no máximo uma de cada por equipe.
   assert not exists (select 1 from public.crm_entries e

@@ -1994,10 +1994,282 @@ receita da Onda 3) · **Linha** (naturezas Duração e Entradas).
   e fumaça antes), legado, PR e merge.
 - Handoff "Sprint 11 · Onda 5".
 
+### Onda 6 — Copilot: rápido, certo e útil
+
+Motores: **Automação** (o agente opera pelos verbos do banco, como qualquer porta) ·
+**Consulta/Métricas** (o chat lê pelas mesmas RPCs do dashboard e das tabelas) ·
+**Eventos** (o que o Copilot faz fica registrado, com desfazer).
+
+#### Decisões do Human (2026-09-13)
+
+40. **O Copilot é a Onda 6, dentro da Sprint 11.** 6A: manter os negócios em dia —
+    nota, campos, etapa — em segundo plano, rápido e certo. 6B: o chat "Entenda como está
+    sua máquina de receita", só leitura. **Onda 7 = Modo Builder** (pipeline, campos,
+    etapas, metas, taxonomia, webhooks, tabelas, automações determinísticas, blocos do AI
+    Studio, tarefas e agenda) sobre changesets (`future_sprint__mcp_v1.md` §5).
+    Integrações (Meta, Google, Windsor.ai, ElevenLabs), API e MCP vêm depois; bugs e
+    acabamento das tabelas também.
+41. **Autonomia: o seguro é automático, o arriscado pede.** Automático: nota, campo
+    declarado **vazio**, nome/e-mail do contato vazio ou provisório, próxima tarefa,
+    etiqueta que a equipe já usa, avançar para etapa aberta ou de marco. Pede aprovação:
+    ganho/perda, voltar de etapa, valor/itens, trocar um valor já preenchido — e qualquer
+    ação abaixo do limiar de confiança da linha. Todo automático tem desfazer. Os modos por
+    linha continuam: observar · sugerir · autônomo.
+42. **Quando roda: quando a conversa pausa.** ~10 min depois da última mensagem do
+    cliente (a espera de cada linha, `pipeline_agent_rules.cooldown_minutes`), uma passada
+    por rajada — nunca por mensagem —, só negócio com mensagem nova, com teto diário de
+    créditos. O Sync só enfileira na frente; "Sync da etapa/pipeline" pega só quem tem
+    mensagem nova.
+43. **Arquitetura: fila no Postgres + cérebro no `python-agent` + verbos no banco.** O
+    Agno fica (a lentidão não é dele — achado 38). Por negócio: uma ida para o contexto,
+    uma chamada de modelo, uma ida para aplicar.
+44. **Tela: CRM › Copilot vira a casa** — saudação e barra de pergunta, "Para aprovar",
+    "O que fiz" com desfazer, configurações na engrenagem — e o negócio ganha o painel do
+    Copilot.
+
+#### Achados que moldam a onda (produção, 12–13/09)
+
+37. **Quase não é usado, e quando é, falha.** 11 execuções em 30 dias; as 2 últimas
+    (12/09) falharam por deriva de esquema: tarefa com status `pending` (o banco aceita
+    `a_fazer/fazendo/feito/parado`), touchpoint `inbound` (aceita
+    `call/email/meeting/note/whatsapp`), campos de contato descartados por não estarem no
+    dicionário. 2 das 8 equipes com o Agente CRM ligado; nenhum cron do Copilot
+    (`INGEST_ENABLED` nunca foi ligado): só roda no clique.
+38. **A lentidão é medida e não é do Agno.** O caminho vivo é o Workflow do Agno
+    (`COPILOT_WORKFLOW_ENABLED`): Torre (1 chamada de modelo) → Chão (outra) → executor que
+    roda cada verbo em sequência, cada um com 3–5 idas ao PostgREST a partir da VPS
+    (buscar, atualizar, carimbar histórico, cobrar crédito, gravar evento) — **2–3 s por
+    verbo**. A tela espera tudo pelo SSE antes de mostrar a telemetria.
+39. **O Copilot escreve direto nas tabelas** (`skills/core_table.py`: `update` de
+    `stage_id`, `status`, `custom_data`; enums escritos à mão em Python). Os gatilhos da
+    Onda 3 salvam desfecho e eventos, mas o Copilot não conhece os motores novos: itens e
+    catálogo, marcos por `funnel_event`, responsável por regra, origem, artefatos.
+40. **A Torre perdeu a função.** Desde a Onda 5 toda porta cria o negócio na chegada (a
+    linha da entrada, `crm_intake_pipeline`): o Copilot sempre começa de um negócio.
+41. **As configurações já existem** em `pipeline_agent_rules`: `cooldown_minutes` (a
+    espera), `autonomy_cost_ceiling` (o teto), `confidence_threshold`,
+    `auto_extract_custom_fields`, `auto_advance_stages`, `extraction_hints`. A onda as usa;
+    não cria outras.
+42. **O `python-agent` sobe sozinho do `main`** (Dokploy, `python-agent/DEPLOY.md`): o
+    merge é o deploy do agente. A parada da T67 cobre o merge, e o motor novo nasce
+    desligado (flag).
+
+#### Onda 6A — O motor
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T58 | Fila, espera e contexto | Automação | L |
+| T59 | Aplicar, desfazer e aprovar | Automação · Eventos | L |
+| T60 | O cérebro: uma chamada, em paralelo, cronometrado | Automação | L |
+| T61 | Sync rápido: negócio, etapa, pipeline | Automação | M |
+
+#### T58 · Fila, espera e contexto (L)
+
+**Files:** create `supabase/migrations/20260914000100_sprint11_w6_copilot_queue.sql`,
+`supabase/tests/sprint11_w6_copilot_queue.test.sql`.
+
+- `copilot_jobs`: equipe, negócio, lead, motivo (`conversation` · `manual` ·
+  `sync_stage` · `sync_pipeline`), `run_after`, prioridade, status (`queued` · `running`
+  · `done` · `failed` · `capped`), tentativas, último erro, `run_id`, `claimed_at` e os
+  tempos. Um job na fila por negócio (índice parcial). RLS: a equipe lê; escrita pelos
+  verbos.
+- `copilot_memory` (por negócio): resumo, fatos, cursor da última mensagem lida.
+- Gatilho em `messages` (só `sender_type = 'customer'`, equipe com Agente CRM ligado e
+  linha com o agente configurado — `copilot_agents` de escopo `pipeline`; sem ele, a linha
+  só roda pelo Sync): upsert do job do negócio aberto do lead com
+  `run_after = now() + espera`; cada mensagem empurra. Barato: um `select` e um upsert.
+- `crm_copilot_claim(p_limit)` (service_role): `for update skip locked`; job preso há mais
+  de 5 min volta para a fila; 3 tentativas e falha com o motivo.
+- `crm_copilot_context(p_opportunity_id)` (service_role), numa ida: negócio (etapa,
+  valor, itens, dono), contato, etapas da linha (tipo, marco, descrição, SLA, posição),
+  campos declarados (`field_id`, `key`, tipo, opções, descrição, valor atual), oferta do
+  catálogo, tarefas abertas, mensagens desde o cursor (até 40, texto), resumo anterior,
+  modo, limiar, dicas de extração.
+- Teste SQL: a espera empurra; um job por negócio; equipe desligada não enfileira;
+  `claim` não entrega o mesmo job duas vezes e recupera o preso; o contexto traz só as
+  mensagens novas; outra equipe barrada.
+
+#### T59 · Aplicar, desfazer e aprovar (L)
+
+**Files:** create `supabase/migrations/20260914000200_sprint11_w6_copilot_apply.sql`,
+`supabase/tests/sprint11_w6_copilot_apply.test.sql`.
+
+- `crm_copilot_apply(p_opportunity_id, p_run_id, p_actions, p_summary, p_confidence)`
+  (service_role), uma transação: confere cada ação pelo contrato — ids que vieram no
+  contexto, tipo do campo (número em português por `_crm_parse_br_number`, data, opção da
+  lista, sim/não), etapa da mesma linha, status e tipos do banco —; aplica as seguras
+  conforme o modo e o limiar (decisão 41); guarda as arriscadas como `ai_decisions`
+  pendentes; grava resumo e cursor; devolve o resultado por ação; cobra por ação aplicada
+  via `charge_credits`, idempotente por `run_id` + ação. Ação inválida é recusada com
+  motivo; as válidas seguem.
+- Mover etapa pelo caminho das telas: os gatilhos da Onda 3 (desfecho, histórico, marco,
+  receita) fazem o resto, como se uma pessoa movesse o card.
+- `crm_copilot_undo(p_decision_id)` (authenticated, equipe): desfaz pelo inverso guardado
+  (valor anterior, etapa anterior, ids criados).
+- `crm_copilot_resolve(p_decision_id, p_approve)` (authenticated): aprovar confere a ação
+  contra o negócio de agora — mudou, fica "desatualizada" e não aplica; recusar arquiva.
+- Teste SQL: cada ação segura aplica e desfaz; a arriscada vira pendente; aprovar aplica;
+  aprovação velha não aplica; campo não declarado recusado com motivo; campo preenchido
+  não muda sem aprovação; ganho só por aprovação (e a etapa fecha o negócio); modo
+  observar não grava nada; crédito cobrado uma vez só.
+
+#### T60 · O cérebro (L)
+
+**Files:** create `python-agent/app/copilot/keeper.py`, `python-agent/app/copilot/actions.py`,
+`python-agent/app/routers/jobs.py`, `python-agent/tests/test_keeper.py`,
+`python-agent/tests/test_jobs_router.py`,
+`supabase/migrations/20260914000300_sprint11_w6_copilot_cron.sql`; modify
+`python-agent/app/main.py`, `python-agent/app/config.py`.
+
+- `POST /api/v1/jobs/tick` (token interno): reivindica até N jobs e roda com teto de
+  concorrência (5). Por job: contexto (T58) → **uma** chamada de modelo (Agno, saída
+  estruturada `{summary, actions[], confidence}`) → aplicar (T59). Falha do provedor: nova
+  tentativa com espera; nada é cobrado.
+- O prompt é o contrato das ações e as regras da linha (etapas, marcos, campos com
+  descrição e dicas de extração); a saída só pode citar ids do contexto.
+- Eventos da execução com `context_ms`, `model_ms`, `apply_ms` — a métrica da onda.
+- Cron a cada minuto (`pg_cron` → `pg_net`), com o token lido do Vault — nunca em
+  arquivo. Flag `COPILOT_JOBS_ENABLED`, desligado por padrão.
+- A Torre sai do caminho; o Workflow antigo e a cascata ficam atrás dos flags de hoje e
+  saem na Onda 7.
+- Testes: execução com cliente e modelo falsos; saída inválida do modelo não aplica nada;
+  o teto de concorrência vale; os tempos são gravados.
+
+#### T61 · Sync rápido (M)
+
+**Files:** create `supabase/migrations/20260914000400_sprint11_w6_copilot_sync.sql`,
+`supabase/tests/sprint11_w6_copilot_sync.test.sql`, `src/hooks/useCopilotJobs.ts`;
+modify `src/components/crm/copilot/SyncButton.tsx`, `python-agent/app/routers/sync.py`
+(compatível: passa a enfileirar).
+
+- `crm_copilot_enqueue(p_opportunity_id | p_stage_id | p_pipeline_id)` (authenticated):
+  enfileira na frente o negócio pedido, ou só os negócios da etapa/pipeline com mensagem
+  depois do cursor; devolve quantos.
+- Tela: o Sync do negócio mostra "na fila → lendo → pronto" pelo Realtime do job; o da
+  etapa/pipeline mostra o progresso (feitos de total). Nada de esperar o SSE.
+- Teste: pipeline com 1.000 negócios e 30 com mensagem nova → 30 jobs; o vendedor só
+  enfileira o que pode ver.
+
+#### Onda 6B — Chat e telas
+
+| # | Tarefa | Motor | Tier |
+| :-- | :-- | :-- | :-- |
+| T62 | Ferramentas de leitura: o negócio em resumo e onde focar | Consulta | M |
+| T63 | Chat "Entenda como está sua máquina de receita" | Consulta · Métricas | L |
+| T64 | A casa do Copilot | — | L |
+| T65 | O Copilot no negócio | — | M |
+| T66 | Precisão e velocidade | — | M |
+| T67 | Verificação, deploy (parada) e handoff | — | S |
+
+#### T62 · Ferramentas de leitura (M)
+
+**Files:** create `supabase/migrations/20260914000500_sprint11_w6_copilot_read.sql`,
+`supabase/tests/sprint11_w6_copilot_read.test.sql`.
+
+- `crm_copilot_deal_brief(p_opportunity_id)` (RLS da equipe): o resumo do Copilot, a
+  origem (primeiro toque), tarefas abertas, pendências e as últimas ações.
+- `crm_focus_list(p_owner_id default null, p_limit default 10)` (escopo do dashboard,
+  `_funnel_scope`): pontua valor, atividade recente do cliente, tempo parado além do SLA
+  da etapa e aprovação esperando — determinístico, com o motivo de cada negócio.
+- Teste: a vendedora só vê os seus; o motivo bate com a pontuação; o vizinho não vê nada.
+
+#### T63 · Chat (L)
+
+**Files:** create `python-agent/app/copilot/chat.py`, `python-agent/app/copilot/tools.py`,
+`python-agent/app/routers/chat.py`, `python-agent/tests/test_chat_tools.py`,
+`supabase/migrations/20260914000600_sprint11_w6_copilot_threads.sql` (+ teste).
+
+- `POST /api/v1/chat` com o JWT do usuário, resposta em streaming. As ferramentas chamam
+  as RPCs **com o token do usuário** (RLS e `_funnel_scope` valem): resumo
+  (`get_funnel_overview`), quebra (`get_funnel_breakdown`), evolução
+  (`get_funnel_series`), retorno (`crm_campaign_report`), placar (`crm_placar`), negócios
+  (`crm_opp_table` com os filtros da Onda 2/5), negócio (`crm_copilot_deal_brief`), onde
+  focar (`crm_focus_list`), perdas (`get_loss_reasons`).
+- Número só vem de ferramenta; sem dado, diz que não tem. A resposta diz o período e o
+  filtro; lista vira link da Tabela de Leads com os filtros na URL; negócio vira link do
+  modal.
+- Conversas por usuário (`copilot_threads`, `copilot_messages`; RLS do dono); as últimas
+  voltas vão junto.
+- Crédito: `charge_credits` a preço 0 no piloto (recusa equipe suspensa) e tokens no
+  ledger; o preço sai de ~20 conversas reais (`future_sprint__mcp_v1.md` §7).
+
+#### T64 · A casa do Copilot (L)
+
+**Files:** create `src/components/crm/copilot/CopilotHome.tsx`, `CopilotChat.tsx`,
+`CopilotFeed.tsx`, `CopilotApprovals.tsx`, `CopilotSettingsSheet.tsx`,
+`src/hooks/useCopilotChat.ts`, `src/lib/copilotFeed.ts` (+ testes); modify
+`src/pages/CopilotCockpit.tsx` e `src/pages/CRM.tsx`.
+
+- Saudação "Entenda como está sua máquina de receita", barra de pergunta e sugestões
+  ("Como foi hoje?", "Onde devo focar?", "ROI do mês", "Por que perdemos?").
+- "Para aprovar": aprovar/recusar num clique; "desatualizada" avisada.
+- "O que fiz": por dia, em palavras, com desfazer; falhas em linguagem de gente.
+- Engrenagem: modo por linha, o que o Copilot pode preencher e mover, espera, teto
+  diário (as colunas de `pipeline_agent_rules`).
+- Os painéis antigos (HUD de telemetria, sala de controle, treino) saem ou entram na casa;
+  o saldo de créditos fica.
+
+#### T65 · O Copilot no negócio (M)
+
+**Files:** create `src/components/crm/copilot/DealCopilotPanel.tsx`; modify
+`src/components/crm/OpportunityDetailModal.tsx`, `src/components/crm/OpportunityCard.tsx`.
+
+- Resumo, sugestões pendentes, últimas ações com desfazer e "Sincronizar agora"; o card
+  ganha um selo quando há sugestão esperando.
+
+#### T66 · Precisão e velocidade (M)
+
+**Files:** create `python-agent/evals/test_eval_keeper_precision.py`,
+`python-agent/evals/test_eval_chat_numbers.py`, fixtures sintéticas (nenhum dado de
+cliente), `supabase/scripts/2026-09-14_copilot_speed_report.sql`.
+
+- Evals: conversas no estilo das reais → ações esperadas (acerto por tipo de ação);
+  pergunta sem dado → "não tenho esse dado", nunca número inventado.
+- Relatório de velocidade (p50/p90 de contexto, modelo e aplicar) a partir dos eventos.
+  Metas: ~4 s por negócio; resultado do Sync em menos de 10 s; primeira palavra do chat
+  em menos de 2 s.
+
+#### T67 · Verificação, deploy e handoff (S)
+
+- Gates: `tsc -b`, lint, build, vitest, Deno, pytest, evals, SQL.
+- **Ponto de parada — aprovação do founder** para: migrations da onda, o cron (token no
+  Vault), o merge (o Dokploy publica o `python-agent` do `main`), ligar
+  `COPILOT_JOBS_ENABLED` e o piloto na Solo Energia.
+- Handoff "Sprint 11 · Onda 6".
+
+### Onda 7 (planejada) — Copilot em Modo Builder
+
+Changesets (`describe · plan · apply · revert`, `future_sprint__mcp_v1.md` §5.1) e o
+Copilot propondo, com diff e desfazer: pipeline, etapas, campos, metas, taxonomia,
+webhooks, tabelas, automações determinísticas, blocos do AI Studio, tarefas e eventos da
+agenda. Antes do plano: D2 (quem altera configuração — recomendado admin/gestor) e D4
+(cobrança no apply) do estudo do MCP.
+
+### Integrações (conselho para a sprint seguinte)
+
+- **Uma porta, os mesmos verbos.** Todo conector chama o que as telas chamam
+  (`crm_record_touch`, a fila de saída, os lançamentos de investimento); API e MCP depois
+  são mais portas para o mesmo núcleo.
+- **Fundação primeiro:** credenciais cifradas (Vault), catálogo de conectores na página
+  de Integrações, fila de saída com nova tentativa — obrigatória antes de devolver
+  conversão, que não pode se perder.
+- **Meta:** Lead Ads entram pelo webhook `leadgen` como chegada (formulário, anúncio e
+  campanha — os campos da Onda 5 já existem); o retorno vai pela Conversions API a partir
+  dos eventos do funil e da receita (lead, qualificado, reunião, venda com valor), com
+  `fbclid`/`ctwa_clid` e telefone/e-mail com hash.
+- **Google:** formulário de lead pelo mesmo caminho; ganho volta como conversão offline
+  pelo `gclid`.
+- **Windsor.ai:** para **ler** investimento e métricas de várias plataformas
+  (`crm_campaign_spend`, fonte da API) sem um conector de relatório por plataforma. Entrada
+  de lead e retorno de conversão ficam nativos (tempo real e os nossos ids).
+- **ElevenLabs:** é do lado do atendimento (agente de WhatsApp, voz), não dos motores do
+  CRM.
+- **Ordem:** fundação → Meta → Google → Windsor → REST API → MCP.
+
 ### Fora desta sprint
 
-Copilot: velocidade e UI (ponto 8 — medir antes de mexer) · modelo do lead score ·
-página de integrações · MCP (`future_sprint__mcp_v1.md`) · visões salvas, agrupar e
+Copilot em Modo Builder (Onda 7, planejada acima) · modelo do lead score ·
+página de integrações (conselho acima) · MCP (`future_sprint__mcp_v1.md`) · visões salvas, agrupar e
 "selecionar todos os filtrados" (v1.2) · filtros por campo de contato · campos de
 contato em `field_id` (v1.2) · regras do Agente CRM com campo Usuário · campo com
 vários usuários · virtualização de lista (só se o orçamento de latência falhar).
@@ -2071,6 +2343,21 @@ modal do negócio são tocados por várias tarefas, uma de cada vez, na ordem.
 Execução solo e sequencial, branch `claude/sprint11/w5a/entradas` (T48–T51) e
 `claude/sprint11/w5b/campanhas-e-roi` (T52–T57, do 5A). O `crm-webhook` é a porta
 viva de lead de todos os tenants: teste Deno da captura + ensaio SQL antes da parada.
+
+
+### Wave map — Onda 6
+
+```
+6A   T58 ─► T59 ─► T60 ─► T61          fila e contexto; aplicar; o cérebro; sync
+6B   T58 ─► T62 ─► T63                 leitura; chat
+     T59 + T63 ─► T64 ─► T65           a casa; o painel do negócio
+     T60 + T63 ─► T66 ─► T67           precisão e velocidade; uma parada
+```
+
+Execução solo e sequencial, branch `claude/sprint11/w6a/copiloto-motor` (T58–T61) e
+`claude/sprint11/w6b/copiloto-chat-e-telas` (T62–T67, do 6A). O `python-agent` sobe do
+`main` sozinho: o motor novo nasce atrás de `COPILOT_JOBS_ENABLED` (desligado) e só liga
+depois da parada.
 ---
 
 ## 📊 Ledger
@@ -2146,4 +2433,17 @@ viva de lead de todos os tenants: teste Deno da captura + ensaio SQL antes da pa
 - [x] T54 · Filtros, quebras e relatório de campanha (ROI) · L — migration `20260913000300`. **Filtros:** o filtro compilado da Onda 2 ganha campanha (com "sem campanha"), plataforma (com "sem plataforma") e entrada, do primeiro toque do lead, no negócio e no contato — Kanban, Tabela de Leads do servidor e Base de Contatos; na tela, "Campanha" e "Plataforma" nas duas barras, com chip e URL (`campanha`, `plataforma`). **Quebras:** `get_funnel_breakdown` com `campaign`, `platform` e `entry` (cartões na página Canais). **Relatório:** `crm_campaign_report(de, até, linhas, responsáveis)` — por campanha e "Sem campanha": leads (primeiro toque no período), negócios, ganhos e perdas pelo evento (dono do momento; reaberto não conta), receita líquida do livro-razão, investimento; CPL, custo por ganho, taxa de ganho, ROAS e ROI. Conta como o dashboard: mesmo escopo (a vendedora vê o seu), mesmos filtros de linha e responsável; o investimento é da campanha inteira (não tem linha nem dono) e isso está escrito no cartão. Tela: aba **Resultados** em CRM › Campanhas (período) e cartão **Retorno por campanha** na página Canais do dashboard (filtros do dashboard); linha de total com as contas só sobre as campanhas com investimento ("Sem campanha" não dilui o CPL nem infla o ROI). 5 blocos SQL (contas, filtros de linha/responsável, a vendedora, filtros compilados e tabela do servidor, quebras, o vizinho); as suítes antigas de filtros/quadro/métricas rodam com a onda e passam. `lib/campaigns` (período, total) +3 testes; barras e URL +3
 - [x] T55 · Naturezas Duração e Entradas · M — migration `20260913000400`. **Duração** em `pipelines.natures`: contínua ou campanha (início e fim, datas reais e em ordem — `invalid_duration`); quem salva sem falar da duração (Track Shaper, tela antiga) não a apaga. A linha encerra no dia seguinte ao fim (fuso de Brasília, `_crm_line_closed`). **Onde o negócio nasce:** `crm_intake_pipeline` (só service_role) — a linha pedida, ou a padrão quando a campanha acabou, a linha foi apagada ou é de outra equipe; a padrão encerrada segue recebendo (não há para onde mandar). O resolvedor das edges (`_shared/opportunities.ts`) pergunta a ela antes de criar; quem já tem negócio aberto na linha encerrada continua nele (a linha para de receber, não de trabalhar); trocada a linha, o negócio aberto na padrão é reaproveitado, não duplicado; se a pergunta falhar, a porta segue a regra antiga. **Desvio do plano:** a regra mora onde o negócio nasce, não no `crm_record_touch` — mover depois do toque daria dois negócios abertos a quem volta. **Entradas:** a linha da entrada agora vale — o número de WhatsApp (`solo-wpp-webhook`) e o agente (`gpt-maker-webhook`) mandam o negócio novo para a linha da sua entrada (vazia = a padrão, igual a hoje), perguntada só na hora de criar; negócio aberto em qualquer linha é reaproveitado como antes. Manual e importação escolhem a linha no cadastro (a entrada deixa de oferecer linha — em T52 a escolha não fazia nada); o webhook usa a do webhook. Editor de naturezas: seções **Duração** (datas, "no ar: dia N de M" / encerrada / ainda não começou; aviso quando é a linha padrão) e **Entradas** (as portas cujo negócio novo nasce aqui, com carimbo e quem pega). **Placar** de linha-campanha é o da campanha: meta e ritmo sobre os dias da campanha, com as datas e "encerrada". Modelos de linha nascem contínuos. Testes: 4 blocos SQL (gravar, encerrar, onde nasce + o app barrado, a linha de cada entrada); as suítes de naturezas e Track Shaper da Onda 3 rodam com a migration e passam; 5 testes Deno do resolvedor (encerrada → padrão, sem duplicar, a encerrada ainda trabalha, linha da entrada perguntada só ao criar, falha → regra antiga) + 1 do `entryLine`; `lib/natures` +7. O `analyze-message` usa o mesmo resolvedor: pega a regra no próximo deploy dele (sem pressa — cria na padrão)
 - [x] T56 · Legado: origem das bases antigas · M — script `supabase/scripts/2026-09-13_sprint11_backfill_touches.sql` (**não rodado na produção** — parada da T57). Um toque por lead sem toque, na data de criação, pelo mapa da decisão 38 sobre `origem`/`source`. A entrada: o próprio webhook quando o log de atividade guarda o `config_id` (80 leads, 3 equipes); IA → agente (862, sem categoria inventada); webhook sem rastro → importação/API (antes da T50 esses leads ficavam como `manual`); criado à mão → manual (3); o resto → importação (1.282). A categoria escrita (à mão ou pela classificação da Sprint 9, que já seguia o mesmo mapa) nunca é trocada e vence o mapa no toque; o lead só ganha `first_touch_id`, `entry_id`, plataforma se vazia e categoria se vazia — `origin_detail`, `origem`, `source` e o **`updated_at` ficam** (o gatilho é desligado só dentro da transação; a ordem "atualizado recentemente" não embaralha 2.227 leads). Landing page/Site guardam o nome da página no toque; todo toque diz `raw.backfill = sprint11_t56` e a origem antiga. Idempotente (só lead sem toque nenhum). **Ensaio** `sprint11_w5_backfill.test.sql`: roda as 4 migrations e o script sobre os dados de verdade em rollback e confere um toque por lead, data, entrada da equipe, categoria intacta, `updated_at`/`origin_detail` intactos, IA, webhook com rastro, o mapa, segunda rodada sem efeito e o gatilho religado — PASS
-- [ ] T57 · Verificação, deploy e handoff · S — **gates verdes** (12/09): `tsc -b` limpo · lint 0 erro · build · vitest 333/333 · Deno 136/136 · 36/36 suítes SQL em rollback contra a produção. Achados do gate, corrigidos: a importação de planilha não gravava chegada (agora pela "Importação / API") e o ensaio da semente da Onda 4 supunha a produção de antes do deploy. Handoff "Sprint 11 · Onda 5" escrito. **Deploy aprovado pelo founder e feito (12/09):** cópia da origem dos 2.227 leads; 4 migrations com histórico; as 3 edges publicadas (fumaça 200); legado com 2.227 toques (0 lead sem toque, 0 categoria escrita trocada, 0 `updated_at` mudado); PR → main → Netlify
+- [x] T57 · Verificação, deploy e handoff · S — **gates verdes** (12/09): `tsc -b` limpo · lint 0 erro · build · vitest 333/333 · Deno 136/136 · 36/36 suítes SQL em rollback contra a produção. Achados do gate, corrigidos: a importação de planilha não gravava chegada (agora pela "Importação / API") e o ensaio da semente da Onda 4 supunha a produção de antes do deploy. Handoff "Sprint 11 · Onda 5" escrito. **Deploy aprovado pelo founder e feito (12/09):** cópia da origem dos 2.227 leads; 4 migrations com histórico; as 3 edges publicadas (fumaça 200); legado com 2.227 toques (0 lead sem toque, 0 categoria escrita trocada, 0 `updated_at` mudado); **PR #19** no main (`12529db`), o Netlify serve o bundle novo. Pendente: verificação no navegador
+
+### Ledger · Onda 6
+
+- [x] T58 · Fila, espera e contexto · L — migration `20260914000100`. `copilot_jobs` (um trabalho na fila por negócio; motivo, prioridade, `run_after`, tentativas, erro, `run_id`, tempos) e `copilot_memory` (resumo, fatos, cursor da última mensagem lida), RLS da equipe, Realtime na fila. Gatilho em `messages`: só mensagem do cliente, equipe com Agente CRM e linha com agente configurado; a espera é `cooldown_minutes` entre 5 e 240 min (as regras de hoje dizem 1 — vale o mínimo); cada mensagem empurra; o Sync pedido não é empurrado; a fila nunca derruba a mensagem. `crm_copilot_claim` (sem pegar o mesmo duas vezes; o preso de 5 min volta ou falha na 3ª) e `crm_copilot_finish` (falha volta com espera de 1, 4, 9 min). **Correção do achado 41:** `autonomy_cost_ceiling` é o limite de ferramentas do time autônomo antigo, não teto de crédito — o teto virou a coluna nova `pipeline_agent_rules.daily_run_cap` (passadas por dia na linha, padrão 200; a que falhou conta, a sem nada novo não); quem bate espera amanhã 07:00 com o motivo. O status `capped` do plano virou "na fila até amanhã" com o motivo. `crm_copilot_context` numa ida: negócio, contato (nome provisório detectado), etapas com marco, campos que o Copilot preenche (sem endereço/usuário/arquivo, sem apagado) com valor, itens, catálogo da linha, tarefas abertas, etiquetas da equipe, só as mensagens depois do cursor (40, texto; mídia vira "[áudio]"), memória, modo (linha sem agente = sugerir) e limiar. Só service_role. 5 blocos SQL
+- [x] T59 · Aplicar, desfazer e aprovar · L — migration `20260914000200`. `crm_copilot_apply` (só service_role), uma transação por passada: cada ação é conferida pelo contrato (`_copilot_check`: ids do contexto, tipo do campo — número em português, data, opção da lista sem diferenciar maiúsculas, sim/não —, etapa da mesma linha, tarefa e nota sem repetir, até 20 por passada) e classificada; o modo e o limiar decidem — observar registra (`proposed`), sugerir pede, autônomo aplica a segura com confiança acima do limiar; `auto_extract_custom_fields`/`auto_advance_stages` desligados pedem. Segura: nota, campo vazio, nome provisório, e-mail vazio, tarefa (`a_fazer`, dono do negócio), etiqueta da equipe, avançar para etapa aberta; arriscada: ganho/perda, voltar, etapa de ganho/perda, trocar valor preenchido, valor do negócio, etiqueta nova, nome ou e-mail de verdade. Ação que falha não leva as outras (subtransação) nem cobra. Mover etapa é o `update` das telas com `crm.actor_type = 'copilot'`: o histórico diz Copilot e o marco é gravado pelo gatilho da Onda 3. Automático cobra 1 crédito (`charge_credits`, pool Copiloto, idempotente por passada + ação, `mode = 'auto'` — o ledger só aceita auto/manual); sem crédito, vira pedido. Cada ação válida vira uma `ai_decisions` (`agent_role = 'copilot'`) com rótulo em português ("Valor: R$ 42000,00", "Moveu para Qualificado"), o esperado e o inverso; status novos `undone`/`stale`. Resumo e cursor em `copilot_memory` (o cursor só anda para a frente). `crm_copilot_undo` desfaz pelo inverso e recusa se alguém mexeu depois; `crm_copilot_resolve` aprova conferindo de novo (mudou → desatualizada) ou recusa; aprovar e desfazer não cobram. **Fora, de propósito:** itens do catálogo (trocar a lista pede o diff do Builder, Onda 7). 4 blocos SQL
+- [x] T60 · O cérebro: uma chamada, em paralelo, cronometrado · L — `python-agent/app/copilot/` — `repo.py` (os quatro verbos pela conexão direta do Postgres, uma ida cada, em thread), `keeper.py` (uma passada: contexto → **uma** chamada de modelo pelo Agno com o contrato das ações no prompt — ids reais das etapas e campos, marcos, dicas da linha, resumo anterior, só a conversa nova — → aplicar; nada novo = fecha como `skipped` sem chamar o modelo; provedor, resposta ilegível ou aplicar com erro = `failed`, nada aplicado nem cobrado; fechar nunca levanta), `actions.py` (o formato da resposta, solto de propósito: quem confere é o banco). `POST /api/v1/jobs/tick` (X-Agent-Token): pega o lote, responde 202 na hora e processa em segundo plano com teto de concorrência único (4 = o pool); desligado por padrão (`COPILOT_JOBS_ENABLED`), `KEEPER_MODEL` opcional. Migration `20260914000300`: `_copilot_tick()` só acorda o agente quando há trabalho vencido, com endereço e token lidos do Vault (`copilot_agent_url`, `copilot_agent_token`) — nada de segredo em migration, script ou texto do cron (os crons antigos guardam o segredo no próprio comando); `supabase/scripts/2026-09-14_sprint11_schedule_copilot_tick.sql` liga o `copilot-tick` no T67. Um evento por passada com `context_ms`/`model_ms`/`apply_ms`. A Torre e o Workflow antigo ficam atrás dos flags de hoje (saem na Onda 7). 8 testes do keeper + 4 do despertador (pytest 345 verdes) + SQL do despertador (fila vazia, sem segredo, com segredo em rollback)
+- [x] T61 · Sync rápido: negócio, etapa, pipeline · M — migration `20260914000400`. `crm_copilot_enqueue` (a equipe, pela tela): o negócio pedido — ou o negócio aberto do contato (a caixa de entrada só conhece o contato) — entra agora e na frente (prioridade 10), sem duplicar, e o trabalho que esperava a conversa pausar passa a rodar já; etapa ou pipeline enfileiram só os negócios abertos com mensagem depois da última leitura (prioridade 5, até 500); escopo do dashboard (a vendedora só enfileira os seus); equipe com o Agente de CRM desligado = `copilot_disabled`. Devolve quantos e quais. Tela: o ⚡ (card, caixa de entrada, cabeçalho do pipeline — as mesmas props) só enfileira e acompanha os trabalhos: "Na fila → Lendo a conversa… → Pronto" ou "12 de 30", e um aviso diz o que o Copilot fez ("3 ações aplicadas, 1 para aprovar", "Nada novo…", a falha em palavras). `lib/copilotJobs` (progresso e textos) + `useCopilotJobs` (enfileirar; acompanhar a cada 2,5 s só enquanto há trabalho andando — a fila está no Realtime para a casa do Copilot, T64). O SSE, o HUD de telemetria e o selo "pensando" ficaram sem uso: saem no T64. O `/api/v1/sync` antigo fica como está para telas antigas (sai com o caminho antigo, Onda 7). Teste SQL com 1.000 negócios e 30 conversas novas = 30 trabalhos; 7 testes de `lib/copilotJobs`, 4 do botão
+- [x] T62 · Ferramentas de leitura: o negócio em resumo e onde focar · M — migration `20260914000500`. `crm_copilot_deal_brief` (a equipe): contato, linha, etapa, dono, dias na etapa, o resumo do Copilot, a origem (primeiro toque: entrada, categoria, plataforma, campanha), tarefas abertas, sugestões esperando, as últimas ações e o último trabalho da fila. `crm_focus_list(dono, limite)` (escopo do dashboard: a vendedora vê os seus): determinístico, sem modelo — cliente esperando resposta (+25), escreveu nas últimas 24 h (+35) ou 72 h (+20), parado além do SLA da etapa (+20), tarefa atrasada (+15), sugestão do Copilot esperando (+15), valor proporcional ao maior negócio aberto do escopo (até +30); só entra quem tem algum sinal (o negócio grande e quieto não), cada um com os motivos em português ("parado há 72 h (SLA 48 h)"). Índice novo `messages (lead_id, created_at desc)` — o contexto do Copilot, o Sync em lote e o foco perguntam pela conversa mais recente. 3 blocos SQL
+- [x] T63 · Chat "Entenda como está sua máquina de receita" · L — `POST /api/v1/chat` (JWT do usuário), resposta em SSE: `thread` → `tools` (as consultas, para a tela mostrar) → `delta`… → `done` (id da mensagem, links) ou `error`. Três passos: **planejar** (uma chamada curta pelo Agno escolhe até 3 consultas em JSON — sem depender da chamada de ferramenta nativa do provedor, que o roteador Verboo já negou recurso antes), **consultar** (em paralelo, cada consulta é uma ida ao banco **como o usuário**: na transação a conexão assume `authenticated` com o `sub` dele — a RLS e o escopo do dashboard valem, a vendedora vê o seu), **responder** (chamada em streaming pelo Agno, só com os resultados: número só de consulta, período e filtro ditos, erro dito, links em markdown). 11 consultas: resumo, quebra (canal, campanha, plataforma, entrada, responsável, linha, produto, motivo de perda), evolução, retorno das campanhas, placar, linhas e equipe, negócios (filtros da Onda 2 e link da Tabela de Leads com eles na URL), busca, negócio (resumo do Copilot), onde focar, perdas; "linha" e "responsável" aceitam o nome. Conversas por usuário (migration `20260914000600`: `copilot_threads`/`copilot_messages`, só o dono lê e apaga; quem escreve é o agente), com as consultas usadas e o tempo de cada passo. **Desvio:** `charge_credits` recusa preço 0, então "cobrar a 0 no piloto" virou a checagem direta de `tenant_is_suspended` (o que importava: conta suspensa não conversa) + os tempos por resposta para precificar depois. `CHAT_MODEL` opcional. 8 testes do chat + 8 das consultas (pytest verde) + SQL das conversas
+- [x] T64 · A casa do Copilot · L — CRM › Copilot virou a casa: **"Entenda como está sua máquina de receita"** (barra de pergunta, sugestões "Como foi hoje?", "Onde devo focar?", "ROI do mês", "Por que perdemos?"; a resposta chega em streaming com as consultas como selos e os links para as telas — renderizador de markdown mínimo e seguro: negrito, lista e link só para caminho do app ou https), **Para aprovar** (aprovar/recusar num clique; o motivo de cada um — "pede aprovação", "confiança baixa"…; desatualizada avisada) e **O que fiz** (por dia, em palavras, com desfazer; as passadas que falharam no topo; "hoje: N negócios lidos · N ações"). A configuração de antes (linha por linha: modo, prompt, regras; base de contatos; treino; o registro completo) foi para o **Configurar**, sem reescrever. Nas regras da linha: "Espera depois da conversa" (5–120 min — o servidor garante o mínimo de 5) e **Leituras por dia** (`daily_run_cap`). `crm_copilot_feed` entrou na migration `20260914000500` (escopo do dashboard; bloco SQL novo). Saíram o SSE antigo, o HUD de telemetria, o selo "pensando" e o `useSyncJobPersistence` (o botão já não usava). `lib/copilotFeed` + `lib/copilotChat` (8 testes: SSE em pedaços, markdown, link inseguro, dias, textos), 3 testes da casa
+- [x] T65 · O Copilot no negócio · M — No modal do negócio, a seção **Copilot** (só com o Agente de CRM ligado, carregada só aberta) troca as "Decisões do Copilot" antigas (API externa, só o tipo e a hora): o resumo que o Copilot mantém ("atualizado dd/mm"), a última leitura ("2 ações, 1 para aprovar" / "falhou — …" / "nada novo"), **Esperando você** (aprovar/recusar, com o motivo) e **O que o Copilot fez** (com desfazer) — `crm_copilot_deal_brief` pelo `useCopilotDeal`. O "Sync com Copilot" do rodapé (chamava o `/sync` antigo e esperava) virou o ⚡ da fila. No card do Kanban, o selo **Sugestão do Copilot** quando há sugestão esperando — sem consulta nova: o card já carregava as pendências da linha (`useCopilotApprovals`), agora filtradas por `agent_role = 'copilot'`. Aprovar/recusar/desfazer ficaram num hook só (`useCopilotDecisionActions`), usado pela casa e pelo painel, atualizando a casa, o painel, as pendências e o quadro. 3 testes do painel
+- [x] T66 · Precisão e velocidade · M — Evals (rodam antes do deploy, com a chave do modelo; sem chave, pulam — o job "Backend evals" do CI): **precisão do Copilot** (`evals/test_eval_keeper_precision.py`) sobre 6 conversas sintéticas no estilo das reais, sem dado de cliente — consumo/telhado/cidade, qualificação com pedido de proposta, fechamento explícito, desistência, nome e e-mail do contato, conversa sem novidade — com o que deve vir e o que não pode (ganho sem fechamento, tarefa para quem desistiu); portões: nenhum id inventado, ≥ 75% das esperadas, no máximo 1 proibida; **o chat não inventa número** (`evals/test_eval_chat_numbers.py`): resultados fixos, todo número da resposta tem de estar nos resultados (ou na pergunta) e, sem o dado, "não tenho". A pontuação é determinística e testada no CI (`evals/scoring.py`, 7 testes: id inventado, valor em português, alternativa, proibida, número de fora — sem alarme falso para data, "mil" e R$ com centavos). Sem chave local: os evals de modelo rodam no deploy (T67). **Relatório de velocidade** `supabase/scripts/2026-09-14_copilot_speed_report.sql` (somente leitura): p50/p90 de contexto, modelo e aplicar; espera na fila e do pedido ao fim por motivo; chat até a primeira palavra (planejar + consultar) e total; aplicadas/desfeitas/aprovadas/recusadas/desatualizadas; por que falhou — compilado contra as tabelas da onda num teste SQL
+- [ ] T67 · Verificação, deploy e handoff · S — **gates verdes** (14/09): `tsc -b` limpo · lint 0 erro · build · vitest 314/314 · Deno 136/136 · pytest 368 · evals de modelo pulados sem chave local · 43/43 suítes SQL em rollback. Achado do gate: o ensaio do legado da Onda 5 supunha a produção de antes do deploy (agora traz os próprios leads antigos sintéticos). Handoff "Sprint 11 · Onda 6" escrito. **Parada — aguardando aprovação do founder** para: 6 migrations, evals com a chave, PR/merge (publica também o `python-agent`), `COPILOT_JOBS_ENABLED`, os segredos do Vault, o despertador e o piloto na Solo Energia

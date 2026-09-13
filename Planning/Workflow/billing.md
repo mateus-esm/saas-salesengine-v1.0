@@ -330,3 +330,13 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W5B | T55 Naturezas Duracao e Entradas | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5B | T56 Legado: origem das bases antigas (script + ensaio) | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5B | T57 Verificacao e handoff (deploy aguardando aprovacao) | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-13 | 11 W6 | T58 Fila, espera e contexto do Copilot | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 W6 | T59 Aplicar, desfazer e aprovar (Copilot pelos verbos) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 W6 | T60 O cerebro: uma chamada, em paralelo, cronometrado | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 W6 | T61 Sync rapido: negocio, etapa, pipeline | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-13 | 11 W6 | T62 Ferramentas de leitura: o negocio em resumo e onde focar | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-13 | 11 W6 | T63 Chat 'Entenda como esta sua maquina de receita' | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 W6 | T64 A casa do Copilot | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 W6 | T65 O Copilot no negocio | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-13 | 11 W6 | T66 Precisao e velocidade (evals + relatorio) | Claude / Opus 5 (PM) | M | R$ 12 |
+| 2026-09-14 | 11 W6 | T67 Verificacao e handoff (deploy aguardando aprovacao) | Claude / Opus 5 (PM) | S | R$ 5 |

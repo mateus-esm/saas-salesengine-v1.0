@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.llm import ModelProviderError
-from app.routers import admin, approvals, cycle_pass, decisions, forecast, ingest, revenue, shape, sweep, sync
+from app.routers import admin, approvals, chat, cycle_pass, decisions, forecast, ingest, jobs, revenue, shape, sweep, sync
 
 # ---------------------------------------------------------------------------
 # Application instance
@@ -103,6 +103,10 @@ app.include_router(cycle_pass.router, prefix=_API_PREFIX)
 app.include_router(decisions.router, prefix=_API_PREFIX)
 app.include_router(revenue.router, prefix=_API_PREFIX)
 app.include_router(forecast.router, prefix=_API_PREFIX)
+# Sprint 11 · Onda 6 — the queue's alarm clock (internal token, off by default).
+app.include_router(jobs.router, prefix=_API_PREFIX)
+# Sprint 11 · Onda 6 — "Entenda como está sua máquina de receita" (user JWT, SSE).
+app.include_router(chat.router, prefix=_API_PREFIX)
 # Admin ops surface — NOT under /api/v1 (non-tenant), internal-token gated.
 app.include_router(admin.router)
 

@@ -822,13 +822,116 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 
 ---
 
+# Sprint 11 · Onda 6 — Handoff
+
+> **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
+> **Código fechado:** 2026-09-14 · **PM + Engineer:** Claude (Opus 5), T58–T67
+> **Branches:** `claude/sprint11/w6a/copiloto-motor` (T58–T61, sobre o PR #20) · `claude/sprint11/w6b/copiloto-chat-e-telas` (T62–T67, sobre o 6A)
+> **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 314/314 · Deno 136/136 · pytest 368 · evals de modelo pulados sem chave (rodam no deploy) · 43/43 suítes SQL em rollback contra a produção
+> **Deploy:** **aguardando aprovação do founder** (seção 4) — nada da onda está na produção
+
+## 1. O que esta onda entrega
+
+O Copilot rápido, certo e útil — trabalha em segundo plano e responde perguntas.
+
+- **Fila e espera (T58).** A mensagem do cliente põe o negócio na fila para depois da
+  espera da linha (5–240 min; cada mensagem empurra): uma leitura por conversa, nunca
+  por mensagem. Só onde o Copilot foi ligado (equipe com o Agente de CRM e linha com
+  agente configurado). Teto de leituras por dia por linha. O contexto do negócio vem
+  numa ida só, com só as mensagens novas e o resumo anterior.
+- **Aplicar pelos verbos (T59).** Cada ação é conferida pelo contrato do banco (campo
+  pelo tipo, etapa da linha, sem repetir) e classificada: a segura com confiança é
+  aplicada (e cobra 1 crédito), a arriscada pede aprovação; tudo tem desfazer; a
+  aprovação velha fica desatualizada. Mover etapa passa pelos gatilhos da Onda 3 (o
+  histórico diz "copilot", o marco é gravado).
+- **O cérebro (T60).** Uma chamada de modelo por negócio (a Torre saiu); tempos de
+  contexto, modelo e aplicar gravados; desligado por padrão (`COPILOT_JOBS_ENABLED`).
+  O despertador (`pg_cron`) só chama o agente com trabalho vencido e lê endereço e
+  token do Vault.
+- **Sync rápido (T61).** O ⚡ só enfileira, na frente, e mostra o progresso; "Sincronizar
+  Pipeline" pega só quem tem conversa nova (1.000 negócios, 30 conversas = 30 leituras).
+- **Chat (T62–T63).** "Entenda como está sua máquina de receita": até 3 consultas, em
+  paralelo, como o usuário (a vendedora vê o seu), e a resposta em streaming só com os
+  resultados, com período, filtro e links para as telas. "Onde focar" é determinístico
+  e diz o motivo de cada negócio.
+- **Telas (T64–T65).** CRM › Copilot virou a casa (chat, "Para aprovar", "O que fiz"
+  com desfazer; a configuração foi para "Configurar"); o negócio ganhou o painel do
+  Copilot (resumo, sugestões, o que ele fez); o card ganhou o selo "Sugestão do Copilot".
+- **Precisão e velocidade (T66).** Evals de modelo (precisão do Copilot; o chat não
+  inventa número) com pontuação testada no CI; relatório de velocidade.
+
+## 2. Achados que não estavam no plano
+
+1. **O achado 41 errou uma coluna.** `autonomy_cost_ceiling` é o limite de ferramentas
+   do time autônomo antigo, não teto de crédito: o teto virou `daily_run_cap`.
+2. **As regras de hoje dizem espera de 1 min** (`cooldown_minutes = 1`): vale o mínimo de
+   5 — o Copilot não lê a conversa enquanto ela acontece. A tela foi para 5–120 min.
+3. **O ledger só aceita `mode` auto/manual** — a ação automática do Copilot é `auto`.
+4. **`charge_credits` recusa preço 0**: o chat checa `tenant_is_suspended` direto (conta
+   suspensa não conversa) e guarda os tempos de cada resposta para precificar depois.
+5. **Os crons antigos guardam o segredo no texto do comando** (`cron.job`); o do Copilot
+   lê do Vault. Vale migrar os antigos quando houver tempo.
+6. **Dois ensaios supunham a produção de antes do deploy** — a semente da Onda 4 (já
+   corrigido na Onda 5) e o legado da Onda 5 (este): o do legado agora traz os próprios
+   leads antigos sintéticos e segue provando o script.
+7. **Itens do catálogo ficaram fora do Copilot** (trocar a lista inteira pede o diff do
+   Builder, Onda 7); o painel de aprovações antigo (decisões da Torre/Chão) continua na
+   configuração e na linha até o caminho antigo sair (Onda 7).
+8. **Sem chave de modelo local**: os evals de modelo não rodaram nesta máquina.
+
+## 3. Limites da v1
+
+- O Copilot lê só texto (mídia vira "[áudio]"); não transcreve áudio.
+- Não troca o dono, não cria proposta/contrato, não mexe em itens.
+- O progresso do ⚡ é por consulta a cada 2,5 s enquanto roda (a fila está no Realtime
+  para usos futuros).
+- O chat não escreve nada (é o Modo Builder, Onda 7) e não lê conversas inteiras — lê o
+  resumo que o Copilot mantém.
+
+## 4. Deploy — aguardando aprovação do founder
+
+Nada foi aplicado. A ordem importa: o agente novo chama as funções das migrations; o
+frontend novo chama o agente novo (chat) e os verbos novos.
+
+1. **Migrations** `20260914000100` … `20260914000600`, cada uma numa transação com o seu
+   registro no histórico. A partir daqui a fila começa a encher para as linhas com o
+   Copilot ligado (hoje: 2 equipes com o Agente de CRM, 2 linhas com agente) — e espera,
+   porque nada a processa ainda.
+2. **Evals de modelo** com a chave (Dokploy/CI): `LLM_API_KEY=… uv run pytest evals/ -v -s`.
+3. **PR** `claude/sprint11/w6b/copiloto-chat-e-telas` → `main` (depois do PR #20). O merge
+   publica o frontend (Netlify) **e o `python-agent`** (o Dokploy sobe do `main`).
+4. **No Dokploy:** `COPILOT_JOBS_ENABLED=true` (opcional: `KEEPER_MODEL`, `CHAT_MODEL`).
+5. **No Vault (SQL Editor do Supabase — os valores não entram em arquivo):**
+   `copilot_agent_url` (a URL pública do agente) e `copilot_agent_token` (o
+   `AGENT_INTERNAL_TOKEN` do Dokploy).
+6. **Despertador:** `supabase/scripts/2026-09-14_sprint11_schedule_copilot_tick.sql`.
+7. **Piloto na Solo Energia:** conferir o agente configurado na linha (modo e regras em
+   CRM › Copilot › Configurar); acompanhar "O que fiz"; depois de um dia, o relatório de
+   velocidade (`supabase/scripts/2026-09-14_copilot_speed_report.sql`).
+8. **Navegador:** a casa do Copilot (perguntar, aprovar, desfazer), o painel no negócio,
+   o ⚡ no card e no pipeline — e as verificações pendentes das Ondas 4 e 5.
+
+**Desligar:** `select cron.unschedule('copilot-tick')` e/ou `COPILOT_JOBS_ENABLED=false`;
+a fila para de andar e nada mais é aplicado. **Desfazer uma ação:** "Desfazer" na casa
+ou no negócio.
+
+## 5. Fica para depois
+
+- **Onda 7 — Modo Builder** sobre changesets (D2 e D4 do estudo do MCP antes do plano).
+- Tirar o caminho antigo (Torre/Chão/Workflow, `/api/v1/sync`, o painel de aprovações
+  antigo) quando o novo estiver provado no piloto.
+- Precificar o chat depois de ~20 conversas reais; migrar os crons antigos para o Vault.
+- Integrações (Meta/Google/Windsor/ElevenLabs), API e MCP; bugs e acabamento das tabelas.
+
+---
+
 # Sprint 11 · Onda 5 — Handoff
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
 > **Código fechado:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T48–T57
 > **Branches:** `claude/sprint11/w5a/entradas` (T48–T51) · `claude/sprint11/w5b/campanhas-e-roi` (T52–T57, sobre o 5A)
 > **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 333/333 (39 arquivos) · Deno 136/136 (31 arquivos) · 36/36 suítes SQL em rollback contra a produção (inclui o ensaio do legado)
-> **Deploy:** backend no ar desde 12/09, aprovado pelo founder (seção 4); frontend pelo PR desta branch
+> **Deploy:** no ar desde 12/09 — backend e **PR #19** (seção 4)
 
 ## 1. O que esta onda entrega
 
@@ -923,9 +1026,10 @@ o frontend novo chama os verbos novos):
    pelo agente, 80 pelo próprio webhook, 3 pelo manual (igual ao ensaio). Conferido
    contra a cópia: 0 lead sem toque, 0 categoria escrita trocada, 79 categorias vazias
    preenchidas (leads de webhook com carimbo), 0 `updated_at` mudado; gatilho religado.
-5. **PR** `claude/sprint11/w5b/campanhas-e-roi` → `main` → Netlify.
-6. **Navegador:** Campanhas (criar, lançar investimento, ligar UTM), Origem no negócio,
-   Resultados, filtros, naturezas de uma linha-campanha.
+5. **PR #19** mergeado pelo founder com os checks verdes (`12529db`, 23:32 UTC); o
+   Netlify serve o bundle novo (o mesmo `index-B8pSmJ0t.js` do preview do PR).
+6. **Pendente — navegador:** Campanhas (criar, lançar investimento, ligar UTM), Origem no
+   negócio, Resultados, filtros, naturezas de uma linha-campanha.
 
 **Desfazer:** legado → apagar os toques com `raw->>'backfill' = 'sprint11_t56'` e limpar
 `first_touch_id`/`entry_id`/`origin_platform` desses leads (a categoria volta pela

@@ -805,6 +805,8 @@ interface AgentRulesDraft {
   autoAdvance: boolean;
   autoExtract: boolean;
   cooldown: number;
+  /** Sprint 11 · Onda 6 — Copilot passes per day on this pipeline. */
+  dailyCap?: number;
   triggers: AgentRuleTrigger[];
   hints: string;
 }
@@ -813,7 +815,8 @@ const INITIAL_DRAFT: AgentRulesDraft = {
   autoCreate: false,
   autoAdvance: true,
   autoExtract: true,
-  cooldown: 3,
+  cooldown: 10,
+  dailyCap: 200,
   triggers: [],
   hints: "",
 };
@@ -852,7 +855,7 @@ export const AgentRulesPanel = ({
   // ── Draft persistence — in-progress edits survive navigation ──
   const draftKey = `agent_rules_${pipelineId}`;
   const { value, setValue, clearPersisted, hasDraft } = useDraftAutosave<AgentRulesDraft>(draftKey, INITIAL_DRAFT);
-  const { autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints } = value;
+  const { autoCreate, autoAdvance, autoExtract, cooldown, triggers, hints, dailyCap = 200 } = value;
   const [dirty, setDirty] = useState(() => hasDraft);
 
   const updateField = (k: keyof AgentRulesDraft, v: AgentRulesDraft[keyof AgentRulesDraft]) => {
@@ -871,7 +874,9 @@ export const AgentRulesPanel = ({
         autoCreate: rules.auto_create_opportunity,
         autoAdvance: rules.auto_advance_stages,
         autoExtract: rules.auto_extract_custom_fields,
-        cooldown: rules.cooldown_minutes,
+        // The Copilot waits at least 5 min after the conversation pauses (server rule).
+        cooldown: Math.max(5, rules.cooldown_minutes),
+        dailyCap: rules.daily_run_cap ?? 200,
         triggers: rules.triggers,
         hints: rules.extraction_hints ?? "",
       });
@@ -890,6 +895,7 @@ export const AgentRulesPanel = ({
       auto_advance_stages: autoAdvance,
       auto_extract_custom_fields: autoExtract,
       cooldown_minutes: cooldown,
+      daily_run_cap: dailyCap,
       triggers,
       extraction_hints: hints || null,
     }, {
@@ -1015,18 +1021,39 @@ export const AgentRulesPanel = ({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Cooldown</p>
+                <p className="text-sm font-medium">Espera depois da conversa</p>
                 <span className="text-xs text-muted-foreground font-mono">
                   {cooldown} min
                 </span>
               </div>
               <Slider
                 value={[cooldown]}
-                min={1}
-                max={30}
-                step={1}
+                min={5}
+                max={120}
+                step={5}
                 onValueChange={([v]) => updateField("cooldown", v)}
               />
+              <p className="text-xs text-muted-foreground">
+                O Copilot lê a conversa quando o cliente para de escrever por esse tempo — uma leitura por conversa.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Leituras por dia</p>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10000}
+                  value={dailyCap}
+                  onChange={(e) => updateField("dailyCap", Math.max(1, Math.min(10000, Number(e.target.value) || 1)))}
+                  className="h-8 w-24 text-right"
+                  aria-label="Leituras por dia"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Teto de negócios lidos por dia nesta linha; o que passar espera o dia seguinte.
+              </p>
             </div>
           </div>
         </section>

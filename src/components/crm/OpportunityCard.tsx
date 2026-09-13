@@ -123,6 +123,8 @@ export const OpportunityCard = ({
   );
   const intentKeyword =
     (intentDecision?.output_action as { intent_keyword?: string } | null)?.intent_keyword ?? null;
+  // Sprint 11 · Onda 6 · T65 — the Copilot wants to do something here and needs a person.
+  const copilotWaiting = approvals.some((d) => d.opportunity_id === card.id && d.agent_role === "copilot");
 
   // T11 (Sprint 5) — Driver Override: change the next contact right on the card.
   const handleNextContactChange = async (date: Date | null) => {
@@ -225,7 +227,7 @@ export const OpportunityCard = ({
       )}
 
       {/* Badges — outcome, overdue, SLA, interaction cap; then the Copilot's intent */}
-      {(model.badges.length > 0 || (!isDragOverlay && intentDecision)) && (
+      {(model.badges.length > 0 || (!isDragOverlay && (intentDecision || copilotWaiting))) && (
         <div className="flex flex-wrap gap-1">
           {model.badges.map((b) => (
             <span
@@ -246,6 +248,14 @@ export const OpportunityCard = ({
               }
             >
               Intenção detectada
+            </span>
+          )}
+          {!isDragOverlay && copilotWaiting && (
+            <span
+              className="truncate rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+              title="O Copilot tem uma sugestão esperando aprovação neste negócio."
+            >
+              Sugestão do Copilot
             </span>
           )}
         </div>
