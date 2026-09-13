@@ -89,9 +89,14 @@ As seis ondas estão na produção (13/09/2026). Handoff: `Sprints_PM_Handoff.md
 
 ## 🔴 Agora — só o founder tem a credencial ou a decisão
 
-- [ ] **Token do Copilot no Vault** (Mateus) — sem ele o Copilot não acorda. No SQL Editor
-  do Supabase: `select vault.create_secret('<AGENT_INTERNAL_TOKEN do Dokploy>', 'copilot_agent_token');`
-  Conferir 5 min depois de uma conversa pausar numa linha piloto: CRM › Copilot › "O que fiz".
+- [x] **Token do Copilot no Vault** (13/09) — `copilot_agent_token` criado; o agente aceitou
+  (`/api/v1/jobs/tick` → 202 "accepted", o `COPILOT_JOBS_ENABLED` está ligado). Conferir 5 min
+  depois de uma conversa pausar numa linha piloto: CRM › Copilot › "O que fiz".
+- [ ] **Trocar o `AGENT_INTERNAL_TOKEN` por um forte** (Mateus) — o de hoje é curto e passou
+  pelo chat; quem tem ele chama as rotas internas do agente (`/admin/runs` lista execuções e
+  decisões de todas as equipes). Gerar um valor aleatório longo (ex.: `openssl rand -hex 32`),
+  pôr no Dokploy e publicar; no mesmo minuto, no SQL Editor:
+  `select vault.update_secret(id, '<novo token>') from vault.secrets where name = 'copilot_agent_token';`
 - [ ] **Evals de modelo com a chave** (Mateus, ou ligar o segredo no job "Backend evals"
   do CI) — `cd python-agent && LLM_API_KEY=… uv run pytest evals/ -v -s`. Portões:
   nenhum id inventado, ≥ 75% das ações esperadas, chat sem número de fora.

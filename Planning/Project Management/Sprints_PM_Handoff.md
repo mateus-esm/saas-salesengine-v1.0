@@ -854,7 +854,7 @@ do MCP antes do plano; em seguida a sprint de integrações.
 > **Fechada:** 2026-09-13 · **PM + Engineer:** Claude (Opus 5), T58–T67 · **PR #21**
 > **Branches:** `claude/sprint11/w6a/copiloto-motor` (T58–T61, sobre o PR #20) · `claude/sprint11/w6b/copiloto-chat-e-telas` (T62–T67, sobre o 6A)
 > **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 314/314 · Deno 136/136 · pytest 368 · evals de modelo pulados sem chave (rodam no deploy) · 43/43 suítes SQL em rollback contra a produção
-> **Deploy:** no ar desde 13/09 (seção 4) — falta só o token do agente no Vault, que é do founder
+> **Deploy:** no ar por completo desde 13/09 (seção 4)
 
 ## 1. O que esta onda entrega
 
@@ -927,10 +927,11 @@ o frontend novo chama o agente novo e os verbos novos):
    `python-agent` (health `ok`; `/api/v1/jobs/tick` e `/api/v1/chat` respondem 401 sem
    credencial — as rotas novas estão no ar). `COPILOT_JOBS_ENABLED=true` posto pelo
    founder no Dokploy.
-3. **Vault:** `copilot_agent_url` = `https://agent.soloventures.com.br` criado.
-   **Falta `copilot_agent_token`** (o `AGENT_INTERNAL_TOKEN` do Dokploy — o valor não sai
-   de lá): `select vault.create_secret('<AGENT_INTERNAL_TOKEN>', 'copilot_agent_token');`
-   no SQL Editor. Até lá o despertador não chama o agente (avisa e espera).
+3. **Vault:** `copilot_agent_url` = `https://agent.soloventures.com.br` e
+   `copilot_agent_token` (o `AGENT_INTERNAL_TOKEN` do Dokploy, passado pelo founder e
+   gravado sem passar por arquivo). Conferido: o agente aceita o token
+   (`/api/v1/jobs/tick` → 202 "accepted", fila vazia). **Trocar o token por um forte**
+   está no `todo.md` — o de hoje é curto e passou pelo chat.
 4. **Despertador** `copilot-tick` agendado (`* * * * *`, ativo) — só chama o agente com
    trabalho vencido e os dois segredos.
 5. **Piloto já configurado:** Solo Energia · "Usinas - Micro Geração" no modo
