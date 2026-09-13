@@ -2437,7 +2437,7 @@ depois da parada.
 
 ### Ledger · Onda 6
 
-- [ ] T58 · Fila, espera e contexto · L
+- [x] T58 · Fila, espera e contexto · L — migration `20260914000100`. `copilot_jobs` (um trabalho na fila por negócio; motivo, prioridade, `run_after`, tentativas, erro, `run_id`, tempos) e `copilot_memory` (resumo, fatos, cursor da última mensagem lida), RLS da equipe, Realtime na fila. Gatilho em `messages`: só mensagem do cliente, equipe com Agente CRM e linha com agente configurado; a espera é `cooldown_minutes` entre 5 e 240 min (as regras de hoje dizem 1 — vale o mínimo); cada mensagem empurra; o Sync pedido não é empurrado; a fila nunca derruba a mensagem. `crm_copilot_claim` (sem pegar o mesmo duas vezes; o preso de 5 min volta ou falha na 3ª) e `crm_copilot_finish` (falha volta com espera de 1, 4, 9 min). **Correção do achado 41:** `autonomy_cost_ceiling` é o limite de ferramentas do time autônomo antigo, não teto de crédito — o teto virou a coluna nova `pipeline_agent_rules.daily_run_cap` (passadas por dia na linha, padrão 200; a que falhou conta, a sem nada novo não); quem bate espera amanhã 07:00 com o motivo. O status `capped` do plano virou "na fila até amanhã" com o motivo. `crm_copilot_context` numa ida: negócio, contato (nome provisório detectado), etapas com marco, campos que o Copilot preenche (sem endereço/usuário/arquivo, sem apagado) com valor, itens, catálogo da linha, tarefas abertas, etiquetas da equipe, só as mensagens depois do cursor (40, texto; mídia vira "[áudio]"), memória, modo (linha sem agente = sugerir) e limiar. Só service_role. 5 blocos SQL
 - [ ] T59 · Aplicar, desfazer e aprovar · L
 - [ ] T60 · O cérebro: uma chamada, em paralelo, cronometrado · L
 - [ ] T61 · Sync rápido: negócio, etapa, pipeline · M
