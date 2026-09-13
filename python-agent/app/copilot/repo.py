@@ -11,6 +11,12 @@ action. These are plain calls to the SQL verbs of Sprint 11 · Onda 6:
 
 The calls are synchronous (psycopg); the keeper runs them in a thread so one slow
 call never blocks the other deals being processed.
+
+Every argument carries the type the verb declares. Postgres picks the function
+by the argument types, and psycopg sends a Python float as double precision,
+which never becomes numeric on its own: an untyped confidence made
+crm_copilot_apply "not exist" and every pass died at the last step (13/09).
+tests/test_copilot_repo.py reads the signatures from the migrations.
 """
 
 from __future__ import annotations
@@ -44,7 +50,7 @@ class CopilotRepo:
             return [row[0] for row in cur.fetchall()]
 
     def claim(self, limit: int) -> list[dict[str, Any]]:
-        return self._column("select to_jsonb(j) from public.crm_copilot_claim(%s) j", (limit,))
+        return self._column("select to_jsonb(j) from public.crm_copilot_claim(%s::integer) j", (limit,))
 
     def context(self, opportunity_id: str) -> dict[str, Any]:
         return self._scalar("select public.crm_copilot_context(%s::uuid)", (opportunity_id,))
@@ -61,13 +67,13 @@ class CopilotRepo:
         model: str | None,
     ) -> dict[str, Any]:
         return self._scalar(
-            "select public.crm_copilot_apply(%s::uuid, %s::uuid, %s, %s, %s, %s::timestamptz, %s)",
+            "select public.crm_copilot_apply(%s::uuid, %s::uuid, %s::jsonb, %s::text, %s::numeric, %s::timestamptz, %s::text)",
             (opportunity_id, run_id, Jsonb(actions), summary, confidence, cursor, model),
         )
 
     def finish(self, job_id: str, status: str, error: str | None = None, result: dict[str, Any] | None = None) -> str:
         return self._scalar(
-            "select public.crm_copilot_finish(%s::uuid, %s, %s, %s)",
+            "select public.crm_copilot_finish(%s::uuid, %s::text, %s::text, %s::jsonb)",
             (job_id, status, error, Jsonb(result) if result is not None else None),
         )
 
