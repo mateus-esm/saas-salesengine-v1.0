@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { groupBlocks, inlineSpans, parseSse, renderBlocks } from "../copilotChat";
-import { dealHref, groupByDay, resolveText, undoText, whyLabel } from "../copilotFeed";
+import { activityLine, dealHref, groupByDay, resolveText, undoText, whyLabel } from "../copilotFeed";
 
 describe("the chat's wire format", () => {
   it("splits complete events and keeps the unfinished rest", () => {
@@ -65,6 +65,19 @@ describe("the feed in words", () => {
       now,
     );
     expect(groups.map((g) => [g.label, g.items.length])).toEqual([["Hoje", 2], ["Ontem", 1], ["10/09", 1]]);
+  });
+
+  it("the home's line: what waits for you and what was done today", () => {
+    const item = { id: "d", status: "pending_approval", at: "", label: null, opportunity_id: "o", pipeline_id: null, contact: null };
+    expect(activityLine({ pending: [item, item, item], today: { applied: 12, read: 5 } })).toEqual({
+      text: "3 para aprovar · 12 ações hoje",
+      attention: true,
+    });
+    expect(activityLine({ pending: [], today: { applied: 1, read: 0 } })).toEqual({
+      text: "Nada para aprovar · 1 ação hoje",
+      attention: false,
+    });
+    expect(activityLine({ pending: [], today: { applied: 0, read: 0 } }).text).toBe("Nada para aprovar · nenhuma ação hoje");
   });
 
   it("a feed line opens the deal's pipeline filtered to the contact", () => {

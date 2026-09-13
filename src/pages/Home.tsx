@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRole } from "@/hooks/useRole";
 import { AppHubCard } from "@/components/AppHubCard";
+import { CopilotHome } from "@/components/crm/copilot/CopilotHome";
 
 const Home = () => {
   const { profile, equipe } = useAuth();
@@ -131,21 +132,26 @@ const Home = () => {
 
   return (
     <div className="flex-1 flex flex-col bg-background overflow-y-auto">
-      {/* Hero Section */}
-      <div className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-12 md:py-16 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">
-            <span className="text-gradient-solo">{tenant.name}</span>
-          </h1>
-          <p className="text-lg text-muted-foreground mb-2">
-            {equipe?.nome || "Assistente"} • Sua máquina de vendas automatizada
-          </p>
-          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
-            {profile?.nome_completo} • Powered by Solo Ventures{" "}
-            <Zap className="h-4 w-4 text-solo-orange fill-solo-orange" />
-          </p>
+      {/* Sprint 11 · T68 — with the Copilot on, the app opens on the conversation
+          ("Entenda como está sua máquina de receita"); the modules stay below. */}
+      {equipe?.is_crm_agent_enabled ? (
+        <CopilotHome />
+      ) : (
+        <div className="border-b border-border bg-card">
+          <div className="container mx-auto px-4 py-12 md:py-16 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold mb-3">
+              <span className="text-gradient-solo">{tenant.name}</span>
+            </h1>
+            <p className="text-lg text-muted-foreground mb-2">
+              {equipe?.nome || "Assistente"} • Sua máquina de vendas automatizada
+            </p>
+            <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+              {profile?.nome_completo} • Powered by Solo Ventures{" "}
+              <Zap className="h-4 w-4 text-solo-orange fill-solo-orange" />
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* App Hub Grid */}
       <div className="flex-1 container mx-auto px-4 py-8 md:py-12">

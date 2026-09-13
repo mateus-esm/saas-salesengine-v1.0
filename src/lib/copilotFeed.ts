@@ -36,6 +36,15 @@ export interface CopilotFeed {
 
 export const EMPTY_FEED: CopilotFeed = { pending: [], recent: [], failures: [], today: { applied: 0, read: 0 } };
 
+/** The home's one line under the chat (T68): what waits for a person and what was done today. */
+export function activityLine(feed: Pick<CopilotFeed, "pending" | "today">): { text: string; attention: boolean } {
+  const waiting = feed.pending.length;
+  const done = feed.today.applied;
+  const left = waiting === 0 ? "Nada para aprovar" : `${waiting} para aprovar`;
+  const right = done === 0 ? "nenhuma ação hoje" : `${done} ${done === 1 ? "ação" : "ações"} hoje`;
+  return { text: `${left} · ${right}`, attention: waiting > 0 };
+}
+
 const WHY: Record<string, string> = {
   risky: "pede aprovação",
   low_confidence: "confiança baixa",

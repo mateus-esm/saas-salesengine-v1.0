@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Bot, Building2, Calendar, Home, LayoutGrid, ListChecks, Megaphone, Package, Plus, Table2, Users } from "lucide-react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Building2, Calendar, Home, LayoutGrid, ListChecks, Megaphone, Package, Plus, Table2, Users } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ import { CompaniesDatabaseView } from "@/components/crm/companies/CompaniesDatab
 import TasksView from "@/components/crm/TasksView";
 import { PropertiesDatabaseView } from "@/components/crm/properties/PropertiesDatabaseView";
 import { usePipelineSelection } from "@/hooks/usePipelineSelection";
-import CopilotCockpit from "@/pages/CopilotCockpit";
 import { useCustomTables, type CustomTable } from "@/hooks/useCustomTables";
 import { CustomTableManager } from "@/components/crm/customtables/CustomTableManager";
 import { CustomTableView } from "@/components/crm/customtables/CustomTableView";
@@ -29,9 +28,10 @@ import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { CampaignsView } from "@/components/crm/campaigns/CampaignsView";
 import { FILTER_PARAM_KEYS } from "@/lib/crmFilterParams";
 
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "catalogo" | "campanhas" | "tasks" | "copilot" | "tabelas" | "agenda";
+// Sprint 11 · T68 — the Copilot left the CRM: it is the app's opening (/home).
+type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "catalogo" | "campanhas" | "tasks" | "tabelas" | "agenda";
 
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "catalogo", "campanhas", "tasks", "copilot", "tabelas", "agenda"];
+const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "catalogo", "campanhas", "tasks", "tabelas", "agenda"];
 const isTopTab = (v: string | null): v is TopTab =>
   !!v && TOP_TABS.includes(v as TopTab);
 
@@ -43,7 +43,6 @@ const TAB_LABELS: Record<TopTab, string> = {
   catalogo: "Catálogo",
   campanhas: "Campanhas",
   tasks: "Tarefas",
-  copilot: "Copilot",
   tabelas: "Tabelas",
   agenda: "Agenda",
 };
@@ -94,6 +93,9 @@ const CRM = () => {
     ? customTables.find((t) => t.slug === customTableSlug) ?? null
     : null;
 
+  // Old links to CRM › Copilot land on the app's opening, where the Copilot lives now.
+  if (searchParams.get("tab") === "copilot") return <Navigate to="/home" replace />;
+
   return (
     <div className="flex flex-col h-full">
       <div className="border-b border-border bg-card px-2 sm:px-4 py-2">
@@ -141,10 +143,6 @@ const CRM = () => {
               <ListChecks className="h-4 w-4" />
               Tarefas
             </TabsTrigger>
-            <TabsTrigger value="copilot" className="flex items-center gap-2">
-              <Bot className="h-4 w-4" />
-              Copilot
-            </TabsTrigger>
             <TabsTrigger value="tabelas" className="flex items-center gap-2">
               <Table2 className="h-4 w-4" />
               Tabelas
@@ -173,8 +171,6 @@ const CRM = () => {
           <CampaignsView />
         ) : tab === "tasks" ? (
           <TasksView />
-        ) : tab === "copilot" ? (
-          <CopilotCockpit />
         ) : tab === "tabelas" ? (
           selectedCustomTable ? (
             <CustomTableView
