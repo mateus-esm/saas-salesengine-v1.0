@@ -12,6 +12,8 @@
 --       sugestão do Copilot esperando aprovação ........................ +15
 --       valor (proporcional ao maior da lista) ....................... até +30
 --     Escopo do dashboard: o vendedor vê os seus.
+--   * `crm_copilot_feed` — a casa do Copilot (T64): as sugestões esperando, o que
+--     ele fez nos últimos 7 dias, as passadas que falharam e os números de hoje.
 --   * Índice de mensagens por contato e data — o contexto do Copilot, o Sync em
 --     lote e o "onde focar" perguntam pela conversa mais recente.
 
@@ -168,7 +170,78 @@ begin
 end;
 $$;
 
+-- ============================================================================
+-- 3. O QUE O COPILOT FEZ E O QUE ESPERA (a casa do Copilot, T64)
+-- ============================================================================
+
+-- As sugestões esperando, o que foi feito nos últimos 7 dias, as passadas que
+-- falharam e os números de hoje — com o nome do contato. Escopo do dashboard.
+create or replace function public.crm_copilot_feed(p_limit integer default 60)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_team     uuid;
+  v_restrict uuid;
+  v_today    timestamptz := ((now() at time zone 'America/Sao_Paulo')::date) at time zone 'America/Sao_Paulo';
+begin
+  select s.v_equipe, s.v_restrict into v_team, v_restrict from public._funnel_scope() s;
+
+  return jsonb_build_object(
+    'pending', coalesce((
+      select jsonb_agg(to_jsonb(x) order by x.at desc)
+        from (select d.id, d.status, d.created_at as at, d.output_action->>'label' as label,
+                     d.output_action->>'why' as why, d.input_summary as reason, d.confidence_score as confidence,
+                     d.opportunity_id, o.pipeline_id, l.name as contact
+                from public.ai_decisions d
+                join public.opportunities o on o.id = d.opportunity_id
+                left join public.leads l on l.id = o.lead_id
+               where d.equipe_id = v_team and d.agent_role = 'copilot'
+                 and d.status in ('pending_approval', 'proposed')
+                 and (v_restrict is null or o.owner_id = v_restrict)
+               order by d.created_at desc
+               limit 50) x), '[]'::jsonb),
+    'recent', coalesce((
+      select jsonb_agg(to_jsonb(x) order by x.at desc)
+        from (select d.id, d.status, coalesce(d.resolved_at, d.created_at) as at, d.output_action->>'label' as label,
+                     d.input_summary as reason, d.opportunity_id, o.pipeline_id, l.name as contact
+                from public.ai_decisions d
+                join public.opportunities o on o.id = d.opportunity_id
+                left join public.leads l on l.id = o.lead_id
+               where d.equipe_id = v_team and d.agent_role = 'copilot'
+                 and d.status in ('auto_applied', 'executed', 'undone', 'stale', 'rejected')
+                 and coalesce(d.resolved_at, d.created_at) > now() - interval '7 days'
+                 and (v_restrict is null or o.owner_id = v_restrict)
+               order by coalesce(d.resolved_at, d.created_at) desc
+               limit least(greatest(coalesce(p_limit, 60), 1), 200)) x), '[]'::jsonb),
+    'failures', coalesce((
+      select jsonb_agg(to_jsonb(x) order by x.at desc)
+        from (select j.id, j.finished_at as at, j.last_error as error, j.opportunity_id, o.pipeline_id, l.name as contact
+                from public.copilot_jobs j
+                join public.opportunities o on o.id = j.opportunity_id
+                left join public.leads l on l.id = o.lead_id
+               where j.equipe_id = v_team and j.status = 'failed' and j.finished_at > now() - interval '7 days'
+                 and (v_restrict is null or o.owner_id = v_restrict)
+               order by j.finished_at desc
+               limit 10) x), '[]'::jsonb),
+    'today', jsonb_build_object(
+      'applied', (select count(*) from public.ai_decisions d join public.opportunities o on o.id = d.opportunity_id
+                   where d.equipe_id = v_team and d.agent_role = 'copilot' and d.status in ('auto_applied', 'executed')
+                     and coalesce(d.resolved_at, d.created_at) >= v_today
+                     and (v_restrict is null or o.owner_id = v_restrict)),
+      'read', (select count(*) from public.copilot_jobs j join public.opportunities o on o.id = j.opportunity_id
+                where j.equipe_id = v_team and j.status = 'done' and j.finished_at >= v_today
+                  and (v_restrict is null or o.owner_id = v_restrict)))
+  );
+end;
+$$;
+
 revoke all on function public.crm_copilot_deal_brief(uuid) from public, anon;
+revoke all on function public.crm_copilot_feed(integer) from public, anon;
 revoke all on function public.crm_focus_list(uuid, integer) from public, anon;
 grant execute on function public.crm_copilot_deal_brief(uuid) to authenticated;
 grant execute on function public.crm_focus_list(uuid, integer) to authenticated;
+grant execute on function public.crm_copilot_feed(integer) to authenticated;

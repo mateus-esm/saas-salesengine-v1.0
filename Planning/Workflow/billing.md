@@ -336,3 +336,4 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-13 | 11 W6 | T61 Sync rapido: negocio, etapa, pipeline | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-13 | 11 W6 | T62 Ferramentas de leitura: o negocio em resumo e onde focar | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-13 | 11 W6 | T63 Chat 'Entenda como esta sua maquina de receita' | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 W6 | T64 A casa do Copilot | Claude / Opus 5 (PM) | L | R$ 20 |

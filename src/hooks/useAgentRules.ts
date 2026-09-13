@@ -23,6 +23,8 @@ interface AgentRulesRow {
   auto_advance_stages: boolean;
   auto_extract_custom_fields: boolean;
   cooldown_minutes: number;
+  /** Sprint 11 · Onda 6 — Copilot passes per day on this pipeline (null = no cap). */
+  daily_run_cap: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +39,7 @@ const normalize = (row: AgentRulesRow): PipelineAgentRules => ({
   auto_advance_stages: row.auto_advance_stages !== false,
   auto_extract_custom_fields: row.auto_extract_custom_fields !== false,
   cooldown_minutes: row.cooldown_minutes ?? 3,
+  daily_run_cap: row.daily_run_cap === undefined ? 200 : row.daily_run_cap,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -48,6 +51,7 @@ export interface UpsertAgentRulesData {
   auto_advance_stages?: boolean;
   auto_extract_custom_fields?: boolean;
   cooldown_minutes?: number;
+  daily_run_cap?: number | null;
 }
 
 /**
@@ -134,6 +138,7 @@ export const useAgentRules = (pipelineId?: string) => {
             auto_advance_stages: input.auto_advance_stages ?? true,
             auto_extract_custom_fields: input.auto_extract_custom_fields ?? true,
             cooldown_minutes: input.cooldown_minutes ?? 3,
+            daily_run_cap: input.daily_run_cap === undefined ? 200 : input.daily_run_cap,
           })
           .select()
           .single();

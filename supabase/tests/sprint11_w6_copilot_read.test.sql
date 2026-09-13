@@ -115,6 +115,20 @@ begin
 end $$;
 
 -- ============================================================================
+-- 2b. A casa do Copilot: o que espera, o que foi feito, hoje — no escopo.
+-- ============================================================================
+do $$
+declare f jsonb;
+begin
+  f := public.crm_copilot_feed();
+  assert jsonb_array_length(f->'pending') = 1 and f->'pending'->0->>'contact' = 'Com sugestão'
+     and f->'pending'->0->>'label' = 'Marcar como ganho' and f->'pending'->0->>'why' = 'risky',
+    'T62-2b FAIL: a sugestao esperando, com o contato, veio ' || f::text;
+  assert jsonb_array_length(f->'recent') = 1 and (f->'today'->>'applied')::int = 1,
+    'T62-2b FAIL: o que foi feito hoje, veio ' || f::text;
+end $$;
+
+-- ============================================================================
 -- 3. O vizinho não lê nada.
 -- ============================================================================
 set local request.jwt.claims = '{"sub":"5139b000-0000-0000-0000-00000000000d","role":"authenticated"}';
@@ -122,6 +136,7 @@ do $$
 declare v_failed boolean := false;
 begin
   assert public.crm_focus_list() = '[]'::jsonb, 'T62-3 FAIL: o vizinho ve o foco da equipe A';
+  assert jsonb_array_length(public.crm_copilot_feed()->'pending') = 0, 'T62-3 FAIL: o vizinho ve a casa do Copilot da equipe A';
   begin
     perform public.crm_copilot_deal_brief('5139f000-0000-0000-0000-000000000001');
   exception when others then v_failed := sqlerrm like '%opportunity_not_found%';

@@ -413,7 +413,10 @@ export interface PipelineAgentRules {
   auto_create_opportunity: boolean;
   auto_advance_stages: boolean;
   auto_extract_custom_fields: boolean;
+  /** Minutes the Copilot waits after the conversation pauses (server clamps 5–240). */
   cooldown_minutes: number;
+  /** Sprint 11 · Onda 6 — Copilot reads per day on this pipeline; null = no cap. */
+  daily_run_cap: number | null;
   created_at: string;
   updated_at: string;
 }
