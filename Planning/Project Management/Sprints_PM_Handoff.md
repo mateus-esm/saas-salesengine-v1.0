@@ -828,7 +828,7 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 > **Código fechado:** 2026-09-12 · **PM + Engineer:** Claude (Opus 5), T48–T57
 > **Branches:** `claude/sprint11/w5a/entradas` (T48–T51) · `claude/sprint11/w5b/campanhas-e-roi` (T52–T57, sobre o 5A)
 > **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 333/333 (39 arquivos) · Deno 136/136 (31 arquivos) · 36/36 suítes SQL em rollback contra a produção (inclui o ensaio do legado)
-> **Deploy:** backend no ar desde 12/09, aprovado pelo founder (seção 4); frontend pelo PR desta branch
+> **Deploy:** no ar desde 12/09 — backend e **PR #19** (seção 4)
 
 ## 1. O que esta onda entrega
 
@@ -923,9 +923,10 @@ o frontend novo chama os verbos novos):
    pelo agente, 80 pelo próprio webhook, 3 pelo manual (igual ao ensaio). Conferido
    contra a cópia: 0 lead sem toque, 0 categoria escrita trocada, 79 categorias vazias
    preenchidas (leads de webhook com carimbo), 0 `updated_at` mudado; gatilho religado.
-5. **PR** `claude/sprint11/w5b/campanhas-e-roi` → `main` → Netlify.
-6. **Navegador:** Campanhas (criar, lançar investimento, ligar UTM), Origem no negócio,
-   Resultados, filtros, naturezas de uma linha-campanha.
+5. **PR #19** mergeado pelo founder com os checks verdes (`12529db`, 23:32 UTC); o
+   Netlify serve o bundle novo (o mesmo `index-B8pSmJ0t.js` do preview do PR).
+6. **Pendente — navegador:** Campanhas (criar, lançar investimento, ligar UTM), Origem no
+   negócio, Resultados, filtros, naturezas de uma linha-campanha.
 
 **Desfazer:** legado → apagar os toques com `raw->>'backfill' = 'sprint11_t56'` e limpar
 `first_touch_id`/`entry_id`/`origin_platform` desses leads (a categoria volta pela
