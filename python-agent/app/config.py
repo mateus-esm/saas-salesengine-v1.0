@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     strategic_model: str = "deepseek-v4-flash-0731"
     copilot_workflow_enabled: bool = False
     ingest_enabled: bool = False
+    # Sprint 11 · Onda 6 — the keeper that runs from the Postgres queue
+    # (POST /api/v1/jobs/tick). Off by default: deploying changes nothing until
+    # COPILOT_JOBS_ENABLED=true. The pool has 4 connections — keep concurrency ≤ 4.
+    copilot_jobs_enabled: bool = False
+    copilot_jobs_batch: int = 10
+    copilot_jobs_concurrency: int = 4
+    keeper_model: str | None = None  # empty → doorman_model
 
     # G6 — Production CORS wiring
     # ─────────────────────────────────────────────────────────────────────────
