@@ -822,13 +822,39 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 
 ---
 
+# Sprint 11 — Fechamento
+
+> **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · 6 ondas, T1–T67 · 10/09 a 13/09/2026
+> **Estado:** as seis ondas na produção (PRs #11, #14, #16/#17 e docs, #19/#20, #21)
+> **Custo:** R$ 1.094 (`Planning/Workflow/billing.md`, "Summary Totals")
+> **O que ficou:** `Planning/Project Management/todo.md`, seção "TODO — vindo do Sprint 11"
+
+| Onda | O que entregou |
+| :-- | :-- |
+| 1 · Confiança | quadro no servidor, responsável no negócio, lead de WhatsApp vira negócio de novo (297 recuperados), campo pelo `field_id` |
+| 2 · Kanban e tabelas | filtros v2 no servidor, tabelas por página, verbos de negócio, dono do momento nos eventos, placar redesenhado, celular |
+| 3 · Receita e linha | a etapa decide o desfecho, catálogo e itens, receita no livro-razão, agendador (reciclo/recorrência), naturezas Oferta e Processo, modelos, Track Shaper |
+| 4 · Artefatos | propostas e contratos presos ao negócio, arquivo privado, ciclo de vida → marco, botão com retorno (n8n), formulário público |
+| 5 · Entradas e atribuição | toques, entradas com carimbo e rodízio, campanhas com ROI, filtros e quebras por origem, naturezas Duração e Entradas, legado de 2.227 leads |
+| 6 · Copilot | fila com espera, verbos que conferem e desfazem, uma chamada por negócio, Sync rápido, chat "Entenda como está sua máquina de receita", casa do Copilot |
+
+**A regra que atravessou a sprint:** toda porta — tela, WhatsApp, webhook, Copilot, e
+depois API e MCP — usa os mesmos verbos do banco, conferidos pelas mesmas regras
+(`motores_revops.md`). O Copilot da Onda 6 é a prova: parou de escrever direto nas
+tabelas e passou a operar pelos verbos, com desfazer.
+
+**Próximo passo:** Onda 7 (Modo Builder, sobre changesets) — decisões D2 e D4 do estudo
+do MCP antes do plano; em seguida a sprint de integrações.
+
+---
+
 # Sprint 11 · Onda 6 — Handoff
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · arquitetura em `Planning/Architecture/motores_revops.md`
-> **Código fechado:** 2026-09-14 · **PM + Engineer:** Claude (Opus 5), T58–T67
+> **Fechada:** 2026-09-13 · **PM + Engineer:** Claude (Opus 5), T58–T67 · **PR #21**
 > **Branches:** `claude/sprint11/w6a/copiloto-motor` (T58–T61, sobre o PR #20) · `claude/sprint11/w6b/copiloto-chat-e-telas` (T62–T67, sobre o 6A)
 > **Verificação:** `tsc -b` limpo · lint 0 erro · `npm run build` · vitest 314/314 · Deno 136/136 · pytest 368 · evals de modelo pulados sem chave (rodam no deploy) · 43/43 suítes SQL em rollback contra a produção
-> **Deploy:** **aguardando aprovação do founder** (seção 4) — nada da onda está na produção
+> **Deploy:** no ar desde 13/09 (seção 4) — falta só o token do agente no Vault, que é do founder
 
 ## 1. O que esta onda entrega
 
@@ -888,32 +914,35 @@ O Copilot rápido, certo e útil — trabalha em segundo plano e responde pergun
 - O chat não escreve nada (é o Modo Builder, Onda 7) e não lê conversas inteiras — lê o
   resumo que o Copilot mantém.
 
-## 4. Deploy — aguardando aprovação do founder
+## 4. Deploy / estado da produção (13/09)
 
-Nada foi aplicado. A ordem importa: o agente novo chama as funções das migrations; o
-frontend novo chama o agente novo (chat) e os verbos novos.
+Aprovado pelo founder e feito na ordem (o agente novo chama as funções das migrations;
+o frontend novo chama o agente novo e os verbos novos):
 
-1. **Migrations** `20260914000100` … `20260914000600`, cada uma numa transação com o seu
-   registro no histórico. A partir daqui a fila começa a encher para as linhas com o
-   Copilot ligado (hoje: 2 equipes com o Agente de CRM, 2 linhas com agente) — e espera,
-   porque nada a processa ainda.
-2. **Evals de modelo** com a chave (Dokploy/CI): `LLM_API_KEY=… uv run pytest evals/ -v -s`.
-3. **PR** `claude/sprint11/w6b/copiloto-chat-e-telas` → `main` (depois do PR #20). O merge
-   publica o frontend (Netlify) **e o `python-agent`** (o Dokploy sobe do `main`).
-4. **No Dokploy:** `COPILOT_JOBS_ENABLED=true` (opcional: `KEEPER_MODEL`, `CHAT_MODEL`).
-5. **No Vault (SQL Editor do Supabase — os valores não entram em arquivo):**
-   `copilot_agent_url` (a URL pública do agente) e `copilot_agent_token` (o
-   `AGENT_INTERNAL_TOKEN` do Dokploy).
-6. **Despertador:** `supabase/scripts/2026-09-14_sprint11_schedule_copilot_tick.sql`.
-7. **Piloto na Solo Energia:** conferir o agente configurado na linha (modo e regras em
-   CRM › Copilot › Configurar); acompanhar "O que fiz"; depois de um dia, o relatório de
-   velocidade (`supabase/scripts/2026-09-14_copilot_speed_report.sql`).
-8. **Navegador:** a casa do Copilot (perguntar, aprovar, desfazer), o painel no negócio,
-   o ⚡ no card e no pipeline — e as verificações pendentes das Ondas 4 e 5.
+1. **Migrations** `20260914000100` … `20260914000600` aplicadas, cada uma numa transação
+   com o seu registro no histórico. Conferido: as 11 funções, o gatilho em `messages`,
+   as 4 tabelas, a fila no Realtime, o índice de mensagens; fila vazia.
+2. **PR #21** mergeado com os checks verdes (`ffea08a`; levou junto o PR #20 da Onda 5).
+   O Netlify serve o bundle do preview (`index-D5MIjEbB.js`); o Dokploy publicou o
+   `python-agent` (health `ok`; `/api/v1/jobs/tick` e `/api/v1/chat` respondem 401 sem
+   credencial — as rotas novas estão no ar). `COPILOT_JOBS_ENABLED=true` posto pelo
+   founder no Dokploy.
+3. **Vault:** `copilot_agent_url` = `https://agent.soloventures.com.br` criado.
+   **Falta `copilot_agent_token`** (o `AGENT_INTERNAL_TOKEN` do Dokploy — o valor não sai
+   de lá): `select vault.create_secret('<AGENT_INTERNAL_TOKEN>', 'copilot_agent_token');`
+   no SQL Editor. Até lá o despertador não chama o agente (avisa e espera).
+4. **Despertador** `copilot-tick` agendado (`* * * * *`, ativo) — só chama o agente com
+   trabalho vencido e os dois segredos.
+5. **Piloto já configurado:** Solo Energia · "Usinas - Micro Geração" no modo
+   **autônomo** e Casa Flow · "ADS - B2B" no modo **sugerir** (espera efetiva de 5 min —
+   as regras diziam 1 —, teto de 200 leituras por dia). Com o token no Vault, a próxima
+   conversa que pausar nessas linhas é lida.
+6. **Pendente:** os evals de modelo com a chave (`LLM_API_KEY=… uv run pytest evals/ -v -s`
+   no `python-agent`); o relatório de velocidade depois de um dia
+   (`supabase/scripts/2026-09-14_copilot_speed_report.sql`); a verificação no navegador.
 
-**Desligar:** `select cron.unschedule('copilot-tick')` e/ou `COPILOT_JOBS_ENABLED=false`;
-a fila para de andar e nada mais é aplicado. **Desfazer uma ação:** "Desfazer" na casa
-ou no negócio.
+**Desligar:** `select cron.unschedule('copilot-tick')` e/ou `COPILOT_JOBS_ENABLED=false`.
+**Desfazer uma ação:** "Desfazer" na casa do Copilot ou no negócio.
 
 ## 5. Fica para depois
 

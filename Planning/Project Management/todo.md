@@ -82,6 +82,67 @@ View of Project Manager: Mateus
 
 18. Landing Pages.
 
+# TODO — vindo do Sprint 11 (CRM v1.1)
+
+As seis ondas estão na produção (13/09/2026). Handoff: `Sprints_PM_Handoff.md`,
+"Sprint 11 — Fechamento". Dono entre parênteses.
+
+## 🔴 Agora — só o founder tem a credencial ou a decisão
+
+- [ ] **Token do Copilot no Vault** (Mateus) — sem ele o Copilot não acorda. No SQL Editor
+  do Supabase: `select vault.create_secret('<AGENT_INTERNAL_TOKEN do Dokploy>', 'copilot_agent_token');`
+  Conferir 5 min depois de uma conversa pausar numa linha piloto: CRM › Copilot › "O que fiz".
+- [ ] **Evals de modelo com a chave** (Mateus, ou ligar o segredo no job "Backend evals"
+  do CI) — `cd python-agent && LLM_API_KEY=… uv run pytest evals/ -v -s`. Portões:
+  nenhum id inventado, ≥ 75% das ações esperadas, chat sem número de fora.
+- [ ] **Verificação no navegador — Ondas 4, 5 e 6** (Mateus): criar proposta num negócio
+  da Solo, anexar PDF, marcar como enviada; gerar o link do formulário de um contrato e
+  preencher em aba anônima; criar campanha, lançar investimento, ligar UTM; ver a Origem
+  no negócio; perguntar ao Copilot "Onde devo focar?"; aprovar e desfazer uma ação.
+- [ ] **"Envio de Proposta" ↔ marco `proposal_sent`** na linha da Solo (Mateus, um clique
+  em Configurações do pipeline) — pendente desde a Onda 4.
+- [ ] **Decisões D2 e D4 do estudo do MCP** (Mateus) antes do plano da Onda 7: quem pode
+  alterar configuração (recomendado admin/gestor) e cobrança do Builder no apply.
+
+## 🟠 Próximas ondas e sprints (Claude PM planeja)
+
+- [ ] **Onda 7 — Copilot em Modo Builder** sobre changesets (`describe · plan · apply ·
+  revert`): pipeline, etapas, campos, metas, taxonomia, webhooks, tabelas, automações,
+  blocos do AI Studio, tarefas e agenda — com diff e desfazer (`future_sprint__mcp_v1.md` §5).
+- [ ] **Tirar o caminho antigo do Copilot** depois do piloto provado: Torre/Chão/Workflow,
+  `/api/v1/sync`, o painel de aprovações antigo, `services/copilot.syncOpportunity`.
+- [ ] **Precificar o chat** depois de ~20 conversas reais (os tempos e o modelo ficam em
+  `copilot_messages.meta`).
+- [ ] **Sprint de integrações:** fundação (credenciais no Vault, catálogo de conectores,
+  fila de saída com nova tentativa) → Meta (Lead Ads + Conversions API + investimento) →
+  Google (lead form + conversão offline) → Windsor.ai (investimento das outras
+  plataformas) → REST API v1 com chaves → MCP. ElevenLabs fica do lado do atendimento.
+- [ ] **Tabelas: bugs e acabamento** (pedido do founder em 13/09) — levantar antes de planejar.
+- [ ] **v1.2 do CRM:** visões salvas, agrupar, "selecionar todos os filtrados", campos de
+  contato por `field_id`, filtro por campo de contato.
+- [ ] **Modelo do lead score** (ponto 13 da visão da Sprint 11).
+
+## 🔵 Dívida encontrada no caminho
+
+- [ ] **Crons antigos guardam o segredo no texto do comando** (`cron.job`:
+  `sprint8_dispatch_tick` e outros) — migrar para o Vault como o `copilot-tick`.
+- [ ] **Importação de planilha grava `creation_source = 'manual'`** (`useLeads.createLead`);
+  o toque diz "Importação" — acertar a origem do lead.
+- [ ] **`analyze-message` com o resolvedor antigo** — publicar de novo para pegar a regra da
+  linha encerrada (Onda 5).
+- [ ] **Clique-para-WhatsApp com anúncio de verdade** — o caminho está provado só pelo
+  formato (spike da Onda 5); conferir quando houver instância da Solo API recebendo anúncio.
+- [ ] **`chat-attachments` é público** e a política de delete deixa qualquer usuário logado
+  apagar anexo de qualquer equipe (achado da Onda 4).
+- [ ] **Baseline de lint:** 85 avisos (0 erros) — baixar aos poucos.
+
+## 📊 Para acompanhar no piloto do Copilot
+
+- Relatório de velocidade depois de um dia: `supabase/scripts/2026-09-14_copilot_speed_report.sql`
+  (metas: ~4 s por negócio; Sync em < 10 s; primeira palavra do chat em < 2 s).
+- Quanto é desfeito ou recusado (a precisão vista pela equipe) e quantas sugestões ficam
+  desatualizadas.
+
 # TODO — vindo do Sprint 10 (migração Solo Energia)
 
 Migração aplicada em produção em 09/09/2026: 1.251 leads, 1.260 oportunidades,
