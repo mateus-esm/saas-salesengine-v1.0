@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     copilot_jobs_batch: int = 10
     copilot_jobs_concurrency: int = 4
     keeper_model: str | None = None  # empty → doorman_model
+    chat_model: str | None = None  # the chat (T63); empty → doorman_model
 
     # G6 — Production CORS wiring
     # ─────────────────────────────────────────────────────────────────────────
