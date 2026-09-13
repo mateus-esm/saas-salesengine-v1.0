@@ -179,6 +179,14 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | **Sprint 5.1 — TOTAL** | **T6–T15** | **R$ 145** |
 | **Sprint 5.2 — TOTAL so far** | **T1, T2** | **R$ 24** |
 | **Sprint 6 — TOTAL so far** | **R&D Blueprint** | **R$ 28** |
+| Sprint 11 — Onda 1 (confiança) | T1–T10 | R$ 123 |
+| Sprint 11 — Onda 2 (Kanban e tabelas) | Plano + T11–T27 | R$ 234 |
+| Sprint 11 — Onda 3 (receita e linha) | Plano + T28–T38 | R$ 225 |
+| Sprint 11 — Onda 4 (artefatos) | Plano + T39–T47 | R$ 169 |
+| Sprint 11 — Onda 5 (entradas e atribuição) | Plano + T48–T57 | R$ 165 |
+| Sprint 11 — Onda 6 (Copilot) | Plano + T58–T67 | R$ 173 |
+| Sprint 11 — fechamento | handoff, todo, custos | R$ 5 |
+| **Sprint 11 — TOTAL** | **71 linhas, T1–T67** | **R$ 1.094** |
 
 ---
 
@@ -330,6 +338,7 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-12 | 11 W5B | T55 Naturezas Duracao e Entradas | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5B | T56 Legado: origem das bases antigas (script + ensaio) | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-12 | 11 W5B | T57 Verificacao e handoff (deploy aguardando aprovacao) | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-13 | 11 W6 | Plano da Onda 6 (Copilot) + conselho de integracoes | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-13 | 11 W6 | T58 Fila, espera e contexto do Copilot | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-13 | 11 W6 | T59 Aplicar, desfazer e aprovar (Copilot pelos verbos) | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-13 | 11 W6 | T60 O cerebro: uma chamada, em paralelo, cronometrado | Claude / Opus 5 (PM) | L | R$ 20 |
@@ -339,4 +348,5 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-13 | 11 W6 | T64 A casa do Copilot | Claude / Opus 5 (PM) | L | R$ 20 |
 | 2026-09-13 | 11 W6 | T65 O Copilot no negocio | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-13 | 11 W6 | T66 Precisao e velocidade (evals + relatorio) | Claude / Opus 5 (PM) | M | R$ 12 |
-| 2026-09-14 | 11 W6 | T67 Verificacao e handoff (deploy aguardando aprovacao) | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-13 | 11 W6 | T67 Verificacao, deploy e handoff | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-13 | 11 | Fechamento da Sprint 11 (handoff, todo, custos) | Claude / Opus 5 (PM) | S | R$ 5 |
