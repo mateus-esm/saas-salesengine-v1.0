@@ -43,7 +43,6 @@ import SkillsPage from "./pages/ai-studio/SkillsPage";
 import ChannelsPage from "./pages/ai-studio/ChannelsPage";
 import SettingsPage from "./pages/ai-studio/SettingsPage";
 import { ToolkitPage, ClubePage } from "./pages/ComingSoon";
-import CopilotCockpit from "./pages/CopilotCockpit";
 
 // Sprint 5.2 T12 — keep query data hot between screen switches so navigating
 // (e.g. CRM -> Chat) is a layout swap, not a refetch-and-flash.
@@ -110,7 +109,8 @@ const App = () => (
                   </Route>
                   <Route path="/chat" element={<Chat />} />
                   <Route path="/crm" element={<CRM />} />
-                  <Route path="/copiloto" element={<CopilotCockpit />} />
+                  {/* Sprint 11 · T68 — the Copilot is the app's opening now */}
+                  <Route path="/copiloto" element={<Navigate to="/home" replace />} />
                   {/* Tasks live inside CRM now; keep this redirect for old links/bookmarks. */}
                   <Route path="/tasks" element={<Navigate to="/crm?tab=tasks" replace />} />
                   <Route path="/pipeline" element={<PipelineSettings />} />
