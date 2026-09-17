@@ -8,7 +8,7 @@
 // screen. That is what broke the tables: each screen handled types its own way,
 // so a Select column had no options and a multi-select was saved as text.
 
-import { formatBrPhone } from "@/lib/displayName";
+import { formatBrPhone, isTechnicalPhone } from "@/lib/displayName";
 import type { CustomFieldFilterOp } from "@/types/crmFilters";
 import type { AddressValue, CustomFieldType } from "@/types/pipelines";
 
@@ -257,7 +257,13 @@ export const FIELD_TYPES: readonly FieldTypeSpec[] = [
   spec({
     type: "phone",
     label: "Telefone",
-    format: (v) => (isEmptyValue(v) ? "" : formatBrPhone(String(v)) ?? String(v)),
+    // SE-LID-001 — a Meta technical id sitting in the phone column (Casa Flow,
+    // 2026-09-17: "186432031355045@lid") was rendered as "+186432031355045".
+    // Same defect class as formatDisplayName: an id that is not a number must
+    // not be formatted as one. Blank is the honest rendering; the inline editor
+    // still lets someone replace it with a real number.
+    format: (v) =>
+      isEmptyValue(v) || isTechnicalPhone(String(v)) ? "" : formatBrPhone(String(v)) ?? String(v),
     parse: trimmedOrNull,
     filterOps: TEXT_OPS,
     sortAs: "text",

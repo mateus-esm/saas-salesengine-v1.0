@@ -28,6 +28,37 @@ export function isTechnicalId(name: string | null | undefined): boolean {
 }
 
 /**
+ * SE-LID-001 — the same question, asked of the phone column.
+ *
+ * A lead's `phone` can hold a Meta technical id when the provider withheld the
+ * real number (Casa Flow, 2026-09-17: "186432031355045@lid"). The phone was
+ * rendered as "+186432031355045" and shipped as-is to the team's outbound lead
+ * webhook. Two shapes count:
+ *   - a `@lid` / `@g.us` / `@broadcast` value — no number inside;
+ *   - a digit run of 15+, longer than any BR number (max 13 after
+ *     normalization: "55" + DDD + 9 digits). A "<digits>@s.whatsapp.net" /
+ *     "@c.us" envelope is judged by the digits inside it, so a real number stays
+ *     a real number while a 15-digit id does not slip through disguised.
+ *
+ * Mirrors `isTechnicalPhone` in supabase/functions/_shared/phone.ts.
+ */
+export function isTechnicalPhone(phone: string | null | undefined): boolean {
+  if (!phone) return false;
+  const trimmed = String(phone).trim().toLowerCase();
+  if (!trimmed) return false;
+  if (
+    trimmed.endsWith("@lid")
+    || trimmed.endsWith("@g.us")
+    || trimmed.endsWith("@broadcast")
+  ) {
+    return true;
+  }
+  const envelope = ["@s.whatsapp.net", "@c.us"].find((s) => trimmed.endsWith(s));
+  const candidate = envelope ? trimmed.slice(0, trimmed.length - envelope.length) : trimmed;
+  return /^\d{15,}$/.test(candidate.replace(/^\+/, ""));
+}
+
+/**
  * Format a Brazilian phone (E.164 digits, e.g. "5511987654321") into the
  * familiar `+55 (11) 98765-4321` shape. Returns the input unchanged when it
  * doesn't look like a BR mobile.
@@ -56,8 +87,14 @@ export function formatBrPhone(phone: string | null | undefined): string | null {
  *
  * Precedence:
  *   1. A real name (not a technical ID) — use it.
- *   2. A phone number — render it formatted.
- *   3. Nothing — fall back to `[WhatsApp - Lead Anônimo]` (blocked-number case).
+ *   2. A real phone number — render it formatted.
+ *   3. Nothing usable — fall back to `[WhatsApp - Lead Anônimo]`
+ *      (blocked/LID-only number case).
+ *
+ * Step 2 requires an actual phone: a Meta LID sitting in the phone column used
+ * to be formatted as "+186432031355045", which is how the raw id kept reaching
+ * the screen after the name side had already been masked. The edge functions
+ * no longer write LIDs (SE-LID-001), but historical rows still carry them.
  */
 export function formatDisplayName(
   name: string | null | undefined,
@@ -65,6 +102,7 @@ export function formatDisplayName(
   fallback: string = "[WhatsApp - Lead Anônimo]",
 ): string {
   if (name && !isTechnicalId(name)) return name.trim();
+  if (isTechnicalPhone(phone)) return fallback;
   const pretty = formatBrPhone(phone);
   if (pretty) return pretty;
   return fallback;
