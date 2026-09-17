@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryLine, entryOfKind, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
-import { normalizePhone } from "../_shared/phone.ts"
+import { resolveLeadIdentity } from "../_shared/lead-identity.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -34,27 +34,30 @@ serve(async (req) => {
     let messageContent = typeof rawContent === 'string' ? rawContent.trim() : ''
     const senderPhone = payload.contactPhone || payload.phone || payload.from || ''
     // Sprint 5.5 EPIC 1 — normalize so "+5511..." and "5511..." resolve to one lead.
-    const phoneNorm = normalizePhone(senderPhone)
-    // Sprint 5.5 — refuse Meta technical IDs (e.g. "264162450083898@lid") as
-    // the contact name. When GPT Maker can't read a real pushName it forwards
-    // the raw account identifier, which then surfaces in every UI as a broken
-    // string. Treat those as "no name" so the existing phone-based fallback
-    // ("Lead 5511...", "Novo Visitante") kicks in instead.
+    // SE-LID-001: normalizePhone() stays a pure digit normalizer on purpose — it
+    // is a documented mirror of public.normalize_phone_br and cannot tell a
+    // phone from a Meta LID. resolveLeadIdentity() is the decision point: it
+    // refuses to persist a technical id as name/phone, while keeping the legacy
+    // phone_normalized key so existing rows are still found (no duplicates).
     const rawSenderName: string = payload.contactName || payload.pushName || ''
-    const isTechnicalSenderId = (() => {
-      const t = rawSenderName.trim().toLowerCase()
-      if (!t) return false
-      if (t.endsWith('@lid')) return true
-      if (t.endsWith('@s.whatsapp.net')) return true
-      if (t.endsWith('@c.us')) return true
-      if (t.endsWith('@g.us')) return true
-      if (t.endsWith('@broadcast')) return true
-      if (/^\d{8,}$/.test(t)) return true
-      return false
-    })()
-    const senderName = isTechnicalSenderId ? '' : (rawSenderName || 'Desconhecido')
-    if (isTechnicalSenderId) {
+    const identity = resolveLeadIdentity({
+      contactName: rawSenderName,
+      contactPhone: senderPhone,
+    })
+    const phoneNorm = identity.phoneNormalized
+    // Sprint 5.5 — when GPT Maker can't read a real pushName it forwards the
+    // raw account identifier; the name falls back to "Lead 5511..." /
+    // "Novo Visitante" instead of storing the broken string.
+    if (identity.technicalName) {
       console.log('[Webhook] contactName parecia um Meta ID técnico — descartado:', rawSenderName)
+    }
+    // SE-LID-001 — the Casa Flow incident (2026-09-17): "186432031355045@lid"
+    // arrived in contactPhone, was stored in leads.phone, and the outbound lead
+    // webhook shipped it to the team's WhatsApp notification as Nome *and*
+    // Telefone. A technical id is no longer written to leads.phone — the lead
+    // is deduped by gpt_maker_chat_id instead.
+    if (identity.technicalPhone) {
+      console.log('[Webhook] contactPhone parecia um Meta ID técnico — descartado de leads.phone:', senderPhone)
     }
     const messageDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
     const chatId = payload.contextId || null
@@ -168,6 +171,11 @@ serve(async (req) => {
     // 8. Buscar lead existente — Sprint 5.5 EPIC 1
     // Lookup by NORMALIZED phone (canonical form) so "+5511..." and "5511..."
     // resolve to the same lead. Falls back to gpt_maker_chat_id when no phone.
+    // SE-LID-001: for a Meta LID, phoneNorm is the bare id on purpose — it is
+    // the key legacy rows were created with, so an existing `@lid` lead is
+    // FOUND here and reused instead of turning into a second lead for the same
+    // contact. New LID leads are stored without a phone key and are found by
+    // the gpt_maker_chat_id lookup below.
     let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null } | null = null
 
     if (phoneNorm) {
@@ -205,19 +213,31 @@ serve(async (req) => {
     // IS NOT NULL atomically prevents races. If two parallel webhooks both
     // miss the SELECT and both INSERT, only the first commits; the loser
     // catches the 23505 violation and re-reads the winning row.
+    // SE-LID-001: a LID lead is inserted with phone_normalized NULL — the LID
+    // must not be persisted as a phone — so the partial index above cannot
+    // cover it at INSERT time. Two things compensate, in order: this insert is
+    // immediately followed by re-attaching the legacy dedup key (step 9b), and
+    // the gpt_maker_chat_id lookup above catches the remaining window. Two
+    // parallel *first* messages of the same conversation can still
+    // double-insert; a partial UNIQUE index on (equipe_id, gpt_maker_chat_id)
+    // is the follow-up that closes it (docs SE-LID-001, needs a migration).
     let leadIsNew = false
     if (!lead) {
       console.log('[Webhook] Lead não encontrado, criando novo...')
 
-      const finalName = senderName || (senderPhone ? `Lead ${senderPhone}` : 'Novo Visitante')
+      const finalName = identity.name
 
       const { data: newLead, error: createError } = await supabase
         .from('leads')
         .insert({
-          phone: senderPhone || null,
-          // Trigger trg_leads_sync_phone_normalized will set this; we set it
-          // explicitly too so older clients don't break the conflict check.
-          phone_normalized: phoneNorm,
+          // SE-LID-001 — null when the provider sent a Meta technical id.
+          phone: identity.phone,
+          // Trigger trg_leads_sync_phone_normalized recomputes this from
+          // `phone`; we set it explicitly too so older clients don't break the
+          // conflict check. A lead with no real phone gets no phone key at all:
+          // sending the LID digits here would recreate the very row this fix
+          // removes.
+          phone_normalized: identity.phone ? phoneNorm : null,
           name: finalName,
           equipe_id: equipeId,
           gpt_maker_chat_id: chatId,
@@ -260,6 +280,38 @@ serve(async (req) => {
       }
     }
 
+    // 9.1. SE-LID-001 — re-attach the legacy dedup key for a lead with no real
+    // phone. (Numbered 9.1, not 9b: step 9b further down is the unrelated
+    // conversation upsert.)
+    //
+    // The fix keeps the LID out of `leads.phone`, but `phone_normalized` is how
+    // this webhook has always deduped. Storing NULL there would leave the lead
+    // outside UNIQUE (equipe_id, phone_normalized), and a later message from the
+    // same contact carrying a different contextId would miss both lookups and
+    // create a SECOND lead. Keeping the bare identifier as the key preserves the
+    // old behaviour exactly.
+    //
+    // This is safe for the notification: `phone_normalized` is only ever read as
+    // a lookup key — no UI and no outbound payload renders it. The mask applies
+    // to `leads.name`/`leads.phone`, which is what the template reads.
+    //
+    // The UPDATE intentionally lists only `phone_normalized`:
+    // trg_leads_sync_phone_normalized is declared `UPDATE OF phone`, so it does
+    // not fire here and does not blank the key we are setting.
+    if (leadIsNew && lead && !identity.phone && phoneNorm) {
+      const { error: keyError } = await supabase
+        .from('leads')
+        .update({ phone_normalized: phoneNorm })
+        .eq('id', lead.id)
+
+      if (keyError) {
+        // 23505 = another live row already owns this key (lost a race). Leaving
+        // NULL is the documented degraded state: the lead is still reachable by
+        // gpt_maker_chat_id.
+        console.warn('[Webhook] Não foi possível restaurar a chave de dedup do lead:', keyError)
+      }
+    }
+
     if (!leadIsNew && lead) {
       // Atualizar chat_id, last_message_at e metadados de enriquecimento se necessário
       const updates: Record<string, unknown> = { last_message_at: messageDate }
@@ -269,9 +321,12 @@ serve(async (req) => {
         updates.gpt_maker_chat_id = chatId
       }
       
-      // If we found by chat_id but now we have a phone (unlikely but possible merge)
-      if (senderPhone && !lead.phone) {
-        updates.phone = senderPhone
+      // If we found by chat_id but now we have a phone (unlikely but possible
+      // merge). SE-LID-001: identity.phone is null when the provider sent a
+      // Meta technical id, so an @lid is never backfilled into leads.phone —
+      // the UPDATE OF phone trigger keeps phone_normalized in sync.
+      if (identity.phone && !lead.phone) {
+        updates.phone = identity.phone
       }
 
       // Fase 2: Enriquecimento — atualizar metadados quando disponíveis

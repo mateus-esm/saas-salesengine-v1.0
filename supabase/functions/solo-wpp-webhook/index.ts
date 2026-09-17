@@ -20,7 +20,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryForInstance, entryLine, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
-import { normalizePhone } from "../_shared/phone.ts"
+import { isTechnicalPhone, normalizePhone } from "../_shared/phone.ts"
+import { formatDisplayName } from "../_shared/displayName.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -283,8 +284,11 @@ async function handleConnectionUpdate(
     last_health_at: new Date().toISOString(),
   }
 
-  // Extract phone from wuid on first connection
-  if (wuid && newStatus === 'connected') {
+  // Extract phone from wuid on first connection.
+  // SE-LID-001: if the pairing identity is a Meta technical id, wpp_instances.phone
+  // is the one column that MUST stay empty rather than carry it — it feeds the
+  // instance list and the notification sender resolution.
+  if (wuid && newStatus === 'connected' && !isTechnicalPhone(wuid)) {
     const phone = extractPhoneFromJid(wuid)
     if (phone) updates.phone = phone
   }
@@ -417,7 +421,15 @@ async function handleMessagesUpsert(
 
   if (!lead) {
     console.log('[solo-wpp] Lead nao encontrado, criando novo...')
-    const senderName = pushName || (phone ? `Lead ${phone}` : 'Novo Visitante')
+    // SE-LID-001 — a `@lid` remoteJid is a Meta technical id, not a phone.
+    // extractPhoneFromJid() strips the suffix, so `phone` here is the bare id.
+    // It stays as the dedup key (this path has no chat-id fallback: nulling it
+    // would create one lead per message) but it must never become the label —
+    // "Lead 186432031355045" is what the team saw in the CRM.
+    const technicalJid = isTechnicalPhone(key.remoteJid)
+    const senderName = technicalJid
+      ? formatDisplayName(pushName, null)
+      : (pushName || (phone ? `Lead ${phone}` : 'Novo Visitante'))
 
     const baseLead = {
       phone: phone || null,
