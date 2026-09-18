@@ -120,11 +120,17 @@ export async function runProvisionEffects(
 }
 
 /**
- * Boas-vindas: entrar no sistema, depois agendar o discovery.
+ * Boas-vindas: entrar no sistema, depois responder o discovery.
  *
  * O texto vem do template editável em notification_types; o que esta função faz
- * é montar as variáveis. O link de agendamento sai de system_settings porque
- * uma URL de agenda muda mais do que o código.
+ * é montar as variáveis.
+ *
+ * Sprint 8.2 discovery_q&a — até aqui a mensagem mandava agendar a reunião. O
+ * link da agenda era o mais fácil de clicar, então o cliente marcava primeiro e
+ * chegava na reunião sem ter contado nada sobre a operação dele — e a reunião
+ * inteira virava entrevista. Agora o pedido é o discovery, e o agendamento
+ * aparece na tela final do formulário: um pedido só por mensagem, e nenhuma
+ * reunião marcada contra um discovery vazio.
  *
  * `link_senha` existe porque "o acesso foi enviado para o seu e-mail" deixava o
  * cliente parado: a mensagem chega no WhatsApp e o e-mail pode estar no spam,
@@ -135,15 +141,29 @@ async function sendWelcome(
   origin: string, linkSenha: string,
 ) {
   const { data: settings } = await db
-    .from("system_settings").select("key, value")
-    .in("key", ["ONBOARDING_CALENDLY_URL", "APP_BASE_URL"]);
+    .from("system_settings").select("key, value").in("key", ["APP_BASE_URL"]);
 
   const get = (k: string) => (settings ?? []).find((s) => s.key === k)?.value ?? "";
   const base = origin || get("APP_BASE_URL") || "";
 
+  // Sprint 8.2 discovery_q&a — o pedido das boas-vindas agora é o discovery, e o
+  // agendamento aparece na tela final dele. O token em claro sai daqui uma única
+  // vez: depois desta chamada só existe o hash no banco.
+  let linkDiscovery = "";
+  const { data: onboarding } = await db
+    .from("onboardings").select("id").eq("equipe_id", r.equipe_id).maybeSingle();
+
+  if (onboarding?.id) {
+    const { data: token, error } = await db.rpc("_discovery_ensure_link", {
+      p_onboarding_id: onboarding.id,
+    });
+    if (error) console.error("[provision-effects] _discovery_ensure_link:", error.message);
+    else if (token && base) linkDiscovery = `${base}/discovery/${token}`;
+  }
+
   await notify(db, r.equipe_id, "onboarding.welcome", "Bem-vindo!", "", "/home", {
     cliente_nome: clienteNome,
-    link_agenda: get("ONBOARDING_CALENDLY_URL"),
+    link_discovery: linkDiscovery,
     link_app: base,
     link_senha: linkSenha || (base ? `${base}/definir-senha` : ""),
     golive_previsto: formatDateBR(r.golive_previsto),

@@ -2037,7 +2037,8 @@ values
   -- ele acabou de preencher, não precisa ser avisado de que preencheu.
   ('onboarding.discovery_done', 'success', '{in_app,email}', 'founder',
    'O cliente enviou o discovery: dá para montar o ambiente antes da reunião.',
-   'operacional',
+   -- 'operacao', não 'operacional': o CHECK aceita comercial|financeiro|suporte|operacao.
+   'operacao',
    '{cliente_nome,link_onboarding}')
 on conflict (type) do update
   set audience = excluded.audience, purpose = excluded.purpose,
