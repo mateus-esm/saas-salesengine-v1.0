@@ -285,7 +285,7 @@ comment on table public.discovery_questions is
 Run:
 ```bash
 npx supabase db push
-npx supabase db execute --sql "select block_label, count(*), count(*) filter (where required) as obrig from public.discovery_questions where niche_id is null and active group by 1,2 order by min(sort_order);"
+npx supabase db query --linked "select block_label, count(*), count(*) filter (where required) as obrig from public.discovery_questions where niche_id is null and active group by 1,2 order by min(sort_order);"
 ```
 Expected: 6 rows totalling 23 questions; `empresa`=4, `cliente`=3, `funil`=4, `agente`=6, `canais`=3, `time`=3.
 
@@ -293,7 +293,7 @@ Expected: 6 rows totalling 23 questions; `empresa`=4, `cliente`=3, `funil`=4, `a
 
 Run:
 ```bash
-npx supabase db execute --sql "set role anon; select count(*) from public.discovery_questions;"
+npx supabase db query --linked "set role anon; select count(*) from public.discovery_questions;"
 ```
 Expected: `permission denied` **or** `0 rows` — never the 23. If it returns 23, the RLS policy is wrong; fix before continuing.
 
@@ -403,7 +403,7 @@ comment on table public.onboarding_discovery is
 Run:
 ```bash
 npx supabase db push
-npx supabase db execute --sql "
+npx supabase db query --linked "
   select public._discovery_has_answer('multi','[]'::jsonb)        as vazio_multi_false,
          public._discovery_has_answer('multi','[\"a\"]'::jsonb)   as cheio_multi_true,
          public._discovery_has_answer('textarea','\"  \"'::jsonb) as espaco_false,
@@ -615,7 +615,7 @@ grant execute on function public._discovery_submit(text)      to service_role;
 Run:
 ```bash
 npx supabase db push
-npx supabase db execute --sql "
+npx supabase db query --linked "
 do \$\$
 declare v_ob uuid; v_tok text; v_res jsonb;
 begin
@@ -2113,13 +2113,13 @@ The type created in Step 1 is useless until something sends it. In `supabase/fun
 Run:
 ```bash
 npx supabase db push
-npx supabase db execute --sql "select type, variables, left(template_body, 120) from public.notification_types where type in ('onboarding.welcome','onboarding.discovery_done');"
+npx supabase db query --linked "select type, variables, left(template_body, 120) from public.notification_types where type in ('onboarding.welcome','onboarding.discovery_done');"
 ```
 Expected: `onboarding.welcome` variables contain `link_discovery` and NOT `link_agenda`; `onboarding.discovery_done` exists.
 
 Also confirm the routing actually reached the founder and not the client:
 ```bash
-npx supabase db execute --sql "select type, audience, purpose from public.notification_types where type = 'onboarding.discovery_done';"
+npx supabase db query --linked "select type, audience, purpose from public.notification_types where type = 'onboarding.discovery_done';"
 ```
 Expected: `audience = founder`. If the insert raised a CHECK violation, the vocabulary changed again — read `20260824000400_sprint84_notification_routing.sql` for the current allowed set.
 

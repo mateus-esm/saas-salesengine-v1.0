@@ -137,7 +137,7 @@ diz quais perguntas sustentam peso.
 
 `niche_id` opcional torna a pergunta específica de segmento.
 
-### D2 · 23 perguntas, 15 delas com padrão já marcado
+### D2 · 23 perguntas, 12 de escolha, 10 já com padrão marcado
 
 | Bloco | Perguntas | Prosa |
 | --- | --- | --- |
@@ -148,6 +148,15 @@ diz quais perguntas sustentam peso.
 | 5 · Canais e acessos | 3 | 0 |
 | 6 · Time e alertas | 3 | 1 |
 | **Total** | **23** | **9** |
+
+Das 23, **12 são escolha** (rádio ou caixa) e **10 dessas já abrem com uma
+sugestão marcada** — funil, motivos de perda, origens, objetivo e tom do agente,
+transferência, canais, agenda, horário e avisos. As duas escolhas que ficam em
+branco de propósito são ticket médio e situação do número: chutar o tamanho de
+uma venda ou o estado de um chip é pior do que perguntar, porque o cliente
+aceitaria o palpite errado sem reparar.
+
+As outras 11 são escritas: 10 textos longos (9 obrigatórios) e o nome do agente.
 
 São as 23 de todo mundo. Quem é de um segmento que já conhecemos vê mais uma ou
 duas, vindas de `niche_id` — consumo médio em kWh para energia solar, tipo de
