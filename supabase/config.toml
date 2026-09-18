@@ -141,3 +141,7 @@ verify_jwt = false
 
 [functions.public-form]
 verify_jwt = false
+
+# Sprint 8.2 discovery_q&a — o cliente tem só o link, sem login.
+[functions.public-discovery]
+verify_jwt = false
