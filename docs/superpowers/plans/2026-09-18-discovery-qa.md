@@ -408,12 +408,17 @@ npx supabase db query --linked "
          public._discovery_has_answer('multi','[\"a\"]'::jsonb)   as cheio_multi_true,
          public._discovery_has_answer('textarea','\"  \"'::jsonb) as espaco_false,
          public._discovery_has_answer('textarea','\"oi\"'::jsonb) as texto_true,
+         public._discovery_has_answer('multi','\"x\"'::jsonb)     as multi_com_string_false,
          public._discovery_progress('{}'::jsonb, null)            as zero,
+         -- Cada tipo com o SEU formato: uma multi respondida é lista, não string.
+         -- Preencher tudo com 'x' devolve 73%, não 100 — e isso é a função certa,
+         -- recusando 6 multis mal formadas, não um bug.
          public._discovery_progress(
-           (select jsonb_object_agg(code, to_jsonb('x'::text))
+           (select jsonb_object_agg(code,
+                     case when type = 'multi' then '[\"a\"]'::jsonb else to_jsonb('x'::text) end)
               from public.discovery_questions where required and niche_id is null), null) as cem;"
 ```
-Expected: `f, t, f, t, 0, 100`.
+Expected: `f, t, f, t, f, 0, 100`.
 
 - [ ] **Step 3: Commit**
 
