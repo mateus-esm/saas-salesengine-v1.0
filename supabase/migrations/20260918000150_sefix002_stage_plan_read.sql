@@ -1,5 +1,15 @@
 -- SE-FIX-002 — leitura por etapa para a seção Metas (Pipelines → Config → Metas).
 --
+-- RENUMERADA de 20260918000100 para 20260918000150 em 18/09/2026.
+--
+-- Duas migrations nasceram no mesmo dia com o mesmo prefixo: esta e
+-- 20260918000100_sprint82_discovery_bank.sql. O histórico do Supabase é chaveado
+-- pela VERSÃO, não pelo nome — e a do discovery chegou primeiro ao banco. Com o
+-- número ocupado, `db push` considerava esta aqui já aplicada e a pulava para
+-- sempre: `fn_stage_conversion_plan` não existia no banco enquanto a seção Metas
+-- já a chamava em produção. Renumerar foi o que fez esta migration voltar a
+-- rodar.
+--
 -- NADA AQUI É DESTRUTIVO. São dois `create or replace function` de LEITURA:
 -- nenhuma tabela, coluna, índice ou linha é criada, alterada ou apagada.
 --
