@@ -13,7 +13,21 @@ export interface RevenueConfig {
   period?: "month" | "quarter";
   owner_goals?: OwnerGoal[];
   hidden_scoreboard_metrics?: string[];
+  /**
+   * SE-FIX-002 — a meta de passagem por etapa (0–1), por `pipeline_stages_v2.id`.
+   *
+   * A chave é a mesma do Sprint 6.7, mas o papel mudou: antes era um desvio
+   * opcional sobre a taxa que o banco calculava; agora é a meta declarada da
+   * etapa, e o histórico (`fn_stage_conversion_plan`) é a sugestão. Etapa sem
+   * entrada aqui usa a taxa histórica.
+   */
   conversion_overrides?: Record<string, number>;
+  /**
+   * SE-FIX-002 — quantos dias o funil inteiro pode levar, do lead que entra ao
+   * negócio fechado. A tela divide por igual entre as etapas de passagem para
+   * mostrar o orçamento de dias de cada uma.
+   */
+  target_lead_time_days?: number;
 }
 
 export type CustomFieldType =
