@@ -150,6 +150,22 @@ export function OnboardingTab() {
       return;
     }
 
+    // Sprint 8.2 discovery_q&a — avisa, não trava.
+    //
+    // O gate é mole de propósito: o fundador fura a própria ordem quando o
+    // cliente pede para conversar antes, e um quadro que o impede de registrar
+    // o que já aconteceu é um quadro que ele para de usar.
+    const destino = (stages ?? []).find((s) => s.id === targetStageId);
+    if (destino?.code === "implantacao" && (card.discovery_progress ?? 0) < 100) {
+      toast({
+        title: "Discovery incompleto",
+        description:
+          card.discovery_progress === null
+            ? "O cliente ainda não recebeu o link. Seguindo assim mesmo."
+            : `${card.discovery_progress}% respondido. Seguindo assim mesmo.`,
+      });
+    }
+
     moveStage.mutate(
       { id: card.id, stageId: targetStageId },
       {

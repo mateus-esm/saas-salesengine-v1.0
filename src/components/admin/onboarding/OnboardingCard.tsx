@@ -88,6 +88,16 @@ export function OnboardingCard({ card, stage, onOpen, onGoLive, showGoLive }: Pr
                 Legado
               </Badge>
             )}
+            {/* Sprint 8.2 discovery_q&a — antes da reunião, o que importa saber
+                de relance é se o cliente já respondeu. */}
+            {card.discovery_progress !== null && (
+              <Badge
+                variant={card.discovery_status === "submitted" ? "default" : "secondary"}
+                className="mt-1 ml-1 h-4 px-1 text-[9px] font-normal"
+              >
+                Discovery {card.discovery_progress}%
+              </Badge>
+            )}
           </div>
           {card.monthly_value > 0 && (
             <span className="shrink-0 text-xs font-semibold text-muted-foreground">

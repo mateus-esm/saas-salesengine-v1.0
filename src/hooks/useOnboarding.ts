@@ -44,6 +44,9 @@ export interface OnboardingRow {
   contract_status: string | null;
   /** Sprint 8.2 — cliente que já operava antes do onboarding existir. */
   is_legacy: boolean;
+  /** Sprint 8.2 discovery_q&a — nulo quando o link ainda não foi gerado. */
+  discovery_progress: number | null;
+  discovery_status: "draft" | "submitted" | null;
 }
 
 export interface OnboardingEvent {
@@ -85,6 +88,7 @@ export function useOnboardings() {
           discovery_agendado_em, discovery_feito_em, went_live_at,
           health, blocked_reason, notes, entered_stage_at, created_at,
           proposals ( monthly_price ),
+          onboarding_discovery ( progress, status ),
           equipes ( is_legacy, contracts ( id, status, current_period_end,
                                            contract_items ( unit_price, quantity, period ) ) )
         `)
@@ -120,6 +124,8 @@ export function useOnboardings() {
           contract_id: live?.id ?? null,
           contract_status: live?.status ?? null,
           is_legacy: row.equipes?.is_legacy === true,
+          discovery_progress: row.onboarding_discovery?.progress ?? null,
+          discovery_status: row.onboarding_discovery?.status ?? null,
         } as OnboardingRow;
       });
 

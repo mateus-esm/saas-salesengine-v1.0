@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { DiscoveryPanel } from "./DiscoveryPanel";
 import {
   useOnboardingEvents, useUpdateOnboarding,
   type OnboardingRow, type OnboardingStage,
@@ -157,6 +158,14 @@ export function OnboardingSheet({ card, stages, onClose, onGoLive }: Props) {
               />
             </div>
           </div>
+
+          {/* Sprint 8.2 discovery_q&a — as respostas do cliente, aqui, para a
+              reunião ser decisão em vez de entrevista. */}
+          {card && (
+            <div className="border-t border-border pt-4">
+              <DiscoveryPanel onboardingId={card.id} clienteNome={card.cliente_nome} />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-xs">Situação</Label>
