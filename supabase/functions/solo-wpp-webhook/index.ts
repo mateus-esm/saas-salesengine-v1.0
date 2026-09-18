@@ -402,6 +402,12 @@ async function handleMessagesUpsert(
 
   const isAgentEnabled = equipe?.is_crm_agent_enabled || false
 
+  // SE-LID-002 — this lookup is NOT conditioned on senderType either, same as
+  // the gpt-maker webhook: an outbound message (key.fromMe) to a number that is
+  // already a lead is FOUND here and reused, so it never reaches the
+  // `Lead <número>` fallback below. That satisfies "o telefone deve passar no
+  // teste de duplicidade" for this channel too — the label change (§441) never
+  // had to touch the dedup key.
   let lead: { id: string; phone: string | null } | null = null
   let leadIsNew = false
 

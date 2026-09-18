@@ -188,6 +188,15 @@ serve(async (req) => {
     // FOUND here and reused instead of turning into a second lead for the same
     // contact. New LID leads are stored without a phone key and are found by
     // the gpt_maker_chat_id lookup below.
+    // SE-LID-002 — this lookup is NOT conditioned on senderType, and that is
+    // what satisfies the Casa Flow request "o telefone deve passar no teste de
+    // duplicidade": a message the TEAM sends to a number that is already a lead
+    // hits this SELECT before step 9 and reuses that row — it never reaches the
+    // `Lead <número>` fallback label. That label in resolveLeadIdentity() only
+    // shows up when this lookup (and the gpt_maker_chat_id one below) both miss,
+    // i.e. the contact is genuinely new. See lead-identity.test.ts, "outbound:
+    // the phone dedup key matches an existing contact's key regardless of
+    // direction" for the part of this that is unit-testable.
     let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null } | null = null
 
     if (phoneNorm) {

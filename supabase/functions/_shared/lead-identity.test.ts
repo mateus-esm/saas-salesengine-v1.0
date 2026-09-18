@@ -193,6 +193,37 @@ Deno.test("no payload shape produces the placeholder 'Desconhecido' as a lead na
 });
 
 // ---------------------------------------------------------------------------
+// SE-LID-002 — requisito (b) do Mateus: "o telefone deveria passar no teste de
+// duplicidade contra a base de contatos". Esse teste é uma SELECT ... WHERE
+// phone_normalized = <chave>, feita pelos dois webhooks ANTES do passo de
+// criação e NUNCA condicionada a senderType (gpt-maker-webhook:191-201,
+// solo-wpp-webhook:408-421) — não foi tocada por esta task porque já cobria o
+// caminho outbound. O que dá pra testar aqui, sem subir handler nem banco, é
+// que resolveLeadIdentity() produz a MESMA chave de dedup para o mesmo número,
+// venha ele de uma mensagem inbound anterior (com nome) ou de uma outbound
+// posterior (sem nome) — é essa igualdade que faz a SELECT achar a linha e
+// reaproveitá-la em vez de criar um lead duplicado.
+// ---------------------------------------------------------------------------
+
+Deno.test("outbound: the phone dedup key matches an existing contact's key regardless of direction", () => {
+  const previousInbound = resolveLeadIdentity({
+    contactName: "Maria Souza",
+    contactPhone: "5585996487923",
+  });
+  const laterOutbound = resolveLeadIdentity({
+    contactName: "",
+    contactPhone: "(85) 99648-7923", // mesmo número, formatado como a equipe digitaria
+  });
+
+  assertEquals(laterOutbound.phoneNormalized, previousInbound.phoneNormalized);
+  // Consequência prática: o rótulo "Lead <número>" desta task só é gravado
+  // quando NENHUM lead anterior (inbound ou outbound) tinha esse telefone — se
+  // já existir um lead "Maria Souza" com este número, a mensagem outbound
+  // reaproveita essa linha e o nome real não é sobrescrito (nem o passo 9, nem
+  // resolveLeadIdentity, são chamados de novo para uma linha já encontrada).
+});
+
+// ---------------------------------------------------------------------------
 // `leadNameFromPhone()` — the label rule on its own. The Solo/whatsmiau webhook
 // uses it for the same reason: on an outbound message `pushName` is the SENDER's
 // name (the connected account), so the label has to come from the number.

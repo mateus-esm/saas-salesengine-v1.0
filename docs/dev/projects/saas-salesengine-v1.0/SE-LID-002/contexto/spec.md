@@ -1,68 +1,78 @@
-# SE-LID-002 — Task Contract
+# SE-LID-002 — Task Contract (HANDOFF Verboo -> Claude)
 
 Projeto | Tarefa | Agent
-saas-salesengine-v1.0 | SE-LID-002 | verboo
+saas-salesengine-v1.0 | SE-LID-002 | claude
 
 Project: saas-salesengine-v1.0
-Agent: verboo
+Agent: claude (harness final)
 Branch: fix/desconhecido-outbound-leads
-Risk: bug fix em webhook (sem migração destrutiva)
+Worktree: /srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-LID-002
+Base: HEAD 3eab92e + commit 2c1bd38 (proposta do verboo, NAO final)
+Risk: ALTO — mexe na arquitetura de mensagens/identidade, com produto EM PRODUCAO
 
-## Outcome
+## Por que passou para o Claude (decisao do Mateus, 2026-09-18)
 
-Corrigir o bug em que **mensagens iniciadas pelo próprio usuário** (agente equipe Casa Flow) geram leads com nome **"Desconhecido"** no salesengine.
+"Essa tarefa passa pro Claude, porque é uma tarefa que envolve mexer na arquitetura das mensagens
+e o produto tá em produção. Pede pra ele analisar esse fix escrito pelo Verboo, analisar o
+diagnóstico feito pelo Verboo, e aí desenhar realmente qual é a melhor solução e executar."
 
-Relato do usuário (2026-09-18): "continua o mesmo erro de desconhecido lead na equipe do Casa Flow. O que eu analisei: são mensagens que foram iniciadas pelo próprio usuário, e essas mensagens ficam como desconhecido."
+## O CASO (descricao do Mateus, dono do produto)
 
-Ou seja: o bug anterior (SE-LID-001, PR #29) tratou o `@lid` técnico; **este é outro caso** — a mensagem é OUTBOUND (iniciada pela equipe/agente) e ainda assim cria/atualiza um lead "Desconhecido".
+O cliente **Casa Flow** recebe uma automacao: quando entra um novo lead, ele recebe uma **mensagem
+no WhatsApp** avisando do novo lead. Essa mensagem esta chegando com o nome **"Desconhecido"**.
 
-## Hipótese de causa raiz (a confirmar e provar com evidência)
+Analise do Mateus: esses leads "Desconhecido" vieram de mensagens que **o proprio cliente iniciou**
+(talvez pelo WhatsApp dele). A mensagem sai do WhatsApp dele, entra no sistema, e o lead fica como
+desconhecido.
 
-Em `supabase/functions/gpt-maker-webhook/index.ts`:
-- L54: `const senderName = isTechnicalSenderId ? '' : (rawSenderName || 'Desconhecido')`
-- L124-126: `senderType = 'agent'` quando `role === 'assistant' || fromMe === true`
-- **L9 (criação de lead) NÃO é bloqueada por `senderType === 'agent'`** — só a criação de Opportunity (L410) exige `senderType === 'customer'`.
-- Logo: uma mensagem outbound (agente/equipe iniciando a conversa) **cria o lead** com `finalName = senderName || ...` onde `senderName` caiu para `'Desconhecido'` (vazio/ausente), porque o caminho de agente não tem pushName.
+**Expectativa do Mateus (requisito):**
+1. O lead **deveria vir com a etiqueta completa** — com o **nome e o telefone**.
+2. E o **telefone deveria passar no teste de duplicidade** contra a base de contatos (verificar se
+   ja existe outro contato/lead com o mesmo telefone, para nao duplicar).
 
-Em `supabase/functions/solo-wpp-webhook/index.ts`:
-- L365: `senderType = key.fromMe ? 'agent' : 'customer'`
-- A criação de lead (L399+) **também não é condicionada** a `senderType === 'customer'`.
+## Sua tarefa (Claude)
 
-Pergunta central: a mensagem outbound deve CRIAR lead? Se a equipe inicia a conversa, o contato ainda é um lead legítimo (a pessoa existe), mas o nome não pode ser "Desconhecido" — precisa de fallback coerente (telefone formatado) ou de resolução do nome real.
+1. **Ler e criticar** o diagnostico (`verboo/diagnostico.md`) e o fix (`verboo/fix.md`) do Verboo —
+   ambos ja no worktree, commit `2c1bd38`. O Verboo concluiu que a causa e o **rotulo**
+   (`"Desconhecido"`) e que a criacao do lead esta correta; propos `leadNameFromPhone()` + gate de
+   `pushName` por `senderType`.
+2. **Verificar a conclusao do Verboo.** Concorda? Onde ele errou, simplificou ou deixou hipotese nao
+   provada? Ele mesmo marcou varias hipoteses (payload outbound sem `contactName` deduzido do
+   sintoma; `pushName` em `fromMe:true`; qual canal o Casa Flow usa).
+3. **Desenhar a melhor solucao** para o caso real — considerando os DOIS requisitos do Mateus
+   (etiqueta completa nome+telefone; dedup do telefone contra a base) e o fato de estar em producao.
+4. **Executar** a solucao desenhada no worktree.
 
-## Entregáveis
-1. `docs/dev/projects/saas-salesengine-v1.0/SE-LID-002/verboo/diagnostico.md` — causa raiz com `arquivo:linha`, distinguindo deste bug e do SE-LID-001.
-2. `docs/dev/projects/saas-salesengine-v1.0/SE-LID-002/verboo/fix.md` — fix, por quê, validação, riscos/rollback.
-3. `docs/dev/projects/saas-salesengine-v1.0/SE-LID-002/README.md` — header Projeto | Tarefa | Origem | Agentes | Status | Artefatos | Pendências.
+## Requisitos de aceite
 
-## Perguntas a responder
-1. Qual webhook cria o lead quando a mensagem é outbound (Casa Flow)? Provar com `arquivo:linha`.
-2. Por que o nome resolve para "Desconhecido" nesse caminho? O `senderName` vazio cai em `'Desconhecido'` em vez do fallback por telefone (`Lead <phone>`) ou de `formatDisplayName`.
-3. O SE-LID-001 (máscara de `@lid` + `resolveLeadIdentity`) cobriu esse caminho? Se não, por quê (o gate `senderType === 'customer'` não existe na criação de lead)?
-4. Qual o comportamento correto: (a) não criar lead a partir de mensagem outbound quando não há contato identificado; (b) criar, mas com nome derivado do telefone; (c) criar e resolver o nome real depois? Justificar com o domínio (a equipe iniciando a conversa com um número novo é caso legítimo?).
-5. O mesmo defeito existe no `solo-wpp-webhook`? Provar.
-6. Fix proposto + testes. Validar sem produção.
+- [ ] Mensagem outbound NAO produz lead com rotulo "Desconhecido".
+- [ ] Lead criado a partir de outbound tem **nome E telefone** utilizaveis (etiqueta completa).
+- [ ] **Dedup por telefone** verificada contra a base (nao criar duplicata quando o telefone ja existe).
+- [ ] Nada quebra o fluxo inbound existente (nao regride SE-LID-001 nem o caminho normal).
+- [ ] Testes cobrindo o caso outbound + dedup. Baseline registrado sem mascarar.
+- [ ] Plano de rollback explicito (produto em producao).
+- [ ] `git status` limpo alem dos arquivos do fix + docs.
+- [ ] PT-BR nos artefatos; zero credenciais reais.
 
-## Contexto (evidência levantada 2026-09-18)
-- Bug anterior: SE-LID-001 (PR #29, merge f2bd042) tratou `@lid` técnico como nome/telefone. Este relato é o MESMO sintoma ("Desconhecido"/técnico) mas outra causa.
-- `displayName.ts` (novo no SE-LID-001) tem `formatDisplayName(name, phone, fallback='[WhatsApp - Lead Anônimo]')` — verificar se o caminho do agente o usa.
-- `lead-identity.ts` (novo no SE-LID-001) tem `resolveLeadIdentity()` — verificar se o caminho outbound o usa.
+## Entregaveis
+
+1. `docs/dev/projects/saas-salesengine-v1.0/SE-LID-002/claude/revisao-do-fix-verboo.md`
+   — sua analise critica do diagnostico e do fix do Verboo (o que aceita, o que rejeita, por que).
+2. `docs/dev/projects/saas-salesengine-v1.0/SE-LID-002/claude/solucao.md`
+   — o desenho da melhor solucao + o que foi implementado + validacao + rollback.
+3. Codigo do fix no worktree (substituindo ou refinando a proposta do Verboo).
+4. `README.md` atualizado com o header e os artefatos dos dois agentes.
 
 ## Constraints
-- NÃO citar credenciais reais — referir como "env vars"/"secrets".
-- NÃO rodar migração destrutiva, NÃO escrever em produção, NÃO tocar em `main` direto.
-- NÃO inventar payload nem arquitetura fora do código. Marcar hipótese quando sem evidência.
-- PT-BR obrigatório. Verificar: `grep -lE 'Archivo|Fuente|decisión|teléfono|Migración'` deve voltar vazio.
-- Escrever docs APENAS em `docs/dev/projects/saas-salesengine-v1.0/SE-LID-002/verboo/` + `README.md`.
-- Não fazer commit/push/PR — isso é do orquestrador.
 
-## Acceptance
-- [ ] Causa raiz provada com `arquivo:linha`, explicitando a diferença vs SE-LID-001.
-- [ ] Fix implementado + testes (registrar baseline sem mascarar).
-- [ ] Comportamento para mensagem outbound definido e justificado.
-- [ ] `git status` mostra apenas arquivos do fix + docs da task.
-- [ ] README.md com header completo.
-- [ ] PT-BR confirmado; zero credenciais reais.
+- NAO citar credenciais reais (referir como "env vars"/"secrets").
+- NAO tocar em `main`/`master` direto, migrations destrutivas, assets compartilhados, pastas de clientes.
+- NAO fazer commit/push/PR — isso e do orquestrador.
+- Produto EM PRODUCAO: preferir mudanca minima e reversivel; nada destrutivo.
+- PT-BR obrigatorio. Verificar: `grep -lE 'Archivo|Fuente|decisión|teléfono|Migración'` deve voltar vazio.
+- Testes .tsx exigem `NODE_ENV=test` neste repo (senao falha com "jsxDEV is not a function").
 
-## Do not touch
-- Secrets, `main`/`master` direto, migrations destrutivas, assets compartilhados, pastas de clientes.
+## Nota sobre o commit do Verboo
+
+O commit `2c1bd38` e uma **PROPOSTA NAO FINAL**, preservada para revisao. Voce pode reescrever,
+refinar ou substituir. Ele NAO foi enviado para PR.

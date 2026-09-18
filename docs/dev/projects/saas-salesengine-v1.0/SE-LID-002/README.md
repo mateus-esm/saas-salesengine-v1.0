@@ -5,10 +5,10 @@
 | Projeto | saas-salesengine-v1.0 |
 | Tarefa | SE-LID-002 |
 | Origem | Relato do usuário em 2026-09-18: "Continua o mesmo erro de desconhecido lead na equipe do Casa Flow. O que eu analisei: são mensagens que foram iniciadas pelo próprio usuário, e essas mensagens ficam como desconhecido." (continuação do SE-LID-001 / #29, que tratou o `@lid` técnico) |
-| Agentes | verboo (diagnóstico + fix com código, branch `fix/desconhecido-outbound-leads`) |
-| Status | ✅ Fix implementado nos 4 arquivos de código + testes atualizados · ⚠️ validação (`deno test` / `typecheck` / `lint` / `test`) **NÃO EXECUTADA** neste sandbox (permissão negada — ver `verboo/fix.md` §5) · ⛔ sem commit/push (conforme o contrato) |
-| Artefatos | `contexto/spec.md` (contrato) · `verboo/diagnostico.md` · `verboo/fix.md` · este README |
-| Pendências | backfill das linhas antigas `"Desconhecido"` (SQL proposto em `verboo/fix.md` §7.1, **não executado**) · enriquecimento do nome pelo `pushName` inbound do provider (§7.2) · `@lid` ainda gravado em `leads.phone` no canal solo (§7.3) · `creation_source` de lead outbound no gpt-maker (§7.4) · índice UNIQUE parcial em `(equipe_id, gpt_maker_chat_id)` (§7.5) · rodar os runners fora do sandbox (§5) |
+| Agentes | verboo (diagnóstico + fix com código, commit `2c1bd38`, proposta) → claude (revisão crítica + fechamento do requisito de dedup + validação executada, harness final) |
+| Status | ✅ Fix revisado e aceito, com refinamento (comentários + 1 teste) · ✅ validação **EXECUTADA** neste ambiente: `deno test` (136 passed), `deno check` (5 arquivos ok), `npm run typecheck`/`lint` limpos · ⛔ sem commit/push (conforme o contrato) |
+| Artefatos | `contexto/spec.md` (contrato) · `verboo/diagnostico.md` · `verboo/fix.md` · `claude/revisao-do-fix-verboo.md` · `claude/solucao.md` · este README |
+| Pendências | backfill das linhas antigas `"Desconhecido"` (SQL proposto em `verboo/fix.md` §7.1, **não executado**) · enriquecimento do nome pelo `pushName` inbound do provider (§7.2) · `@lid` ainda gravado em `leads.phone` no canal solo (§7.3) · `creation_source` de lead outbound no gpt-maker (§7.4) · índice UNIQUE parcial em `(equipe_id, gpt_maker_chat_id)` (§7.5) · payload outbound real e canal ativo da Casa Flow não capturados (hipóteses, ver `claude/solucao.md` §7) |
 
 ## O que foi encontrado
 
@@ -47,32 +47,40 @@ enviou**, e em mensagem outbound o remetente é a própria conta da equipe. Ele 
 do incidente não trazia `pushName` nenhum —, mas elimina a assimetria entre os dois canais e a possibilidade
 de o contato ser nomeado com o nome da equipe.
 
+## Requisito (b) — dedup por telefone — verificado, não implementado de novo
+
+O contrato pedia para checar explicitamente se "o telefone passa no teste de duplicidade contra a
+base de contatos". O fix do Verboo não verificava isso por escrito. Tracei o código: `public.leads` É
+a base de contatos (não existe tabela `contacts` separada), e os dois webhooks já fazem
+`SELECT ... WHERE phone_normalized = ?` **antes** de criar um lead, **sem** gate de `senderType` —
+ou seja, isso já cobria mensagem outbound antes desta task inteira (Sprint 5.5 EPIC 1). O requisito
+(b) estava satisfeito pela arquitetura existente; o que faltava era essa verificação por escrito.
+Detalhes com linha exata em `claude/solucao.md` §1.
+
 ## Arquivos
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/_shared/lead-identity.ts` | `leadNameFromPhone()` (novo, reusado pelos dois webhooks) + precedência do nome sem o placeholder |
-| `supabase/functions/gpt-maker-webhook/index.ts` | predicado único `isAgentMessage` (`:47`) reusado pelo `senderType` e pelo nome — `pushName` do remetente não rotula mais o contato; nota no passo 9 explicando por que **não** há gate `senderType === 'customer'` na criação do lead (`:236-245`) + log quando o lead nasce de mensagem da equipe |
-| `supabase/functions/solo-wpp-webhook/index.ts` | `pushName` só rotula lead em mensagem inbound (`senderType === 'customer'`, `:438`) |
-| `supabase/functions/_shared/lead-identity.test.ts` | 5 asserções do SE-LID-001 reescritas + 3 testes novos (seção OUTBOUND + invariante `"Desconhecido"` + helper); 13 → 16 `Deno.test`, nenhum perdido |
+| `supabase/functions/_shared/lead-identity.ts` | (verboo) `leadNameFromPhone()` (novo, reusado pelos dois webhooks) + precedência do nome sem o placeholder |
+| `supabase/functions/gpt-maker-webhook/index.ts` | (verboo) predicado único `isAgentMessage` reusado pelo `senderType` e pelo nome — `pushName` do remetente não rotula mais o contato; nota no passo 9 explicando por que **não** há gate `senderType === 'customer'` na criação do lead + log quando o lead nasce de mensagem da equipe. (claude) +comentário no passo 8 documentando que o dedup por telefone já cobre outbound |
+| `supabase/functions/solo-wpp-webhook/index.ts` | (verboo) `pushName` só rotula lead em mensagem inbound (`senderType === 'customer'`). (claude) +comentário no lookup por `phoneNorm`, mesma nota |
+| `supabase/functions/_shared/lead-identity.test.ts` | (verboo) 5 asserções do SE-LID-001 reescritas + 3 testes novos (seção OUTBOUND + invariante `"Desconhecido"` + helper); 13 → 16 `Deno.test`. (claude) +1 teste: chave de dedup estável entre payload inbound e outbound do mesmo número; 16 → 17 |
 
-## Como validar (fora do sandbox)
+## Como validar
 
-⚠️ **Os scripts npm deste repo não cobrem `supabase/`**: `tsconfig.json:15-17` exclui `supabase`,
-`eslint.config.js:13` ignora `supabase/functions` e `vite.config.ts:30` exclui `supabase/functions/**` do
-vitest. Rodar só `npm run typecheck/lint/test` e ver verde **não** valida este fix — o runner que cobre é o
-**Deno**.
+✅ **Executado neste ambiente** (Deno 2.9.6, node/npm disponíveis — diferente do sandbox do Verboo):
 
 ```bash
-# 1) o que realmente cobre este fix
-deno check supabase/functions/_shared/lead-identity.ts
-deno test supabase/functions/_shared/
-# 2) sanidade do resto do repo (não cobre supabase/, só confirma que nada quebrou)
-npm run typecheck
-npm run lint
-NODE_ENV=test npm test
+deno test supabase/functions/_shared/                    # 136 passed, 0 failed
+deno check supabase/functions/_shared/lead-identity.ts    # ok
+deno check supabase/functions/gpt-maker-webhook/index.ts  # ok
+deno check supabase/functions/solo-wpp-webhook/index.ts   # ok
+npm run typecheck                                          # limpo
+npm run lint                                                # 0 erros (85 warnings pré-existentes, fora do fix)
 ```
 
-Os testes `.tsx` do frontend exigem `NODE_ENV=test` (sem isso falham com `jsxDEV is not a function`); os
-arquivos alterados nesta task não são `.tsx`.
+⚠️ Os scripts npm **não cobrem** `supabase/`: `tsconfig.json:15-17` exclui `supabase`,
+`eslint.config.js:13` ignora `supabase/functions` e `vite.config.ts:30` exclui `supabase/functions/**`
+do vitest — quem cobre este fix é o **Deno**. `NODE_ENV=test npm test` não foi rodado: nenhum arquivo
+`.tsx`/frontend foi tocado por esta task. Números e comandos completos em `claude/solucao.md` §4.
 
