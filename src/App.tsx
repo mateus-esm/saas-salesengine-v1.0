@@ -32,6 +32,7 @@ import BillingDataPage from "./pages/billing/BillingDataPage";
 import PublicProposal from "./pages/PublicProposal";
 import PublicReport from "./pages/PublicReport";
 import PublicForm from "./pages/PublicForm";
+import PublicDiscovery from "./pages/PublicDiscovery";
 import NotificationsPage from "./pages/NotificationsPage";
 import Tutorial from "./pages/Tutorial";
 import NotFound from "./pages/NotFound";
@@ -87,6 +88,10 @@ const App = () => (
                     Contrato") from the seller's link. Public: the token is the
                     whole authorisation. */}
                 <Route path="/f/:token" element={<PublicForm />} />
+                {/* Sprint 8.2 discovery_q&a — o cliente responde o discovery
+                    antes da reunião de implantação. Público: o token é toda a
+                    autorização, e o link é repassável a quem sabe a resposta. */}
+                <Route path="/discovery/:token" element={<PublicDiscovery />} />
 
                 {/* Authenticated shell — mounted once; children swap via <Outlet/> */}
                 <Route
