@@ -41,7 +41,7 @@
 
 > **Flag:** `discovery_q&a` — o discovery deixa de ser uma reunião em branco e
 > passa a ser um formulário que o cliente preenche antes dela.
-> **Data:** 2026-09-18 · **Status:** especificado
+> **Data:** 2026-09-18 · **Status:** ENTREGUE E NO AR (18/09)
 
 ## 🎯 Vision (Human)
 
@@ -280,13 +280,19 @@ um quadro que eu paro de usar.
 
 ## 📊 Ledger
 
-- [ ] T70 · Banco de perguntas + seed das 23 · M
-- [ ] T71 · `onboarding_discovery` + trigger em `boas_vindas` · M
-- [ ] T72 · RPCs get/save/submit · M
-- [ ] T73 · Edge function `public-discovery` · S
-- [ ] T74 · `src/lib/discovery/` (lógica pura + testes) · M
-- [ ] T75 · `PublicDiscovery.tsx` + rota · L
-- [ ] T76 · Boas-vindas com um pedido só + `discovery_done` · S
-- [ ] T77 · Selo no card + bloco no sheet · M
-- [ ] T78 · Aviso mole ao mover para implantação · S
-- [ ] T79 · Briefing de implantação · M
+Todas as tarefas entregues e no ar em 18/09. Duas correções que só apareceram
+na aplicação: `purpose` aceita `operacao` e não `operacional`, e pgcrypto mora
+em `extensions` — `set search_path = public` esconde `gen_random_bytes`, e o
+corpo de uma função plpgsql não é conferido na criação, então a migration
+passa limpa e o erro só aparece na primeira chamada.
+
+- [x] T70 · Banco de perguntas + seed das 23 · M
+- [x] T71 · `onboarding_discovery` + trigger em `boas_vindas` · M
+- [x] T72 · RPCs get/save/submit · M
+- [x] T73 · Edge function `public-discovery` · S
+- [x] T74 · `src/lib/discovery/` (lógica pura + testes) · M
+- [x] T75 · `PublicDiscovery.tsx` + rota · L
+- [x] T76 · Boas-vindas com um pedido só + `discovery_done` · S
+- [x] T77 · Selo no card + bloco no sheet · M
+- [x] T78 · Aviso mole ao mover para implantação · S
+- [x] T79 · Briefing de implantação · M
