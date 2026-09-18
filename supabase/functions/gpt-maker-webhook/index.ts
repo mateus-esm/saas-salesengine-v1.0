@@ -39,7 +39,19 @@ serve(async (req) => {
     // phone from a Meta LID. resolveLeadIdentity() is the decision point: it
     // refuses to persist a technical id as name/phone, while keeping the legacy
     // phone_normalized key so existing rows are still found (no duplicates).
-    const rawSenderName: string = payload.contactName || payload.pushName || ''
+    // SE-LID-002 — the single predicate that says "the team sent this". It is
+    // computed here, above the name decision, because the name decision needs it
+    // too; the two consumers share one variable so they cannot drift apart, and
+    // that drift is the bug class this task fixes — the outbound marker existed
+    // but was not consulted where the lead gets its name.
+    const isAgentMessage = payload.role === 'assistant' || payload.fromMe === true
+    // SE-LID-002 — `pushName` is the SENDER's profile name. On an inbound message
+    // that is the contact, so it can label the lead; on an outbound one the
+    // sender is the team's own account, and the field would name the contact
+    // after the team. `contactName` is the provider's contact field and is
+    // trusted either way. Mirrors the same gate in solo-wpp-webhook.
+    const rawSenderName: string =
+      payload.contactName || (isAgentMessage ? '' : payload.pushName) || ''
     const identity = resolveLeadIdentity({
       contactName: rawSenderName,
       contactPhone: senderPhone,
@@ -125,7 +137,7 @@ serve(async (req) => {
     }
 
     let senderType = 'customer'
-    if (payload.role === 'assistant' || payload.fromMe === true) {
+    if (isAgentMessage) {
       senderType = 'agent'
       console.log(`[Webhook] Mensagem do agente/sistema (role: ${payload.role}, fromMe: ${payload.fromMe})`)
     } else {
@@ -221,9 +233,22 @@ serve(async (req) => {
     // parallel *first* messages of the same conversation can still
     // double-insert; a partial UNIQUE index on (equipe_id, gpt_maker_chat_id)
     // is the follow-up that closes it (docs SE-LID-001, needs a migration).
+    //
+    // SE-LID-002 — this step is deliberately NOT gated on
+    // `senderType === 'customer'` (the gate that step 9c applies before opening
+    // an Opportunity). When the team starts the conversation the contact is
+    // still a real number and the history has to be kept: `messages.lead_id` is
+    // NOT NULL, so skipping the creation would not skip a message — it would
+    // hit the "Lead nulo após processamento" guard below and lose the outbound
+    // message, its conversation and its notification. What was wrong was the
+    // LABEL such a lead received ("Desconhecido"), and that is decided in
+    // `resolveLeadIdentity()` — see the SE-LID-002 note in lead-identity.ts.
     let leadIsNew = false
     if (!lead) {
       console.log('[Webhook] Lead não encontrado, criando novo...')
+      if (senderType === 'agent') {
+        console.log('[Webhook] ... lead criado por mensagem da equipe (outbound) — rótulo:', identity.name)
+      }
 
       const finalName = identity.name
 

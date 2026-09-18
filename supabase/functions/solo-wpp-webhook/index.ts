@@ -22,6 +22,7 @@ import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryForInstance, entryLine, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { isTechnicalPhone, normalizePhone } from "../_shared/phone.ts"
 import { formatDisplayName } from "../_shared/displayName.ts"
+import { leadNameFromPhone } from "../_shared/lead-identity.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -427,9 +428,17 @@ async function handleMessagesUpsert(
     // would create one lead per message) but it must never become the label —
     // "Lead 186432031355045" is what the team saw in the CRM.
     const technicalJid = isTechnicalPhone(key.remoteJid)
+    // SE-LID-002 — `pushName` describes whoever SENT the message. On an inbound
+    // message that is the contact, so it can label the lead. On an outbound one
+    // (`key.fromMe`) the sender is the connected number itself: keeping the
+    // field would name the contact after the team's own WhatsApp account.
+    // A lead created by an outbound message is labelled from the number it was
+    // addressed to — the same rule (and the same string) the GPT Maker webhook
+    // applies through `resolveLeadIdentity`.
+    const contactPushName = senderType === 'customer' ? pushName : undefined
     const senderName = technicalJid
-      ? formatDisplayName(pushName, null)
-      : (pushName || (phone ? `Lead ${phone}` : 'Novo Visitante'))
+      ? formatDisplayName(contactPushName, null)
+      : (contactPushName || leadNameFromPhone(phone) || 'Novo Visitante')
 
     const baseLead = {
       phone: phone || null,
