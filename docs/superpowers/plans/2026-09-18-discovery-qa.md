@@ -10,6 +10,20 @@
 
 **Spec:** `Planning/Sprints/sprint_8.2_onboarding.md`, section `# 🏳️ discovery_q&a`
 
+## Running SQL against the linked database
+
+Two tools, and the choice is not cosmetic:
+
+- **Plain queries** → `npx supabase db query --linked "<sql>"`. (The subcommand is `db query`, not `db execute`.)
+- **Anything with a `DO $$ … $$` block** → `psql`. The `db query` endpoint appends its own trailing comment to the statement and breaks dollar-quoting, failing with `42601: unterminated dollar-quoted string`. Every exception-handling test in this plan is a DO block, so they all go through `psql`:
+
+```bash
+export PGPASSWORD=$(grep '^SUPABASE_DB_PASSWORD=' .env | cut -d= -f2- | tr -d '"'"'"'\r')
+psql "$(cat supabase/.temp/pooler-url)" -f <file.sql>
+```
+
+Write the DO block to a file in the scratchpad first — passing it inline invites the shell to chew on `$$`.
+
 ## Global Constraints
 
 - **Brand:** client-facing text says `BRAND.product` = `"Solo Rev"` (software) and `BRAND.company` = `"Solo Ventures"` (invoicing). Never the old engineering name — `src/__tests__/brand-consistency.test.ts` fails on it, including inside comments.
