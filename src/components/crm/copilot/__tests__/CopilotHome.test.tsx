@@ -8,6 +8,7 @@ import { MemoryRouter } from "react-router-dom";
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
+  resolveMany: vi.fn(),
   undo: vi.fn(),
   send: vi.fn(),
   admin: true,
@@ -24,7 +25,10 @@ vi.mock("@/hooks/useCopilotFeed", () => ({
       today: { applied: 1, read: 3 },
     },
     isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
     resolve: { mutate: mocks.resolve },
+    resolveMany: { mutate: mocks.resolveMany, isPending: false },
     undo: { mutate: mocks.undo },
   }),
 }));

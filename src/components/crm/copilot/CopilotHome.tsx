@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 export function CopilotHome() {
   const { profile } = useAuth();
   const { isAdmin } = useRole();
-  const { feed, resolve, undo } = useCopilotFeed();
+  const { feed, resolve, resolveMany, undo, isLoading, isError, refetch } = useCopilotFeed();
   const [activityOpen, setActivityOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -32,6 +32,9 @@ export function CopilotHome() {
   const onResolve = (id: string, approve: boolean) => {
     setBusyId(id);
     resolve.mutate({ id, approve }, { onSettled: () => setBusyId(null) });
+  };
+  const onResolveMany = (ids: string[], approve: boolean) => {
+    resolveMany.mutate({ ids, approve });
   };
   const onUndo = (id: string) => {
     setBusyId(id);
@@ -72,6 +75,11 @@ export function CopilotHome() {
         feed={feed}
         busyId={busyId}
         onResolve={onResolve}
+        onResolveMany={onResolveMany}
+        isResolvingMany={resolveMany.isPending}
+        isLoading={isLoading}
+        isError={isError}
+        onRetry={() => void refetch()}
         onUndo={onUndo}
       />
       {admin && <CopilotSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />}
