@@ -64,7 +64,7 @@ export function CopilotSettingsSheet({ open, onOpenChange }: CopilotSettingsShee
           {activePipelines.map((pipeline) => (
             <section key={pipeline.id} className="space-y-2">
               <h3 className="text-sm font-medium">{pipeline.name}</h3>
-              <CopilotApprovalsPanel pipelineId={pipeline.id} />
+              <CopilotApprovalsPanel pipelineId={pipeline.id} variant="inline" />
             </section>
           ))}
         </div>

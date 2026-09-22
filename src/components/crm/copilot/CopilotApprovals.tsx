@@ -50,6 +50,10 @@ interface CopilotApprovalsProps {
  * SE-COPILOT-001 — the queue became selectable: pick what to answer, filter by
  * why it is waiting, and approve or reject the selection in one go. The
  * per-item buttons stay exactly as they were.
+ *
+ * SE-COPILOT-002 — the same queue now also backs the pipeline panel
+ * (CopilotApprovalsPanel), which maps its `ai_decisions` rows into this shape.
+ * It is props-driven and knows nothing about where the rows came from.
  */
 export function CopilotApprovals({
   items,

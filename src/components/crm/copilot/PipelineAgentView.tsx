@@ -247,7 +247,7 @@ export function PipelineAgentView({
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4 pt-2">
-              <CopilotApprovalsPanel pipelineId={pipeline.id} />
+              <CopilotApprovalsPanel pipelineId={pipeline.id} variant="inline" />
             </AccordionContent>
           </AccordionItem>
         </Accordion>
