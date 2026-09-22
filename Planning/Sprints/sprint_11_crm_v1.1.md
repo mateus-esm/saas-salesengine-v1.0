@@ -2453,3 +2453,10 @@ depois da parada.
 As seis ondas estão na produção. Custo: R$ 1.094 (`billing.md`, "Summary Totals"). O que
 ficou — com dono — está em `Planning/Project Management/todo.md`, "TODO — vindo do
 Sprint 11". Próximo: Onda 7 (Modo Builder).
+
+### Depois do fechamento (13/09)
+
+- [x] T68 · O Copilot vira a abertura do app · L — o `/home` das equipes com o Agente de CRM abre na conversa: "Olá, <nome>", "Entenda como está sua máquina de receita", campo grande e sugestões; a conversa cresce no lugar, e os cartões dos módulos ficam embaixo (pedido do founder). A linha "N para aprovar · M ações hoje" (`activityLine`) abre o painel lateral (`CopilotActivitySheet`: Para aprovar + O que fiz); Configurar só para admin; sem o Copilot, a abertura de antes. A aba CRM › Copilot saiu (`?tab=copilot` e `/copiloto` → `/home`; `CopilotCockpit.tsx` apagado). Testes da Home, da casa e da linha. PR #25; o Netlify serve o bundle novo
+- [x] T69 · Hotfix: o agente diz o tipo de cada argumento ao banco · M — o Sync da Solo não fazia nada: para o agente, o `crm_copilot_apply` "não existia", porque a confiança ia como `double precision` (o `float` pelo psycopg) para uma função que declara `numeric`, e o Postgres não faz essa conversão ao escolher a função. Todas as passadas desde o deploy falharam no último passo, sem gravar. Cada argumento do `repo.py` leva o tipo declarado; `tests/test_copilot_repo.py` lê as assinaturas das migrations e confere cada `%s`. Ensaio em rollback (`PREPARE`) antes e depois; PR #24; na produção, a passada seguinte aplicou 4 ações. Primeira medição real: 60 s esperando o despertador + 52 s de modelo (meta ~4 s por negócio) → `todo.md`
+
+Custo depois do fechamento: R$ 32; total da sprint R$ 1.126.
