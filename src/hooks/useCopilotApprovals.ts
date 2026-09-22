@@ -20,6 +20,13 @@ const sb = supabase as any;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+/** The lead behind the decision — the "which deal" the queue shows. */
+export interface AiDecisionLead {
+  id: string;
+  name: string;
+  phone: string | null;
+}
+
 export interface AiDecision {
   id: string;
   equipe_id: string;
@@ -29,9 +36,12 @@ export interface AiDecision {
   agent_role: string | null;
   status: string;
   output_action: unknown;   // JSONB — shape varies per agent_role
+  /** The model's own reason for the action — what the queue shows as "motivo". */
+  input_summary: string | null;
   confidence_score: number | null;
-  reason: string | null;
   created_at: string;
+  /** Embedded `leads` row (SE-COPILOT-002) — null when the decision has no lead. */
+  lead: AiDecisionLead | null;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────────
@@ -54,7 +64,10 @@ export const useCopilotApprovals = (pipelineId: string) => {
 
       const { data, error } = await sb
         .from("ai_decisions")
-        .select("*")
+        // `lead:leads(...)` mirrors `crm_copilot_feed`, which names the deal in
+        // the queue by the contact's name. Same embedding shape as
+        // useCopilotCredits' ledger (`select("*, lead:leads(name)")`).
+        .select("*, lead:leads(id, name, phone)")
         .eq("equipe_id", equipeId)           // defensive equipe_id filter (RLS also covers this)
         .eq("pipeline_id", pipelineId)
         .eq("status", "pending_approval")

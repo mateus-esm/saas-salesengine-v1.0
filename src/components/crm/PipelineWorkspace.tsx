@@ -97,7 +97,7 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
         )}
       </div>
 
-      {/* F4: Approval cards — renders only when there are pending decisions */}
+      {/* F4: approval queue — always visible (loading / error / empty / pending) */}
       <CopilotApprovalsPanel pipelineId={pipelineId} />
 
       <div className="flex-1 overflow-hidden">

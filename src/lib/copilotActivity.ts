@@ -111,6 +111,35 @@ function payloadValue(
   return undefined;
 }
 
+/**
+ * Sprint 11 · Onda 6 · T59 — `crm_copilot_apply` writes a different payload from
+ * the legacy Python worker: the action is nested (`action.type` + its args) and
+ * the row carries the sentence already written for a person (`label`) plus the
+ * reason it is waiting (`why`). Without this map those rows read as "manual" in
+ * the audit table and the approval queue.
+ */
+const NESTED_FIELD: Record<string, string> = {
+  note: "Nota",
+  set_field: "Campo",
+  set_contact: "Contato",
+  create_task: "Tarefa",
+  add_tag: "Etiqueta",
+  move_stage: "Etapa",
+  set_outcome: "Status",
+  set_value: "Valor",
+};
+
+const NESTED_TITLE: Record<string, string> = {
+  note: "Adicionar nota",
+  set_field: "Atualizar campo",
+  set_contact: "Atualizar contato",
+  create_task: "Criar tarefa",
+  add_tag: "Adicionar etiqueta",
+  move_stage: "Mover de etapa",
+  set_outcome: "Marcar o negócio",
+  set_value: "Alterar o valor do negócio",
+};
+
 function payloadSource(action: Payload | null, optionsSource?: string): string {
   return (
     optionsSource ||
@@ -130,14 +159,33 @@ export function formatCopilotActivity(
   const actionRecord = asRecord(action);
   const args = asRecord(actionRecord?.args);
   const payload = actionRecord ?? {};
+  const nested = asRecord(payload.action);
+  const nestedType = text(nested?.type);
   const verb =
     text(payload.verb) ??
     text(payload.action) ??
+    nestedType ??
     text(args?.verb) ??
     text(args?.action) ??
     "manual";
   const source = payloadSource(actionRecord, options.source);
   const technical = stringifyCopilotPayload(action);
+
+  // Onda 6 payload: the stored sentence beats anything derived from the verb —
+  // it is what the pipeline panel and the audit table should read.
+  if (nestedType) {
+    const label = text(payload.label);
+    return {
+      verb: nestedType,
+      title: label ?? NESTED_TITLE[nestedType] ?? "Aplicar ação do Copilot",
+      description: label ?? `Executando ${nestedType}.`,
+      field: NESTED_FIELD[nestedType] ?? "-",
+      result: label ?? "-",
+      source,
+      tone: "info",
+      technical,
+    };
+  }
 
   switch (verb) {
     case "move_stage": {
