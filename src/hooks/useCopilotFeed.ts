@@ -8,7 +8,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { EMPTY_FEED, resolveText, undoText, type CopilotFeed } from "@/lib/copilotFeed";
+import {
+  EMPTY_FEED,
+  bulkResolveText,
+  resolveText,
+  summarizeBulk,
+  undoText,
+  type BulkResolveSummary,
+  type CopilotFeed,
+} from "@/lib/copilotFeed";
 
 const sb = supabase as any;
 
@@ -55,7 +63,35 @@ export function useCopilotDecisionActions() {
     onError: (e: Error) => toast.error("Não deu para desfazer: " + e.message),
   });
 
-  return { resolve, undo };
+  /**
+   * Approve or reject many suggestions at once. `crm_copilot_resolve` already
+   * re-checks each suggestion against the deal of now and only touches its own
+   * row, so running them one by one is safe; we just gather the answers into a
+   * single summary instead of a toast per item.
+   */
+  const resolveMany = useMutation({
+    mutationFn: async ({ ids, approve }: { ids: string[]; approve: boolean }): Promise<BulkResolveSummary> => {
+      const settled = await Promise.allSettled(
+        ids.map(async (id) => {
+          const { data, error } = await sb.rpc("crm_copilot_resolve", { p_decision_id: id, p_approve: approve });
+          if (error) throw error;
+          return (data ?? {}) as { ok?: boolean; reason?: string };
+        }),
+      );
+
+      return summarizeBulk(settled.map((outcome) => (outcome.status === "fulfilled" ? outcome.value : null)));
+    },
+    onSuccess: (summary, { approve }) => {
+      const { tone, text } = bulkResolveText(approve, summary);
+      if (tone === "success") toast.success(text);
+      else if (tone === "warning") toast.warning(text);
+      else toast.error(text);
+      refresh();
+    },
+    onError: (e: Error) => toast.error("Não deu: " + e.message),
+  });
+
+  return { resolve, resolveMany, undo };
 }
 
 export function useCopilotFeed(enabled = true) {
@@ -69,7 +105,15 @@ export function useCopilotFeed(enabled = true) {
       return { ...EMPTY_FEED, ...(data ?? {}) } as CopilotFeed;
     },
   });
-  const { resolve, undo } = useCopilotDecisionActions();
+  const { resolve, resolveMany, undo } = useCopilotDecisionActions();
 
-  return { feed: feed.data ?? EMPTY_FEED, isLoading: feed.isLoading, resolve, undo };
+  return {
+    feed: feed.data ?? EMPTY_FEED,
+    isLoading: feed.isLoading,
+    isError: feed.isError,
+    refetch: feed.refetch,
+    resolve,
+    resolveMany,
+    undo,
+  };
 }

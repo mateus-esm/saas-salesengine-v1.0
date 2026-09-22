@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import { groupBlocks, inlineSpans, parseSse, renderBlocks } from "../copilotChat";
-import { activityLine, dealHref, groupByDay, resolveText, undoText, whyLabel } from "../copilotFeed";
+import {
+  activityLine,
+  bulkResolveText,
+  dealHref,
+  groupByDay,
+  groupByWhy,
+  resolveText,
+  statusLabel,
+  summarizeBulk,
+  undoText,
+  whyCounts,
+  whyLabel,
+} from "../copilotFeed";
 
 describe("the chat's wire format", () => {
   it("splits complete events and keeps the unfinished rest", () => {
@@ -83,5 +95,77 @@ describe("the feed in words", () => {
   it("a feed line opens the deal's pipeline filtered to the contact", () => {
     expect(dealHref({ pipeline_id: "p1", contact: "Maria Souza" })).toBe("/crm?tab=pipeline&pipeline=p1&q=Maria%20Souza");
     expect(dealHref({ pipeline_id: null, contact: "x" })).toBeNull();
+  });
+
+  it("pending reads as 'aguardando'", () => {
+    expect(statusLabel("pending_approval")).toBe("aguardando");
+    expect(statusLabel("auto_applied")).toBe("feito");
+  });
+});
+
+describe("the approval queue", () => {
+  const item = (id: string, why: string | null) => ({
+    id,
+    status: "pending_approval",
+    at: new Date(2026, 8, 14, 10).toISOString(),
+    label: null,
+    why,
+    opportunity_id: "o",
+    pipeline_id: "p1",
+    contact: null,
+  });
+
+  it("groups by why it waits, risk first, unknown reasons last", () => {
+    const groups = groupByWhy([
+      item("a", "suggest_mode"),
+      item("b", "risky"),
+      item("c", "risky"),
+      item("d", "something_new"),
+      item("e", null),
+    ]);
+    expect(groups.map((g) => [g.label, g.items.length])).toEqual([
+      ["pede aprovação", 2],
+      ["linha no modo sugerir", 1],
+      ["something_new", 1],
+      ["outras", 1],
+    ]);
+  });
+
+  it("counts what each filter chip shows", () => {
+    expect(whyCounts([item("a", "risky"), item("b", "low_confidence"), item("c", "risky")])).toEqual([
+      { why: "risky", label: "pede aprovação", count: 2 },
+      { why: "low_confidence", label: "confiança baixa", count: 1 },
+    ]);
+  });
+
+  it("folds a bulk round into a summary, one thrown call at a time", () => {
+    expect(
+      summarizeBulk([
+        { ok: true },
+        { ok: false, reason: "stale" },
+        { ok: false, reason: "not_pending" },
+        null, // crm_copilot_resolve raised — decision or deal gone
+        { ok: false, reason: "something_new" },
+      ]),
+    ).toEqual({ total: 5, ok: 1, stale: 1, notPending: 1, failed: 2 });
+    expect(summarizeBulk([])).toEqual({ total: 0, ok: 0, stale: 0, notPending: 0, failed: 0 });
+  });
+
+  it("says a clean bulk round in one sentence", () => {
+    expect(bulkResolveText(true, { total: 3, ok: 3, stale: 0, notPending: 0, failed: 0 })).toEqual({
+      tone: "success",
+      text: "3 aplicadas.",
+    });
+    expect(bulkResolveText(false, { total: 1, ok: 1, stale: 0, notPending: 0, failed: 0 }).text).toBe("1 recusada.");
+  });
+
+  it("names what went wrong without hiding what worked", () => {
+    const mixed = bulkResolveText(true, { total: 4, ok: 2, stale: 1, notPending: 0, failed: 1 });
+    expect(mixed.tone).toBe("warning");
+    expect(mixed.text).toBe("2 aplicadas; 1 desatualizada, 1 com erro.");
+
+    const none = bulkResolveText(true, { total: 1, ok: 0, stale: 1, notPending: 0, failed: 0 });
+    expect(none.tone).toBe("error");
+    expect(none.text).toBe("Nenhuma: 1 desatualizada.");
   });
 });

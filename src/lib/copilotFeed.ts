@@ -63,9 +63,94 @@ const STATUS: Record<string, string> = {
   undone: "desfeito",
   stale: "desatualizada",
   rejected: "recusada",
+  pending_approval: "aguardando",
+  proposed: "proposta",
 };
 
 export const statusLabel = (status: string) => STATUS[status] ?? status;
+
+/** The order the approval queue reads its reasons in — risk first, then doubt. */
+const WHY_ORDER = ["risky", "low_confidence", "fields_need_approval", "stages_need_approval", "suggest_mode", "observe", "no_credits"];
+
+const whyRank = (why: string) => {
+  const i = WHY_ORDER.indexOf(why);
+  return i === -1 ? WHY_ORDER.length : i;
+};
+
+export interface ApprovalGroup {
+  why: string;
+  label: string;
+  items: FeedItem[];
+}
+
+/**
+ * Pending suggestions grouped by why they wait for a person, risk first.
+ * Items without a reason land in a trailing group instead of disappearing.
+ */
+export function groupByWhy(items: FeedItem[]): ApprovalGroup[] {
+  const groups = new Map<string, FeedItem[]>();
+  for (const item of items) {
+    const why = item.why ?? "";
+    if (!groups.has(why)) groups.set(why, []);
+    groups.get(why)!.push(item);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => whyRank(a) - whyRank(b))
+    .map(([why, group]) => ({ why, label: whyLabel(why) || "outras", items: group }));
+}
+
+export interface WhyCount {
+  why: string;
+  label: string;
+  count: number;
+}
+
+/** How many pending suggestions per reason — what the filter chips read. */
+export function whyCounts(items: FeedItem[]): WhyCount[] {
+  return groupByWhy(items).map((g) => ({ why: g.why, label: g.label, count: g.items.length }));
+}
+
+export interface BulkResolveSummary {
+  total: number;
+  ok: number;
+  stale: number;
+  notPending: number;
+  failed: number;
+}
+
+/**
+ * Fold the per-decision answers of a bulk round into one summary. A `null` is a
+ * call that threw (`crm_copilot_resolve` raises when the decision or the deal is
+ * gone) — it counts as an error and never takes the rest of the batch down.
+ */
+export function summarizeBulk(answers: Array<{ ok?: boolean; reason?: string } | null>): BulkResolveSummary {
+  const summary: BulkResolveSummary = { total: answers.length, ok: 0, stale: 0, notPending: 0, failed: 0 };
+  for (const answer of answers) {
+    if (answer?.ok) summary.ok += 1;
+    else if (answer?.reason === "stale") summary.stale += 1;
+    else if (answer?.reason === "not_pending") summary.notPending += 1;
+    else summary.failed += 1;
+  }
+  return summary;
+}
+
+/** What a bulk approve/reject answered, in one sentence; tone drives the toast. */
+export function bulkResolveText(
+  approve: boolean,
+  summary: BulkResolveSummary,
+): { tone: "success" | "warning" | "error"; text: string } {
+  const verb = approve ? "Aplicadas" : "Recusadas";
+  const one = approve ? "Aplicada" : "Recusada";
+  const problems: string[] = [];
+  if (summary.stale > 0) problems.push(`${summary.stale} desatualizada${summary.stale === 1 ? "" : "s"}`);
+  if (summary.notPending > 0) problems.push(`${summary.notPending} já resolvida${summary.notPending === 1 ? "" : "s"}`);
+  if (summary.failed > 0) problems.push(`${summary.failed} com erro`);
+
+  const head = summary.ok === 1 ? `1 ${one.toLowerCase()}` : `${summary.ok} ${verb.toLowerCase()}`;
+  if (problems.length === 0) return { tone: "success", text: `${head}.` };
+  if (summary.ok === 0) return { tone: "error", text: `Nenhuma: ${problems.join(", ")}.` };
+  return { tone: "warning", text: `${head}; ${problems.join(", ")}.` };
+}
 
 /** What crm_copilot_undo answered, in words; null = done. */
 export function undoText(result: { ok?: boolean; reason?: string } | null | undefined): string | null {
