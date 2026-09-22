@@ -11,7 +11,8 @@
 | Branch | `task/SE-LEAD-001-lead-agent-handoff` |
 | Base lida | `68dd0a9` |
 | Agente | verboo |
-| Status | ✅ Estudo entregue · ✅ validações reais executadas · 🔁 commit/push/PR em execução pelo orquestrador |
+| Status | ✅ Estudo entregue · ✅ validações reais executadas · ✅ PR aberto |
+| PR | https://github.com/mateus-esm/saas-salesengine-v1.0/pull/34 |
 
 ## Objetivo
 
