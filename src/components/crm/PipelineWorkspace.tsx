@@ -69,8 +69,16 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b border-border bg-card px-2 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
+      {/* Sprint 12 · SE-PIPELINE-001 — no celular a barra rola para o lado.
+          Com `flex-wrap`, os controles quebravam para uma segunda linha e, no
+          caminho, encolhiam: os `shrink-0` abaixo mantêm cada grupo no tamanho
+          natural (a linha fica mais larga que a tela) e o `overflow-x-auto` na
+          própria barra transforma esse excesso em rolagem horizontal — com
+          `overscroll-x-contain` para o gesto não encadear e arrastar a página.
+          No desktop não há excesso: nada rola e o `justify-between` continua
+          empurrando o "Sincronizar Pipeline" para a direita, como antes. */}
+      <div className="border-b border-border bg-card px-2 sm:px-4 py-2 flex items-center justify-between gap-2 sm:gap-3 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <PipelineSelector />
           <Tabs value={view} onValueChange={setView}>
             <TabsList>
@@ -91,9 +99,13 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
           </Tabs>
         </div>
 
-        {/* E4: Global Pipeline Sweep ⚡ — only the kanban view, with credit confirm */}
+        {/* E4: Global Pipeline Sweep ⚡ — only the kanban view, with credit confirm.
+            `shrink-0` so the button keeps its width and rides the scroll instead
+            of being squeezed against the tabs on a phone. */}
         {view === "kanban" && (
-          <SyncButton mode="sweep" variant="header" pipelineId={pipelineId} />
+          <div className="shrink-0">
+            <SyncButton mode="sweep" variant="header" pipelineId={pipelineId} />
+          </div>
         )}
       </div>
 
