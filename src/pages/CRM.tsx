@@ -112,7 +112,16 @@ const CRM = () => {
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Sprint 12 · SE-CRM-001 — no celular a barra rola para o lado.
+            Com `flex-wrap`, as nove abas e os dois controles quebravam para uma
+            segunda linha e, no caminho, encolhiam: o `[&>*]:shrink-0` mantém
+            cada grupo no tamanho natural (a linha fica mais larga que a tela) e
+            o `overflow-x-auto` na própria barra transforma esse excesso em
+            rolagem horizontal — com `overscroll-x-contain` para o gesto não
+            encadear e arrastar a página.
+            No desktop não há excesso: nada rola e o `justify-between` continua
+            distribuindo as abas, o "Ativar tabelas" e o Copilot como antes. */}
+        <div className="flex items-center justify-between gap-3 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
           <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="pipeline" className="flex items-center gap-2">
