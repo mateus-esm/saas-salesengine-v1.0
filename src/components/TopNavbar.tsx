@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import {
   Home,
   MessageCircle,
+  MessageSquareText,
   LayoutDashboard,
   HelpCircle,
   ExternalLink,
@@ -70,6 +71,14 @@ export function TopNavbar() {
       title: "Webhooks",
       url: "/webhooks",
       icon: Webhook,
+      external: false,
+      requiredRole: "admin",
+      permissionKey: "webhooks",
+    },
+    {
+      title: "Outreach",
+      url: "/outreach",
+      icon: MessageSquareText,
       external: false,
       requiredRole: "admin",
       permissionKey: "webhooks",
