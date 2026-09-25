@@ -1,4 +1,4 @@
-import { Home, MessageCircle, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield, Bot, Cpu } from "lucide-react";
+import { Home, MessageCircle, MessageSquareText, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield, Bot, Cpu } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
@@ -33,6 +33,7 @@ export function AppSidebar() {
     { title: "Copiloto", url: "/copiloto", icon: Bot, external: false },
     { title: "AI Studio", url: "/ai-studio", icon: Cpu, external: false, requiredRole: 'admin', permissionKey: 'ai_studio' },
     { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false, requiredRole: 'admin', permissionKey: 'webhooks' },
+    { title: "Outreach", url: "/outreach", icon: MessageSquareText, external: false, requiredRole: 'admin', permissionKey: 'webhooks' },
     { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin', permissionKey: 'billing' },
     { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'toolkit' },
     { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'clube' },

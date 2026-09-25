@@ -577,9 +577,10 @@ if (import.meta.main) {
       // the UTMs and click IDs (body and query string), the payload. The first
       // touch stamps the lead; a returning lead gets a new touch, not a new lead;
       // a deal with no owner gets one from the entry's rule. Never breaks the door.
+      const entryId = await entryForWebhook(supabase, config.id);
       const touch = await recordTouch(supabase, {
         leadId,
-        entryId: await entryForWebhook(supabase, config.id),
+        entryId,
         payload: inboundTouchPayload(payload, url.searchParams),
         opportunityId,
       }, '[crm-webhook]');
@@ -615,6 +616,8 @@ if (import.meta.main) {
         equipeId: config.equipe_id,
         leadId,
         source: (leadData.source as string | undefined) ?? 'webhook_inbound',
+        // SE-REV-002 — a porta desta chegada; o filtro do tenant é por porta.
+        entryId,
         logPrefix: '[crm-webhook]',
       });
 
@@ -773,9 +776,10 @@ if (import.meta.main) {
       }
 
       // Sprint 11 · T50 — the API route is the team's "Importação / API" entry.
+      const entryId = await entryOfKind(supabase, equipe.id, 'import');
       const touch = await recordTouch(supabase, {
         leadId: lead.id,
-        entryId: await entryOfKind(supabase, equipe.id, 'import'),
+        entryId,
         payload: inboundTouchPayload(body, url.searchParams),
         opportunityId,
       }, '[crm-webhook]');
@@ -798,6 +802,7 @@ if (import.meta.main) {
         equipeId: equipe.id,
         leadId: lead.id,
         source: payload.source || 'webhook',
+        entryId,
         logPrefix: '[crm-webhook]',
       });
 

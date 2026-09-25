@@ -28,20 +28,28 @@
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createClient,
+  SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2";
 import { isTechnicalPhone } from "../_shared/phone.ts";
+import {
+  HttpError,
+  resolveCaller,
+  type TenantCaller as Caller,
+} from "../_shared/tenant-auth.ts";
 import {
   buildEventKey,
   callStartConversation,
   extractProviderChatId,
+  intakeFilterFailure,
   listEngineChannels,
   loadOpenerSettings,
-  type OpenFailureCode,
   type OpenerSettings,
+  type OpenFailureCode,
   pickStartConversationChannel,
   providerPhone,
   renderFirstMessage,
-  sourceMatches,
 } from "../_shared/start-conversation.ts";
 
 const corsHeaders = {
@@ -50,89 +58,17 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
-class HttpError extends Error {
-  status: number;
-  code: string;
-
-  constructor(message: string, status = 400, code = "bad_request") {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
-}
-
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-type Caller = {
-  equipeId: string;
-  /** Quem chamou, para o rastro: 'lead_intake' | 'http' | 'manual'. */
-  defaultTriggerSource: "lead_intake" | "http" | "manual";
-  /** Só o usuário autenticado pode mexer na configuração. */
-  profileId: string | null;
-};
-
 interface TeamRow {
   id: string;
   nome: string | null;
   workspace_id: string | null;
   gpt_maker_agent_id: string | null;
-}
-
-// ── Autenticação ────────────────────────────────────────────────────────────
-
-/**
- * Resolve o tenant a partir de uma das três credenciais aceitas.
- *
- * A ordem importa: o segredo do tenant é verificado antes do JWT porque o n8n
- * manda os dois cabeçalhos quando a requisição passa pelo gateway do Supabase
- * (que exige um apikey/Authorization qualquer) — e nesse caso o que identifica
- * o tenant é o segredo, não o token do gateway.
- */
-async function resolveCaller(
-  req: Request,
-  url: URL,
-  supabase: SupabaseClient,
-  body: Record<string, unknown>,
-): Promise<Caller> {
-  const secret = req.headers.get("x-webhook-secret") || url.searchParams.get("secret");
-  if (secret) {
-    const { data: team, error } = await supabase
-      .from("equipes")
-      .select("id")
-      .eq("webhook_secret", secret)
-      .maybeSingle();
-    if (error) throw error;
-    if (!team) throw new HttpError("Segredo de webhook inválido", 401, "invalid_secret");
-    return { equipeId: team.id, defaultTriggerSource: "http", profileId: null };
-  }
-
-  const authHeader = req.headers.get("Authorization") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new HttpError("Credencial ausente", 401, "unauthorized");
-
-  // service_role: chamada interna (gatilho de entrada de lead). O tenant vem no
-  // corpo porque a chave de serviço não pertence a tenant nenhum.
-  if (token === (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "___")) {
-    const equipeId = typeof body.equipe_id === "string" ? body.equipe_id.trim() : "";
-    if (!equipeId) throw new HttpError("equipe_id é obrigatório na chamada interna", 400, "missing_equipe");
-    return { equipeId, defaultTriggerSource: "lead_intake", profileId: null };
-  }
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) throw new HttpError("Credencial inválida", 401, "unauthorized");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, equipe_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!profile?.equipe_id) throw new HttpError("Perfil sem equipe", 403, "no_team");
-
-  return { equipeId: profile.equipe_id, defaultTriggerSource: "manual", profileId: profile.id };
 }
 
 // ── Resolução do lead ───────────────────────────────────────────────────────
@@ -167,18 +103,27 @@ async function resolveLead(
       .is("deleted_at", null)
       .maybeSingle();
     if (error) throw error;
-    if (!data) throw new HttpError("Lead não encontrado", 404, "lead_not_found");
-    if (data.equipe_id !== equipeId) throw new HttpError("Lead de outra equipe", 403, "forbidden");
+    if (!data) {
+      throw new HttpError("Lead não encontrado", 404, "lead_not_found");
+    }
+    if (data.equipe_id !== equipeId) {
+      throw new HttpError("Lead de outra equipe", 403, "forbidden");
+    }
     return data as LeadRow;
   }
 
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";
-  if (!phone) throw new HttpError("lead_id ou phone é obrigatório", 400, "missing_lead");
+  if (!phone) {
+    throw new HttpError("lead_id ou phone é obrigatório", 400, "missing_lead");
+  }
 
-  const { data: foundId, error: rpcError } = await supabase.rpc("crm_find_lead_by_phone", {
-    p_equipe_id: equipeId,
-    p_phone: phone,
-  });
+  const { data: foundId, error: rpcError } = await supabase.rpc(
+    "crm_find_lead_by_phone",
+    {
+      p_equipe_id: equipeId,
+      p_phone: phone,
+    },
+  );
   if (rpcError) throw rpcError;
   if (!foundId) {
     throw new HttpError(
@@ -209,7 +154,8 @@ interface EventRow {
   event_key: string;
 }
 
-const EVENT_COLUMNS = "id, status, conversation_id, provider_chat_id, attempts, event_key";
+const EVENT_COLUMNS =
+  "id, status, conversation_id, provider_chat_id, attempts, event_key";
 
 /**
  * Reserva o evento. O INSERT é a trava: UNIQUE (equipe_id, event_key) garante
@@ -237,7 +183,12 @@ async function claimEvent(
     phone: string | null;
     force: boolean;
   },
-): Promise<{ kind: "claimed" | "retaken"; event: EventRow } | { kind: "already"; event: EventRow }> {
+): Promise<
+  { kind: "claimed" | "retaken"; event: EventRow } | {
+    kind: "already";
+    event: EventRow;
+  }
+> {
   const { data: inserted, error } = await supabase
     .from("conversation_open_events")
     .insert({
@@ -261,13 +212,22 @@ async function claimEvent(
     .eq("event_key", row.event_key)
     .maybeSingle();
   if (readError) throw readError;
-  if (!existing) throw new HttpError("Conflito de idempotência sem linha vencedora", 500, "idempotency_race");
+  if (!existing) {
+    throw new HttpError(
+      "Conflito de idempotência sem linha vencedora",
+      500,
+      "idempotency_race",
+    );
+  }
 
   const event = existing as EventRow & { updated_at: string };
 
-  if (event.status === "opened" && !row.force) return { kind: "already", event };
+  if (event.status === "opened" && !row.force) {
+    return { kind: "already", event };
+  }
 
-  const stale = Date.now() - new Date(event.updated_at).getTime() > STALE_PENDING_MS;
+  const stale =
+    Date.now() - new Date(event.updated_at).getTime() > STALE_PENDING_MS;
   if (event.status === "pending" && !stale) return { kind: "already", event };
 
   // Reassume: 'failed'/'skipped', ou 'pending' abandonada, ou force explícito.
@@ -371,7 +331,10 @@ async function persistOpenedConversation(
       update.status = "active";
       update.archived_at = null;
     }
-    await supabase.from("conversations").update(update).eq("id", conversationId);
+    await supabase.from("conversations").update(update).eq(
+      "id",
+      conversationId,
+    );
   } else {
     const { data: created, error } = await supabase
       .from("conversations")
@@ -404,14 +367,23 @@ async function persistOpenedConversation(
     provider: "gptmaker",
     created_at: nowIso,
   });
-  if (msgError) console.error("[start-conversation] falha ao registrar mensagem enviada:", msgError);
+  if (msgError) {
+    console.error(
+      "[start-conversation] falha ao registrar mensagem enviada:",
+      msgError,
+    );
+  }
 
   return conversationId;
 }
 
 // ── Configuração (actions get-settings / update-settings) ───────────────────
 
-const SETTINGS_COLUMNS = "equipe_id, enabled, channel_id, channel_type, trigger_sources, first_message, updated_at";
+const SETTINGS_COLUMNS =
+  "equipe_id, enabled, channel_id, channel_type, trigger_sources, trigger_entry_ids, first_message, updated_at";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function handleUpdateSettings(
   supabase: SupabaseClient,
@@ -419,28 +391,79 @@ async function handleUpdateSettings(
   body: Record<string, unknown>,
 ): Promise<Response> {
   if (!caller.profileId) {
-    throw new HttpError("Só um usuário autenticado altera a configuração", 403, "forbidden");
+    throw new HttpError(
+      "Só um usuário autenticado altera a configuração",
+      403,
+      "forbidden",
+    );
   }
 
   const patch: Record<string, unknown> = { equipe_id: caller.equipeId };
   if ("enabled" in body) patch.enabled = body.enabled === true;
   if ("channel_id" in body) {
-    const value = typeof body.channel_id === "string" ? body.channel_id.trim() : "";
+    const value = typeof body.channel_id === "string"
+      ? body.channel_id.trim()
+      : "";
     patch.channel_id = value || null;
   }
   if ("channel_type" in body) {
-    const value = typeof body.channel_type === "string" ? body.channel_type.trim() : "";
+    const value = typeof body.channel_type === "string"
+      ? body.channel_type.trim()
+      : "";
     patch.channel_type = value || null;
   }
   if ("first_message" in body) {
-    const value = typeof body.first_message === "string" ? body.first_message : "";
+    const value = typeof body.first_message === "string"
+      ? body.first_message
+      : "";
     patch.first_message = value.trim() || null;
   }
   if ("trigger_sources" in body) {
-    const list = Array.isArray(body.trigger_sources) ? body.trigger_sources : [];
+    const list = Array.isArray(body.trigger_sources)
+      ? body.trigger_sources
+      : [];
     patch.trigger_sources = list
       .map((s) => String(s).trim())
       .filter(Boolean);
+  }
+  if ("trigger_entry_ids" in body) {
+    // SE-REV-002 — só portas do próprio tenant. Uma porta de outro time na
+    // lista não dispararia nada, mas aceitá-la esconderia um erro de
+    // configuração (id colado errado).
+    const list = Array.isArray(body.trigger_entry_ids)
+      ? body.trigger_entry_ids
+      : [];
+    const ids = Array.from(
+      new Set(list.map((s) => String(s).trim().toLowerCase()).filter(Boolean)),
+    );
+    const invalid = ids.filter((id) => !UUID_RE.test(id));
+    if (invalid.length > 0) {
+      throw new HttpError(
+        `trigger_entry_ids com valor que não é UUID: ${invalid.join(", ")}`,
+        400,
+        "invalid_entry",
+      );
+    }
+    if (ids.length > 0) {
+      const { data: owned, error: ownedError } = await supabase
+        .from("crm_entries")
+        .select("id")
+        .eq("equipe_id", caller.equipeId)
+        .in("id", ids);
+      if (ownedError) throw ownedError;
+      const ownedIds = new Set(
+        (owned ?? []).map((r: { id: string }) => String(r.id).toLowerCase()),
+      );
+      const foreign = ids.filter((id) => !ownedIds.has(id));
+      if (foreign.length > 0) {
+        throw new HttpError(
+          `Porta(s) inexistente(s) neste time: ${foreign.join(", ")}`,
+          400,
+          "invalid_entry",
+        );
+      }
+    }
+    patch.trigger_entry_ids = ids;
   }
 
   const { data, error } = await supabase
@@ -459,13 +482,18 @@ async function handleOpen(
   caller: Caller,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const settings: OpenerSettings = await loadOpenerSettings(supabase, caller.equipeId);
+  const settings: OpenerSettings = await loadOpenerSettings(
+    supabase,
+    caller.equipeId,
+  );
 
   // O interruptor vale para os três caminhos de chamada, de propósito: ele é a
   // autorização do tenant para o Rev mandar a primeira mensagem. Um tenant que
   // não ligou isso não recebe abertura automática nem por um n8n mal apontado.
   if (!settings.enabled) {
-    console.log(`[start-conversation] equipe ${caller.equipeId}: recurso desligado`);
+    console.log(
+      `[start-conversation] equipe ${caller.equipeId}: recurso desligado`,
+    );
     return json({
       success: false,
       skipped: true,
@@ -478,23 +506,33 @@ async function handleOpen(
 
   const lead = await resolveLead(supabase, caller.equipeId, body);
 
-  const triggerSource = typeof body.trigger_source === "string" && body.trigger_source
-    ? body.trigger_source
-    : caller.defaultTriggerSource;
+  const triggerSource =
+    typeof body.trigger_source === "string" && body.trigger_source
+      ? body.trigger_source
+      : caller.defaultTriggerSource;
 
-  // O filtro de source existe para o gatilho automático: é ele que separa
-  // "lead veio do anúncio" de "lead digitado à mão por um vendedor". Chamada
-  // explícita (n8n, botão) já é a intenção declarada e não passa pelo filtro.
-  if (triggerSource === "lead_intake" && !sourceMatches(settings.trigger_sources, lead.source)) {
-    console.log(
-      `[start-conversation] lead ${lead.id}: source "${lead.source}" fora do filtro do tenant`,
-    );
-    return json({
-      success: false,
-      skipped: true,
-      code: "source_not_triggered" satisfies OpenFailureCode,
-      lead_id: lead.id,
-    }, 200);
+  // O filtro de porta/source existe para o gatilho automático: é ele que
+  // separa "lead veio do anúncio" de "lead digitado à mão por um vendedor".
+  // Chamada explícita (n8n, botão) já é a intenção declarada e não passa pelo
+  // filtro. SE-REV-002: vale o source/porta DESTA chegada (corpo), não o
+  // leads.source do primeiro cadastro.
+  if (triggerSource === "lead_intake") {
+    const filtered = intakeFilterFailure(settings, {
+      source: body.source,
+      entryId: body.entry_id,
+      leadSource: lead.source,
+    });
+    if (filtered) {
+      console.log(
+        `[start-conversation] lead ${lead.id}: ${filtered} (porta/source fora do filtro do tenant)`,
+      );
+      return json({
+        success: false,
+        skipped: true,
+        code: filtered satisfies OpenFailureCode,
+        lead_id: lead.id,
+      }, 200);
+    }
   }
 
   // Conta em modo somente-leitura não manda mensagem — mesma regra (e mesmo
@@ -526,7 +564,9 @@ async function handleOpen(
   });
 
   if (claim.kind === "already") {
-    console.log(`[start-conversation] evento ${eventKey} já processado (${claim.event.status})`);
+    console.log(
+      `[start-conversation] evento ${eventKey} já processado (${claim.event.status})`,
+    );
     return json({
       success: claim.event.status === "opened",
       already: true,
@@ -546,16 +586,27 @@ async function handleOpen(
   if (isTechnicalPhone(lead.phone)) {
     await recordFailure(supabase, eventId, {
       code: "technical_phone",
-      message: `O lead ${lead.id} tem um identificador técnico no lugar do telefone.`,
+      message:
+        `O lead ${lead.id} tem um identificador técnico no lugar do telefone.`,
     });
-    return json({ success: false, code: "technical_phone", event_id: eventId, lead_id: lead.id }, 422);
+    return json({
+      success: false,
+      code: "technical_phone",
+      event_id: eventId,
+      lead_id: lead.id,
+    }, 422);
   }
   if (!phone) {
     await recordFailure(supabase, eventId, {
       code: "missing_phone",
       message: `O lead ${lead.id} não tem telefone utilizável.`,
     });
-    return json({ success: false, code: "missing_phone", event_id: eventId, lead_id: lead.id }, 422);
+    return json({
+      success: false,
+      code: "missing_phone",
+      event_id: eventId,
+      lead_id: lead.id,
+    }, 422);
   }
 
   const { data: team, error: teamError } = await supabase
@@ -567,8 +618,14 @@ async function handleOpen(
   const tenant = (team ?? null) as TeamRow | null;
 
   const message = renderFirstMessage(
-    typeof body.message === "string" && body.message.trim() ? body.message : settings.first_message,
-    { leadName: lead.name, leadSource: lead.source, tenantName: tenant?.nome ?? null },
+    typeof body.message === "string" && body.message.trim()
+      ? body.message
+      : settings.first_message,
+    {
+      leadName: lead.name,
+      leadSource: lead.source,
+      tenantName: tenant?.nome ?? null,
+    },
   );
   if (!message) {
     await recordFailure(supabase, eventId, {
@@ -577,7 +634,12 @@ async function handleOpen(
         "Sem primeira mensagem: configure first_message em conversation_opener_settings " +
         "ou mande `message` no corpo da chamada.",
     });
-    return json({ success: false, code: "missing_message", event_id: eventId, lead_id: lead.id }, 422);
+    return json({
+      success: false,
+      code: "missing_message",
+      event_id: eventId,
+      lead_id: lead.id,
+    }, 422);
   }
 
   const engineToken = Deno.env.get("GPT_MAKER_TOKEN");
@@ -586,7 +648,11 @@ async function handleOpen(
       code: "engine_token_missing",
       message: "GPT_MAKER_TOKEN não está configurado no ambiente da função.",
     });
-    return json({ success: false, code: "engine_token_missing", event_id: eventId }, 500);
+    return json({
+      success: false,
+      code: "engine_token_missing",
+      event_id: eventId,
+    }, 500);
   }
   // IDs colados no Admin carregam whitespace/newline — o mesmo saneamento que o
   // manage-agent-channels faz, pelo mesmo motivo (URL quebrada em produção).
@@ -595,7 +661,8 @@ async function handleOpen(
   if (!workspaceId || !agentId) {
     await recordFailure(supabase, eventId, {
       code: workspaceId ? "agent_not_configured" : "workspace_not_configured",
-      message: `Tenant ${caller.equipeId} sem workspace_id/gpt_maker_agent_id configurado.`,
+      message:
+        `Tenant ${caller.equipeId} sem workspace_id/gpt_maker_agent_id configurado.`,
     });
     return json({
       success: false,
@@ -604,23 +671,44 @@ async function handleOpen(
     }, 422);
   }
 
-  const listed = await listEngineChannels({ token: engineToken, workspaceId, agentId });
+  const listed = await listEngineChannels({
+    token: engineToken,
+    workspaceId,
+    agentId,
+  });
   if ("errorCode" in listed) {
-    await recordFailure(supabase, eventId, { code: listed.errorCode, message: listed.detail });
-    return json({ success: false, code: listed.errorCode, message: listed.detail, event_id: eventId }, 502);
+    await recordFailure(supabase, eventId, {
+      code: listed.errorCode,
+      message: listed.detail,
+    });
+    return json({
+      success: false,
+      code: listed.errorCode,
+      message: listed.detail,
+      event_id: eventId,
+    }, 502);
   }
 
-  const requestedChannel = typeof body.channel_id === "string" && body.channel_id.trim()
-    ? body.channel_id.trim()
-    : settings.channel_id;
-  const picked = pickStartConversationChannel(listed.channels, requestedChannel);
+  const requestedChannel =
+    typeof body.channel_id === "string" && body.channel_id.trim()
+      ? body.channel_id.trim()
+      : settings.channel_id;
+  const picked = pickStartConversationChannel(
+    listed.channels,
+    requestedChannel,
+  );
   if ("errorCode" in picked) {
     await recordFailure(supabase, eventId, {
       code: picked.errorCode,
       message: picked.detail,
       channelId: requestedChannel ?? null,
     });
-    return json({ success: false, code: picked.errorCode, message: picked.detail, event_id: eventId }, 422);
+    return json({
+      success: false,
+      code: picked.errorCode,
+      message: picked.detail,
+      event_id: eventId,
+    }, 422);
   }
   const channel = picked.channel;
   const channelType = String(channel.type ?? "").toUpperCase();
@@ -637,7 +725,8 @@ async function handleOpen(
       code: result.errorCode ?? "provider_rejected",
       message: result.errorMessage ?? "provider recusou a abertura de conversa",
       providerStatus: result.status,
-      providerResponse: result.body ?? (result.rawText ? { raw: result.rawText.slice(0, 2000) } : null),
+      providerResponse: result.body ??
+        (result.rawText ? { raw: result.rawText.slice(0, 2000) } : null),
       channelId: channel.id,
       channelType,
     });
@@ -673,7 +762,8 @@ async function handleOpen(
       channel_type: channelType,
       message,
       provider_chat_id: providerChatId,
-      provider_response: result.body ?? (result.rawText ? { raw: result.rawText.slice(0, 2000) } : null),
+      provider_response: result.body ??
+        (result.rawText ? { raw: result.rawText.slice(0, 2000) } : null),
       provider_status: result.status,
       conversation_id: conversationId,
       opened_at: new Date().toISOString(),
@@ -686,7 +776,8 @@ async function handleOpen(
   await supabase.from("lead_activities").insert({
     lead_id: lead.id,
     tipo: "conversation_opened",
-    descricao: "Conversa de WhatsApp aberta pelo Rev para o agente iniciar o atendimento",
+    descricao:
+      "Conversa de WhatsApp aberta pelo Rev para o agente iniciar o atendimento",
     metadata: {
       event_id: eventId,
       event_key: eventKey,
@@ -699,7 +790,9 @@ async function handleOpen(
   });
 
   console.log(
-    `[start-conversation] aberta: lead=${lead.id} canal=${channel.id} chat=${providerChatId ?? "sem id"}`,
+    `[start-conversation] aberta: lead=${lead.id} canal=${channel.id} chat=${
+      providerChatId ?? "sem id"
+    }`,
   );
 
   return json({
@@ -717,7 +810,9 @@ async function handleOpen(
 // ── Entrada HTTP ────────────────────────────────────────────────────────────
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -730,7 +825,10 @@ serve(async (req) => {
     // Corpo ausente ou não-JSON não é erro de parse: `functions.invoke(name)`
     // sem opções manda POST com corpo vazio, e a leitura de configuração é uma
     // chamada legítima sem corpo (mesma convenção do manage-agent-channels).
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = (await req.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     const action = url.searchParams.get("action") ||
       (typeof body.action === "string" && body.action ? body.action : "open");
 
@@ -754,12 +852,21 @@ serve(async (req) => {
       return await handleOpen(supabase, caller, body);
     }
 
-    return json({ success: false, code: "unknown_action", message: `Ação desconhecida: ${action}` }, 400);
+    return json({
+      success: false,
+      code: "unknown_action",
+      message: `Ação desconhecida: ${action}`,
+    }, 400);
   } catch (error) {
     if (error instanceof HttpError) {
-      return json({ success: false, code: error.code, message: error.message }, error.status);
+      return json(
+        { success: false, code: error.code, message: error.message },
+        error.status,
+      );
     }
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    const message = error instanceof Error
+      ? error.message
+      : "Erro desconhecido";
     console.error("[start-conversation] erro inesperado:", error);
     return json({ success: false, code: "internal_error", message }, 500);
   }

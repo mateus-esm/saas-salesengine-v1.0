@@ -152,3 +152,11 @@ verify_jwt = false
 # gateway derrubaria justamente o caminho do n8n, que não tem sessão.
 [functions.start-conversation]
 verify_jwt = false
+
+# SE-REV-002 — ambos autenticam internamente. `outreach` aceita segredo do
+# tenant/JWT/service role; o worker exige x-outreach-secret vindo do Vault.
+[functions.outreach]
+verify_jwt = false
+
+[functions.outreach-worker]
+verify_jwt = false
