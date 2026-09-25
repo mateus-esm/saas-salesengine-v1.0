@@ -94,11 +94,11 @@ export default function OutreachSettings() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Não foi possível salvar."),
   });
 
-  if (query.isLoading || !profile) {
-    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-  }
   if (query.error) {
     return <div className="container mx-auto p-6 text-destructive">Falha ao carregar: {query.error.message}</div>;
+  }
+  if (query.isLoading || !profile) {
+    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
   const lineValue = profile.provider === "gptmaker" ? profile.channel_id : profile.solo_instance_id;

@@ -206,7 +206,7 @@ async function getConnectedFallbackInstance(
 }
 
 type DeliveryProfile = {
-  provider: 'gptmaker' | 'solo'
+  provider: 'gptmaker' | 'solo' | null
   channel_id: string | null
   solo_instance_id: string | null
 }
@@ -220,9 +220,25 @@ async function getDeliveryProfile(
     .select('provider, channel_id, solo_instance_id')
     .eq('equipe_id', equipeId)
     .maybeSingle()
+  // O passo 2b pode ser publicado com a Fase 0, antes da migration do motor
+  // que acrescenta provider/solo_instance_id. Nesse intervalo, preservamos o
+  // channel_id da SE-REV-001 e deixamos a escolha cair na compatibilidade Solo.
+  if (error?.code === '42703' || error?.code === 'PGRST204') {
+    const { data: legacy, error: legacyError } = await supabase
+      .from('conversation_opener_settings')
+      .select('channel_id')
+      .eq('equipe_id', equipeId)
+      .maybeSingle()
+    if (legacyError) throw legacyError
+    return {
+      provider: null,
+      channel_id: legacy?.channel_id ?? null,
+      solo_instance_id: null,
+    }
+  }
   if (error) throw error
   return {
-    provider: data?.provider === 'solo' ? 'solo' : 'gptmaker',
+    provider: data?.provider === 'solo' ? 'solo' : data?.provider === 'gptmaker' ? 'gptmaker' : null,
     channel_id: data?.channel_id ?? null,
     solo_instance_id: data?.solo_instance_id ?? null,
   }
@@ -294,11 +310,14 @@ async function persistManualGptOpening(
     opened_via: 'start_conversation',
     provider_channel_id: input.channelId,
     last_message_at: now,
+    status: 'active',
+    archived_at: null,
   }
   if (input.providerChatId) patch.gpt_maker_chat_id = input.providerChatId
 
   if (conversationId) {
-    await supabase.from('conversations').update(patch).eq('id', conversationId)
+    const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId)
+    if (error) throw error
   } else {
     const { data, error } = await supabase.from('conversations').insert({
       lead_id: input.leadId,
@@ -313,11 +332,12 @@ async function persistManualGptOpening(
     conversationId = data.id
   }
 
-  await supabase.from('messages').update({
+  const { error: messageError } = await supabase.from('messages').update({
     conversation_id: conversationId,
     provider: 'gptmaker',
   }).eq('id', input.messageId)
-  await supabase.from('conversation_open_events').update({
+  if (messageError) throw messageError
+  const { error: eventError } = await supabase.from('conversation_open_events').update({
     status: 'opened',
     conversation_id: conversationId,
     channel_id: input.channelId,
@@ -329,7 +349,8 @@ async function persistManualGptOpening(
     error_code: null,
     error_message: null,
   }).eq('id', input.eventId)
-  await supabase.from('lead_activities').insert({
+  if (eventError) throw eventError
+  const { error: activityError } = await supabase.from('lead_activities').insert({
     lead_id: input.leadId,
     tipo: 'conversation_opened',
     descricao: 'Conversa de WhatsApp aberta manualmente pelo Rev',
@@ -343,7 +364,70 @@ async function persistManualGptOpening(
       message_id: input.messageId,
     },
   })
+  if (activityError) throw activityError
   return conversationId
+}
+
+async function persistManualSoloOpening(
+  supabase: SupabaseClient,
+  input: {
+    equipeId: string
+    leadId: string
+    conversationId: string | null
+    messageId: string
+    instanceId: string
+    providerMessageId?: string
+  },
+): Promise<string> {
+  const now = new Date().toISOString()
+  let conversationId = input.conversationId
+  const patch = {
+    solo_instance_id: input.instanceId,
+    last_message_at: now,
+    status: 'active',
+    archived_at: null,
+    opened_at: now,
+    opened_via: 'manual',
+  }
+
+  if (conversationId) {
+    const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId)
+    if (error) throw error
+  } else {
+    const { data, error } = await supabase.from('conversations').insert({
+      lead_id: input.leadId,
+      equipe_id: input.equipeId,
+      channel: 'whatsapp',
+      atendido_por_agente: false,
+      unread_count: 0,
+      ...patch,
+    }).select('id').single()
+    if (error) throw error
+    conversationId = data.id
+  }
+
+  const { error: messageError } = await supabase.from('messages').update({
+    conversation_id: conversationId,
+    provider: 'solo',
+    provider_message_id: input.providerMessageId ?? null,
+  }).eq('id', input.messageId)
+  if (messageError) throw messageError
+
+  const { error: activityError } = await supabase.from('lead_activities').insert({
+    lead_id: input.leadId,
+    tipo: 'conversation_opened',
+    descricao: 'Conversa de WhatsApp aberta manualmente pelo Rev',
+    metadata: {
+      trigger_source: 'manual',
+      provider: 'solo',
+      solo_instance_id: input.instanceId,
+      provider_message_id: input.providerMessageId ?? null,
+      conversation_id: conversationId,
+      message_id: input.messageId,
+    },
+  })
+  if (activityError) throw activityError
+  return conversationId!
 }
 
 function markUndelivered(msg: DeliveryMessage, reason: string) {
@@ -549,8 +633,20 @@ serve(async (req) => {
     // message_id vira uma chave de evento própria: há rastro, mas um segundo
     // clique deliberado nunca é bloqueado pela abertura anterior.
     const deliveryProfile = await getDeliveryProfile(supabase, equipeId)
+    let manualProvider = deliveryProfile.provider
+    let preResolvedSolo: Awaited<ReturnType<typeof resolveManualSoloInstance>> | null = null
+    if (!manualProvider) {
+      preResolvedSolo = await resolveManualSoloInstance(supabase, equipeId, null)
+      if ('instance' in preResolvedSolo) {
+        manualProvider = 'solo'
+      } else if (preResolvedSolo.reason === 'solo_instance_ambiguous') {
+        return jsonResponse(markUndelivered(msg, preResolvedSolo.reason))
+      } else {
+        manualProvider = 'gptmaker'
+      }
+    }
 
-    if (deliveryProfile.provider === 'gptmaker') {
+    if (manualProvider === 'gptmaker') {
       if (media_url || !String(content ?? '').trim()) {
         return jsonResponse(markUndelivered(msg, 'gpt_start_requires_text'))
       }
@@ -632,7 +728,7 @@ serve(async (req) => {
       return jsonResponse({ ...msg, delivered: true })
     }
 
-    const soloLine = await resolveManualSoloInstance(
+    const soloLine = preResolvedSolo ?? await resolveManualSoloInstance(
       supabase,
       equipeId,
       deliveryProfile.solo_instance_id,
@@ -653,12 +749,15 @@ serve(async (req) => {
     if (!manualSoloResult.ok) {
       return jsonResponse(markUndelivered(msg, 'outbound_solo_failed'))
     }
-    if (resolvedConversationId) {
-      await supabase.from('conversations').update({
-        solo_instance_id: soloLine.instance.id,
-      }).eq('id', resolvedConversationId)
-    }
-    await updateMessageProvider(supabase, msg, {
+    await persistManualSoloOpening(supabase, {
+      equipeId,
+      leadId: resolvedLeadId,
+      conversationId: resolvedConversationId,
+      messageId: msg.id,
+      instanceId: soloLine.instance.id,
+      providerMessageId: manualSoloResult.providerMessageId,
+    })
+    Object.assign(msg, {
       provider: 'solo',
       provider_message_id: manualSoloResult.providerMessageId,
     })
