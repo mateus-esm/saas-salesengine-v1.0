@@ -249,6 +249,47 @@ export async function loadOpenerSettings(
   };
 }
 
+async function cadenceIntakeState(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  input: { equipeId: string; leadId: string; entryId?: string | null },
+): Promise<{ ownsEntry: boolean; enrolled: boolean }> {
+  if (!input.entryId) return { ownsEntry: false, enrolled: false };
+  const { data: sequences, error } = await supabase
+    .from("cadence_sequences")
+    .select("id")
+    .eq("equipe_id", input.equipeId)
+    .eq("active", true)
+    .eq("trigger_event", "lead_intake")
+    .contains("trigger_entry_ids", [input.entryId])
+    .limit(20);
+  if (error) {
+    console.error(
+      "[start-conversation] falha ao verificar convivência com cadência:",
+      error,
+    );
+    return { ownsEntry: false, enrolled: false };
+  }
+  const ids = (sequences ?? []).map((sequence: { id: string }) => sequence.id);
+  if (!ids.length) return { ownsEntry: false, enrolled: false };
+
+  const { data: enrollment, error: enrollmentError } = await supabase
+    .from("cadence_enrollments")
+    .select("id")
+    .eq("lead_id", input.leadId)
+    .eq("status", "active")
+    .in("sequence_id", ids)
+    .limit(1)
+    .maybeSingle();
+  if (enrollmentError) {
+    console.error(
+      "[start-conversation] sequência ativa sem confirmação da inscrição:",
+      enrollmentError,
+    );
+  }
+  return { ownsEntry: true, enrolled: Boolean(enrollment) };
+}
+
 // ── Gatilho de entrada ──────────────────────────────────────────────────────
 
 /**
@@ -284,6 +325,15 @@ export async function dispatchConversationOpen(
     }
     if (!sourceMatches(settings.trigger_sources, input.source)) {
       return { dispatched: false, reason: "source_not_triggered" };
+    }
+
+    // Se uma sequência ativa é dona desta porta, o gatilho SQL em lead_touches
+    // já materializou o passo 0. Nunca invocamos também a abertura legada.
+    const cadence = await cadenceIntakeState(supabase, input);
+    if (cadence.ownsEntry) {
+      return cadence.enrolled
+        ? { dispatched: true, reason: "cadence" }
+        : { dispatched: false, reason: "cadence_enrollment_missing" };
     }
 
     const baseUrl = Deno.env.get("SUPABASE_URL");
