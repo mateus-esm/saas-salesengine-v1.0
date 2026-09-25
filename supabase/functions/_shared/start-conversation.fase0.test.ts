@@ -1,7 +1,13 @@
 // SE-REV-002 · Fase 0 — correções da SE-REV-001. Arquivo separado para que os
 // 25 testes originais (start-conversation.test.ts) continuem sem edição.
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { callStartConversation, providerAccepted } from "./start-conversation.ts";
+import {
+  callStartConversation,
+  dispatchConversationOpen,
+  entryMatches,
+  intakeFilterFailure,
+  providerAccepted,
+} from "./start-conversation.ts";
 
 /** Troca o fetch global durante `fn` e devolve o original no fim. */
 async function withFetch(
@@ -62,4 +68,87 @@ Deno.test("providerAccepted: só success===true vale quando o campo existe", () 
   assertEquals(providerAccepted({ chatId: "C1" }), true);
   assertEquals(providerAccepted(null), true);
   assertEquals(providerAccepted("ok"), true);
+});
+
+// ── Correção 3: filtro pela porta, com o source do evento ──────────────────
+
+const PORTA = "5a000000-0000-0000-0000-0000000000e1";
+const OUTRA = "5a000000-0000-0000-0000-0000000000e2";
+
+Deno.test("entryMatches: lista vazia = qualquer porta; com filtro, só a porta listada", () => {
+  assertEquals(entryMatches([], PORTA), true);
+  assertEquals(entryMatches(null, null), true);
+  assertEquals(entryMatches([PORTA], PORTA), true);
+  assertEquals(entryMatches([PORTA], PORTA.toUpperCase()), true);
+  assertEquals(entryMatches([PORTA], OUTRA), false);
+  assertEquals(entryMatches([PORTA], null), false);
+});
+
+Deno.test("lead que voltou: vale o source do evento, não o leads.source antigo", () => {
+  const settings = { trigger_sources: ["Anúncio"], trigger_entry_ids: [] };
+  // leads.source = 'Manual' (primeiro cadastro), mas esta chegada veio do anúncio.
+  assertEquals(intakeFilterFailure(settings, { source: "Anúncio", leadSource: "Manual" }), null);
+  // Sem source no evento (chamador antigo), cai no leads.source.
+  assertEquals(intakeFilterFailure(settings, { leadSource: "Manual" }), "source_not_triggered");
+});
+
+Deno.test("porta fora do filtro barra antes do source", () => {
+  const settings = { trigger_sources: [], trigger_entry_ids: [PORTA] };
+  assertEquals(intakeFilterFailure(settings, { entryId: PORTA, source: "webhook_inbound" }), null);
+  assertEquals(intakeFilterFailure(settings, { entryId: OUTRA, source: "webhook_inbound" }), "entry_not_triggered");
+  assertEquals(intakeFilterFailure(settings, { source: "webhook_inbound" }), "entry_not_triggered");
+});
+
+/** Cliente falso: só o que loadOpenerSettings lê. */
+function fakeSettingsClient(row: Record<string, unknown> | null) {
+  const chain = {
+    select: () => chain,
+    eq: () => chain,
+    maybeSingle: async () => ({ data: row, error: null }),
+  };
+  return { from: () => chain };
+}
+
+Deno.test("dispatcher: porta fora do filtro não chama a função (nenhum fetch)", async () => {
+  let calls = 0;
+  await withFetch(async () => {
+    calls++;
+    return new Response("{}", { status: 200 });
+  }, async () => {
+    const supabase = fakeSettingsClient({
+      equipe_id: "t1", enabled: true, trigger_sources: [], trigger_entry_ids: [PORTA], first_message: "oi",
+    });
+    const out = await dispatchConversationOpen(supabase, { equipeId: "t1", leadId: "l1", entryId: OUTRA });
+    assertEquals(out, { dispatched: false, reason: "entry_not_triggered" });
+  });
+  assertEquals(calls, 0);
+});
+
+Deno.test("dispatcher: porta certa manda source e entry_id no corpo", async () => {
+  const prevUrl = Deno.env.get("SUPABASE_URL");
+  const prevKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_URL", "http://local.test");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "svc");
+  let sent: Record<string, unknown> | null = null;
+  try {
+    await withFetch(async (_input, init) => {
+      sent = JSON.parse(String(init?.body ?? "{}"));
+      return new Response("{}", { status: 200 });
+    }, async () => {
+      const supabase = fakeSettingsClient({
+        equipe_id: "t1", enabled: true, trigger_sources: [], trigger_entry_ids: [PORTA], first_message: "oi",
+      });
+      const out = await dispatchConversationOpen(supabase, {
+        equipeId: "t1", leadId: "l1", entryId: PORTA, source: "webhook_inbound",
+      });
+      assertEquals(out.dispatched, true);
+    });
+  } finally {
+    if (prevUrl === undefined) Deno.env.delete("SUPABASE_URL"); else Deno.env.set("SUPABASE_URL", prevUrl);
+    if (prevKey === undefined) Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+    else Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", prevKey);
+  }
+  assertEquals(sent!.entry_id, PORTA);
+  assertEquals(sent!.source, "webhook_inbound");
+  assertEquals(sent!.trigger_source, "lead_intake");
 });

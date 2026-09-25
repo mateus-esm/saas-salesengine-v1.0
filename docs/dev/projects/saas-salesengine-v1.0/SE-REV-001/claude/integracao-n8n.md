@@ -22,7 +22,7 @@ Content-Type: application/json
   "action": "update-settings",
   "enabled": true,
   "channel_id": "<id do canal WhatsApp não oficial no provider>",
-  "trigger_sources": ["Meta Ads - Cadastro (Social Pago)"],
+  "trigger_entry_ids": ["<crm_entries.id da porta do webhook do n8n>"],
   "first_message": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?"
 }
 ```
@@ -31,8 +31,16 @@ Content-Type: application/json
 - `channel_id` é o `id` que a aba **Canais** já lista (é o mesmo
   `/v2/workspace/{id}/channels` do `manage-agent-channels`). Pode ficar nulo se o
   tenant tiver **exatamente um** WhatsApp conectado; com dois, é obrigatório.
-- `trigger_sources` vazio = qualquer `source` dispara. A comparação ignora caixa
-  e espaços nas pontas.
+- **Atualizado na SE-REV-002:** o filtro recomendado é pela **porta**
+  (`trigger_entry_ids`, os `crm_entries.id`), não pelo `source`. O nome que
+  aparece na tela ("<nome do webhook>") é o nome da porta; o `leads.source` sai
+  do field_mapping do webhook e, sem mapeamento, vira `webhook_inbound` — um
+  `trigger_sources` com o nome da porta nunca casaria. A porta de um webhook é
+  `select id from crm_entries where webhook_config_id = '<id do webhook>'`.
+  Portas de outro time são recusadas no `update-settings`.
+- `trigger_entry_ids` vazio = qualquer porta. `trigger_sources` continua
+  existindo (vazio = qualquer `source`; compara ignorando caixa e espaços) e é
+  avaliado sobre o `source` **desta chegada**, não o do primeiro cadastro.
 - Placeholders de `first_message`: `{{lead.name}}`, `{{lead.first_name}}`,
   `{{lead.source}}`, `{{tenant.name}}`. Um placeholder sem valor vira string
   vazia — nunca vaza `{{lead.name}}` para o cliente.
@@ -147,7 +155,7 @@ supabase functions deploy crm-webhook
 4. **Idempotência.** Repetir exatamente a chamada do passo 3 → espera `200` com
    `already: true` e **nenhuma segunda mensagem** no aparelho.
 5. **Ponta a ponta.** Disparar o fluxo real do n8n para o `crm-webhook` com
-   `source = "Meta Ads - Cadastro (Social Pago)"` e um telefone de teste. Espera
+   a porta configurada em `trigger_entry_ids` e um telefone de teste. Espera
    `conversation_open_dispatched: true` na resposta do webhook e a conversa
    aberta. Reenviar o mesmo payload → nenhuma segunda conversa.
 6. **Resposta do lead.** Responder do aparelho e confirmar que a mensagem cai na

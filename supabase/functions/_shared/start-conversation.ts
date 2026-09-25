@@ -41,6 +41,7 @@ export const START_CONVERSATION_CHANNEL_TYPES = ["WHATSAPP"] as const;
 export type OpenFailureCode =
   | "disabled"
   | "source_not_triggered"
+  | "entry_not_triggered"
   | "lead_not_found"
   | "missing_phone"
   | "technical_phone"
@@ -63,6 +64,8 @@ export interface OpenerSettings {
   channel_id: string | null;
   channel_type: string | null;
   trigger_sources: string[];
+  /** SE-REV-002 — portas (crm_entries.id) que disparam. Vazio = qualquer porta. */
+  trigger_entry_ids: string[];
   first_message: string | null;
 }
 
@@ -71,6 +74,7 @@ export const DEFAULT_OPENER_SETTINGS: Omit<OpenerSettings, "equipe_id"> = {
   channel_id: null,
   channel_type: null,
   trigger_sources: [],
+  trigger_entry_ids: [],
   first_message: null,
 };
 
@@ -110,6 +114,39 @@ export function sourceMatches(triggerSources: string[] | null | undefined, sourc
   const value = String(source ?? "").trim().toLowerCase();
   if (!value) return false;
   return filters.includes(value);
+}
+
+/**
+ * SE-REV-002 — a porta de entrada (crm_entries.id) casa com o filtro do tenant?
+ * Lista vazia = qualquer porta. Com filtro, chegada sem porta conhecida não
+ * dispara: sem saber por onde o lead entrou, não dá para afirmar que ele veio
+ * do anúncio.
+ */
+export function entryMatches(triggerEntryIds: string[] | null | undefined, entryId: string | null | undefined): boolean {
+  const filters = (triggerEntryIds ?? []).map((s) => String(s).trim().toLowerCase()).filter(Boolean);
+  if (filters.length === 0) return true;
+  const value = String(entryId ?? "").trim().toLowerCase();
+  if (!value) return false;
+  return filters.includes(value);
+}
+
+/**
+ * SE-REV-002 — o filtro do gatilho automático (`trigger_source = 'lead_intake'`).
+ *
+ * Usa o source e a porta DO EVENTO quando o chamador os manda (o dispatcher
+ * manda). Só cai no `leads.source` gravado quando o evento não trouxe source —
+ * compatibilidade com chamadas antigas. Antes, um lead que voltou por um
+ * anúncio era barrado pelo source do primeiro cadastro.
+ */
+export function intakeFilterFailure(
+  settings: Pick<OpenerSettings, "trigger_sources" | "trigger_entry_ids">,
+  event: { source?: unknown; entryId?: unknown; leadSource?: string | null },
+): "entry_not_triggered" | "source_not_triggered" | null {
+  const entryId = typeof event.entryId === "string" ? event.entryId : null;
+  if (!entryMatches(settings.trigger_entry_ids, entryId)) return "entry_not_triggered";
+  const source = typeof event.source === "string" ? event.source : event.leadSource ?? null;
+  if (!sourceMatches(settings.trigger_sources, source)) return "source_not_triggered";
+  return null;
 }
 
 export function supportsStartConversation(type: string | null | undefined): boolean {
@@ -372,7 +409,7 @@ export async function loadOpenerSettings(
 ): Promise<OpenerSettings> {
   const { data, error } = await supabase
     .from("conversation_opener_settings")
-    .select("equipe_id, enabled, channel_id, channel_type, trigger_sources, first_message")
+    .select("equipe_id, enabled, channel_id, channel_type, trigger_sources, trigger_entry_ids, first_message")
     .eq("equipe_id", equipeId)
     .maybeSingle();
 
@@ -388,6 +425,7 @@ export async function loadOpenerSettings(
     channel_id: data.channel_id ?? null,
     channel_type: data.channel_type ?? null,
     trigger_sources: Array.isArray(data.trigger_sources) ? data.trigger_sources : [],
+    trigger_entry_ids: Array.isArray(data.trigger_entry_ids) ? data.trigger_entry_ids : [],
     first_message: data.first_message ?? null,
   };
 }
@@ -412,6 +450,8 @@ export async function dispatchConversationOpen(
     equipeId: string;
     leadId: string;
     source?: string | null;
+    /** SE-REV-002 — a porta (crm_entries.id) por onde o lead chegou agora. */
+    entryId?: string | null;
     eventKey?: string | null;
     logPrefix?: string;
   },
@@ -420,6 +460,9 @@ export async function dispatchConversationOpen(
   try {
     const settings = await loadOpenerSettings(supabase, input.equipeId);
     if (!settings.enabled) return { dispatched: false, reason: "disabled" };
+    if (!entryMatches(settings.trigger_entry_ids, input.entryId)) {
+      return { dispatched: false, reason: "entry_not_triggered" };
+    }
     if (!sourceMatches(settings.trigger_sources, input.source)) {
       return { dispatched: false, reason: "source_not_triggered" };
     }
@@ -436,6 +479,10 @@ export async function dispatchConversationOpen(
         lead_id: input.leadId,
         event_key: input.eventKey ?? null,
         trigger_source: "lead_intake",
+        // SE-REV-002 — o filtro do lado da função usa o source e a porta DESTA
+        // chegada, não o leads.source gravado no primeiro cadastro.
+        source: input.source ?? null,
+        entry_id: input.entryId ?? null,
       }),
       signal: AbortSignal.timeout(25_000),
     });

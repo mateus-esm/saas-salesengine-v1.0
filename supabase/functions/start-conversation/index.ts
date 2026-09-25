@@ -34,6 +34,7 @@ import {
   buildEventKey,
   callStartConversation,
   extractProviderChatId,
+  intakeFilterFailure,
   listEngineChannels,
   loadOpenerSettings,
   type OpenFailureCode,
@@ -41,7 +42,6 @@ import {
   pickStartConversationChannel,
   providerPhone,
   renderFirstMessage,
-  sourceMatches,
 } from "../_shared/start-conversation.ts";
 
 const corsHeaders = {
@@ -411,7 +411,10 @@ async function persistOpenedConversation(
 
 // ── Configuração (actions get-settings / update-settings) ───────────────────
 
-const SETTINGS_COLUMNS = "equipe_id, enabled, channel_id, channel_type, trigger_sources, first_message, updated_at";
+const SETTINGS_COLUMNS =
+  "equipe_id, enabled, channel_id, channel_type, trigger_sources, trigger_entry_ids, first_message, updated_at";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function handleUpdateSettings(
   supabase: SupabaseClient,
@@ -441,6 +444,31 @@ async function handleUpdateSettings(
     patch.trigger_sources = list
       .map((s) => String(s).trim())
       .filter(Boolean);
+  }
+  if ("trigger_entry_ids" in body) {
+    // SE-REV-002 — só portas do próprio tenant. Uma porta de outro time na
+    // lista não dispararia nada, mas aceitá-la esconderia um erro de
+    // configuração (id colado errado).
+    const list = Array.isArray(body.trigger_entry_ids) ? body.trigger_entry_ids : [];
+    const ids = Array.from(new Set(list.map((s) => String(s).trim().toLowerCase()).filter(Boolean)));
+    const invalid = ids.filter((id) => !UUID_RE.test(id));
+    if (invalid.length > 0) {
+      throw new HttpError(`trigger_entry_ids com valor que não é UUID: ${invalid.join(", ")}`, 400, "invalid_entry");
+    }
+    if (ids.length > 0) {
+      const { data: owned, error: ownedError } = await supabase
+        .from("crm_entries")
+        .select("id")
+        .eq("equipe_id", caller.equipeId)
+        .in("id", ids);
+      if (ownedError) throw ownedError;
+      const ownedIds = new Set((owned ?? []).map((r: { id: string }) => String(r.id).toLowerCase()));
+      const foreign = ids.filter((id) => !ownedIds.has(id));
+      if (foreign.length > 0) {
+        throw new HttpError(`Porta(s) inexistente(s) neste time: ${foreign.join(", ")}`, 400, "invalid_entry");
+      }
+    }
+    patch.trigger_entry_ids = ids;
   }
 
   const { data, error } = await supabase
@@ -482,19 +510,26 @@ async function handleOpen(
     ? body.trigger_source
     : caller.defaultTriggerSource;
 
-  // O filtro de source existe para o gatilho automático: é ele que separa
-  // "lead veio do anúncio" de "lead digitado à mão por um vendedor". Chamada
-  // explícita (n8n, botão) já é a intenção declarada e não passa pelo filtro.
-  if (triggerSource === "lead_intake" && !sourceMatches(settings.trigger_sources, lead.source)) {
-    console.log(
-      `[start-conversation] lead ${lead.id}: source "${lead.source}" fora do filtro do tenant`,
-    );
-    return json({
-      success: false,
-      skipped: true,
-      code: "source_not_triggered" satisfies OpenFailureCode,
-      lead_id: lead.id,
-    }, 200);
+  // O filtro de porta/source existe para o gatilho automático: é ele que
+  // separa "lead veio do anúncio" de "lead digitado à mão por um vendedor".
+  // Chamada explícita (n8n, botão) já é a intenção declarada e não passa pelo
+  // filtro. SE-REV-002: vale o source/porta DESTA chegada (corpo), não o
+  // leads.source do primeiro cadastro.
+  if (triggerSource === "lead_intake") {
+    const filtered = intakeFilterFailure(settings, {
+      source: body.source,
+      entryId: body.entry_id,
+      leadSource: lead.source,
+    });
+    if (filtered) {
+      console.log(`[start-conversation] lead ${lead.id}: ${filtered} (porta/source fora do filtro do tenant)`);
+      return json({
+        success: false,
+        skipped: true,
+        code: filtered satisfies OpenFailureCode,
+        lead_id: lead.id,
+      }, 200);
+    }
   }
 
   // Conta em modo somente-leitura não manda mensagem — mesma regra (e mesmo
