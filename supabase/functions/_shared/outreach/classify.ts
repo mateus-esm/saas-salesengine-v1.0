@@ -21,6 +21,7 @@ export function classifyGptMakerResult(input: {
     : String(input.error ?? "").toLowerCase();
   if (
     name.includes("abort") || name.includes("timeout") ||
+    message.includes("abort") || message.includes("timeout") ||
     message.includes("timed out")
   ) {
     return {
@@ -70,6 +71,13 @@ export function classifySoloResult(input: {
   }
 
   const error = String(input.error ?? "").toLowerCase();
+  if (error.includes("missing key.id")) {
+    return {
+      outcome: "unknown",
+      retryable: false,
+      errorCode: "solo_missing_message_id",
+    };
+  }
   if (
     error.includes("abort") || error.includes("timeout") ||
     error.includes("timed out")
