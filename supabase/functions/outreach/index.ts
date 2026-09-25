@@ -11,8 +11,13 @@ import { HttpError, resolveCaller } from "../_shared/tenant-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  // `x-client-info` é obrigatório: o supabase-js o envia em toda chamada
+  // (functions-js DEFAULT_HEADERS). Sem ele no Allow-Headers o preflight do
+  // browser falha e o fetch morre antes de sair — o usuário vê
+  // "Failed to send a request to the Edge Function". Todas as outras funções
+  // do repo já listam este header.
   "Access-Control-Allow-Headers":
-    "authorization, apikey, content-type, x-webhook-secret",
+    "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
