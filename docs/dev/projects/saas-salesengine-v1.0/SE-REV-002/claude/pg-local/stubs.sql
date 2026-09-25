@@ -33,6 +33,43 @@ begin
   return v_id;
 end $$;
 
+-- Cópia literal de 20260517182736_sprint55_epic1_phone_dedup.sql (existe em produção).
+CREATE OR REPLACE FUNCTION public.normalize_phone_br(raw text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  d text;
+BEGIN
+  IF raw IS NULL THEN
+    RETURN NULL;
+  END IF;
+  d := regexp_replace(raw, '\D', '', 'g');
+  IF d = '' THEN
+    RETURN NULL;
+  END IF;
+  -- Strip leading zeros
+  d := regexp_replace(d, '^0+', '');
+  IF length(d) < 8 THEN
+    RETURN NULL;
+  END IF;
+  -- Strip leading 55 country code only when length suggests one is present.
+  IF length(d) >= 12 AND left(d, 2) = '55' THEN
+    d := substring(d FROM 3);
+  END IF;
+  -- 10-digit DDD+8 → insert mobile-9
+  IF length(d) = 10 THEN
+    d := left(d, 2) || '9' || substring(d FROM 3);
+  END IF;
+  -- 11-digit DDD+9 mobile → prepend country code
+  IF length(d) = 11 THEN
+    RETURN '55' || d;
+  END IF;
+  RETURN d;
+END;
+$$;
+
 create or replace function public.update_updated_at_column() returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
 
