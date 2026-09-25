@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendViaSolo } from '../_shared/solo-sender.ts'
+import { openManualGptConversation } from '../_shared/manual-conversation.ts'
+import { isTechnicalPhone, normalizePhone as normalizeProviderPhone } from '../_shared/phone.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -203,6 +205,147 @@ async function getConnectedFallbackInstance(
   return data ?? null
 }
 
+type DeliveryProfile = {
+  provider: 'gptmaker' | 'solo'
+  channel_id: string | null
+  solo_instance_id: string | null
+}
+
+async function getDeliveryProfile(
+  supabase: SupabaseClient,
+  equipeId: string,
+): Promise<DeliveryProfile> {
+  const { data, error } = await supabase
+    .from('conversation_opener_settings')
+    .select('provider, channel_id, solo_instance_id')
+    .eq('equipe_id', equipeId)
+    .maybeSingle()
+  if (error) throw error
+  return {
+    provider: data?.provider === 'solo' ? 'solo' : 'gptmaker',
+    channel_id: data?.channel_id ?? null,
+    solo_instance_id: data?.solo_instance_id ?? null,
+  }
+}
+
+async function resolveManualSoloInstance(
+  supabase: SupabaseClient,
+  equipeId: string,
+  configuredId: string | null,
+): Promise<
+  | { instance: { id: string; instance_name: string } }
+  | { reason: 'solo_instance_not_found' | 'solo_instance_not_connected' | 'solo_instance_ambiguous' }
+> {
+  if (configuredId) {
+    const pinned = await getPinnedInstance(supabase, equipeId, configuredId)
+    if (!pinned) return { reason: 'solo_instance_not_found' }
+    if (pinned.status !== 'connected') return { reason: 'solo_instance_not_connected' }
+    return { instance: { id: pinned.id, instance_name: pinned.instance_name } }
+  }
+
+  const { data, error } = await supabase
+    .from('wpp_instances')
+    .select('id, instance_name')
+    .eq('equipe_id', equipeId)
+    .eq('status', 'connected')
+    .limit(2)
+  if (error) throw error
+  if (!data?.length) return { reason: 'solo_instance_not_connected' }
+  if (data.length > 1) return { reason: 'solo_instance_ambiguous' }
+  return { instance: data[0] }
+}
+
+async function recordManualOpenFailure(
+  supabase: SupabaseClient,
+  eventId: string,
+  reason: string,
+  detail?: string,
+  providerStatus?: number | null,
+  providerBody?: unknown,
+) {
+  await supabase.from('conversation_open_events').update({
+    status: 'failed',
+    error_code: reason,
+    error_message: (detail || reason).slice(0, 2000),
+    provider_status: providerStatus ?? null,
+    provider_response: providerBody ?? null,
+  }).eq('id', eventId)
+}
+
+async function persistManualGptOpening(
+  supabase: SupabaseClient,
+  input: {
+    equipeId: string
+    leadId: string
+    conversationId: string | null
+    messageId: string
+    eventId: string
+    channelId: string
+    channelType: string
+    providerChatId: string | null
+    providerStatus: number | null
+    providerBody: unknown
+  },
+): Promise<string | null> {
+  const now = new Date().toISOString()
+  let conversationId = input.conversationId
+  const patch: Record<string, unknown> = {
+    opened_at: now,
+    opened_via: 'start_conversation',
+    provider_channel_id: input.channelId,
+    last_message_at: now,
+  }
+  if (input.providerChatId) patch.gpt_maker_chat_id = input.providerChatId
+
+  if (conversationId) {
+    await supabase.from('conversations').update(patch).eq('id', conversationId)
+  } else {
+    const { data, error } = await supabase.from('conversations').insert({
+      lead_id: input.leadId,
+      equipe_id: input.equipeId,
+      channel: 'whatsapp',
+      status: 'active',
+      atendido_por_agente: false,
+      unread_count: 0,
+      ...patch,
+    }).select('id').single()
+    if (error) throw error
+    conversationId = data.id
+  }
+
+  await supabase.from('messages').update({
+    conversation_id: conversationId,
+    provider: 'gptmaker',
+  }).eq('id', input.messageId)
+  await supabase.from('conversation_open_events').update({
+    status: 'opened',
+    conversation_id: conversationId,
+    channel_id: input.channelId,
+    channel_type: input.channelType,
+    provider_chat_id: input.providerChatId,
+    provider_status: input.providerStatus,
+    provider_response: input.providerBody ?? null,
+    opened_at: now,
+    error_code: null,
+    error_message: null,
+  }).eq('id', input.eventId)
+  await supabase.from('lead_activities').insert({
+    lead_id: input.leadId,
+    tipo: 'conversation_opened',
+    descricao: 'Conversa de WhatsApp aberta manualmente pelo Rev',
+    metadata: {
+      event_id: input.eventId,
+      trigger_source: 'manual',
+      channel_id: input.channelId,
+      channel_type: input.channelType,
+      provider_chat_id: input.providerChatId,
+      conversation_id: conversationId,
+      message_id: input.messageId,
+    },
+  })
+  return conversationId
+}
+
 function markUndelivered(msg: DeliveryMessage, reason: string) {
   return { ...msg, delivered: false, reason }
 }
@@ -400,38 +543,126 @@ serve(async (req) => {
       return jsonResponse({ ...msg, delivered: true })
     }
 
-    if (connectedInstance && soloPhone) {
-      console.log('[SendMsg] route: solo (outbound)')
-      const soloResult = await sendViaSolo({
-        supabase,
+    // SE-REV-002 / D7 — sem chat, a configuração do tenant decide a linha.
+    // O ramo com chat acima permanece exatamente como antes (start-human +
+    // send-message, inclusive o fallback legado). Para um clique humano cada
+    // message_id vira uma chave de evento própria: há rastro, mas um segundo
+    // clique deliberado nunca é bloqueado pela abertura anterior.
+    const deliveryProfile = await getDeliveryProfile(supabase, equipeId)
+
+    if (deliveryProfile.provider === 'gptmaker') {
+      if (media_url || !String(content ?? '').trim()) {
+        return jsonResponse(markUndelivered(msg, 'gpt_start_requires_text'))
+      }
+      if (isTechnicalPhone(leadPhone)) {
+        return jsonResponse(markUndelivered(msg, 'technical_phone'))
+      }
+      const gptPhone = normalizeProviderPhone(leadPhone)
+      if (!gptPhone) return jsonResponse(markUndelivered(msg, 'missing_phone'))
+
+      const { data: event, error: eventError } = await supabase
+        .from('conversation_open_events')
+        .insert({
+          equipe_id: equipeId,
+          lead_id: resolvedLeadId,
+          conversation_id: resolvedConversationId,
+          event_key: `manual-message:${msg.id}`,
+          trigger_source: 'manual',
+          phone: gptPhone,
+          message: content,
+          status: 'pending',
+        })
+        .select('id')
+        .single()
+      if (eventError) throw eventError
+
+      const token = Deno.env.get('GPT_MAKER_TOKEN') ?? ''
+      if (!token) {
+        await recordManualOpenFailure(supabase, event.id, 'engine_token_missing')
+        return jsonResponse(markUndelivered(msg, 'engine_token_missing'))
+      }
+      const { data: team, error: teamError } = await supabase
+        .from('equipes')
+        .select('workspace_id, gpt_maker_agent_id')
+        .eq('id', equipeId)
+        .maybeSingle()
+      if (teamError) throw teamError
+      const workspaceId = String(team?.workspace_id ?? '').trim()
+      const agentId = String(team?.gpt_maker_agent_id ?? '').trim()
+      if (!workspaceId || !agentId) {
+        const reason = workspaceId ? 'agent_not_configured' : 'workspace_not_configured'
+        await recordManualOpenFailure(supabase, event.id, reason)
+        return jsonResponse(markUndelivered(msg, reason))
+      }
+
+      const opened = await openManualGptConversation({
+        token,
+        workspaceId,
+        agentId,
+        preferredChannelId: deliveryProfile.channel_id,
+        phone: gptPhone,
+        message: String(content),
+      })
+      if (!opened.ok || !opened.channelId) {
+        const reason = opened.errorCode ?? 'provider_rejected'
+        await recordManualOpenFailure(
+          supabase,
+          event.id,
+          reason,
+          opened.detail,
+          opened.providerStatus,
+          opened.providerBody,
+        )
+        return jsonResponse(markUndelivered(msg, reason))
+      }
+
+      await persistManualGptOpening(supabase, {
         equipeId,
-        instanceName: connectedInstance.instance_name,
-        phone: soloPhone,
-        content,
-        mediaUrl: media_url,
-        mediaType: media_type,
+        leadId: resolvedLeadId,
+        conversationId: resolvedConversationId,
+        messageId: msg.id,
+        eventId: event.id,
+        channelId: opened.channelId,
+        channelType: opened.channelType ?? 'WHATSAPP',
+        providerChatId: opened.providerChatId ?? null,
+        providerStatus: opened.providerStatus ?? null,
+        providerBody: opened.providerBody,
       })
-
-      if (!soloResult.ok) {
-        console.log('[SendMsg] route: solo (outbound) | delivered=false | reason=outbound_solo_failed')
-        return jsonResponse(markUndelivered(msg, 'outbound_solo_failed'))
-      }
-
-      if (resolvedConversationId) {
-        await supabase.from('conversations').update({
-          solo_instance_id: connectedInstance.id,
-        }).eq('id', resolvedConversationId)
-      }
-
-      await updateMessageProvider(supabase, msg, {
-        provider: 'solo',
-        provider_message_id: soloResult.providerMessageId,
-      })
+      Object.assign(msg, { provider: 'gptmaker' })
       return jsonResponse({ ...msg, delivered: true })
     }
 
-    console.log('[SendMsg] route: no_route | delivered=false | reason=no_delivery_route')
-    return jsonResponse(markUndelivered(msg, 'no_delivery_route'))
+    const soloLine = await resolveManualSoloInstance(
+      supabase,
+      equipeId,
+      deliveryProfile.solo_instance_id,
+    )
+    if ('reason' in soloLine) {
+      return jsonResponse(markUndelivered(msg, soloLine.reason))
+    }
+    if (!soloPhone) return jsonResponse(markUndelivered(msg, 'missing_phone'))
+    const manualSoloResult = await sendViaSolo({
+      supabase,
+      equipeId,
+      instanceName: soloLine.instance.instance_name,
+      phone: soloPhone,
+      content,
+      mediaUrl: media_url,
+      mediaType: media_type,
+    })
+    if (!manualSoloResult.ok) {
+      return jsonResponse(markUndelivered(msg, 'outbound_solo_failed'))
+    }
+    if (resolvedConversationId) {
+      await supabase.from('conversations').update({
+        solo_instance_id: soloLine.instance.id,
+      }).eq('id', resolvedConversationId)
+    }
+    await updateMessageProvider(supabase, msg, {
+      provider: 'solo',
+      provider_message_id: manualSoloResult.providerMessageId,
+    })
+    return jsonResponse({ ...msg, delivered: true })
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 400
     return jsonResponse(
