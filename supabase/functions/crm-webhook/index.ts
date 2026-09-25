@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
 import { resolveCustomDataKeys, type SchemaField } from "../_shared/custom-fields.ts";
 import { entryForWebhook, entryOfKind, inboundTouchPayload, recordTouch } from "../_shared/attribution.ts";
+import { dispatchConversationOpen } from "../_shared/start-conversation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -600,12 +601,30 @@ if (import.meta.main) {
         },
       });
 
+      // 7. SE-REV-001 — lead novo vindo de formulário/anúncio: abrir a conversa
+      // de WhatsApp para o agente de IA começar o atendimento.
+      //
+      // Vale tanto para lead novo quanto para lead que voltou: quem decide se
+      // abre é a idempotência (uma abertura por lead, em
+      // conversation_open_events), não a novidade do cadastro — alguém digitado
+      // à mão ontem que hoje preencheu o anúncio também merece atendimento.
+      //
+      // Não altera a resposta deste webhook e não pode derrubá-lo: tenant que
+      // não ligou o recurso paga apenas uma consulta de configuração.
+      const conversationOpen = await dispatchConversationOpen(supabase, {
+        equipeId: config.equipe_id,
+        leadId,
+        source: (leadData.source as string | undefined) ?? 'webhook_inbound',
+        logPrefix: '[crm-webhook]',
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
           lead_id: leadId,
           opportunity_id: opportunityId,
           is_new: isNewLead,
+          conversation_open_dispatched: conversationOpen.dispatched,
           message: isNewLead ? 'Lead created via inbound webhook' : 'Lead updated via inbound webhook',
         }),
         { status: isNewLead ? 201 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -773,12 +792,22 @@ if (import.meta.main) {
         },
       });
 
+      // SE-REV-001 — mesma abertura de conversa da rota /inbound, para o
+      // cadastro que entra pela rota autenticada por segredo do time.
+      const conversationOpen = await dispatchConversationOpen(supabase, {
+        equipeId: equipe.id,
+        leadId: lead.id,
+        source: payload.source || 'webhook',
+        logPrefix: '[crm-webhook]',
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
           lead_id: lead.id,
           opportunity_id: opportunityId,
           is_new: isNewLead,
+          conversation_open_dispatched: conversationOpen.dispatched,
           message: isNewLead ? 'Lead created' : 'Lead updated',
         }),
         { status: isNewLead ? 201 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

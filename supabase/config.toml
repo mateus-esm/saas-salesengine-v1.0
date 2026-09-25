@@ -145,3 +145,10 @@ verify_jwt = false
 # Sprint 8.2 discovery_q&a — o cliente tem só o link, sem login.
 [functions.public-discovery]
 verify_jwt = false
+
+# SE-REV-001 — abertura de conversa com lead novo. A função autentica sozinha,
+# nos três caminhos: service_role (gatilho interno), x-webhook-secret do time
+# (o n8n do cliente, igual ao crm-webhook) e JWT de usuário. Exigir JWT no
+# gateway derrubaria justamente o caminho do n8n, que não tem sessão.
+[functions.start-conversation]
+verify_jwt = false
