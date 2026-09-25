@@ -289,6 +289,21 @@ export async function listEngineChannels(
   }
 }
 
+/**
+ * O corpo de um 2xx do start-conversation significa "aceito"?
+ *
+ * - objeto com `success` → só `success === true` é aceite;
+ * - corpo vazio, não-JSON ou objeto sem `success` → aceite. SUPOSIÇÃO
+ *   registrada: a documentação só descreve o corpo com `success`; um 2xx sem
+ *   esse campo não tem outra leitura razoável, e o corpo cru fica no rastro.
+ */
+export function providerAccepted(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return true;
+  const obj = body as Record<string, unknown>;
+  if (!("success" in obj)) return true;
+  return obj.success === true;
+}
+
 /** POST /v2/channel/{channelId}/start-conversation */
 export async function callStartConversation(
   opts: { token: string; channelId: string; phone: string; message: string; timeoutMs?: number },
@@ -316,6 +331,19 @@ export async function callStartConversation(
         rawText,
         errorCode: "provider_rejected",
         errorMessage: `provider ${res.status}: ${rawText.slice(0, 500)}`,
+      };
+    }
+    // SE-REV-002 — a documentação do provider define a resposta 200 como
+    // `{"success": boolean}`. Um `200 {"success": false}` é recusa: tratá-lo
+    // como aberto gravava 'opened' e o lead nunca recebia nada.
+    if (!providerAccepted(body)) {
+      return {
+        ok: false,
+        status: res.status,
+        body,
+        rawText,
+        errorCode: "provider_rejected",
+        errorMessage: `provider ${res.status} com success=false: ${rawText.slice(0, 500)}`,
       };
     }
     return { ok: true, status: res.status, body, rawText };
