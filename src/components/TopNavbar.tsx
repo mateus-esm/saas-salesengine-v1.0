@@ -99,7 +99,7 @@ export function TopNavbar() {
       requiredRole: "admin",
       permissionKey: "suporte",
     },
-    { title: "Tutorial", url: "/tutorial", icon: BookOpen, external: false },
+    { title: "Central de Ajuda", url: "/docs", icon: BookOpen, external: false },
   ];
 
   // Items hidden from main nav but shown in mobile

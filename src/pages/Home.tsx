@@ -90,11 +90,11 @@ const Home = () => {
       requiredRole: "admin" as const,
     },
     {
-      title: "Tutorial",
+      title: "Central de Ajuda",
       description:
-        "Aprenda a usar a plataforma com guias passo-a-passo e vídeos.",
+        "Aprenda a usar a plataforma com guias passo-a-passo.",
       icon: BookOpen,
-      href: "/tutorial",
+      href: "/docs",
       external: false,
       requiredRole: undefined,
     },
