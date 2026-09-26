@@ -34,6 +34,12 @@ export interface ChatSession {
   unreadCount: number;
   status: ChatStatus;
   isOnline?: boolean;
+  /**
+   * SE-REV-006 — a conexão do canal é não oficial (WhatsApp Web/QR, Z-API ou
+   * Solo API), então a janela não fecha. `isOnline` já vem `true` nesse caso;
+   * a flag existe para o indicador dizer POR QUE está aberta.
+   */
+  isWindowAlwaysOpen?: boolean;
   tags: string[];
   // Fase 2: Omnichannel
   channel?: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string;

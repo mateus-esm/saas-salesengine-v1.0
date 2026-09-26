@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { SERVICE_WINDOW_MS } from "@/lib/service-window";
 import { toast } from "sonner";
 
 // Database types lag the new conversations table until `supabase gen types` reruns post-migration.
@@ -42,6 +43,11 @@ export interface Conversation {
   atendido_por_agente: boolean;
   agent_name: string | null;
   gpt_maker_chat_id: string | null;
+  /**
+   * SE-REV-006 — preenchido quando a conversa vive numa instância Solo API,
+   * que é uma conexão NÃO OFICIAL (janela sempre aberta).
+   */
+  solo_instance_id: string | null;
   last_message_at: string | null;
   unread_count: number;
   created_at: string;
@@ -49,6 +55,44 @@ export interface Conversation {
   archived_at: string | null;
   deleted_at: string | null;
   lead: ConversationLeadSlice | null;
+}
+
+/**
+ * SE-REV-006 — `conversationId → ISO da última mensagem DO CLIENTE dentro das
+ * 24 h`. É o único sinal de relógio que a janela do WhatsApp OFICIAL usa.
+ *
+ * Antes cada consumidor calculava o próprio corte com um sinal diferente: o
+ * header varria as mensagens da conversa aberta e a sidebar comparava
+ * `conversations.last_message_at` — que o envio do time também empurra (ver
+ * send-chat-message). Agora os dois leem daqui.
+ */
+export type CustomerWindowSignal = Record<string, string>;
+
+/** Busca as mensagens de cliente das últimas 24 h e reduz para a mais recente
+ *  por conversa. A RLS de `messages` já limita o resultado à equipe do usuário,
+ *  então não é preciso enumerar ids de conversa. */
+async function fetchCustomerWindowSignal(): Promise<CustomerWindowSignal> {
+  const since = new Date(Date.now() - SERVICE_WINDOW_MS).toISOString();
+  const { data, error } = await sb
+    .from("messages")
+    .select("conversation_id, created_at")
+    .eq("sender_type", "customer")
+    .gte("created_at", since)
+    .not("conversation_id", "is", null);
+  if (error) throw error;
+
+  const latest: CustomerWindowSignal = {};
+  for (const row of (data ?? []) as {
+    conversation_id: string | null;
+    created_at: string | null;
+  }[]) {
+    const id = row.conversation_id;
+    if (!id || !row.created_at) continue;
+    if (!latest[id] || Date.parse(row.created_at) > Date.parse(latest[id])) {
+      latest[id] = row.created_at;
+    }
+  }
+  return latest;
 }
 
 export const useConversations = () => {
@@ -79,6 +123,15 @@ export const useConversations = () => {
       if (error) throw error;
       return (data || []) as unknown as Conversation[];
     },
+    enabled: !!equipeId,
+  });
+
+  // A chave repete o prefixo ["conversations", equipeId] de propósito: toda
+  // invalidação que já existe (realtime de mensagens e as mutations) alcança
+  // este query por prefixo, então o sinal de janela anda junto com a lista.
+  const customerWindowQuery = useQuery({
+    queryKey: ["conversations", equipeId, "customer-window-signal"],
+    queryFn: fetchCustomerWindowSignal,
     enabled: !!equipeId,
   });
 
@@ -291,6 +344,12 @@ export const useConversations = () => {
 
   return {
     conversations: conversationsQuery.data || [],
+    /**
+     * SE-REV-006 — sinal de janela por conversa. Vazio enquanto carrega ou se a
+     * leitura falhar: conversa oficial aparece fechada, nunca aberta por
+     * engano.
+     */
+    lastCustomerMessageAtByConversation: customerWindowQuery.data || {},
     isLoading: conversationsQuery.isLoading,
     refetch: conversationsQuery.refetch,
     updateStatus,
