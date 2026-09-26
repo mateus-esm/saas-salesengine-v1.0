@@ -143,7 +143,9 @@ export function ConversationHeader({
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                   </span>
-                  Online (24h)
+                  {/* SE-REV-006: conexão não oficial não tem janela para
+                      fechar — dizer "24h" ali seria mentira sobre o motivo. */}
+                  {session.isWindowAlwaysOpen ? "Sempre aberta" : "Online (24h)"}
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-amber-50 text-amber-700 ring-1 ring-amber-300/50 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20">

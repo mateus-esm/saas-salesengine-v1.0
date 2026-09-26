@@ -27,6 +27,7 @@ import { Lead } from "@/types/crm";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
+import { resolveServiceWindow } from "@/lib/service-window";
 
 const Chat = () => {
   const { user, profile } = useAuth();
@@ -41,6 +42,7 @@ const Chat = () => {
   // Epic 1: Conversations layer is the source of truth for the inbox list.
   const {
     conversations,
+    lastCustomerMessageAtByConversation,
     isLoading: loadingConversations,
     updateStatus,
   } = useConversations();
@@ -202,14 +204,16 @@ const Chat = () => {
 
     const stageName = stages.find(s => s.id === lead?.stage_id)?.name || "Novo Lead";
 
-    // EPIC 3: Calculate 24h SLA based on the last message sent by the customer
-    const lastCustomerMsg = [...messages].reverse().find(m => m.sender_type === 'customer');
-    const lastCustomerMsgTime = lastCustomerMsg ? new Date(lastCustomerMsg.created_at || 0) : null;
-    
-    // Check if the elapsed time since the last customer message is <= 24 hours (86_400_000 ms)
-    const isOnline24h = lastCustomerMsgTime
-      ? (Date.now() - lastCustomerMsgTime.getTime()) <= 86_400_000
-      : false;
+    // SE-REV-006: a janela vem do tipo de conexão. Conexão não oficial
+    // (WhatsApp Web/QR, Z-API ou Solo API) nunca fecha; CLOUD_API mantém as 24 h
+    // contadas da última mensagem do cliente. A conta mora em um lugar só —
+    // `src/lib/service-window.ts`.
+    const serviceWindow = resolveServiceWindow({
+      conversationSoloInstanceId: selectedConversation.solo_instance_id,
+      hasConnectedSoloInstance: hasSoloInstance,
+      lastCustomerMessageAt:
+        lastCustomerMessageAtByConversation[selectedConversation.id] ?? null,
+    });
 
     return {
       id: selectedConversation.id,
@@ -224,7 +228,8 @@ const Chat = () => {
       customerPhone: lead?.phone || lead?.origem || "WhatsApp",
       customerAvatar: lead?.profile_picture || undefined,
       status: selectedConversation.atendido_por_agente ? 'human_handling' : 'bot_handling',
-      isOnline: isOnline24h,
+      isOnline: serviceWindow.open,
+      isWindowAlwaysOpen: serviceWindow.alwaysOpen,
       unreadCount: selectedConversation.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(selectedConversation.last_message_at || selectedConversation.created_at || new Date()),
@@ -243,13 +248,27 @@ const Chat = () => {
       },
       messages: [],
     };
-  }, [selectedConversation, selectedLead, stages, messages]);
+  }, [
+    selectedConversation,
+    selectedLead,
+    stages,
+    hasSoloInstance,
+    lastCustomerMessageAtByConversation,
+  ]);
 
   /** Map Conversations → sidebar ExtendedChatSession list. */
   const sessionsAdapter = useMemo(() => {
     return conversations.map(c => {
       const lead = leads?.find(l => l.id === c.lead_id);
       const leadSlice = c.lead;
+      // SE-REV-006: mesma decisão do header, mesmo sinal. Antes esta ponta
+      // comparava `last_message_at` (que o envio do time também atualiza) e
+      // ignorava o canal — os dois indicadores discordavam entre si.
+      const serviceWindow = resolveServiceWindow({
+        conversationSoloInstanceId: c.solo_instance_id,
+        hasConnectedSoloInstance: hasSoloInstance,
+        lastCustomerMessageAt: lastCustomerMessageAtByConversation[c.id] ?? null,
+      });
       return {
         id: c.id,
         conversationId: c.id,
@@ -268,9 +287,8 @@ const Chat = () => {
         unreadCount: c.unread_count || 0,
         leadType: (lead?.lead_type || leadSlice?.lead_type || null) as 'lead' | 'contact' | 'spam' | null,
         responsibleId: c.responsible_id,
-        isOnline: c.last_message_at
-          ? (Date.now() - new Date(c.last_message_at).getTime()) < 86_400_000
-          : false,
+        isOnline: serviceWindow.open,
+        isWindowAlwaysOpen: serviceWindow.alwaysOpen,
         channel: c.channel || 'whatsapp',
         agentName: c.agent_name || undefined,
         crmData: {
@@ -284,7 +302,7 @@ const Chat = () => {
         messages: [],
       };
     });
-  }, [conversations, leads]);
+  }, [conversations, leads, hasSoloInstance, lastCustomerMessageAtByConversation]);
 
   const handleSendMessage = async (content: string, media?: { url: string; type: string }) => {
     if (!selectedConversationId || !selectedConversation) return;
