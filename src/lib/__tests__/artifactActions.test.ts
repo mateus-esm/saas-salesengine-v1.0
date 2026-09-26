@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { actionDraftError, actionsFrom, isRunWaiting, runStatusText, type ArtifactRun } from "../artifactActions";
+import { actionDraftError, actionsFrom, isActionBusy, isRunWaiting, runStatusText, type ArtifactRun } from "../artifactActions";
 
 const now = new Date("2026-09-12T12:00:00Z");
 const run = (extra: Partial<ArtifactRun> = {}): ArtifactRun => ({
@@ -49,5 +49,26 @@ describe("a run on screen", () => {
     expect(runStatusText(run({ result: { last_error: "invalid_artifact_status" } }), now)).toBe(
       "Aguardando retorno (último erro: invalid_artifact_status)",
     );
+  });
+});
+
+describe("isActionBusy (SE-DOCPIPE-001: no double click)", () => {
+  const mine = (extra: Partial<ArtifactRun> = {}) => run({ action_id: "gerar", ...extra });
+
+  it("holds the button while the last click waits for its first answer", () => {
+    expect(isActionBusy("gerar", [mine()], now)).toBe(true);
+    expect(isActionBusy("enviar", [mine()], now)).toBe(false);
+  });
+
+  it("frees it after an answer, a finish, the window, or the expiry", () => {
+    expect(isActionBusy("gerar", [mine({ result: { responses: [{ artifact_status: "sent" }] } })], now)).toBe(false);
+    expect(isActionBusy("gerar", [mine({ status: "completed" })], now)).toBe(false);
+    expect(isActionBusy("gerar", [mine({ status: "failed" })], now)).toBe(false);
+    expect(isActionBusy("gerar", [mine({ created_at: "2026-09-12T11:40:00Z" })], now)).toBe(false);
+    expect(isActionBusy("gerar", [mine({ expires_at: "2026-09-12T11:59:30Z" })], now)).toBe(false);
+  });
+
+  it("a row without action_id (read before) never holds a button", () => {
+    expect(isActionBusy("gerar", [run()], now)).toBe(false);
   });
 });

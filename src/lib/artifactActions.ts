@@ -20,6 +20,8 @@ export type ArtifactRunStatus = "queued" | "claimed" | "completed" | "failed";
 
 export interface ArtifactRun {
   id: string;
+  /** Absent in rows read before SE-DOCPIPE-001. */
+  action_id?: string;
   action_label: string;
   status: ArtifactRunStatus;
   created_at: string;
@@ -50,6 +52,23 @@ export function actionsFrom(raw: unknown): ArtifactAction[] {
 /** Waiting for the automation: queued (or being applied) and the token still valid. */
 export function isRunWaiting(run: ArtifactRun, now: Date = new Date()): boolean {
   return (run.status === "queued" || run.status === "claimed") && new Date(run.expires_at) > now;
+}
+
+/** How long a click holds its button while nothing came back. */
+export const BUSY_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * SE-DOCPIPE-001 — the button is busy while its last click waits for the FIRST
+ * answer (a second click would generate a second proposal / a second envelope).
+ * After an answer (contract sent, waiting for the signature) or after the
+ * window, the button is free again.
+ */
+export function isActionBusy(actionId: string, runs: ArtifactRun[], now: Date = new Date()): boolean {
+  return runs.some((r) => {
+    if (r.action_id !== actionId || !isRunWaiting(r, now)) return false;
+    const answered = Array.isArray(r.result?.responses) && (r.result?.responses as unknown[]).length > 0;
+    return !answered && now.getTime() - new Date(r.created_at).getTime() < BUSY_WINDOW_MS;
+  });
 }
 
 /** How a run reads: "Aguardando retorno", "Concluído", "Falhou: …", "Expirou". */

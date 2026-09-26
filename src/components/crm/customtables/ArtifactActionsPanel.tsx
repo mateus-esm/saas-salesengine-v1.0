@@ -4,7 +4,7 @@ import { Loader2, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useArtifactRuns, useRunArtifactAction } from "@/hooks/useArtifactActions";
-import { isRunWaiting, runStatusText, type ArtifactAction } from "@/lib/artifactActions";
+import { isActionBusy, isRunWaiting, runStatusText, type ArtifactAction } from "@/lib/artifactActions";
 import { cn } from "@/lib/utils";
 
 interface ArtifactActionsPanelProps {
@@ -25,6 +25,10 @@ const ago = (iso: string) => {
  * Sprint 11 · Onda 4 · T44 — in the record's drawer: the table's automation
  * buttons and what happened to the last clicks (waiting, done, failed). When the
  * automation answers, the record is read again.
+ *
+ * SE-DOCPIPE-001: a button waiting for the first answer of its last click
+ * spins and stays disabled — a second click would make a second proposal (or a
+ * second Clicksign envelope).
  */
 export function ArtifactActionsPanel({ recordId, tableId, actions }: ArtifactActionsPanelProps) {
   const run = useRunArtifactAction();
@@ -36,24 +40,28 @@ export function ArtifactActionsPanel({ recordId, tableId, actions }: ArtifactAct
     <div className="space-y-2 border-t border-border pt-4">
       <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Automações</p>
       <div className="flex flex-wrap gap-2">
-        {actions.map((a) => (
-          <Button
-            key={a.id}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => run.mutate({ recordId, actionId: a.id, label: a.label })}
-            disabled={run.isPending}
-          >
-            {run.isPending && run.variables?.actionId === a.id ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Zap className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            {a.label}
-          </Button>
-        ))}
+        {actions.map((a) => {
+          const busy = isActionBusy(a.id, runs.data ?? []);
+          return (
+            <Button
+              key={a.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => run.mutate({ recordId, actionId: a.id, label: a.label })}
+              disabled={run.isPending || busy}
+              title={busy ? "Aguardando o retorno da automação" : undefined}
+            >
+              {busy || (run.isPending && run.variables?.actionId === a.id) ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Zap className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {a.label}
+            </Button>
+          );
+        })}
       </div>
       {(runs.data ?? []).length > 0 && (
         <ul className="space-y-1">

@@ -7,7 +7,9 @@ import {
   httpStatusFor,
   isSafeDownloadUrl,
   parseCallbackBody,
+  downloadArtifactFile,
   resolveFileField,
+  storeArtifactFiles,
   type CallbackClaim,
 } from "./artifact-callback.ts";
 
@@ -46,6 +48,7 @@ Deno.test("parseCallbackBody lê o corpo completo do contrato v1", () => {
       files: [{ url: "https://docs.test/p.pdf", name: "Proposta.pdf", field: "pdf" }],
       error: null,
       keepOpen: false,
+      eventId: null,
     },
   });
 });
@@ -60,7 +63,7 @@ Deno.test("parseCallbackBody: keep_open só quando é true de verdade", () => {
 Deno.test("parseCallbackBody aceita só o token (o resto é opcional)", () => {
   assertEquals(parseCallbackBody({ token: TOKEN }), {
     ok: true,
-    body: { token: TOKEN, status: null, fields: {}, files: [], error: null, keepOpen: false },
+    body: { token: TOKEN, status: null, fields: {}, files: [], error: null, keepOpen: false, eventId: null },
   });
 });
 
@@ -139,4 +142,85 @@ Deno.test("httpStatusFor/errorCode traduzem o erro do banco", () => {
   assertEquals(httpStatusFor("boom"), 500);
   assertEquals(errorCode("P0002: token_invalid"), "token_invalid");
   assertEquals(errorCode("boom"), "internal_error");
+});
+
+// ---- SE-DOCPIPE-001 ---------------------------------------------------------
+
+Deno.test("parseCallbackBody: event_id (texto ou número) é a idempotência do keep_open", () => {
+  const a = parseCallbackBody({ token: TOKEN, status: "signed", event_id: " clicksign:evt-9 " });
+  assertEquals(a.ok && a.body.eventId, "clicksign:evt-9");
+  const b = parseCallbackBody({ token: TOKEN, event_id: 8231 });
+  assertEquals(b.ok && b.body.eventId, "8231");
+  const c = parseCallbackBody({ token: TOKEN, event_id: "" });
+  assertEquals(c.ok && c.body.eventId, null);
+  assertEquals(parseCallbackBody({ token: TOKEN, event_id: { id: 1 } }), { ok: false, error: "event_id_invalid" });
+  assertEquals(parseCallbackBody({ token: TOKEN, event_id: "x".repeat(201) }), { ok: false, error: "event_id_invalid" });
+});
+
+const fakeFetch = (routes: Record<string, () => Response>): typeof fetch =>
+  ((input: string | URL | Request) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const route = routes[url];
+    return Promise.resolve(route ? route() : new Response("nope", { status: 404 }));
+  }) as typeof fetch;
+
+Deno.test("downloadArtifactFile: segue redirecionamento, mas cada salto é conferido", async () => {
+  const ok = await downloadArtifactFile(
+    "https://api.apitemplate.io/p.pdf",
+    fakeFetch({
+      "https://api.apitemplate.io/p.pdf": () =>
+        new Response(null, { status: 302, headers: { location: "https://cdn.apitemplate.io/p.pdf" } }),
+      "https://cdn.apitemplate.io/p.pdf": () =>
+        new Response(new Uint8Array([37, 80, 68, 70]), { headers: { "content-type": "application/pdf" } }),
+    }),
+  );
+  assertEquals([ok.bytes.byteLength, ok.type], [4, "application/pdf"]);
+
+  let err = "";
+  try {
+    await downloadArtifactFile(
+      "https://files.test/p.pdf",
+      fakeFetch({
+        "https://files.test/p.pdf": () => new Response(null, { status: 302, headers: { location: "https://127.0.0.1/x" } }),
+      }),
+    );
+  } catch (e) {
+    err = (e as Error).message;
+  }
+  assertEquals(err, "unsafe_file_url");
+});
+
+Deno.test("storeArtifactFiles: falha no meio desfaz o que subiu", async () => {
+  const uploaded: string[] = [];
+  const removed: string[] = [];
+  const db = {
+    storage: {
+      from: () => ({
+        upload: (path: string) => {
+          uploaded.push(path);
+          return Promise.resolve({ error: null });
+        },
+        remove: (paths: string[]) => {
+          removed.push(...paths);
+          return Promise.resolve({ error: null });
+        },
+      }),
+    },
+  };
+  let err = "";
+  try {
+    // O primeiro sobe; o segundo aponta para a rede interna e é recusado.
+    await storeArtifactFiles(
+      db,
+      [{ url: "https://docs.test/p.pdf", field: "pdf" }, { url: "https://10.0.0.1/x.pdf" }],
+      claim,
+      fakeFetch({ "https://docs.test/p.pdf": () => new Response("pdf", { headers: { "content-type": "application/pdf" } }) }),
+    );
+  } catch (e) {
+    err = (e as Error).message;
+  }
+  assertEquals(err, "unsafe_file_url");
+  assertEquals(uploaded.length, 1);
+  assertEquals(uploaded[0].startsWith("eq/tab/rec/"), true);
+  assertEquals(removed, uploaded);
 });

@@ -82,7 +82,7 @@ export function useArtifactRuns(recordId: string | null, tableId: string | null,
     queryFn: async (): Promise<ArtifactRun[]> => {
       const { data, error } = await sb
         .from("artifact_action_runs")
-        .select("id, action_label, status, created_at, finished_at, expires_at, result")
+        .select("id, action_id, action_label, status, created_at, finished_at, expires_at, result")
         .eq("record_id", recordId)
         .order("created_at", { ascending: false })
         .limit(5);

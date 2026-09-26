@@ -27,6 +27,11 @@ export interface CallbackBody {
   error: string | null;
   /** More answers will come (contract sent now, signed later): the token stays valid. */
   keepOpen: boolean;
+  /**
+   * SE-DOCPIPE-001 — the id of the event being answered (the Clicksign event,
+   * the n8n execution). The same id twice in one run is applied once.
+   */
+  eventId: string | null;
 }
 
 /** What `_crm_artifact_callback_claim` returns. */
@@ -70,11 +75,21 @@ export function parseCallbackBody(raw: unknown): Parsed {
 
   const error = typeof raw.error === "string" && raw.error.trim() ? raw.error.trim() : null;
   const keepOpen = raw.keep_open === true;
-  return { ok: true, body: { token, status: status as string | null, fields, files, error, keepOpen } };
+  const eventId = parseEventId(raw.event_id);
+  if (eventId === false) return { ok: false, error: "event_id_invalid" };
+  return { ok: true, body: { token, status: status as string | null, fields, files, error, keepOpen, eventId } };
+}
+
+/** An event id: text (or a number, as n8n sends ids), up to 200 characters. `false` = unusable. */
+export function parseEventId(raw: unknown): string | null | false {
+  if (raw === undefined || raw === null) return null;
+  const text = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : typeof raw === "string" ? raw.trim() : null;
+  if (text === null || text.length > 200) return false;
+  return text || null;
 }
 
 /** The file column a file goes to: the one named, or the table's first. */
-export function resolveFileField(file: CallbackFile, claim: CallbackClaim): string | null {
+export function resolveFileField(file: CallbackFile, claim: Pick<CallbackClaim, "file_columns">): string | null {
   if (file.field) return claim.file_columns.find((c) => c.key === file.field)?.field_id ?? null;
   return claim.file_columns[0]?.field_id ?? null;
 }
@@ -84,7 +99,10 @@ export function resolveFileField(file: CallbackFile, claim: CallbackClaim): stri
  * the record does not write (lookups, relations, unknown keys) are not an
  * error: the database ignores them and says so in the answer.
  */
-export function checkAgainstClaim(body: CallbackBody, claim: CallbackClaim): string | null {
+export function checkAgainstClaim(
+  body: Pick<CallbackBody, "status" | "files" | "error">,
+  claim: Pick<CallbackClaim, "statuses" | "file_columns">,
+): string | null {
   if (body.error) return null;
   if (body.status !== null && !claim.statuses.includes(body.status)) return "invalid_artifact_status";
   for (const f of body.files) {
@@ -150,6 +168,83 @@ export function fileNameFrom(url: string, contentDisposition: string | null, con
   const type = (contentType ?? "").split(";")[0].trim().toLowerCase();
   if (!/\.[a-z0-9]{1,8}$/i.test(name) && EXT_BY_TYPE[type]) name = `${name}.${EXT_BY_TYPE[type]}`;
   return name;
+}
+
+// ---- download and store (the callback and artifact-inbound) -----------------
+
+export interface UploadedFile {
+  field_id: string;
+  path: string;
+  name: string;
+  size: number;
+  type: string | null;
+}
+
+/** Where the files of one answer go. */
+export type FileTarget = Pick<CallbackClaim, "equipe_id" | "table_id" | "record_id" | "file_columns">;
+
+// Redirects are followed by hand (file hosts hand out signed links), each hop
+// checked like the first: a redirect must not lead into a private network.
+export async function downloadArtifactFile(
+  url: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ bytes: Uint8Array; type: string | null; disposition: string | null }> {
+  let current = url;
+  let res: Response | null = null;
+  for (let hop = 0; hop <= 3; hop++) {
+    if (!isSafeDownloadUrl(current)) throw new Error("unsafe_file_url");
+    res = await fetchFn(current, { redirect: "manual", signal: AbortSignal.timeout(30000) });
+    const location = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && location) {
+      await res.body?.cancel();
+      current = new URL(location, current).toString();
+      res = null;
+      continue;
+    }
+    break;
+  }
+  if (!res) throw new Error("too_many_redirects");
+  if (!res.ok) throw new Error(`download_failed:${res.status}`);
+  const declared = Number(res.headers.get("content-length") ?? "0");
+  if (declared > ARTIFACT_MAX_BYTES) throw new Error("file_too_large");
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength > ARTIFACT_MAX_BYTES) throw new Error("file_too_large");
+  return { bytes, type: res.headers.get("content-type"), disposition: res.headers.get("content-disposition") };
+}
+
+/**
+ * Download each file into the private bucket. On any failure what already went
+ * up comes down, and the error is thrown (the caller releases its claim).
+ */
+export async function storeArtifactFiles(
+  // deno-lint-ignore no-explicit-any
+  db: any,
+  files: CallbackFile[],
+  target: FileTarget,
+  fetchFn: typeof fetch = fetch,
+): Promise<UploadedFile[]> {
+  const uploaded: UploadedFile[] = [];
+  try {
+    for (const file of files) {
+      const fieldId = resolveFileField(file, target)!;
+      const { bytes, type, disposition } = await downloadArtifactFile(file.url, fetchFn);
+      const name = fileNameFrom(file.url, disposition, type, file.name);
+      const path = artifactFilePath(target.equipe_id, target.table_id, target.record_id, name);
+      const contentType = type?.split(";")[0].trim() || undefined;
+      const { error } = await db.storage.from(ARTIFACT_BUCKET).upload(path, bytes, { contentType, upsert: false });
+      if (error) throw new Error(`upload_failed:${error.message}`);
+      uploaded.push({ field_id: fieldId, path, name, size: bytes.byteLength, type: contentType ?? null });
+    }
+    return uploaded;
+  } catch (e) {
+    await removeArtifactFiles(db, uploaded);
+    throw e;
+  }
+}
+
+// deno-lint-ignore no-explicit-any
+export async function removeArtifactFiles(db: any, uploaded: UploadedFile[]): Promise<void> {
+  if (uploaded.length) await db.storage.from(ARTIFACT_BUCKET).remove(uploaded.map((u) => u.path));
 }
 
 // ---- the storage path (twin of src/lib/artifactFiles.ts) --------------------
