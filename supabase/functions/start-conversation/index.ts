@@ -51,6 +51,15 @@ import {
   providerPhone,
   renderFirstMessage,
 } from "../_shared/start-conversation.ts";
+import {
+  checkLeadInService,
+  IN_SERVICE_WINDOW_HOURS,
+} from "../_shared/outreach/in-service.ts";
+import { templateError } from "../_shared/outreach/template.ts";
+import {
+  ineligibleEntryIds,
+  loadTeamEntries,
+} from "../_shared/outreach/entries.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -416,6 +425,15 @@ async function handleUpdateSettings(
     const value = typeof body.first_message === "string"
       ? body.first_message
       : "";
+    // SE-REV-005 — variável inexistente virava "" em silêncio no WhatsApp.
+    const invalid = templateError(value);
+    if (invalid) {
+      throw new HttpError(
+        `Mensagem inicial com ${invalid}`,
+        400,
+        "invalid_template",
+      );
+    }
     patch.first_message = value.trim() || null;
   }
   if ("trigger_sources" in body) {
@@ -458,6 +476,20 @@ async function handleUpdateSettings(
       if (foreign.length > 0) {
         throw new HttpError(
           `Porta(s) inexistente(s) neste time: ${foreign.join(", ")}`,
+          400,
+          "invalid_entry",
+        );
+      }
+      // SE-REV-005 — só porta que recebe lead de verdade: ativa e, se
+      // webhook, com o webhook ainda existente e ativo. Salvar desligado
+      // continua permitido (não trava quem só quer desligar).
+      const { entries } = body.enabled === false
+        ? { entries: null }
+        : await loadTeamEntries(supabase, caller.equipeId);
+      const unusable = entries ? ineligibleEntryIds(ids, entries) : [];
+      if (unusable.length > 0) {
+        throw new HttpError(
+          `Porta(s) inativa(s) ou com webhook apagado: ${unusable.join(", ")}`,
           400,
           "invalid_entry",
         );
@@ -580,6 +612,34 @@ async function handleOpen(
   }
 
   const eventId = claim.event.id;
+
+  // SE-REV-005 — lead que já está conversando (mandou mensagem nas últimas
+  // 24 h) não recebe a mensagem de abertura: o agente já está atendendo. Fica
+  // 'skipped' no ledger — status que claimEvent() reassume —, então um
+  // cadastro futuro, fora da janela, ainda abre. `force` é a exceção explícita.
+  if (body.force !== true) {
+    const service = await checkLeadInService(supabase, lead.id);
+    if (service.inService) {
+      const code: OpenFailureCode = service.error
+        ? "in_service_check_failed"
+        : "already_in_service";
+      await recordFailure(supabase, eventId, {
+        code,
+        status: "skipped",
+        message: service.error
+          ? `Não deu para confirmar se o lead ${lead.id} já está em atendimento (${service.error}); abertura não enviada.`
+          : `Lead ${lead.id} já está em atendimento: última mensagem dele em ${service.lastCustomerMessageAt} (janela de ${IN_SERVICE_WINDOW_HOURS} h). Abertura não enviada.`,
+      });
+      return json({
+        success: false,
+        skipped: true,
+        code,
+        event_id: eventId,
+        lead_id: lead.id,
+        last_customer_message_at: service.lastCustomerMessageAt,
+      }, 200);
+    }
+  }
 
   // SE-LID-001: um id técnico da Meta ("...@lid") parece número e não é. Não dá
   // para abrir conversa com ele, e tentar mandaria a mensagem para o vazio.

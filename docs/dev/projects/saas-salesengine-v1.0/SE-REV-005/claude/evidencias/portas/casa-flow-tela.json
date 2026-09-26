@@ -1,0 +1,10 @@
+{
+ "opcoes_do_select": [
+  "Selecione uma porta",
+  "Manual (Manual)",
+  "Meta ADS - Cadastro (Webhook)"
+ ],
+ "texto_mensagem_abertura": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?",
+ "aviso_ocultas": "Fora da lista por não receberem lead: Landing Page - Lead Land (webhook apagado); Meta ADS - Cadastro (webhook apagado).",
+ "chamadas_bloqueadas": []
+}

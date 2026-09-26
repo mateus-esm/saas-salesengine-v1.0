@@ -6,7 +6,7 @@
 // tela abre a regra salva e que salvar a EDITA (manda o id).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +30,9 @@ const PROFILE = {
   timezone: "America/Sao_Paulo",
   max_sends_per_line_hour: 30,
   opt_out_keywords: ["sair"],
+  enabled: true,
+  first_message: "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}.",
+  trigger_entry_ids: ["5a0349b1-efd4-4d17-b9ab-4f8502ff8574"],
 };
 const SEQUENCE = {
   id: "5396de90-d294-4e4f-a7b0-40ff41dff8b7",
@@ -46,7 +49,14 @@ const SEQUENCE = {
 function listResponse(sequences: unknown[]) {
   return {
     sequences,
-    entries: [{ id: "7e6576a0-696f-40a9-841c-d64721979181", name: "Manual", kind: "manual" }],
+    entries: [
+      { id: "7e6576a0-696f-40a9-841c-d64721979181", name: "Manual", kind: "manual", label: "Manual (Manual)" },
+      { id: "5a0349b1-efd4-4d17-b9ab-4f8502ff8574", name: "Meta ADS - Cadastro", kind: "webhook", label: "Meta ADS - Cadastro (Webhook)" },
+    ],
+    hidden_entries: [
+      { id: "dcf93cfc-fe10-4570-804b-5e542ebde515", name: "Meta ADS - Cadastro", kind: "webhook", reason: "webhook_deleted" },
+    ],
+    tenant_name: "Casa Flow",
     solo_instances: [],
     gpt_channels: [],
     gpt_channels_error: null,
@@ -55,7 +65,11 @@ function listResponse(sequences: unknown[]) {
 }
 
 function mockBackend(sequences: unknown[]) {
-  mocks.invoke.mockImplementation((_fn: string, { body }: { body: Record<string, unknown> }) => {
+  mocks.invoke.mockImplementation((fn: string, { body }: { body: Record<string, unknown> }) => {
+    if (fn === "start-conversation") return Promise.resolve({ data: { settings: body }, error: null });
+    if (body.action === "delete-sequence") {
+      return Promise.resolve({ data: { deleted: true, name: SEQUENCE.name }, error: null });
+    }
     if (body.action === "list-sequences") return Promise.resolve({ data: listResponse(sequences), error: null });
     if (body.action === "upsert-sequence") {
       const sent = body.sequence as Record<string, unknown>;
@@ -68,10 +82,21 @@ function mockBackend(sequences: unknown[]) {
   });
 }
 
-const upserts = () =>
+const calls = (action: string, fn = "outreach") =>
   mocks.invoke.mock.calls
+    .filter(([name]) => name === fn)
     .map(([, { body }]) => body)
-    .filter((body: Record<string, unknown>) => body.action === "upsert-sequence");
+    .filter((body: Record<string, unknown>) => body.action === action);
+const upserts = () => calls("upsert-sequence");
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <OutreachSettings />
+    </QueryClientProvider>,
+  );
+}
 
 describe("OutreachSettings", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -111,5 +136,72 @@ describe("OutreachSettings", () => {
     );
     expect(await screen.findByRole("button", { name: "Criar sequência" })).toBeTruthy();
     expect(screen.getByText(/Salvar cria uma sequência nova/)).toBeTruthy();
+  });
+
+  // ── SE-REV-005 ──────────────────────────────────────────────────────────
+
+  it("mostra a mensagem de abertura salva, com preview, e grava a edição", async () => {
+    mockBackend([SEQUENCE]);
+    renderPage();
+    const field = (await screen.findByDisplayValue(PROFILE.first_message)) as HTMLTextAreaElement;
+    expect(screen.getByTestId("opener-message-preview").textContent).toContain("Oi Maria! Aqui é da Casa Flow.");
+
+    fireEvent.change(field, { target: { value: "Olá {{lead.name}}, tudo bem?" } });
+    expect(screen.getByTestId("opener-message-preview").textContent).toContain("Olá Maria Souza, tudo bem?");
+    fireEvent.click(screen.getByRole("button", { name: "Salvar mensagem de abertura" }));
+
+    await waitFor(() => expect(calls("update-settings", "start-conversation")).toHaveLength(1));
+    expect(calls("update-settings", "start-conversation")[0]).toEqual({
+      action: "update-settings",
+      enabled: true,
+      first_message: "Olá {{lead.name}}, tudo bem?",
+      trigger_entry_ids: ["5a0349b1-efd4-4d17-b9ab-4f8502ff8574"],
+    });
+    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith("Mensagem de abertura salva."));
+  });
+
+  it("variável inexistente é apontada e bloqueia o salvar (abertura e passo)", async () => {
+    mockBackend([SEQUENCE]);
+    renderPage();
+    const opener = await screen.findByDisplayValue(PROFILE.first_message);
+    fireEvent.change(opener, { target: { value: "Oi {{lead.nome}}" } });
+    expect(screen.getAllByRole("alert")[0].textContent).toContain("{{lead.nome}} não existe");
+    expect((screen.getByRole("button", { name: "Salvar mensagem de abertura" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByDisplayValue("Oi"), { target: { value: "Oi {lead.name}" } });
+    expect((screen.getByRole("button", { name: "Salvar alterações" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(calls("update-settings", "start-conversation")).toHaveLength(0);
+  });
+
+  it("as variáveis aparecem nos dois lugares e clicar insere no texto", async () => {
+    mockBackend([SEQUENCE]);
+    renderPage();
+    const openerVars = await screen.findByTestId("opener-message-variables");
+    const stepVars = screen.getByTestId("step-0-message-variables");
+    for (const key of ["lead.name", "lead.first_name", "lead.source", "tenant.name"]) {
+      expect(openerVars.textContent).toContain(`{{${key}}}`);
+      expect(stepVars.textContent).toContain(`{{${key}}}`);
+    }
+    fireEvent.click(within(stepVars).getByRole("button", { name: "{{lead.source}}" }));
+    expect(screen.getByDisplayValue("Oi{{lead.source}}")).toBeTruthy();
+  });
+
+  it("portas: rótulo desambiguado, órfã fora da lista e explicada", async () => {
+    mockBackend([SEQUENCE]);
+    renderPage();
+    const card = await screen.findByTestId("opener-card");
+    expect(within(card).getByText("Meta ADS - Cadastro (Webhook)")).toBeTruthy();
+    expect(within(card).getByTestId("hidden-entries").textContent).toContain("Meta ADS - Cadastro (webhook apagado)");
+  });
+
+  it("apagar sequência pede confirmação e manda o id", async () => {
+    mockBackend([{ ...SEQUENCE, enrollment_counts: { active: 2, completed: 5 } }]);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Apagar" }));
+    expect(await screen.findByText(/2 lead\(s\) ainda têm mensagens/)).toBeTruthy();
+    expect(calls("delete-sequence")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Apagar sequência" }));
+    await waitFor(() => expect(calls("delete-sequence")).toEqual([{ action: "delete-sequence", sequence_id: SEQUENCE.id }]));
+    await waitFor(() => expect(mocks.toast.success).toHaveBeenCalledWith(`Sequência "${SEQUENCE.name}" apagada.`));
   });
 });

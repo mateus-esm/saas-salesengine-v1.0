@@ -6,6 +6,13 @@ import {
   validateProfileInput,
   validateSteps,
 } from "../_shared/outreach/api-validation.ts";
+import {
+  classifyEntries,
+  ENTRY_SELECT,
+  type EntryRow,
+  ineligibleEntryIds,
+  loadTeamEntries,
+} from "../_shared/outreach/entries.ts";
 import { listEngineChannels } from "../_shared/outreach/gptmaker.ts";
 import { HttpError, resolveCaller } from "../_shared/tenant-auth.ts";
 
@@ -125,13 +132,12 @@ serve(async (req) => {
           "equipe_id",
           caller.equipeId,
         ),
-        supabase.from("crm_entries").select("id, name, kind, active").eq(
+        // SE-REV-005 — todas as portas do time; classifyEntries() decide quais
+        // aparecem (ativa, tipo que abre conversa, webhook ainda existente).
+        supabase.from("crm_entries").select(ENTRY_SELECT).eq(
           "equipe_id",
           caller.equipeId,
-        )
-          .in("kind", ["webhook", "import", "manual"]).eq("active", true).order(
-            "name",
-          ),
+        ).order("name"),
         supabase.from("wpp_instances").select(
           "id, instance_name, display_name, status",
         )
@@ -140,7 +146,9 @@ serve(async (req) => {
           "equipe_id",
           caller.equipeId,
         ).maybeSingle(),
-        supabase.from("equipes").select("workspace_id, gpt_maker_agent_id").eq(
+        supabase.from("equipes").select(
+          "nome, workspace_id, gpt_maker_agent_id",
+        ).eq(
           "id",
           caller.equipeId,
         ).single(),
@@ -164,6 +172,10 @@ serve(async (req) => {
         counts[enrollment.sequence_id][enrollment.status] =
           (counts[enrollment.sequence_id][enrollment.status] ?? 0) + 1;
       }
+      const { entries, hidden } = classifyEntries(
+        (entriesResult.data ?? []) as EntryRow[],
+        caller.equipeId,
+      );
       const token = Deno.env.get("GPT_MAKER_TOKEN") ?? "";
       const workspaceId = text(teamResult.data?.workspace_id);
       const agentId = text(teamResult.data?.gpt_maker_agent_id);
@@ -188,8 +200,13 @@ serve(async (req) => {
           ),
           enrollment_counts: counts[sequence.id] ?? {},
         })),
-        entries: entriesResult.data ?? [],
+        entries,
+        // Portas que existem mas não recebem lead (webhook apagado/inativo,
+        // porta desativada) — a tela avisa em vez de sumir com elas sem motivo.
+        hidden_entries: hidden,
         solo_instances: instancesResult.data ?? [],
+        // SE-REV-005 — para o preview de {{tenant.name}} na tela.
+        tenant_name: teamResult.data?.nome ?? null,
         gpt_channels: gptChannels,
         gpt_channels_error: gptChannelsError,
         profile: profileResult.data ?? {
@@ -245,6 +262,20 @@ serve(async (req) => {
           error instanceof Error ? error.message : String(error),
         );
       }
+      // SE-REV-005 — ligar sequência numa porta que não recebe lead (webhook
+      // apagado, porta inativa) esconderia o problema: ela nunca dispararia.
+      // Desligar/editar uma sequência antiga nessa porta continua permitido.
+      if (sequence.active === true && entryIds.length) {
+        const { entries } = await loadTeamEntries(supabase, caller.equipeId);
+        const unusable = ineligibleEntryIds(entryIds, entries);
+        if (unusable.length) {
+          throw new HttpError(
+            `Porta inativa ou com webhook apagado: ${
+              unusable.join(", ")
+            }. Escolha outra porta ou salve a sequência desligada.`,
+          );
+        }
+      }
       const stageId = text(sequence.trigger_stage_id) || null;
       if (triggerEvent === "stage_entered") {
         const { data: stage, error } = await supabase.from("pipeline_stages_v2")
@@ -289,6 +320,94 @@ serve(async (req) => {
         throw saveError;
       }
       return json({ sequence: saved });
+    }
+
+    if (action === "delete-sequence") {
+      // SE-REV-005 — apagar sequência. Ordem pensada para que qualquer parada
+      // no meio deixe um estado coerente e uma nova chamada termine o serviço:
+      //   1. desliga (o gatilho trg_cadence_sequences_disabled cancela as
+      //      inscrições ativas e os jobs na fila, motivo 'sequence_disabled');
+      //   2. cancela o que ainda estiver ativo (sequência já desligada antes);
+      //   3. recusa (409) se houver job 'running' — um envio em curso, cujo
+      //      registro o worker ainda vai gravar;
+      //   4. apaga. As FKs em cascata levam passos, inscrições e jobs. As
+      //      mensagens já enviadas continuam no chat (messages) e na timeline
+      //      do lead (lead_activities).
+      if (!caller.profileId) {
+        throw new HttpError("Só usuário autenticado apaga sequências", 403);
+      }
+      const sequenceId = text(body.sequence_id);
+      if (!sequenceId) throw new HttpError("sequence_id é obrigatório");
+      const { data: sequence, error: sequenceError } = await supabase
+        .from("cadence_sequences").select("id, equipe_id, name, active")
+        .eq("id", sequenceId).maybeSingle();
+      if (sequenceError) throw sequenceError;
+      if (!sequence || sequence.equipe_id !== caller.equipeId) {
+        throw new HttpError(
+          "Sequência inexistente neste time",
+          404,
+          "sequence_not_found",
+        );
+      }
+      const { data: enrollments, error: enrollmentsError } = await supabase
+        .from("cadence_enrollments").select("id, status")
+        .eq("sequence_id", sequence.id).eq("equipe_id", caller.equipeId);
+      if (enrollmentsError) throw enrollmentsError;
+      const activeIds = (enrollments ?? [])
+        .filter((row) => row.status === "active").map((row) => row.id);
+      if (sequence.active) {
+        const { error } = await supabase.from("cadence_sequences")
+          .update({ active: false }).eq("id", sequence.id)
+          .eq("equipe_id", caller.equipeId);
+        if (error) throw error;
+      }
+      if (activeIds.length) {
+        // Idempotente: só mexe no que ainda está 'active' (o gatilho do passo
+        // 1 normalmente já cancelou tudo e aqui não sobra nada).
+        const { error } = await supabase.rpc("_outreach_cancel_enrollments", {
+          p_ids: activeIds,
+          p_reason: "sequence_disabled",
+        });
+        if (error) throw error;
+      }
+      const { data: jobs, error: jobsError } = await supabase
+        .from("outreach_jobs")
+        .select("status, cadence_enrollments!inner(sequence_id)")
+        .eq("cadence_enrollments.sequence_id", sequence.id)
+        .eq("equipe_id", caller.equipeId);
+      if (jobsError) throw jobsError;
+      const jobCounts: Record<string, number> = {};
+      for (const job of jobs ?? []) {
+        jobCounts[job.status] = (jobCounts[job.status] ?? 0) + 1;
+      }
+      // Contagem própria para 'running': a lista acima para em 1000 linhas.
+      const { count: running, error: runningError } = await supabase
+        .from("outreach_jobs")
+        .select("id, cadence_enrollments!inner(sequence_id)", {
+          count: "exact",
+          head: true,
+        })
+        .eq("cadence_enrollments.sequence_id", sequence.id)
+        .eq("status", "running");
+      if (runningError) throw runningError;
+      if (running) {
+        throw new HttpError(
+          "Há uma mensagem desta sequência sendo enviada agora. A sequência já foi desligada; tente apagar de novo em 1 minuto.",
+          409,
+          "sequence_sending",
+        );
+      }
+      const { error: deleteError } = await supabase.from("cadence_sequences")
+        .delete().eq("id", sequence.id).eq("equipe_id", caller.equipeId);
+      if (deleteError) throw deleteError;
+      return json({
+        deleted: true,
+        sequence_id: sequence.id,
+        name: sequence.name,
+        enrollments_removed: enrollments?.length ?? 0,
+        enrollments_cancelled: activeIds.length,
+        jobs_removed: jobCounts,
+      });
     }
 
     if (action === "update-profile") {

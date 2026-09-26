@@ -1,4 +1,5 @@
 import { validateSendWindow } from "./schedule.ts";
+import { templateError } from "./template.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,6 +36,8 @@ export function validateSteps(value: unknown): SequenceStepInput[] {
       throw new Error("Os offsets devem ser estritamente crescentes.");
     }
     if (!message) throw new Error(`Mensagem vazia no passo ${index}.`);
+    const invalid = templateError(message);
+    if (invalid) throw new Error(`Passo ${index + 1}: ${invalid}`);
     return { position, offset_minutes: offset, message_template: message };
   });
   return steps;

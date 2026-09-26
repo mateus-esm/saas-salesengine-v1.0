@@ -34,7 +34,10 @@ export type OpenFailureCode =
   | "no_whatsapp_channel"
   | "channel_type_unsupported"
   | "provider_rejected"
-  | "provider_unreachable";
+  | "provider_unreachable"
+  // SE-REV-005 — guarda de abertura (ver ../outreach/in-service.ts).
+  | "already_in_service"
+  | "in_service_check_failed";
 
 export interface EngineChannel {
   id: string;

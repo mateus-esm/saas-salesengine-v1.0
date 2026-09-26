@@ -1,0 +1,41 @@
+{
+ "antes": {
+  "opener": {
+   "first_message": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?",
+   "updated_at": "2026-09-26T01:42:30.721807+00:00"
+  },
+  "sequencias_teste": []
+ },
+ "update_settings_invalida": {
+  "http": 400,
+  "body": {
+   "success": false,
+   "code": "invalid_template",
+   "message": "Mensagem inicial com variável inexistente: {{lead.nome}}. Variáveis disponíveis: {{lead.name}}, {{lead.first_name}}, {{lead.source}}, {{tenant.name}}."
+  }
+ },
+ "update_settings_chave_mal_fechada": {
+  "http": 400,
+  "body": {
+   "success": false,
+   "code": "invalid_template",
+   "message": "Mensagem inicial com chaves mal fechadas perto de \"{lead.first_name}\". Variáveis disponíveis: {{lead.name}}, {{lead.first_name}}, {{lead.source}}, {{tenant.name}}."
+  }
+ },
+ "upsert_sequence_invalida": {
+  "http": 400,
+  "body": {
+   "error": "Passo 1: variável inexistente: {{cliente.nome}}. Variáveis disponíveis: {{lead.name}}, {{lead.first_name}}, {{lead.source}}, {{tenant.name}}.",
+   "code": "bad_request"
+  }
+ },
+ "upsert_sequence_ativa_em_porta_orfa_outro_time": "não testado aqui: porta órfã só existe na Casa Flow (coberto por entries.test.ts)",
+ "depois": {
+  "opener": {
+   "first_message": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?",
+   "updated_at": "2026-09-26T01:42:30.721807+00:00"
+  },
+  "sequencias_teste": []
+ },
+ "nada_mudou": true
+}

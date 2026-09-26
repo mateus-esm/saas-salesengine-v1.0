@@ -1,0 +1,59 @@
+1:34:35 AM [vite] warning: `optimizeDeps.esbuildOptions` option was specified by "vite:react-swc" plugin. This option is deprecated, please use `optimizeDeps.rolldownOptions` instead.
+
+ RUN  v4.1.9 /srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005
+
+ ❯ src/components/crm/grid/__tests__/InlineCell.test.tsx (0 test)
+ ❯ src/hooks/__tests__/useForecast.test.ts (0 test)
+ ❯ src/hooks/__tests__/usePipelines.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/hooks/__tests__/useForecast.test.ts [ src/hooks/__tests__/useForecast.test.ts ]
+Error: Configuração ausente: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY. Defina as variáveis de ambiente no build (Netlify → Site settings → Environment variables).
+ ❯ src/integrations/supabase/client.ts:9:9
+      7|
+      8| if (!supabaseUrl || !supabaseKey) {
+      9|   throw new Error(
+       |         ^
+     10|     `Configuração ausente: ${!supabaseUrl ? 'VITE_SUPABASE_URL' : ''}$…
+     11|     `Defina as variáveis de ambiente no build (Netlify → Site settings…
+ ❯ src/hooks/useForecast.ts:2:1
+ ❯ src/hooks/__tests__/useForecast.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/hooks/__tests__/usePipelines.test.ts [ src/hooks/__tests__/usePipelines.test.ts ]
+Error: Configuração ausente: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY. Defina as variáveis de ambiente no build (Netlify → Site settings → Environment variables).
+ ❯ src/integrations/supabase/client.ts:9:9
+      7|
+      8| if (!supabaseUrl || !supabaseKey) {
+      9|   throw new Error(
+       |         ^
+     10|     `Configuração ausente: ${!supabaseUrl ? 'VITE_SUPABASE_URL' : ''}$…
+     11|     `Defina as variáveis de ambiente no build (Netlify → Site settings…
+ ❯ src/hooks/usePipelines.ts:3:1
+ ❯ src/hooks/__tests__/usePipelines.test.ts:3:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/components/crm/grid/__tests__/InlineCell.test.tsx [ src/components/crm/grid/__tests__/InlineCell.test.tsx ]
+Error: Configuração ausente: VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY. Defina as variáveis de ambiente no build (Netlify → Site settings → Environment variables).
+ ❯ src/integrations/supabase/client.ts:9:9
+      7|
+      8| if (!supabaseUrl || !supabaseKey) {
+      9|   throw new Error(
+       |         ^
+     10|     `Configuração ausente: ${!supabaseUrl ? 'VITE_SUPABASE_URL' : ''}$…
+     11|     `Defina as variáveis de ambiente no build (Netlify → Site settings…
+ ❯ src/components/crm/grid/RelationPicker.tsx:16:1
+ ❯ src/components/crm/grid/InlineCell.tsx:26:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  3 failed | 52 passed (55)
+      Tests  390 passed (390)
+   Start at  01:34:35
+   Duration  84.95s (transform 3.72s, setup 0ms, import 9.85s, tests 6.15s, environment 56.97s)
+
+vitest exit 1

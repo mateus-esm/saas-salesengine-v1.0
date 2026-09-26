@@ -1,0 +1,8 @@
+[
+ {
+  "seqs": 0,
+  "eventos": 0,
+  "inscricoes": 0,
+  "solo_first_message": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?"
+ }
+]

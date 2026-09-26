@@ -1,0 +1,112 @@
+[
+ {
+  "evento": "667468e6-dc97-4a63-bbca-86b4a86d899e",
+  "status": "failed",
+  "error_code": "channel_type_unsupported",
+  "trigger_source": "manual",
+  "evento_em": "2026-09-25 23:13:03.074402+00",
+  "lead_id": "06682408-54c2-4dbc-8af7-54829155c903",
+  "ultima_msg_cliente_antes": null,
+  "guarda_nova_bloquearia": false,
+  "mensagem_enviada": "Oi"
+ },
+ {
+  "evento": "13187ea2-ee2a-44c7-b850-4feacdabd56e",
+  "status": "failed",
+  "error_code": "channel_type_unsupported",
+  "trigger_source": "manual",
+  "evento_em": "2026-09-25 23:14:56.443165+00",
+  "lead_id": "06682408-54c2-4dbc-8af7-54829155c903",
+  "ultima_msg_cliente_antes": null,
+  "guarda_nova_bloquearia": false,
+  "mensagem_enviada": "Ola teste"
+ },
+ {
+  "evento": "a91f29cd-f829-4971-889d-519304bbbfc8",
+  "status": "failed",
+  "error_code": "channel_type_unsupported",
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-25 23:20:57.828496+00",
+  "lead_id": "d25b68b0-0d7b-4b55-8a8c-160ff3acd389",
+  "ultima_msg_cliente_antes": "2026-09-25 23:18:46.93+00",
+  "guarda_nova_bloquearia": true,
+  "mensagem_enviada": null
+ },
+ {
+  "evento": "305e2afd-965c-4868-bcb7-f2650687a024",
+  "status": "failed",
+  "error_code": "channel_type_unsupported",
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-25 23:31:04.257244+00",
+  "lead_id": "e3727147-09bc-409a-9b5b-b6c3c1cbc278",
+  "ultima_msg_cliente_antes": "2026-09-25 23:24:56.791+00",
+  "guarda_nova_bloquearia": true,
+  "mensagem_enviada": null
+ },
+ {
+  "evento": "e35763f9-5ca4-4865-9067-a0f5afac2f16",
+  "status": "failed",
+  "error_code": "channel_type_unsupported",
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-26 00:11:01.303466+00",
+  "lead_id": "1110dc58-08e9-4cd8-84e4-1b06f14a8581",
+  "ultima_msg_cliente_antes": null,
+  "guarda_nova_bloquearia": false,
+  "mensagem_enviada": null
+ },
+ {
+  "evento": "9c2d4fb0-3555-4664-bdfd-33f36ca39a3a",
+  "status": "opened",
+  "error_code": null,
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-26 00:50:57.022695+00",
+  "lead_id": "09a60a83-dd66-4756-a024-5836f5d774f8",
+  "ultima_msg_cliente_antes": "2026-09-26 00:44:38.335+00",
+  "guarda_nova_bloquearia": true,
+  "mensagem_enviada": "Oi Vale! Aqui é da Casa Flow. Vi que você se cadastrou — pos"
+ },
+ {
+  "evento": "99973653-17d1-42bd-b734-ff2e9c377114",
+  "status": "opened",
+  "error_code": null,
+  "trigger_source": "manual",
+  "evento_em": "2026-09-26 00:57:32.718885+00",
+  "lead_id": "06682408-54c2-4dbc-8af7-54829155c903",
+  "ultima_msg_cliente_antes": null,
+  "guarda_nova_bloquearia": false,
+  "mensagem_enviada": "Ola"
+ },
+ {
+  "evento": "d1fdb4ef-6009-4552-be71-cbf9ab7aa0fc",
+  "status": "opened",
+  "error_code": null,
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-26 01:00:59.005877+00",
+  "lead_id": "4d6cca92-e330-4ff6-882b-aba68b2b2779",
+  "ultima_msg_cliente_antes": null,
+  "guarda_nova_bloquearia": false,
+  "mensagem_enviada": "Oi Tatiane! Aqui é da Casa Flow. Vi que você se cadastrou — "
+ },
+ {
+  "evento": "33bf42b1-e154-4379-ae44-c63cab6a44aa",
+  "status": "opened",
+  "error_code": null,
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-26 01:01:06.11963+00",
+  "lead_id": "92aa5e48-cfab-4e8a-bc44-abcf7399bea0",
+  "ultima_msg_cliente_antes": "2026-09-26 01:00:54.332+00",
+  "guarda_nova_bloquearia": true,
+  "mensagem_enviada": "Oi Ineida! Aqui é da Casa Flow. Vi que você se cadastrou — p"
+ },
+ {
+  "evento": "fcbda052-0f1b-4665-b9e9-fb07fe133260",
+  "status": "opened",
+  "error_code": null,
+  "trigger_source": "lead_intake",
+  "evento_em": "2026-09-26 01:30:59.342345+00",
+  "lead_id": "746745c5-bf43-4c6d-8535-990a18136e0c",
+  "ultima_msg_cliente_antes": null,
+  "guarda_nova_bloquearia": false,
+  "mensagem_enviada": "Oi mendesregina! Aqui é da Casa Flow. Vi que você se cadastr"
+ }
+]

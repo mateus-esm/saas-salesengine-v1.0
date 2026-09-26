@@ -1,0 +1,22 @@
+[
+ {
+  "etapa": "lead_touch",
+  "at": "2026-09-26 01:30:56.492307+00",
+  "detalhe": "porta 5a0349b1-efd4-4d17-b9ab-4f8502ff8574"
+ },
+ {
+  "etapa": "open_event",
+  "at": "2026-09-26 01:30:59.342345+00",
+  "detalhe": "opened canal=Z_API http=200 chat= tel=5517981044459"
+ },
+ {
+  "etapa": "msg:agent/gptmaker",
+  "at": "2026-09-26 01:31:00.658+00",
+  "detalhe": "conv=683e1045 Oi mendesregina! Aqui é da Casa Flow. Vi que você se cadastrou — posso te ajudar"
+ },
+ {
+  "etapa": "conversation",
+  "at": "2026-09-26 01:31:01.027134+00",
+  "detalhe": "id=683e1045 via=start_conversation chat=3F32F1093C8681A460108E59734FC41E-5517981044459 agente=false"
+ }
+]

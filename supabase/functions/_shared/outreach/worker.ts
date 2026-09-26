@@ -6,6 +6,7 @@ import type {
   OutreachProvider,
   OutreachSettings,
 } from "./providers.ts";
+import type { InServiceCheck } from "./in-service.ts";
 import { getOutreachProvider } from "./router.ts";
 import { nextAllowedSendTime } from "./schedule.ts";
 
@@ -62,6 +63,16 @@ export interface WorkerDependencies {
   ): Promise<string>;
   provider?(id: OutreachSettings["provider"]): OutreachProvider;
   now?(): Date;
+  /** SE-REV-005 — o lead já está conversando? (ver in-service.ts) */
+  inService?(
+    job: OutreachJob,
+    now: Date,
+  ): Promise<InServiceCheck & { error?: string }>;
+  /** SE-REV-005 — cancela a inscrição (e os jobs na fila dela). */
+  cancelEnrollment?(
+    enrollmentId: string,
+    reason: "lead_replied",
+  ): Promise<void>;
 }
 
 function deliveryResult(
@@ -112,6 +123,37 @@ export async function processOutreachBatch(
       }
 
       const now = deps.now?.() ?? new Date();
+
+      // SE-REV-005 — o passo 0 é a abertura. Lead que já está conversando
+      // (mandou mensagem nas últimas 24 h, ANTES da inscrição — as posteriores
+      // o stop_on_reply já trata) não recebe a abertura, e os follow-ups
+      // dessa abertura não fazem sentido: a inscrição é cancelada como
+      // 'lead_replied', o motivo que já existe para "o lead escreveu".
+      if (job.step_position === 0 && deps.inService) {
+        const service = await deps.inService(job, now);
+        if (service.error) {
+          await deps.defer(
+            job.id,
+            new Date(now.getTime() + 5 * 60_000),
+            "in_service_check_failed",
+          );
+          processed++;
+          continue;
+        }
+        if (service.inService) {
+          await deps.cancelEnrollment?.(job.enrollment_id, "lead_replied");
+          await deps.finish(
+            job.id,
+            "skipped",
+            "already_in_service",
+            null,
+            false,
+          );
+          processed++;
+          continue;
+        }
+      }
+
       const allowedAt = nextAllowedSendTime(now, {
         start: context.settings.send_window_start,
         end: context.settings.send_window_end,

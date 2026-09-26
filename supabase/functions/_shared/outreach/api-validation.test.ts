@@ -30,6 +30,27 @@ Deno.test("upsert recusa porta de outro time e porta WhatsApp", () => {
   assertEquals(validateEntryIds([WEBHOOK], rows, TEAM), [WEBHOOK]);
 });
 
+Deno.test("upsert recusa passo com variável inexistente (SE-REV-005)", () => {
+  assertThrows(
+    () =>
+      validateSteps([{
+        position: 0,
+        offset_minutes: 0,
+        message_template: "Oi {{lead.nome}}",
+      }]),
+    Error,
+    "{{lead.nome}}",
+  );
+  assertEquals(
+    validateSteps([{
+      position: 0,
+      offset_minutes: 0,
+      message_template: "Oi {{lead.first_name}}, da {{tenant.name}}",
+    }])[0].message_template,
+    "Oi {{lead.first_name}}, da {{tenant.name}}",
+  );
+});
+
 Deno.test("upsert recusa offsets fora de ordem e posições descontínuas", () => {
   assertThrows(
     () =>
