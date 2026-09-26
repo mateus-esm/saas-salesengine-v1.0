@@ -1,0 +1,66 @@
+{
+ "equipe": "aa33b576-3959-4a81-8e73-4027039ea2ce",
+ "tenant": "Casa Flow",
+ "at": "2026-09-26T01:38:23.754Z",
+ "antes_producao": {
+  "http": 200,
+  "entries": [
+   {
+    "id": "10a34b8d-1af1-43b5-a016-350ee59f1449",
+    "name": "Landing Page - Lead Land",
+    "kind": "webhook",
+    "active": true
+   },
+   {
+    "id": "7e6576a0-696f-40a9-841c-d64721979181",
+    "name": "Manual",
+    "kind": "manual",
+    "active": true
+   },
+   {
+    "id": "dcf93cfc-fe10-4570-804b-5e542ebde515",
+    "name": "Meta ADS - Cadastro",
+    "kind": "webhook",
+    "active": true
+   },
+   {
+    "id": "5a0349b1-efd4-4d17-b9ab-4f8502ff8574",
+    "name": "Meta ADS - Cadastro",
+    "kind": "webhook",
+    "active": true
+   }
+  ],
+  "hidden_entries": "(campo não existe nesta versão)"
+ },
+ "depois_codigo_novo": {
+  "http": 200,
+  "entries": [
+   {
+    "id": "7e6576a0-696f-40a9-841c-d64721979181",
+    "name": "Manual",
+    "kind": "manual",
+    "label": "Manual (Manual)"
+   },
+   {
+    "id": "5a0349b1-efd4-4d17-b9ab-4f8502ff8574",
+    "name": "Meta ADS - Cadastro",
+    "kind": "webhook",
+    "label": "Meta ADS - Cadastro (Webhook)"
+   }
+  ],
+  "hidden_entries": [
+   {
+    "id": "10a34b8d-1af1-43b5-a016-350ee59f1449",
+    "name": "Landing Page - Lead Land",
+    "kind": "webhook",
+    "reason": "webhook_deleted"
+   },
+   {
+    "id": "dcf93cfc-fe10-4570-804b-5e542ebde515",
+    "name": "Meta ADS - Cadastro",
+    "kind": "webhook",
+    "reason": "webhook_deleted"
+   }
+  ]
+ }
+}

@@ -176,3 +176,77 @@ Deno.test("persistência grava mensagem Solo com provider_message_id", async () 
   assertEquals(messages[0].provider_message_id, "provider-message");
   assertEquals(activities.length, 1);
 });
+
+// ── SE-REV-005 — guarda de abertura ─────────────────────────────────────────
+
+Deno.test("passo 0 com lead já em atendimento: não envia, pula e cancela a inscrição", async () => {
+  let deliveries = 0;
+  const cancels: unknown[][] = [];
+  const setup = dependencies(
+    [job("J1")],
+    fakeProvider(async () => {
+      deliveries++;
+      return sent;
+    }),
+  );
+  setup.deps.inService = async () => ({
+    inService: true,
+    lastCustomerMessageAt: "2026-09-25T14:50:00Z",
+  });
+  setup.deps.cancelEnrollment = async (...args) => {
+    cancels.push(args);
+  };
+  const result = await processOutreachBatch(setup.deps);
+  assertEquals(result, { claimed: 1, processed: 1, errors: 0 });
+  assertEquals(deliveries, 0);
+  assertEquals(cancels, [["enrollment", "lead_replied"]]);
+  assertEquals(setup.finishes[0].slice(1, 3), [
+    "skipped",
+    "already_in_service",
+  ]);
+});
+
+Deno.test("passo 0 com lead novo: envia normalmente", async () => {
+  const setup = dependencies([job("J1")], fakeProvider(async () => sent));
+  setup.deps.inService = async () => ({
+    inService: false,
+    lastCustomerMessageAt: null,
+  });
+  await processOutreachBatch(setup.deps);
+  assertEquals(setup.finishes[0][1], "sent");
+});
+
+Deno.test("follow-up (passo 1) não passa pela guarda: stop_on_reply já cuida", async () => {
+  let checks = 0;
+  const setup = dependencies(
+    [{ ...job("J1"), step_position: 1 }],
+    fakeProvider(async () => sent),
+  );
+  setup.deps.inService = async () => {
+    checks++;
+    return { inService: true, lastCustomerMessageAt: "2026-09-25T14:50:00Z" };
+  };
+  await processOutreachBatch(setup.deps);
+  assertEquals(checks, 0);
+  assertEquals(setup.finishes[0][1], "sent");
+});
+
+Deno.test("falha ao checar atendimento adia o job em vez de enviar", async () => {
+  let deliveries = 0;
+  const setup = dependencies(
+    [job("J1")],
+    fakeProvider(async () => {
+      deliveries++;
+      return sent;
+    }),
+  );
+  setup.deps.inService = async () => ({
+    inService: true,
+    lastCustomerMessageAt: null,
+    error: "timeout",
+  });
+  await processOutreachBatch(setup.deps);
+  assertEquals(deliveries, 0);
+  assertEquals(setup.defers[0][2], "in_service_check_failed");
+  assertEquals(setup.finishes.length, 0);
+});

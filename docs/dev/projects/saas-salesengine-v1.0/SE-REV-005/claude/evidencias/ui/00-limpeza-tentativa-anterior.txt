@@ -1,0 +1,1 @@
+200 {"deleted":true,"sequence_id":"67724b5c-fa9d-49c6-b8e4-c0cde7294155","name":"[SE-REV-005] apagar pela tela","enrollments_removed":1,"enrollments_cancelled":1,"jobs_removed":{"cancelled":2}}

@@ -1,0 +1,60 @@
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useLeadScores.ts
+  4:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useLeads.ts
+  14:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useMessages.ts
+    5:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+  209:6  warning  React Hook useEffect has a missing dependency: 'sortMessages'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useOppTable.ts
+  29:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useOpportunities.ts
+  18:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useOpportunityLinks.ts
+  14:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/usePipelineStagesV2.ts
+  14:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/usePipelines.ts
+  16:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useProperties.ts
+  13:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/usePropertyOwnerLinks.ts
+  11:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useReportSchedules.ts
+  14:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useStageTelemetry.ts
+  114:7  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useTeamMembers.ts
+  19:7  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useTouchpoints.ts
+  10:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/hooks/useWebhookConfigs.ts
+  61:7  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+  93:7  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/pages/Chat.tsx
+  14:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/pages/PipelineSettings.tsx
+  112:6  warning  React Hook useEffect has a missing dependency: 'setSelectedId'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/src/pages/dashboard/DashboardLayout.tsx
+  42:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+✖ 85 problems (0 errors, 85 warnings)
+  0 errors and 52 warnings potentially fixable with the `--fix` option.
+
+eslint exit 0

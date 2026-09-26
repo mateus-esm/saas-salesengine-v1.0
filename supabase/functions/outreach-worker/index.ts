@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-import-prefix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkLeadInService } from "../_shared/outreach/in-service.ts";
 import { persistDeliveredMessage } from "../_shared/outreach/persist.ts";
 import type { OutreachSettings } from "../_shared/outreach/providers.ts";
 import {
@@ -143,6 +144,15 @@ serve(async (req) => {
           p_error: errorMessage,
           p_result: delivery,
           p_retryable: retryable,
+        });
+        if (error) throw error;
+      },
+      inService: async (job, now) =>
+        await checkLeadInService(supabase, job.lead_id, now),
+      cancelEnrollment: async (enrollmentId, reason) => {
+        const { error } = await supabase.rpc("_outreach_cancel_enrollments", {
+          p_ids: [enrollmentId],
+          p_reason: reason,
         });
         if (error) throw error;
       },

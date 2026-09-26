@@ -1,0 +1,22 @@
+[
+ {
+  "etapa": "lead_touch",
+  "at": "2026-09-26 01:00:56.031931+00",
+  "detalhe": "porta 5a0349b1-efd4-4d17-b9ab-4f8502ff8574"
+ },
+ {
+  "etapa": "open_event",
+  "at": "2026-09-26 01:00:59.005877+00",
+  "detalhe": "opened canal=Z_API http=200 chat= tel=5524992611762"
+ },
+ {
+  "etapa": "msg:agent/gptmaker",
+  "at": "2026-09-26 01:00:59.761+00",
+  "detalhe": "conv=50191953 Oi Tatiane! Aqui é da Casa Flow. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "etapa": "conversation",
+  "at": "2026-09-26 01:01:00.117663+00",
+  "detalhe": "id=50191953 via=start_conversation chat=3F32F1093C8681A460108E59734FC41E-5524992611762 agente=false"
+ }
+]

@@ -1,0 +1,57 @@
+[
+ {
+  "k": "msg:customer",
+  "at": "2026-09-26 01:00:54.332+00",
+  "info": "Olá! Preenchi seu formulário e gostaria de saber mais sobre sua empresa.\n\nFull name: Ineid"
+ },
+ {
+  "k": "touch",
+  "at": "2026-09-26 01:00:58.313521+00",
+  "info": "99f0afc8-70c7-4cae-9a4c-1533d674d52a"
+ },
+ {
+  "k": "touch",
+  "at": "2026-09-26 01:01:04.495606+00",
+  "info": "5a0349b1-efd4-4d17-b9ab-4f8502ff8574"
+ },
+ {
+  "k": "open_event",
+  "at": "2026-09-26 01:01:06.11963+00",
+  "info": "opened Oi Ineida! Aqui é da Casa Flow. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:01:06.41+00",
+  "info": "Já tenho a maioria dos dados dela pelo formulário, mas o Instagram é um pré-requisito impo"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:01:06.411+00",
+  "info": "Olá, Ineida! Tudo bem?"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:01:06.412+00",
+  "info": "Aqui é da Casa Flow Ads. Vi seus dados no formulário, seu imóvel em Itapema, meia praia, b"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:01:06.413+00",
+  "info": "Hoje a maioria dos proprietários depende muito de Airbnb e Booking, paga taxa alta e sofre"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:01:06.414+00",
+  "info": "Um ponto importante: nesse modelo é necessário um perfil de Instagram ativo pra rodarmos o"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:01:06.796+00",
+  "info": "Oi Ineida! Aqui é da Casa Flow. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 01:11:08.915+00",
+  "info": "Ineida, ficou alguma dúvida sobre o Instagram ou consegue me confirmar se pretende ativar "
+ }
+]

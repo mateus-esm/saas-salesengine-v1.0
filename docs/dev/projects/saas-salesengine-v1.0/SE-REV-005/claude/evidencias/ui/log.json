@@ -1,0 +1,295 @@
+[
+ {
+  "t": "2026-09-26T01:42:09.072Z",
+  "k": "DB opener antes",
+  "v": {
+   "enabled": true,
+   "first_message": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?",
+   "trigger_entry_ids": [
+    "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+   ],
+   "updated_at": "2026-09-26T00:24:37.654698+00:00"
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:09.360Z",
+  "k": "DB sequências de teste antes da preparação",
+  "v": {
+   "sequences": [],
+   "enrollments": [],
+   "jobs": []
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:10.596Z",
+  "k": "preparação: upsert-sequence (código novo)",
+  "v": {
+   "http": 200,
+   "body": {
+    "sequence": {
+     "id": "1da11ced-7dbd-4738-952f-76d2895dfe1f",
+     "name": "[SE-REV-005] apagar pela tela",
+     "steps": [
+      {
+       "id": "9e243ebd-1bd6-482c-8024-63fab7332e85",
+       "active": true,
+       "position": 0,
+       "equipe_id": "939d7dd8-592c-4fda-946e-3568f2909904",
+       "created_at": "2026-09-26T01:42:10.422474+00:00",
+       "updated_at": "2026-09-26T01:42:10.422474+00:00",
+       "sequence_id": "1da11ced-7dbd-4738-952f-76d2895dfe1f",
+       "offset_minutes": 1440,
+       "message_template": "teste SE-REV-005 {{lead.first_name}} (inativa, nunca enviada)"
+      },
+      {
+       "id": "0ed468f1-d300-49a3-8182-a1efd7c25de2",
+       "active": true,
+       "position": 1,
+       "equipe_id": "939d7dd8-592c-4fda-946e-3568f2909904",
+       "created_at": "2026-09-26T01:42:10.422474+00:00",
+       "updated_at": "2026-09-26T01:42:10.422474+00:00",
+       "sequence_id": "1da11ced-7dbd-4738-952f-76d2895dfe1f",
+       "offset_minutes": 2880,
+       "message_template": "teste SE-REV-005 passo 2"
+      }
+     ],
+     "active": false,
+     "reenroll": "once_per_lead",
+     "equipe_id": "939d7dd8-592c-4fda-946e-3568f2909904",
+     "created_at": "2026-09-26T01:42:10.422474+00:00",
+     "updated_at": "2026-09-26T01:42:10.422474+00:00",
+     "stop_on_reply": true,
+     "trigger_event": "lead_intake",
+     "trigger_stage_id": null,
+     "trigger_entry_ids": [
+      "2c61b619-5738-47f1-bd6e-1caf54350104"
+     ],
+     "stop_on_stage_change": true
+    }
+   }
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:10.890Z",
+  "k": "preparação: _outreach_enroll",
+  "v": "be4671f2-25b2-4b7b-bf94-b84943d0ad58"
+ },
+ {
+  "t": "2026-09-26T01:42:11.673Z",
+  "k": "DB sequências de teste após preparação",
+  "v": {
+   "sequences": [
+    {
+     "id": "1da11ced-7dbd-4738-952f-76d2895dfe1f",
+     "name": "[SE-REV-005] apagar pela tela",
+     "active": false,
+     "trigger_entry_ids": [
+      "2c61b619-5738-47f1-bd6e-1caf54350104"
+     ]
+    }
+   ],
+   "enrollments": [
+    {
+     "id": "be4671f2-25b2-4b7b-bf94-b84943d0ad58",
+     "sequence_id": "1da11ced-7dbd-4738-952f-76d2895dfe1f",
+     "lead_id": "3c06f9cc-c84c-45f0-98d9-587e0dbdd7e6",
+     "status": "active",
+     "cancel_reason": null
+    }
+   ],
+   "jobs": [
+    {
+     "id": "ef31c009-a3de-4a06-ac56-818d3973e79b",
+     "enrollment_id": "be4671f2-25b2-4b7b-bf94-b84943d0ad58",
+     "step_position": 0,
+     "status": "queued",
+     "skip_reason": null,
+     "run_after": "2026-09-27T01:42:10.733119+00:00"
+    },
+    {
+     "id": "cbbb7d9c-c56d-4905-b7fe-b7b17e907644",
+     "enrollment_id": "be4671f2-25b2-4b7b-bf94-b84943d0ad58",
+     "step_position": 1,
+     "status": "queued",
+     "skip_reason": null,
+     "run_after": "2026-09-28T01:42:10.733119+00:00"
+    }
+   ]
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:12.805Z",
+  "k": "delete-sequence de outro time (Casa Flow)",
+  "v": {
+   "http": 404,
+   "body": {
+    "error": "Sequência inexistente neste time",
+    "code": "sequence_not_found"
+   }
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:13.058Z",
+  "k": "DB sequência da Casa Flow continua lá",
+  "v": {
+   "id": "ad36c612-cc76-4e1c-a74e-d8129b69bd1b",
+   "name": "Novo Lead",
+   "equipe_id": "aa33b576-3959-4a81-8e73-4027039ea2ce",
+   "active": false
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:17.279Z",
+  "k": "→ outreach list-sequences 200",
+  "v": "(lista)"
+ },
+ {
+  "t": "2026-09-26T01:42:19.516Z",
+  "k": "mensagem de abertura na tela",
+  "v": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "t": "2026-09-26T01:42:19.537Z",
+  "k": "preview na tela",
+  "v": "Como sai para um lead de exemplo (Maria Souza, origem Meta Ads):\nOi Maria! Aqui é da Solo Energia. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "t": "2026-09-26T01:42:19.919Z",
+  "k": "erro mostrado",
+  "v": "{{lead.nome}} não existe — sairia em branco para o cliente."
+ },
+ {
+  "t": "2026-09-26T01:42:19.930Z",
+  "k": "botão salvar desabilitado?",
+  "v": true
+ },
+ {
+  "t": "2026-09-26T01:42:20.559Z",
+  "k": "texto após clicar na variável",
+  "v": "Olá {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "t": "2026-09-26T01:42:22.153Z",
+  "k": "→ start-conversation update-settings 200",
+  "v": "{\"settings\":{\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"enabled\":true,\"channel_id\":null,\"channel_type\":null,\"trigger_sources\":[],\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"first_message\":\"Olá {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?\",\"updated_at\":\"2026-09-26T01:42:22.034569+00:00\"}}"
+ },
+ {
+  "t": "2026-09-26T01:42:24.203Z",
+  "k": "→ outreach list-sequences 200",
+  "v": "(lista)"
+ },
+ {
+  "t": "2026-09-26T01:42:24.625Z",
+  "k": "toasts após salvar",
+  "v": "Mensagem de abertura salva."
+ },
+ {
+  "t": "2026-09-26T01:42:24.960Z",
+  "k": "DB opener depois de editar pela tela",
+  "v": {
+   "enabled": true,
+   "first_message": "Olá {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?",
+   "trigger_entry_ids": [
+    "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+   ],
+   "updated_at": "2026-09-26T01:42:22.034569+00:00"
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:24.960Z",
+  "k": "persistiu o texto editado?",
+  "v": true
+ },
+ {
+  "t": "2026-09-26T01:42:27.936Z",
+  "k": "→ outreach list-sequences 200",
+  "v": "(lista)"
+ },
+ {
+  "t": "2026-09-26T01:42:29.616Z",
+  "k": "após reload, texto na tela",
+  "v": "Olá {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "t": "2026-09-26T01:42:30.843Z",
+  "k": "→ start-conversation update-settings 200",
+  "v": "{\"settings\":{\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"enabled\":true,\"channel_id\":null,\"channel_type\":null,\"trigger_sources\":[],\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"first_message\":\"Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?\",\"updated_at\":\"2026-09-26T01:42:30.721807+00:00\"}}"
+ },
+ {
+  "t": "2026-09-26T01:42:32.365Z",
+  "k": "→ outreach list-sequences 200",
+  "v": "(lista)"
+ },
+ {
+  "t": "2026-09-26T01:42:33.964Z",
+  "k": "DB opener depois de restaurar pela tela",
+  "v": {
+   "enabled": true,
+   "first_message": "Oi {{lead.first_name}}! Aqui é da {{tenant.name}}. Vi que você se cadastrou — posso te ajudar?",
+   "trigger_entry_ids": [
+    "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+   ],
+   "updated_at": "2026-09-26T01:42:30.721807+00:00"
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:33.964Z",
+  "k": "restaurado igual ao original?",
+  "v": true
+ },
+ {
+  "t": "2026-09-26T01:42:35.667Z",
+  "k": "opções do Select de portas",
+  "v": [
+   "Selecione uma porta",
+   "Cadastro de Leads - Formulário Meta ADS (Webhook)",
+   "Importação / API (Importação)",
+   "Landing Page - Lead Land (Webhook)"
+  ]
+ },
+ {
+  "t": "2026-09-26T01:42:36.367Z",
+  "k": "texto do diálogo",
+  "v": "Apagar a sequência “[SE-REV-005] apagar pela tela”?\n\n1 lead(s) ainda têm mensagens desta sequência para receber. Esses envios são cancelados — nada mais sai para eles.\n\nAs mensagens já enviadas continuam no chat. Não dá para desfazer.\n\nVoltar\nApagar sequência"
+ },
+ {
+  "t": "2026-09-26T01:42:38.189Z",
+  "k": "→ outreach delete-sequence 200",
+  "v": "{\"deleted\":true,\"sequence_id\":\"1da11ced-7dbd-4738-952f-76d2895dfe1f\",\"name\":\"[SE-REV-005] apagar pela tela\",\"enrollments_removed\":1,\"enrollments_cancelled\":1,\"jobs_removed\":{\"cancelled\":2}}"
+ },
+ {
+  "t": "2026-09-26T01:42:39.691Z",
+  "k": "→ outreach list-sequences 200",
+  "v": "(lista)"
+ },
+ {
+  "t": "2026-09-26T01:42:41.508Z",
+  "k": "toasts após apagar",
+  "v": "Sequência \"[SE-REV-005] apagar pela tela\" apagada."
+ },
+ {
+  "t": "2026-09-26T01:42:41.519Z",
+  "k": "sequências na lista",
+  "v": "Sequências"
+ },
+ {
+  "t": "2026-09-26T01:42:41.994Z",
+  "k": "DB sequências de teste depois de apagar pela tela",
+  "v": {
+   "sequences": [],
+   "enrollments": [],
+   "jobs": []
+  }
+ },
+ {
+  "t": "2026-09-26T01:42:42.670Z",
+  "k": "delete-sequence repetido",
+  "v": {
+   "http": 404,
+   "body": {
+    "error": "Sequência inexistente neste time",
+    "code": "sequence_not_found"
+   }
+  }
+ }
+]

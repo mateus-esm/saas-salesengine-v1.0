@@ -1,0 +1,82 @@
+[
+ {
+  "k": "msg:customer",
+  "at": "2026-09-26 00:42:46.022+00",
+  "info": "Olá! Preenchi seu formulário e gostaria de saber mais sobre sua empresa.\n\nFull name: Vale "
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:42:46.948+00",
+  "info": "Casa Flow Ads agradece seu contato. Como podemos ajudar?"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:42:53.374+00",
+  "info": "Oi Vale, tudo certo? Vi que você tem a Cabanas Pousada em Urubici, já ativa, com Instagram"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:42:53.375+00",
+  "info": "Pelo que você mandou, o perfil faz bastante sentido pra gente. A Casa Flow trabalha exatam"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:42:53.376+00",
+  "info": "Como você mesmo faz o atendimento e já tem estrutura rodando, dá pra avançar. Você teria d"
+ },
+ {
+  "k": "touch",
+  "at": "2026-09-26 00:42:54.53553+00",
+  "info": "99f0afc8-70c7-4cae-9a4c-1533d674d52a"
+ },
+ {
+  "k": "msg:customer",
+  "at": "2026-09-26 00:43:33.914+00",
+  "info": "Sim"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:43:39.096+00",
+  "info": "Perfeito. Vou repassar seu contato pro nosso especialista seguir com o agendamento."
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:43:39.097+00",
+  "info": "Só confirmando: qual o melhor dia e horário essa semana pra ligação de diagnóstico?"
+ },
+ {
+  "k": "msg:customer",
+  "at": "2026-09-26 00:44:17.66+00",
+  "info": "A noite após 19 h"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:44:23.969+00",
+  "info": "Show, Vale. Já repassei pro nosso especialista seguir com o agendamento pra noite, depois "
+ },
+ {
+  "k": "msg:customer",
+  "at": "2026-09-26 00:44:38.335+00",
+  "info": "Obrigada"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:44:41.801+00",
+  "info": "Até logo, Vale! Qualquer coisa é só chamar."
+ },
+ {
+  "k": "touch",
+  "at": "2026-09-26 00:50:54.813324+00",
+  "info": "5a0349b1-efd4-4d17-b9ab-4f8502ff8574"
+ },
+ {
+  "k": "open_event",
+  "at": "2026-09-26 00:50:57.022695+00",
+  "info": "opened Oi Vale! Aqui é da Casa Flow. Vi que você se cadastrou — posso te ajudar?"
+ },
+ {
+  "k": "msg:agent",
+  "at": "2026-09-26 00:50:57.767+00",
+  "info": "Oi Vale! Aqui é da Casa Flow. Vi que você se cadastrou — posso te ajudar?"
+ }
+]

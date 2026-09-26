@@ -1,0 +1,53 @@
+{
+ "equipe": "939d7dd8-592c-4fda-946e-3568f2909904",
+ "tenant": "Solo Energia",
+ "at": "2026-09-26T01:38:27.785Z",
+ "antes_producao": {
+  "http": 200,
+  "entries": [
+   {
+    "id": "5c8aca32-6d5d-4177-a9ae-6c0049d8e477",
+    "name": "Cadastro de Leads - Formulário Meta ADS",
+    "kind": "webhook",
+    "active": true
+   },
+   {
+    "id": "2c61b619-5738-47f1-bd6e-1caf54350104",
+    "name": "Importação / API",
+    "kind": "import",
+    "active": true
+   },
+   {
+    "id": "38d58d98-d679-4657-a36c-52fd1536ef85",
+    "name": "Landing Page - Lead Land",
+    "kind": "webhook",
+    "active": true
+   }
+  ],
+  "hidden_entries": "(campo não existe nesta versão)"
+ },
+ "depois_codigo_novo": {
+  "http": 200,
+  "entries": [
+   {
+    "id": "5c8aca32-6d5d-4177-a9ae-6c0049d8e477",
+    "name": "Cadastro de Leads - Formulário Meta ADS",
+    "kind": "webhook",
+    "label": "Cadastro de Leads - Formulário Meta ADS (Webhook)"
+   },
+   {
+    "id": "2c61b619-5738-47f1-bd6e-1caf54350104",
+    "name": "Importação / API",
+    "kind": "import",
+    "label": "Importação / API (Importação)"
+   },
+   {
+    "id": "38d58d98-d679-4657-a36c-52fd1536ef85",
+    "name": "Landing Page - Lead Land",
+    "kind": "webhook",
+    "label": "Landing Page - Lead Land (Webhook)"
+   }
+  ],
+  "hidden_entries": []
+ }
+}

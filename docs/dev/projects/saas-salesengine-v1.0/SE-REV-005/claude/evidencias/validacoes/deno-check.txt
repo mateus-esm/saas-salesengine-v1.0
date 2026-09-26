@@ -1,0 +1,27 @@
+Unsupported compiler options in "file:///srv/solo-dev/worktrees/saas-salesengine-v1.0/SE-REV-005/supabase/functions/deno.json".
+  The following options were ignored:
+    allowJs
+Check outreach/index.ts
+Check outreach-worker/index.ts
+Check start-conversation/index.ts
+Check _shared/outreach/api-validation.test.ts
+Check _shared/outreach/api-validation.ts
+Check _shared/outreach/classify.ts
+Check _shared/outreach/entries.test.ts
+Check _shared/outreach/entries.ts
+Check _shared/outreach/gptmaker.ts
+Check _shared/outreach/in-service.test.ts
+Check _shared/outreach/in-service.ts
+Check _shared/outreach/optout.ts
+Check _shared/outreach/persist.ts
+Check _shared/outreach/providers.test.ts
+Check _shared/outreach/providers.ts
+Check _shared/outreach/pure.test.ts
+Check _shared/outreach/router.ts
+Check _shared/outreach/schedule.ts
+Check _shared/outreach/solo.ts
+Check _shared/outreach/template.test.ts
+Check _shared/outreach/template.ts
+Check _shared/outreach/worker.test.ts
+Check _shared/outreach/worker.ts
+deno check exit 0
