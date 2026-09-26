@@ -38,7 +38,7 @@ export function AppSidebar() {
     { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'toolkit' },
     { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'clube' },
     { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false, requiredRole: 'admin', permissionKey: 'suporte' },
-    { title: "Tutorial", url: "/tutorial", icon: BookOpen, external: false },
+    { title: "Central de Ajuda", url: "/docs", icon: BookOpen, external: false },
   ];
 
   const permissions = equipe?.page_permissions;

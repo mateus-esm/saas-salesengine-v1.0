@@ -35,7 +35,9 @@ import PublicReport from "./pages/PublicReport";
 import PublicForm from "./pages/PublicForm";
 import PublicDiscovery from "./pages/PublicDiscovery";
 import NotificationsPage from "./pages/NotificationsPage";
-import Tutorial from "./pages/Tutorial";
+import DocsLayout from "./pages/docs/DocsLayout";
+import DocsIndex from "./pages/docs/DocsIndex";
+import DocsArticle from "./pages/docs/DocsArticle";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import AIStudioLayout from "./pages/ai-studio/AIStudioLayout";
@@ -159,7 +161,14 @@ const App = () => (
                       <Suporte />
                     </PageRouteGuard>
                   } />
-                  <Route path="/tutorial" element={<Tutorial />} />
+                  {/* SE-DOCS-001 — Central de Ajuda: visível para todos,
+                      como o /tutorial sempre foi. /tutorial redireciona para
+                      cá para não deixar link quebrado. */}
+                  <Route path="/docs" element={<DocsLayout />}>
+                    <Route index element={<DocsIndex />} />
+                    <Route path=":slug" element={<DocsArticle />} />
+                  </Route>
+                  <Route path="/tutorial" element={<Navigate to="/docs" replace />} />
                   {/* ADD ALL CUSTOM AUTHENTICATED ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/toolkit" element={
