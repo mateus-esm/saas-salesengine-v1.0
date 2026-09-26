@@ -8,7 +8,13 @@ import type {
 } from "./providers.ts";
 
 export const AI_ENGINE_BASE = "https://api.gptmaker.ai/v2";
-export const START_CONVERSATION_CHANNEL_TYPES = ["WHATSAPP"] as const;
+// A doc do provider (`POST /v2/channel/{id}/start-conversation`) diz que só
+// abre conversa em "WhatsApp não oficial". No enum de tipos do provider isso é
+// WHATSAPP (WhatsApp Web/QR) e Z_API. CLOUD_API é o WhatsApp oficial da Meta e
+// fica de fora — inclusive quando `/workspace/{id}/channels` o reporta como
+// WHATSAPP (ver channel-config.ts): nesse caso o provider recusa e o erro vira
+// provider_rejected, com o corpo gravado.
+export const START_CONVERSATION_CHANNEL_TYPES = ["WHATSAPP", "Z_API"] as const;
 
 export type OpenFailureCode =
   | "disabled"
@@ -77,7 +83,8 @@ export function pickStartConversationChannel(
         errorCode: "channel_type_unsupported",
         detail:
           `O canal ${wanted} é do tipo ${found.type ?? "desconhecido"}. ` +
-          "O provider só abre conversa em canal de WhatsApp não oficial (WHATSAPP).",
+          "O provider só abre conversa em canal de WhatsApp não oficial " +
+          `(${START_CONVERSATION_CHANNEL_TYPES.join(" ou ")}).`,
       };
     }
     if (found.connected !== true) {

@@ -262,19 +262,8 @@ serve(async (req) => {
           error instanceof Error ? error.message : String(error),
         );
       }
-      if (sequenceId) {
-        const { data: existing, error } = await supabase.from(
-          "cadence_sequences",
-        )
-          .select("id, equipe_id").eq("id", sequenceId).maybeSingle();
-        if (error) throw error;
-        if (!existing || existing.equipe_id !== caller.equipeId) {
-          throw new HttpError("Sequência inexistente neste time", 404);
-        }
-      }
       const row = {
-        ...(sequenceId ? { id: sequenceId } : {}),
-        equipe_id: caller.equipeId,
+        id: sequenceId || null,
         name,
         active: sequence.active === true,
         trigger_event: triggerEvent,
@@ -286,38 +275,20 @@ serve(async (req) => {
         stop_on_reply: sequence.stop_on_reply !== false,
         stop_on_stage_change: sequence.stop_on_stage_change !== false,
       };
-      const { data: saved, error: saveError } = await supabase.from(
-        "cadence_sequences",
-      )
-        .upsert(row).select("*").single();
-      if (saveError) throw saveError;
-      const { data: existingSteps, error: existingStepsError } = await supabase
-        .from("cadence_steps")
-        .select("id, position").eq("sequence_id", saved.id);
-      if (existingStepsError) throw existingStepsError;
-      const { data: savedSteps, error: stepsError } = await supabase.from(
-        "cadence_steps",
-      ).upsert(
-        steps.map((step) => ({
-          ...step,
-          sequence_id: saved.id,
-          equipe_id: caller.equipeId,
-          active: true,
-        })),
-        { onConflict: "sequence_id,position" },
-      ).select("*");
-      if (stepsError) throw stepsError;
-      const kept = new Set(steps.map((step) => step.position));
-      const removed = (existingSteps ?? []).filter((step) =>
-        !kept.has(step.position)
-      ).map((step) => step.id);
-      if (removed.length) {
-        const { error } = await supabase.from("cadence_steps").update({
-          active: false,
-        }).in("id", removed);
-        if (error) throw error;
+      // SE-REV-004: sequência, passos e desativação dos removidos numa única
+      // transação (a RPC confere o time do id). Antes eram três escritas
+      // soltas e uma falha no meio deixava a sequência com conteúdo misturado.
+      const { data: saved, error: saveError } = await supabase.rpc(
+        "crm_outreach_save_sequence",
+        { p_equipe_id: caller.equipeId, p_sequence: row, p_steps: steps },
+      );
+      if (saveError) {
+        if (saveError.code === "P0002") {
+          throw new HttpError("Sequência inexistente neste time", 404);
+        }
+        throw saveError;
       }
-      return json({ sequence: { ...saved, steps: savedSteps ?? [] } });
+      return json({ sequence: saved });
     }
 
     if (action === "update-profile") {

@@ -26,7 +26,11 @@
       "Bash(supabase --version)",
       "Bash(supabase status *)",
       "Bash(supabase projects *)",
-      "Bash(supabase db *)"
+      "Bash(supabase db *)",
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)"
     ]
   }
 }

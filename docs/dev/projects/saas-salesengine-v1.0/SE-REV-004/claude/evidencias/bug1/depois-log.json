@@ -1,0 +1,114 @@
+[
+ {
+  "t": "2026-09-26T00:32:14.037Z",
+  "k": "DB antes",
+  "v": []
+ },
+ {
+  "t": "2026-09-26T00:32:15.501Z",
+  "k": "→ outreach",
+  "v": {
+   "action": "list-sequences"
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:17.906Z",
+  "k": "→ outreach",
+  "v": {
+   "action": "upsert-sequence",
+   "id": null,
+   "name": "[SE-REV-004 fix] regra do dono"
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:19.329Z",
+  "k": "→ outreach",
+  "v": {
+   "action": "list-sequences"
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:22.944Z",
+  "k": "form após salvar",
+  "v": {
+   "name": "[SE-REV-004 fix] regra do dono",
+   "porta": "Cadastro de Leads - Formulário Meta ADS (webhook)",
+   "textos": [
+    "Oi"
+   ],
+   "novaSelecionada": false
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:23.338Z",
+  "k": "DB após criar",
+  "v": [
+   {
+    "id": "0f3a9750-590e-44f9-8804-1839e6441af8",
+    "name": "[SE-REV-004 fix] regra do dono",
+    "active": false,
+    "trigger_entry_ids": [
+     "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+    ],
+    "created_at": "2026-09-26T00:32:18.73753+00:00",
+    "updated_at": "2026-09-26T00:32:18.73753+00:00"
+   }
+  ]
+ },
+ {
+  "t": "2026-09-26T00:32:28.951Z",
+  "k": "form ao voltar para /outreach",
+  "v": {
+   "name": "[SE-REV-004 fix] regra do dono",
+   "porta": "Cadastro de Leads - Formulário Meta ADS (webhook)",
+   "textos": [
+    "Oi"
+   ],
+   "novaSelecionada": false
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:29.194Z",
+  "k": "→ outreach",
+  "v": {
+   "action": "upsert-sequence",
+   "id": "0f3a9750-590e-44f9-8804-1839e6441af8",
+   "name": "[SE-REV-004 fix] regra do dono (ajustada)"
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:31.001Z",
+  "k": "→ outreach",
+  "v": {
+   "action": "list-sequences"
+  }
+ },
+ {
+  "t": "2026-09-26T00:32:34.208Z",
+  "k": "toasts",
+  "v": "Alterações salvas."
+ },
+ {
+  "t": "2026-09-26T00:32:34.221Z",
+  "k": "lista após salvar",
+  "v": [
+   "[SE-REV-004 fix] regra do dono (ajustada)\nInativa"
+  ]
+ },
+ {
+  "t": "2026-09-26T00:32:34.579Z",
+  "k": "DB após 'ajustar' e salvar",
+  "v": [
+   {
+    "id": "0f3a9750-590e-44f9-8804-1839e6441af8",
+    "name": "[SE-REV-004 fix] regra do dono (ajustada)",
+    "active": false,
+    "trigger_entry_ids": [
+     "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+    ],
+    "created_at": "2026-09-26T00:32:18.73753+00:00",
+    "updated_at": "2026-09-26T00:32:30.37916+00:00"
+   }
+  ]
+ }
+]

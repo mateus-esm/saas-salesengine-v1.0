@@ -1,0 +1,30 @@
+{
+ "fonte": "POST /functions/v1/outreach {action:list-sequences} (função deployada v2), tenant Casa Flow, 2026-09-26 ~00:13 UTC",
+ "profile_channel_id": "3F32F1093C8681A460108E59734FC41E",
+ "gpt_channels": [
+  {
+   "id": "3F32F1093C8681A460108E59734FC41E",
+   "name": "Casa Flow - WPP (API)",
+   "type": "Z_API",
+   "connected": true
+  },
+  {
+   "id": "3F29F4971C88C088139B1A12669463B7",
+   "name": "Casa Flow - Telegram",
+   "type": "TELEGRAM",
+   "connected": true
+  },
+  {
+   "id": "3F29F4824D89D0475462365566D9DEBD",
+   "name": "Casa Flow - IG",
+   "type": "INSTAGRAM",
+   "connected": false
+  },
+  {
+   "id": "3F27CAA33AD430697C8D064C5998413F",
+   "name": "Flow ADS Teste",
+   "type": "WIDGET",
+   "connected": true
+  }
+ ]
+}

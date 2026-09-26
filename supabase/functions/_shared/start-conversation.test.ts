@@ -55,10 +55,38 @@ Deno.test("com filtro, source fora da lista (ou ausente) não dispara", () => {
 Deno.test("só WhatsApp não oficial é aceito — o provider não expõe o resto", () => {
   assertEquals(supportsStartConversation("WHATSAPP"), true);
   assertEquals(supportsStartConversation("whatsapp"), true);
+  // SE-REV-004: Z-API é WhatsApp não oficial; é o canal real da Casa Flow.
+  assertEquals(supportsStartConversation("Z_API"), true);
+  assertEquals(supportsStartConversation(" z_api "), true);
+  // Oficial da Meta: o endpoint não atende.
   assertEquals(supportsStartConversation("CLOUD_API"), false);
-  assertEquals(supportsStartConversation("Z_API"), false);
   assertEquals(supportsStartConversation("INSTAGRAM"), false);
+  assertEquals(supportsStartConversation("TELEGRAM"), false);
+  assertEquals(supportsStartConversation("WIDGET"), false);
   assertEquals(supportsStartConversation(null), false);
+});
+
+Deno.test("canal Z_API pedido explicitamente e conectado é usado (caso real da Casa Flow)", () => {
+  // Formato devolvido por /workspace/{id}/channels em 2026-09-26.
+  const channels: EngineChannel[] = [
+    { id: "3F32F1093C8681A460108E59734FC41E", type: "Z_API", connected: true, username: "558581406443" },
+    { id: "3F29F4971C88C088139B1A12669463B7", type: "TELEGRAM", connected: true },
+    { id: "3F29F4824D89D0475462365566D9DEBD", type: "INSTAGRAM", connected: false },
+    { id: "3F27CAA33AD430697C8D064C5998413F", type: "WIDGET", connected: true },
+  ];
+  const out = pickStartConversationChannel(channels, "3F32F1093C8681A460108E59734FC41E");
+  assertEquals("channel" in out && out.channel.id, "3F32F1093C8681A460108E59734FC41E");
+  const auto = pickStartConversationChannel(channels, null);
+  assertEquals("channel" in auto && auto.channel.id, "3F32F1093C8681A460108E59734FC41E");
+});
+
+Deno.test("WHATSAPP e Z_API conectados sem canal fixo continuam exigindo escolha", () => {
+  const channels: EngineChannel[] = [
+    { id: "CH1", type: "WHATSAPP", connected: true },
+    { id: "CH2", type: "Z_API", connected: true },
+  ];
+  const out = pickStartConversationChannel(channels, null);
+  assertEquals("errorCode" in out && out.errorCode, "channel_ambiguous");
 });
 
 Deno.test("canal pedido explicitamente é usado quando existe, é do tipo certo e está conectado", () => {

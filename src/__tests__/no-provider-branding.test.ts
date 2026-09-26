@@ -17,6 +17,11 @@ const ALLOWLIST = [
   // no diagnóstico de "esta equipe não tem agente" — ali o identificador
   // interno É a informação útil para quem vai configurá-lo.
   'src/components/admin/billing/TeamBillingDialog.tsx',
+  // SE-REV-004: a tela de Outreach troca com a API o valor interno de provider
+  // `gptmaker` (conversation_opener_settings.provider). Os textos visíveis dizem
+  // "provedor de IA"; o que resta é o identificador.
+  'src/pages/OutreachSettings.tsx',
+  'src/pages/OutreachSettings.test.tsx',
 ];
 
 // node:fs recursive readdir — the repo has no `glob` dependency and this
