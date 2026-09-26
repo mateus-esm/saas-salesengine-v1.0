@@ -1,0 +1,189 @@
+[
+ {
+  "t": "2026-09-26T00:19:07.314Z",
+  "k": "DB antes",
+  "v": {
+   "sequences": [],
+   "steps": []
+  }
+ },
+ {
+  "t": "2026-09-26T00:19:09.554Z",
+  "k": "→ outreach",
+  "v": "{\"action\":\"list-sequences\"}"
+ },
+ {
+  "t": "2026-09-26T00:19:14.205Z",
+  "k": "← outreach 200",
+  "v": "{\"sequences\":[],\"entries\":[{\"id\":\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\",\"name\":\"Cadastro de Leads - Formulário Meta ADS\",\"kind\":\"webhook\",\"active\":true},{\"id\":\"2c61b619-5738-47f1-bd6e-1caf54350104\",\"name\":\"Importação / API\",\"kind\":\"import\",\"active\":true},{\"id\":\"38d58d98-d679-4657-a36c-52fd1536ef85\",\"name\":\"Landing Page - Lead Land\",\"kind\":\"webhook\",\"active\":true}],\"solo_instances\":[],\"gpt_channels\":[{\"name\":\"Solon - Wpp Solo Energia\",\"id\":\"3E88D75021F6D0146D3FF2AF9A4FB162\",\"type\":\"WHATSAPP\",\"connected\":true,\"disparaAiEnabled\":false,\"agentId\":\"3DF0B5F10DF2C09007869A6EC31B5F97\",\"tiktokUsername\":"
+ },
+ {
+  "t": "2026-09-26T00:19:14.563Z",
+  "k": "porta escolhida",
+  "v": "Cadastro de Leads - Formulário Meta ADS (webhook)"
+ },
+ {
+  "t": "2026-09-26T00:19:14.926Z",
+  "k": "→ outreach",
+  "v": "{\"action\":\"upsert-sequence\",\"sequence\":{\"name\":\"[SE-REV-004 base] criar\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true},\"steps\":[{\"position\":0,\"offset_minutes\":0,\"message_template\":\"teste SE-REV-004 (não enviar: sequência inativa)\"}]}"
+ },
+ {
+  "t": "2026-09-26T00:19:18.170Z",
+  "k": "← outreach 200",
+  "v": "{\"sequence\":{\"id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"name\":\"[SE-REV-004 base] criar\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"trigger_stage_id\":null,\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true,\"created_at\":\"2026-09-26T00:19:17.162569+00:00\",\"updated_at\":\"2026-09-26T00:19:17.162569+00:00\",\"steps\":[{\"id\":\"23993fa9-056c-4a3e-8cc8-073b2afb47be\",\"sequence_id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\""
+ },
+ {
+  "t": "2026-09-26T00:19:18.172Z",
+  "k": "→ outreach",
+  "v": "{\"action\":\"list-sequences\"}"
+ },
+ {
+  "t": "2026-09-26T00:19:19.467Z",
+  "k": "← outreach 200",
+  "v": "{\"sequences\":[{\"id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"name\":\"[SE-REV-004 base] criar\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"trigger_stage_id\":null,\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true,\"created_at\":\"2026-09-26T00:19:17.162569+00:00\",\"updated_at\":\"2026-09-26T00:19:17.162569+00:00\",\"steps\":[{\"id\":\"23993fa9-056c-4a3e-8cc8-073b2afb47be\",\"sequence_id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f290990"
+ },
+ {
+  "t": "2026-09-26T00:19:20.963Z",
+  "k": "toasts após criar",
+  "v": "Sequência salva."
+ },
+ {
+  "t": "2026-09-26T00:19:21.562Z",
+  "k": "DB após criar",
+  "v": {
+   "sequences": [
+    {
+     "id": "0386f78b-8f6a-42dc-b84a-182b510e1801",
+     "name": "[SE-REV-004 base] criar",
+     "active": false,
+     "trigger_entry_ids": [
+      "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+     ],
+     "created_at": "2026-09-26T00:19:17.162569+00:00",
+     "updated_at": "2026-09-26T00:19:17.162569+00:00"
+    }
+   ],
+   "steps": [
+    {
+     "sequence_id": "0386f78b-8f6a-42dc-b84a-182b510e1801",
+     "position": 0,
+     "offset_minutes": 0,
+     "message_template": "teste SE-REV-004 (não enviar: sequência inativa)",
+     "active": true,
+     "updated_at": "2026-09-26T00:19:18.027444+00:00"
+    }
+   ]
+  }
+ },
+ {
+  "t": "2026-09-26T00:19:23.312Z",
+  "k": "draft na tela antes de salvar edição",
+  "v": {
+   "name": "[SE-REV-004 base] EDITADA",
+   "textareas": [
+    "texto EDITADO SE-REV-004",
+    "segundo passo SE-REV-004"
+   ]
+  }
+ },
+ {
+  "t": "2026-09-26T00:19:23.380Z",
+  "k": "→ outreach",
+  "v": "{\"action\":\"upsert-sequence\",\"sequence\":{\"id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"name\":\"[SE-REV-004 base] EDITADA\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true},\"steps\":[{\"position\":0,\"offset_minutes\":0,\"message_template\":\"texto EDITADO SE-REV-004\"},{\"position\":1,\"offset_minutes\":1440,\"message_template\":\"segundo passo SE-REV-004\"}]}"
+ },
+ {
+  "t": "2026-09-26T00:19:25.152Z",
+  "k": "→ outreach",
+  "v": "{\"action\":\"list-sequences\"}"
+ },
+ {
+  "t": "2026-09-26T00:19:25.154Z",
+  "k": "← outreach 200",
+  "v": "{\"sequence\":{\"id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"name\":\"[SE-REV-004 base] EDITADA\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"trigger_stage_id\":null,\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true,\"created_at\":\"2026-09-26T00:19:17.162569+00:00\",\"updated_at\":\"2026-09-26T00:19:24.558262+00:00\",\"steps\":[{\"id\":\"23993fa9-056c-4a3e-8cc8-073b2afb47be\",\"sequence_id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f290990"
+ },
+ {
+  "t": "2026-09-26T00:19:26.835Z",
+  "k": "← outreach 200",
+  "v": "{\"sequences\":[{\"id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"name\":\"[SE-REV-004 base] EDITADA\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"trigger_stage_id\":null,\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true,\"created_at\":\"2026-09-26T00:19:17.162569+00:00\",\"updated_at\":\"2026-09-26T00:19:24.558262+00:00\",\"steps\":[{\"id\":\"23993fa9-056c-4a3e-8cc8-073b2afb47be\",\"sequence_id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909"
+ },
+ {
+  "t": "2026-09-26T00:19:29.374Z",
+  "k": "toasts após editar",
+  "v": "Sequência salva."
+ },
+ {
+  "t": "2026-09-26T00:19:29.387Z",
+  "k": "draft na tela após salvar edição",
+  "v": {
+   "name": "[SE-REV-004 base] EDITADA",
+   "textareas": [
+    "texto EDITADO SE-REV-004",
+    "segundo passo SE-REV-004"
+   ]
+  }
+ },
+ {
+  "t": "2026-09-26T00:19:30.035Z",
+  "k": "DB após editar",
+  "v": {
+   "sequences": [
+    {
+     "id": "0386f78b-8f6a-42dc-b84a-182b510e1801",
+     "name": "[SE-REV-004 base] EDITADA",
+     "active": false,
+     "trigger_entry_ids": [
+      "5c8aca32-6d5d-4177-a9ae-6c0049d8e477"
+     ],
+     "created_at": "2026-09-26T00:19:17.162569+00:00",
+     "updated_at": "2026-09-26T00:19:24.558262+00:00"
+    }
+   ],
+   "steps": [
+    {
+     "sequence_id": "0386f78b-8f6a-42dc-b84a-182b510e1801",
+     "position": 0,
+     "offset_minutes": 0,
+     "message_template": "texto EDITADO SE-REV-004",
+     "active": true,
+     "updated_at": "2026-09-26T00:19:25.01023+00:00"
+    },
+    {
+     "sequence_id": "0386f78b-8f6a-42dc-b84a-182b510e1801",
+     "position": 1,
+     "offset_minutes": 1440,
+     "message_template": "segundo passo SE-REV-004",
+     "active": true,
+     "updated_at": "2026-09-26T00:19:25.01023+00:00"
+    }
+   ]
+  }
+ },
+ {
+  "t": "2026-09-26T00:19:31.393Z",
+  "k": "→ outreach",
+  "v": "{\"action\":\"list-sequences\"}"
+ },
+ {
+  "t": "2026-09-26T00:19:32.835Z",
+  "k": "← outreach 200",
+  "v": "{\"sequences\":[{\"id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909904\",\"name\":\"[SE-REV-004 base] EDITADA\",\"active\":false,\"trigger_event\":\"lead_intake\",\"trigger_entry_ids\":[\"5c8aca32-6d5d-4177-a9ae-6c0049d8e477\"],\"trigger_stage_id\":null,\"reenroll\":\"once_per_lead\",\"stop_on_reply\":true,\"stop_on_stage_change\":true,\"created_at\":\"2026-09-26T00:19:17.162569+00:00\",\"updated_at\":\"2026-09-26T00:19:24.558262+00:00\",\"steps\":[{\"id\":\"23993fa9-056c-4a3e-8cc8-073b2afb47be\",\"sequence_id\":\"0386f78b-8f6a-42dc-b84a-182b510e1801\",\"equipe_id\":\"939d7dd8-592c-4fda-946e-3568f2909"
+ },
+ {
+  "t": "2026-09-26T00:19:34.575Z",
+  "k": "sequências na lista após reload",
+  "v": [
+   "[SE-REV-004 base] EDITADA\nInativa"
+  ]
+ },
+ {
+  "t": "2026-09-26T00:19:35.464Z",
+  "k": "draft após reload+abrir",
+  "v": {
+   "name": "[SE-REV-004 base] EDITADA",
+   "textareas": [
+    "texto EDITADO SE-REV-004",
+    "segundo passo SE-REV-004"
+   ]
+  }
+ }
+]

@@ -44,6 +44,33 @@ Deno.test("sem chat: abre conversa GPT Maker com o texto digitado", async () => 
   }
 });
 
+Deno.test("SE-REV-004: canal Z_API configurado abre a conversa (antes: channel_type_unsupported)", async () => {
+  const opened: string[] = [];
+  const result = await openManualGptConversation({
+    token: "token",
+    workspaceId: "workspace",
+    agentId: "agente",
+    preferredChannelId: "3F32F1093C8681A460108E59734FC41E",
+    phone: "5585998153923",
+    message: "Ola teste",
+    listChannels: () =>
+      Promise.resolve({
+        channels: [
+          { id: "3F32F1093C8681A460108E59734FC41E", type: "Z_API", connected: true },
+          { id: "3F29F4971C88C088139B1A12669463B7", type: "TELEGRAM", connected: true },
+        ],
+      }),
+    startConversation: ({ channelId }) => {
+      opened.push(channelId);
+      return Promise.resolve({ ok: true, status: 200, body: { success: true }, rawText: null });
+    },
+  });
+  assertEquals(result.ok, true);
+  assertEquals(result.channelId, "3F32F1093C8681A460108E59734FC41E");
+  assertEquals(result.channelType, "Z_API");
+  assertEquals(opened, ["3F32F1093C8681A460108E59734FC41E"]);
+});
+
 Deno.test("canal oficial/sem suporte falha explicitamente e não tenta abrir", async () => {
   let opens = 0;
   const result = await openManualGptConversation({

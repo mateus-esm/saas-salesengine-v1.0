@@ -1,0 +1,2 @@
+ANTES (main) {"ok":false,"errorCode":"channel_type_unsupported","detail":"O canal 3F32F1093C8681A460108E59734FC41E é do tipo Z_API. O provider só abre conversa em canal de WhatsApp não oficial (WHATSAPP).","channelId":null,"channelType":null,"chamaria_start_conversation_em":[]}
+DEPOIS (SE-REV-004) {"ok":true,"errorCode":null,"detail":null,"channelId":"3F32F1093C8681A460108E59734FC41E","channelType":"Z_API","chamaria_start_conversation_em":["3F32F1093C8681A460108E59734FC41E"]}

@@ -1,0 +1,6 @@
+Casa Flow | http=200 err= | WHATSAPP=0 Z_API=1 CLOUD_API=0 | auto-pick antes=falha depois=ok
+Rema Digital | http=200 err= | WHATSAPP=1 Z_API=0 CLOUD_API=0 | auto-pick antes=ok depois=ok
+Cinemas Benficas | http=200 err= | WHATSAPP=0 Z_API=0 CLOUD_API=0 | auto-pick antes=falha depois=falha
+Jornada do R1 | http=200 err= | WHATSAPP=1 Z_API=0 CLOUD_API=0 | auto-pick antes=ok depois=ok
+Be My Guest | http=200 err= | WHATSAPP=1 Z_API=0 CLOUD_API=0 | auto-pick antes=ok depois=ok
+Solo Energia | http=200 err= | WHATSAPP=1 Z_API=0 CLOUD_API=0 | auto-pick antes=ok depois=ok

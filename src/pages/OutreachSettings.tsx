@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock3, Loader2, MessageSquareText, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -49,8 +49,12 @@ async function invokeOutreach(body: Record<string, unknown>) {
 
 export default function OutreachSettings() {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string>("new");
+  // null = ainda não escolhido. SE-REV-004: começar em "new" fazia quem voltava
+  // à tela ver um formulário em branco no lugar da regra salva; ao "ajustar" e
+  // salvar, criava uma segunda sequência e a original nunca mudava.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<OutreachSequenceDraft>(emptySequenceDraft);
+  const loadedId = useRef<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const query = useQuery<ListResponse>({
@@ -62,14 +66,26 @@ export default function OutreachSettings() {
     if (query.data?.profile) setProfile(query.data.profile);
   }, [query.data?.profile]);
 
-  const selected = useMemo(
-    () => query.data?.sequences.find((sequence) => String(sequence.id) === selectedId),
-    [query.data?.sequences, selectedId],
-  );
+  const sequences = query.data?.sequences;
   useEffect(() => {
-    setDraft(selected ? sequenceToDraft(selected) : emptySequenceDraft());
-  }, [selected]);
+    if (selectedId !== null || !sequences) return;
+    setSelectedId(sequences.length ? String(sequences[0].id) : "new");
+  }, [sequences, selectedId]);
 
+  const selected = useMemo(
+    () => sequences?.find((sequence) => String(sequence.id) === selectedId),
+    [sequences, selectedId],
+  );
+  // Recarrega o rascunho só quando muda QUAL sequência está aberta — um refetch
+  // da lista não apaga o que está sendo digitado.
+  useEffect(() => {
+    if (selectedId === null || loadedId.current === selectedId) return;
+    if (selectedId !== "new" && !selected) return;
+    setDraft(selected ? sequenceToDraft(selected) : emptySequenceDraft());
+    loadedId.current = selectedId;
+  }, [selectedId, selected]);
+
+  const isNew = !draft.id;
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["outreach-settings"] });
   const saveSequence = useMutation({
     mutationFn: () => invokeOutreach({
@@ -79,9 +95,12 @@ export default function OutreachSettings() {
     }),
     onSuccess: async (data) => {
       const id = String(data.sequence.id);
+      // A tela passa a mostrar o que o servidor gravou, não o que foi digitado.
+      setDraft(sequenceToDraft(data.sequence));
+      loadedId.current = id;
       setSelectedId(id);
       await refresh();
-      toast.success("Sequência salva.");
+      toast.success(isNew ? "Sequência criada." : "Alterações salvas.");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Não foi possível salvar."),
   });
@@ -97,7 +116,7 @@ export default function OutreachSettings() {
   if (query.error) {
     return <div className="container mx-auto p-6 text-destructive">Falha ao carregar: {query.error.message}</div>;
   }
-  if (query.isLoading || !profile) {
+  if (query.isLoading || !profile || selectedId === null) {
     return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
@@ -130,7 +149,7 @@ export default function OutreachSettings() {
             })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="gptmaker">GPT Maker (não oficial)</SelectItem>
+                <SelectItem value="gptmaker">Provedor de IA (WhatsApp não oficial)</SelectItem>
                 <SelectItem value="solo">Solo API</SelectItem>
               </SelectContent>
             </Select>
@@ -155,7 +174,7 @@ export default function OutreachSettings() {
               </SelectContent>
             </Select>
             {profile.provider === "gptmaker" && query.data.gpt_channels_error && (
-              <p className="text-xs text-amber-600">Canais GPT Maker indisponíveis: {query.data.gpt_channels_error}</p>
+              <p className="text-xs text-amber-600">Canais do provedor de IA indisponíveis: {query.data.gpt_channels_error}</p>
             )}
           </div>
           <div className="space-y-2">
@@ -189,7 +208,7 @@ export default function OutreachSettings() {
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
-              <div><CardTitle>Regra e mensagens</CardTitle><CardDescription>Somente o evento de entrada pela porta escolhida é configurado aqui.</CardDescription></div>
+              <div><CardTitle>{isNew ? "Nova sequência" : `Editando: ${String(selected?.name ?? draft.name)}`}</CardTitle><CardDescription>{isNew ? "Salvar cria uma sequência nova." : "Salvar altera esta sequência."} Somente o evento de entrada pela porta escolhida é configurado aqui.</CardDescription></div>
               <div className="flex items-center gap-2"><Label htmlFor="sequence-active">Ativa</Label><Switch id="sequence-active" checked={draft.active} onCheckedChange={(active) => setDraft({ ...draft, active })} /></div>
             </div>
           </CardHeader>
@@ -217,7 +236,7 @@ export default function OutreachSettings() {
                 </div>
               ))}
             </div>
-            <div className="flex justify-end"><Button disabled={!canSaveSequence || saveSequence.isPending} onClick={() => saveSequence.mutate()}>{saveSequence.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Salvar sequência</Button></div>
+            <div className="flex justify-end"><Button disabled={!canSaveSequence || saveSequence.isPending} onClick={() => saveSequence.mutate()}>{saveSequence.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{isNew ? "Criar sequência" : "Salvar alterações"}</Button></div>
           </CardContent>
         </Card>
       </div>
