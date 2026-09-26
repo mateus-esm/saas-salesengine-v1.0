@@ -30,9 +30,11 @@ export interface FormConfig {
   title: string;
   intro: string;
   fields: FormConfigField[];
+  /** SE-DOCPIPE-001 — the table's action the client's submit fires (or none). */
+  on_submit_action_id: string | null;
 }
 
-export const EMPTY_FORM_CONFIG: FormConfig = { enabled: false, title: "", intro: "", fields: [] };
+export const EMPTY_FORM_CONFIG: FormConfig = { enabled: false, title: "", intro: "", fields: [], on_submit_action_id: null };
 
 /** The columns a public form can ask for (no people, relations, lookups or files). */
 export function formEligibleColumns(columns: CustomTableColumn[]): CustomTableColumn[] {
@@ -52,6 +54,7 @@ export function normalizeFormConfig(raw: unknown): FormConfig | null {
     title: typeof r.title === "string" ? r.title : "",
     intro: typeof r.intro === "string" ? r.intro : "",
     fields,
+    on_submit_action_id: typeof r.on_submit_action_id === "string" && r.on_submit_action_id ? r.on_submit_action_id : null,
   };
 }
 

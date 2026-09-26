@@ -6,11 +6,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { CustomTable } from "@/hooks/useCustomTables";
 import { useSaveFormConfig } from "@/hooks/usePublicForm";
 import { EMPTY_FORM_CONFIG, formEligibleColumns, type FormConfig } from "@/lib/publicForm";
+
+const NO_ACTION = "__none__";
 
 interface FormConfigEditorProps {
   table: CustomTable;
@@ -20,6 +23,9 @@ interface FormConfigEditorProps {
  * Sprint 11 · Onda 4 · T45 — which fields of the table the client fills through
  * the record's public link ("Dados para Contrato"), in the table's order, and
  * which are required. The link itself is made in the record's drawer.
+ *
+ * SE-DOCPIPE-001: the submit can fire one of the table's actions (the Jestor
+ * "the form triggers the n8n").
  */
 export function FormConfigEditor({ table }: FormConfigEditorProps) {
   const [open, setOpen] = useState(false);
@@ -44,6 +50,8 @@ export function FormConfigEditor({ table }: FormConfigEditorProps) {
     setDraft((d) => ({ ...d, fields: d.fields.map((f) => (f.field_id === fieldId ? { ...f, required } : f)) }));
 
   const invalid = draft.enabled && draft.fields.length === 0;
+  // An action removed from the table reads as none (the database skips it too).
+  const submitAction = table.actions.some((a) => a.id === draft.on_submit_action_id) ? draft.on_submit_action_id : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -112,10 +120,42 @@ export function FormConfigEditor({ table }: FormConfigEditorProps) {
             )}
           </div>
 
+          {table.actions.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-[11px] text-muted-foreground">Ao enviar, disparar</Label>
+              <Select
+                value={submitAction ?? NO_ACTION}
+                onValueChange={(v) => setDraft((d) => ({ ...d, on_submit_action_id: v === NO_ACTION ? null : v }))}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_ACTION} className="text-xs">
+                    Nenhuma automação
+                  </SelectItem>
+                  {table.actions.map((a) => (
+                    <SelectItem key={a.id} value={a.id} className="text-xs">
+                      {a.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Quando o cliente envia, o registro já vai para a automação (ex.: gerar o contrato).
+              </p>
+            </div>
+          )}
+
           {invalid && <p className="text-[11px] text-destructive">Escolha pelo menos um campo.</p>}
 
           <div className="flex justify-end border-t border-border pt-2">
-            <Button size="sm" className="h-7 text-xs" onClick={() => save.mutate(draft)} disabled={invalid || save.isPending}>
+            <Button
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => save.mutate({ ...draft, on_submit_action_id: submitAction })}
+              disabled={invalid || save.isPending}
+            >
               {save.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
               Salvar
             </Button>

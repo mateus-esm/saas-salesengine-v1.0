@@ -42,10 +42,17 @@ describe("normalizeFormConfig", () => {
       title: "Dados",
       intro: "",
       fields: [{ field_id: "a", required: true }],
+      on_submit_action_id: null,
     });
     expect(normalizeFormConfig(null)).toBeNull();
     expect(formIsOn(normalizeFormConfig({ enabled: true, fields: [] }))).toBe(false);
     expect(formIsOn(normalizeFormConfig({ enabled: true, fields: [{ field_id: "a" }] }))).toBe(true);
+  });
+
+  it("reads the action the submit fires (SE-DOCPIPE-001)", () => {
+    expect(normalizeFormConfig({ enabled: true, fields: [], on_submit_action_id: "act-1" })?.on_submit_action_id).toBe("act-1");
+    expect(normalizeFormConfig({ enabled: true, fields: [], on_submit_action_id: "" })?.on_submit_action_id).toBeNull();
+    expect(normalizeFormConfig({ enabled: true, fields: [], on_submit_action_id: 3 })?.on_submit_action_id).toBeNull();
   });
 });
 

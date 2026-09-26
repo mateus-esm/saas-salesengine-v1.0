@@ -120,3 +120,23 @@ valendo) → quando o ClickSign avisa que assinou, o n8n responde de novo com o
 mesmo token: `{ token, status: "signed", files: [{ url: <PDF assinado> }] }` →
 "Contrato assinado". A assinatura precisa chegar dentro dos 7 dias do token;
 depois disso, um novo clique gera outro.
+
+## Extensões SE-DOCPIPE-001 (26/09/2026, aditivas)
+
+Tudo abaixo é compatível com a v1: quem não usa, não percebe. Detalhes e
+exemplos em `docs/dev/projects/saas-salesengine-v1.0/SE-DOCPIPE-001/claude/integracao-n8n.md`.
+
+- **Payload:** `trigger` (`"button"` | `"form_submit"`) e `deal_artifacts` (os
+  outros artefatos do negócio, com status e campos por key — a proposta vai
+  junto no "Enviar contrato").
+- **Formulário dispara ação:** `form_config.on_submit_action_id` — o envio do
+  cliente enfileira a ação escolhida. Ação removida/desligada: o envio passa e a
+  automação é pulada.
+- **Resposta:** `event_id` opcional — o mesmo evento duas vezes na mesma
+  execução é aplicado uma vez (`200 { status: "duplicate" }`). `keep_open`
+  renova o token para 30 dias a partir de agora (teto de 90 dias desde o clique):
+  a assinatura pode chegar depois dos 7 dias.
+- **Entrada por ID:** `artifact-inbound` (`x-webhook-secret` do tenant),
+  `action: "update"` por `record_id` ou por campo (`match`), com `event_id`
+  obrigatório; `action: "file_url"` troca o `path` de um arquivo por uma URL
+  assinada de 5 minutos (também aceita o `token` de uma execução aberta).

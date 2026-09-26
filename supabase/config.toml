@@ -139,6 +139,12 @@ verify_jwt = false
 [functions.artifact-callback]
 verify_jwt = false
 
+# SE-DOCPIPE-001 — entrada por ID da esteira de documentos. A função autentica
+# sozinha: x-webhook-secret do time, service_role com equipe_id, JWT de usuário,
+# ou (só no file_url) o token de uma execução aberta.
+[functions.artifact-inbound]
+verify_jwt = false
+
 [functions.public-form]
 verify_jwt = false
 
