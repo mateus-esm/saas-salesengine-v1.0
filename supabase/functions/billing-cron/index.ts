@@ -438,9 +438,13 @@ async function creditAlerts(db: SupabaseClient) {
     let title = "";
     let body = "";
     if (total <= 0) {
+      // Bug 3: este é o aviso de "acabou o crédito", NÃO o de "o agente parou".
+      // A pausa é aplicada no job agentPower, que roda depois deste, e é lá que
+      // credits.agent_paused é emitido. Prometer "o agente parou" aqui seria
+      // afirmar algo que ainda não aconteceu.
       type = "credits.exhausted";
-      title = "Seus créditos acabaram";
-      body = "O agente parou de responder automaticamente. O chat com sua equipe continua normal.";
+      title = "Seus créditos de atendimento acabaram";
+      body = "O agente ainda não parou: ele continua respondendo por um curto período e o consumo é descontado quando o crédito voltar. Recarregue para não deixar seus clientes sem resposta.";
     } else if (pct >= 0.95) {
       type = "credits.critical";
       title = "Menos de 5% dos créditos restantes";
