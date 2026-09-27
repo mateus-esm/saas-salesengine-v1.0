@@ -20,13 +20,14 @@
 -- depender de RLS implícito de subconsulta:
 --
 --   * a mensagem é legível se o ticket for da equipe do usuário; OU
---   * se o usuário for super_admin (o "Master admin").
+--   * se o usuário for super_admin (o "Master admin" — o dono do sistema).
 --
--- O papel `owner` continua atravessando (vê todos os tickets), porque é o que a
--- policy de `support_tickets` já fazia e é o que o painel admin usa hoje. O dono
--- disse "só quem pode ver é o próprio time e o Master admin"; o `owner` NÃO foi
--- removido aqui — está registrado como decisão pendente de confirmação. Quando o
--- dono responder, ajustar apenas esta condição.
+-- `owner` é o DONO DO TIME (papel do cliente), NÃO um administrador do sistema:
+-- ele vê apenas os tickets da própria equipe, como qualquer membro. Confirmado
+-- pelo dono em 2026-09-27: "owner é quem o dono do time? Se for ele tem que ver
+-- só o dele, eu sou o administrador do sistema geral, só o admin geral pode ver
+-- tudo e tem acesso ao admin panel". Por isso `has_role(..., 'owner')` NÃO entra
+-- nesta condição — quem atravessa é só o super_admin.
 --
 -- A policy de INSERT (`support_messages_create`) tinha o mesmo EXISTS sem
 -- filtro: permitia inserir mensagem em ticket de outra equipe. Corrigida junto,
@@ -42,7 +43,6 @@ create policy support_messages_read on public.support_ticket_messages
         and (
           t.equipe_id in (select p.equipe_id from public.profiles p where p.user_id = auth.uid())
           or public.has_role(auth.uid(), 'super_admin')
-          or public.has_role(auth.uid(), 'owner')
         )
     )
   );
@@ -58,7 +58,6 @@ create policy support_messages_create on public.support_ticket_messages
         and (
           t.equipe_id in (select p.equipe_id from public.profiles p where p.user_id = auth.uid())
           or public.has_role(auth.uid(), 'super_admin')
-          or public.has_role(auth.uid(), 'owner')
         )
     )
   );

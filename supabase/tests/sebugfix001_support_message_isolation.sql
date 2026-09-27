@@ -17,7 +17,7 @@
 --   2. cliente da equipe A NÃO lê a mensagem do ticket da equipe B  <-- o bug;
 --   3. cliente da equipe B NÃO lê a mensagem do ticket da equipe A;
 --   4. super_admin lê as duas (Master admin);
---   5. owner lê as duas (comportamento MANTIDO, registrado como pendência);
+--   5. owner (dono do time A) lê SÓ a da equipe dele — NÃO é admin do sistema;
 --   6. cliente da equipe A NÃO consegue INSERIR mensagem no ticket da equipe B.
 
 begin;
@@ -106,15 +106,19 @@ begin
 end $$;
 
 -- ============================================================================
--- 5. owner enxerga as duas (comportamento MANTIDO — pendência registrada)
+-- 5. owner é o DONO DO TIME (equipe A): enxerga só a conversa da própria equipe.
+--    NÃO é administrador do sistema — quem atravessa é só o super_admin.
 -- ============================================================================
 select set_config('request.jwt.claim.sub', '5e000000-0000-0000-0000-000000000004', true);
 do $$
 begin
   assert (select count(*) from public.support_ticket_messages
-          where id in ('5e000000-0000-0000-0000-0000000000a3',
-                       '5e000000-0000-0000-0000-0000000000b3')) = 2,
-    'ASSERT FAILED (5): owner deveria continuar enxergando as duas conversas (decisão pendente do dono)';
+          where id = '5e000000-0000-0000-0000-0000000000a3') = 1,
+    'ASSERT FAILED (5a): owner não enxergou a conversa da própria equipe';
+
+  assert (select count(*) from public.support_ticket_messages
+          where id = '5e000000-0000-0000-0000-0000000000b3') = 0,
+    'ASSERT FAILED (5b): VAZAMENTO — owner (dono do time A) enxergou a conversa da equipe B';
 end $$;
 
 -- ============================================================================
