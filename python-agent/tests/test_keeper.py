@@ -169,3 +169,114 @@ def test_the_answer_schema_keeps_only_objects():
     assert KeeperOutput.model_validate({"actions": [1, "x", {"type": "note"}]}).actions == [{"type": "note"}]
     assert KeeperOutput.model_validate({"actions": None}).actions == []
     assert len(KeeperOutput.model_validate({"actions": [{"type": "note"}] * 30}).actions) == 20
+
+
+# ── Sprint 13 · System One around the model call ──────────────────────────────
+# What these protect: without s1 nothing changes (the tests above); "on" + a
+# quiet triage skips the model but still moves the read cursor; "on" + signal
+# sends Jev's calibrated confidence to apply; "shadow" changes nothing but logs
+# everything; a Jev failure is logged and the pass runs as before; a model that
+# does not answer in time closes the job as failed.
+
+from app.cognition.system_one import Judgments, SystemOneError
+from app.copilot.judgments import System1
+
+QUIET = {
+    "signal": {"type": "noul", "noul": 0.04}, "next_step": {"type": "noul", "noul": 0.03},
+    "value": {"type": "noul", "noul": 0.02}, "contact": {"type": "noul", "noul": 0.01},
+    "field": {"type": "noul", "noul": 0.05},
+    "stage": {"type": "choice", "choice": "e1", "confidence": 0.9},
+    "outcome": {"type": "choice", "choice": "aberto", "confidence": 1.0},
+}
+LOUD = {**QUIET, "signal": {"type": "noul", "noul": 0.95}, "field": {"type": "noul", "noul": 0.97}}
+VERIFY = {"a1": {"type": "noul", "noul": 0.93}}
+ACTION = {"type": "set_field", "field_id": "f-consumo", "value": 450, "confidence": 0.62}
+
+
+class FakeJev:
+    """Answers triage with `triage` and verification with `verify` (told apart by the question ids)."""
+
+    def __init__(self, triage=None, verify=None, error=None):
+        self.triage, self.verify, self.error, self.calls = triage, verify, error, []
+
+    async def judge(self, state, questions):
+        self.calls.append(sorted(questions))
+        if self.error:
+            raise self.error
+        answers = self.verify if "a1" in questions else self.triage
+        return Judgments(model="jev-1.13.0", answers=answers, input_tokens=700, ms=380)
+
+
+def test_on_and_quiet_skips_the_model_and_moves_the_cursor():
+    repo = FakeRepo()
+    think, calls = _thinker(KeeperOutput(actions=[ACTION]))
+    s1 = System1(FakeJev(triage=QUIET), mode="on")
+    out = _run(run_job(JOB, repo=repo, think=think, model_id="m", s1=s1))
+
+    assert calls == []
+    assert repo.applied[0]["actions"] == [] and repo.applied[0]["summary"] is None
+    assert repo.applied[0]["cursor"] == CTX["last_message_at"]
+    assert out["status"] == "skipped" and out["route"] == "quiet"
+    result = repo.finished[0][3]
+    assert result["s1"]["mode"] == "on" and result["s1"]["triage"]["would_quiet"] is True
+    assert repo.events[0]["kind"] == "keeper_skipped"
+
+
+def test_on_with_signal_sends_calibrated_confidence_to_apply():
+    repo = FakeRepo()
+    think, calls = _thinker(KeeperOutput(actions=[ACTION]))
+    s1 = System1(FakeJev(triage=LOUD, verify=VERIFY), mode="on")
+    out = _run(run_job(JOB, repo=repo, think=think, model_id="m", s1=s1))
+
+    assert len(calls) == 1
+    sent = repo.applied[0]["actions"][0]
+    assert sent["confidence"] == 0.93 and sent["llm_confidence"] == 0.62
+    assert out["status"] == "done" and out["route"] == "model"
+    s1_log = repo.finished[0][3]["s1"]
+    assert s1_log["verify"]["p"] == [0.93] and s1_log["verify"]["llm"] == [0.62]
+    assert s1_log["calibrated"] is True
+
+
+def test_shadow_changes_nothing_but_logs_everything():
+    repo = FakeRepo()
+    think, calls = _thinker(KeeperOutput(actions=[ACTION]))
+    s1 = System1(FakeJev(triage=QUIET, verify=VERIFY), mode="shadow")
+    out = _run(run_job(JOB, repo=repo, think=think, model_id="m", s1=s1))
+
+    assert len(calls) == 1  # quiet, but shadow still asks the model
+    assert repo.applied[0]["actions"] == [ACTION]  # the LLM's own confidence
+    s1_log = repo.finished[0][3]["s1"]
+    assert s1_log["mode"] == "shadow" and s1_log["calibrated"] is False
+    assert s1_log["triage"]["would_quiet"] is True and s1_log["verify"]["p"] == [0.93]
+    assert out["status"] == "done"
+
+
+def test_jev_failure_runs_the_pass_as_before_and_logs_it():
+    repo = FakeRepo()
+    think, calls = _thinker(KeeperOutput(actions=[ACTION]))
+    s1 = System1(FakeJev(error=SystemOneError("timeout")), mode="on")
+    out = _run(run_job(JOB, repo=repo, think=think, model_id="m", s1=s1))
+
+    assert len(calls) == 1
+    assert repo.applied[0]["actions"] == [ACTION]
+    s1_log = repo.finished[0][3]["s1"]
+    assert s1_log["triage"]["error"] == "timeout" and s1_log["verify"]["error"] == "timeout"
+    assert out["status"] == "done"
+
+
+def test_nothing_new_never_asks_jev():
+    jev = FakeJev(triage=QUIET)
+    think, _ = _thinker()
+    _run(run_job(JOB, repo=FakeRepo({**CTX, "messages": []}), think=think, model_id="m", s1=System1(jev, mode="on")))
+    assert jev.calls == []
+
+
+def test_a_model_that_does_not_answer_in_time_fails_the_pass():
+    async def think(message):
+        await asyncio.sleep(1)
+        return KeeperOutput()
+
+    repo = FakeRepo()
+    out = _run(run_job(JOB, repo=repo, think=think, model_id="m", model_timeout_s=0.01))
+    assert out["status"] == "failed" and "tempo esgotado" in out["error"]
+    assert repo.applied == []
