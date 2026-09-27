@@ -1,3 +1,4 @@
+import { TicketsTab } from "@/components/admin/support/TicketsTab";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -104,7 +105,7 @@ const statusBadgeVariant = (status: string | null): "default" | "secondary" | "d
 // um valor inventado não pode deixar a página sem nenhuma aba selecionada.
 const ADMIN_TABS = [
   "nichos", "equipes", "usuarios", "solo-instances",
-  "propostas", "onboarding", "faturamento", "notificacoes",
+  "propostas", "onboarding", "faturamento", "notificacoes", "tickets",
 ];
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -196,7 +197,7 @@ const Admin = () => {
   // ─── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (loadingRole) return;
-    if (role !== "super_admin") navigate("/home");
+    if (role !== "super_admin" && role !== "owner") navigate("/home");
   }, [loadingRole, role, navigate]);
 
   // ─── Fetch all data ──────────────────────────────────────────────────────────
@@ -702,6 +703,20 @@ const Admin = () => {
     );
   }
 
+  // O owner acessa somente tickets; as consultas e abas antigas continuam exclusivas do super_admin.
+  if (role === "owner") {
+    return (
+      <div className="container mx-auto p-4 md:p-6 space-y-6">
+        <h1 className="text-2xl font-bold">Administração do suporte</h1>
+        <Tabs value="tickets">
+          <TabsList><TabsTrigger value="tickets">Tickets</TabsTrigger></TabsList>
+          <TabsContent value="tickets" className="mt-4"><TicketsTab /></TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
+  if (role !== "super_admin") return null;
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -756,7 +771,10 @@ const Admin = () => {
             <Bell className="h-4 w-4" />
             Notificações
           </TabsTrigger>
+          <TabsTrigger value="tickets">Tickets</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="tickets" className="mt-4"><TicketsTab /></TabsContent>
 
         <TabsContent value="propostas" className="mt-4">
           <ProposalsTab />

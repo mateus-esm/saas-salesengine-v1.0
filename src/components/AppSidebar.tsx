@@ -37,7 +37,7 @@ export function AppSidebar() {
     { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin', permissionKey: 'billing' },
     { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'toolkit' },
     { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'clube' },
-    { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false, requiredRole: 'admin', permissionKey: 'suporte' },
+    { title: "Suporte", url: "/suporte", icon: HelpCircle, external: false, requiredRole: 'user', permissionKey: 'suporte' },
     { title: "Central de Ajuda", url: "/docs", icon: BookOpen, external: false },
   ];
 
@@ -107,17 +107,17 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Admin Section - Only visible to super_admin */}
-        {isSuperAdmin() && (
+        {/* Owner acessa somente suporte; super_admin mantém o painel completo. */}
+        {hasRole("owner") && (
           <SidebarGroup>
             <SidebarGroupLabel className={!open ? "sr-only" : ""}>Administração</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <NavLink to="/admin" end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
+                    <NavLink to={isSuperAdmin() ? "/admin" : "/admin?tab=tickets"} end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
                       <Shield className="h-4 w-4 shrink-0" />
-                      {open && <span className="text-sm">Admin Panel</span>}
+                      {open && <span className="text-sm">{isSuperAdmin() ? "Admin Panel" : "Tickets de suporte"}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
