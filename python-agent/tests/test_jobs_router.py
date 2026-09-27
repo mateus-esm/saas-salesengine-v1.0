@@ -23,7 +23,7 @@ from app.routers import jobs as jobs_module
 TOKEN = "internal-token"
 
 
-def _settings(*, enabled: bool = True) -> MagicMock:
+def _settings(*, enabled: bool = True, jev_key: str | None = None, jev_mode: str = "shadow") -> MagicMock:
     s = MagicMock()
     s.agent_internal_token = TOKEN
     s.copilot_jobs_enabled = enabled
@@ -31,6 +31,12 @@ def _settings(*, enabled: bool = True) -> MagicMock:
     s.copilot_jobs_concurrency = 2
     s.keeper_model = None
     s.doorman_model = "deepseek"
+    s.keeper_model_timeout_s = 60.0
+    s.jev_api_key = jev_key
+    s.jev_mode = jev_mode
+    s.jev_model = "jev-1.13.0"
+    s.jev_timeout_s = 5.0
+    s.jev_quiet_below = 0.2
     return s
 
 
@@ -76,10 +82,11 @@ def test_switched_on_claims_answers_202_and_processes_every_job():
     jobs = [{"id": f"j{i}", "opportunity_id": f"o{i}", "equipe_id": "e"} for i in range(3)]
     repo = FakeRepo(jobs)
     seen: list[str] = []
+    passed: list[tuple] = []
 
-    async def fake_run_job(job, *, repo, think, model_id):
+    async def fake_run_job(job, *, repo, think, model_id, s1=None, model_timeout_s=None):
         seen.append(job["id"])
-        assert model_id == "deepseek"
+        passed.append((model_id, s1, model_timeout_s))
         return {"status": "done"}
 
     with patch.object(jobs_module, "get_settings", return_value=_settings()), \
@@ -92,13 +99,14 @@ def test_switched_on_claims_answers_202_and_processes_every_job():
     assert response.json() == {"status": "accepted", "claimed": 3}
     assert repo.claims == [10]
     assert sorted(seen) == ["j0", "j1", "j2"]
+    assert set(passed) == {("deepseek", None, 60.0)}  # no JEV key → no System One
 
 
 def test_the_concurrency_cap_holds():
     running = 0
     peak = 0
 
-    async def slow_run_job(job, *, repo, think, model_id):
+    async def slow_run_job(job, *, repo, think, model_id, **_):
         nonlocal running, peak
         running += 1
         peak = max(peak, running)
@@ -111,3 +119,31 @@ def test_the_concurrency_cap_holds():
         results = asyncio.run(jobs_module.process(jobs, repo=None, think=None, model_id="m", concurrency=2))
     assert len(results) == 6
     assert peak == 2
+
+
+# ── Sprint 13 · System One is wired from the settings ─────────────────────────
+
+def test_system_one_is_built_only_with_a_key_and_a_live_mode():
+    from app.copilot.judgments import System1
+
+    jobs_module._jev_clients.clear()
+    assert jobs_module.get_system1(_settings()) is None  # no key
+    assert jobs_module.get_system1(_settings(jev_key="k", jev_mode="off")) is None
+    s1 = jobs_module.get_system1(_settings(jev_key="k", jev_mode="Shadow"))
+    assert isinstance(s1, System1) and s1.mode == "shadow" and s1.quiet_below == 0.2
+    assert s1.client.model == "jev-1.13.0"
+    on = jobs_module.get_system1(_settings(jev_key="k", jev_mode="on"))
+    assert on.mode == "on" and on.client is s1.client  # one client (keep-alive) across ticks
+
+
+def test_the_tick_hands_system_one_to_every_job():
+    seen = []
+
+    async def fake_run_job(job, *, repo, think, model_id, s1=None, model_timeout_s=None):
+        seen.append(s1)
+        return {"status": "done"}
+
+    jobs_module._jev_clients.clear()
+    with patch.object(jobs_module, "get_settings", return_value=_settings(jev_key="k")),          patch.object(jobs_module, "get_repo", return_value=FakeRepo([{"id": "j1"}])),          patch.object(jobs_module, "get_think", return_value=object()),          patch("app.copilot.keeper.run_job", fake_run_job):
+        _client().post("/api/v1/jobs/tick", headers={"X-Agent-Token": TOKEN})
+    assert len(seen) == 1 and seen[0].mode == "shadow"

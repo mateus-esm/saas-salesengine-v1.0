@@ -36,6 +36,19 @@ class Settings(BaseSettings):
     copilot_jobs_concurrency: int = 4
     keeper_model: str | None = None  # empty → doorman_model
     chat_model: str | None = None  # the chat (T63); empty → doorman_model
+    # A model call that has not answered in this many seconds fails the pass (the
+    # queue retries it later). Before: p90 of 520 s held one of the 4 slots.
+    keeper_model_timeout_s: float = 60.0
+
+    # Sprint 13 — System One (Jev, TypeSafe) around the keeper's model call.
+    # No key → off. "shadow" asks and logs, changes nothing; "on" lets a quiet
+    # triage skip the model and verification set each action's confidence.
+    # Pinned version: thresholds are measured against one model (JEV_MODEL).
+    jev_api_key: str | None = None
+    jev_mode: str = "shadow"  # off | shadow | on
+    jev_model: str = "jev-1.13.0"
+    jev_timeout_s: float = 5.0
+    jev_quiet_below: float = 0.2
 
     # G6 — Production CORS wiring
     # ─────────────────────────────────────────────────────────────────────────
