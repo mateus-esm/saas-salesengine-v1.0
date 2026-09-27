@@ -39,6 +39,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      support_tickets: {
+        Row: {
+          id: string
+          equipe_id: string
+          created_by: string
+          subject: string
+          description: string
+          status: "aberto" | "em_atendimento" | "resolvido" | "fechado"
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          equipe_id: string
+          subject: string
+          description: string
+        }
+        Update: { status?: "aberto" | "em_atendimento" | "resolvido" | "fechado" }
+        Relationships: []
+      }
+      support_ticket_messages: {
+        Row: {
+          id: string
+          ticket_id: string
+          author_id: string
+          author_kind: "cliente" | "suporte"
+          body: string
+          created_at: string
+        }
+        Insert: { ticket_id: string; body: string }
+        Update: { [_ in never]: never }
+        Relationships: []
+      }
       agenda_events: {
         Row: {
           created_at: string
@@ -9046,6 +9078,10 @@ export type Database = {
       }
     }
     Functions: {
+      support_ticket_teams: {
+        Args: Record<PropertyKey, never>
+        Returns: { id: string; nome: string }[]
+      }
       _copilot_apply_one: {
         Args: { p_action: Json; p_opportunity_id: string }
         Returns: Json

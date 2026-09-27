@@ -1,8 +1,9 @@
+import { SupportTickets } from "@/components/support/SupportTickets";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Mail, Phone } from "lucide-react";
+import { MessageCircle, Mail } from "lucide-react";
 
 const Suporte = () => {
   const { equipe } = useAuth();
@@ -60,6 +61,10 @@ const Suporte = () => {
               </Button>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="max-w-4xl mx-auto mt-6">
+          <SupportTickets />
         </div>
 
         {equipe && (
