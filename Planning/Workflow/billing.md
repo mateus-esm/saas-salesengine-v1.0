@@ -186,7 +186,8 @@ When you finish a task, add **one row** to the ledger below with your task's tie
 | Sprint 11 — Onda 5 (entradas e atribuição) | Plano + T48–T57 | R$ 165 |
 | Sprint 11 — Onda 6 (Copilot) | Plano + T58–T67 | R$ 173 |
 | Sprint 11 — fechamento | handoff, todo, custos | R$ 5 |
-| **Sprint 11 — TOTAL** | **71 linhas, T1–T67** | **R$ 1.094** |
+| Sprint 11 — pós-fechamento | T68 (abertura do app) + T69 (hotfix do Copilot) | R$ 32 |
+| **Sprint 11 — TOTAL** | **73 linhas, T1–T69** | **R$ 1.126** |
 
 ---
 
@@ -350,3 +351,5 @@ Kept for history. Costs below were self-estimated from tokens (USD→BRL @ 5.00)
 | 2026-09-13 | 11 W6 | T66 Precisao e velocidade (evals + relatorio) | Claude / Opus 5 (PM) | M | R$ 12 |
 | 2026-09-13 | 11 W6 | T67 Verificacao, deploy e handoff | Claude / Opus 5 (PM) | S | R$ 5 |
 | 2026-09-13 | 11 | Fechamento da Sprint 11 (handoff, todo, custos) | Claude / Opus 5 (PM) | S | R$ 5 |
+| 2026-09-13 | 11 pos | T68 O Copilot vira a abertura do app (PR #25) | Claude / Opus 5 (PM) | L | R$ 20 |
+| 2026-09-13 | 11 pos | T69 Hotfix: o agente diz o tipo de cada argumento ao banco (PR #24) | Claude / Opus 5 (PM) | M | R$ 12 |

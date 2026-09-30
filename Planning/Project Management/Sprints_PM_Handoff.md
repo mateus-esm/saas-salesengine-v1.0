@@ -822,6 +822,70 @@ Energia como caso. Ondas 2 (Kanban/tabelas claros), 3 (tabelas relacionais) e 4
 
 ---
 
+# Sprint 11 — Pós-fechamento (13/09): o Copilot grava de verdade e vira a abertura do app
+
+> **T68–T69** · PRs #24 (agente) e #25 (frontend), os dois na produção · R$ 32 (`billing.md`)
+
+## 1. O Sync que não fazia nada (T69 · PR #24)
+
+**Sintoma (founder):** na Solo Energia, o ⚡ Sincronizar numa conversa não mudava nada.
+
+**Causa:** o agente chamava `crm_copilot_apply` com a confiança do modelo como
+`double precision`, que é como o psycopg manda um `float` do Python. A função declara
+`p_confidence numeric`, e o Postgres não converte `double precision` em `numeric` na hora
+de escolher a função: esse cast só vale em atribuição (`pg_cast.castcontext = 'a'`). O
+banco respondia "function ... does not exist" e o trabalho falhava no último passo, depois
+de o modelo já ter respondido. Desde que o Copilot acordou, nenhuma passada tinha gravado
+nada.
+
+**Por que os testes não pegaram:** os testes SQL chamam a função com número literal, que já
+é `numeric`, e os de Python usam um repo falso. A primeira chamada de verdade foi a do founder.
+
+**Correção:** cada argumento das chamadas do `repo.py` leva o tipo que a função declara.
+`python-agent/tests/test_copilot_repo.py` lê as assinaturas direto das migrations e confere
+o tipo de cada `%s`. Se um lado mudar sem o outro, o teste quebra.
+
+**Provado:** um ensaio em rollback (só `PREPARE`) reproduziu o erro com a chamada antiga e
+resolveu a função com a nova. Depois do deploy, o mesmo negócio rodou `done` na primeira
+tentativa e aplicou 4 ações (3 campos e uma nota; a linha está em modo autônomo).
+
+**Regra que fica:** toda chamada de função do banco feita pelo Python diz o tipo de cada
+argumento (`%s::numeric`, `%s::jsonb`…). Em `INSERT`/`UPDATE` a conversão de atribuição
+resolve; em chamada de função, não.
+
+## 2. O Copilot vira a abertura do app (T68 · PR #25)
+
+- O `/home` das equipes com o Agente de CRM ligado abre como a tela do ChatGPT: "Olá,
+  <nome>", "Entenda como está sua máquina de receita", um campo grande e as sugestões. A
+  conversa cresce ali mesmo, e os cartões dos módulos continuam embaixo (pedido do founder).
+- Uma linha embaixo do campo, "N para aprovar · M ações hoje", abre o painel lateral com
+  **Para aprovar** e **O que fiz** (com desfazer). **Configurar** aparece só para admin.
+- Sem o Copilot, a abertura de antes. A aba CRM › Copilot saiu: `/crm?tab=copilot` e
+  `/copiloto` levam para `/home`, e o `CopilotCockpit.tsx` foi apagado.
+
+## 3. O que a primeira passada de verdade mostrou
+
+| Etapa | Tempo | Meta |
+| :-- | --: | :-- |
+| Esperando o despertador (cron de minuto) | 60 s | Sync em < 10 s |
+| Contexto (1 ida ao banco) | 0,3 s | |
+| Modelo (1 chamada) | 51,7 s (antes: 57 s e 79 s) | ~4 s por negócio |
+| Aplicar (1 ida ao banco) | 0,7 s | |
+
+As idas ao banco já estão na meta; o modelo e a espera pelo cron, não. As duas frentes estão
+no `todo.md`: um modelo mais rápido no `KEEPER_MODEL`, e o Sync acordar o agente na hora.
+
+## 4. Estado do deploy
+
+- **Agente:** PR #24 no main (`5828bca`), publicado pelo Dokploy. A passada das 18:33 UTC já
+  rodou com o código novo.
+- **Frontend:** PR #25 no main (`3737d59`); o Netlify serve o bundle novo (`index-BOhkXKw-.js`).
+- Sem migração, sem edge function, sem escrita em dado de produção.
+- **Gates:** pytest 373 passed / 21 skipped · vitest 319/319 · `tsc -b` limpo · lint 0 erro ·
+  build OK.
+
+---
+
 # Sprint 11 — Fechamento
 
 > **Sprint:** CRM v1.1 (`sprint_11_crm_v1.1.md`) · 6 ondas, T1–T67 · 10/09 a 13/09/2026

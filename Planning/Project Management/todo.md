@@ -90,8 +90,13 @@ As seis ondas estão na produção (13/09/2026). Handoff: `Sprints_PM_Handoff.md
 ## 🔴 Agora — só o founder tem a credencial ou a decisão
 
 - [x] **Token do Copilot no Vault** (13/09) — `copilot_agent_token` criado; o agente aceitou
-  (`/api/v1/jobs/tick` → 202 "accepted", o `COPILOT_JOBS_ENABLED` está ligado). Conferir 5 min
-  depois de uma conversa pausar numa linha piloto: CRM › Copilot › "O que fiz".
+  (`/api/v1/jobs/tick` → 202 "accepted", o `COPILOT_JOBS_ENABLED` está ligado). Conferido
+  em 13/09, depois do hotfix T69: um Sync manual na Solo aplicou 4 ações. O painel agora fica
+  no Início, na linha "N para aprovar · M ações hoje".
+- [ ] **O modelo do Copilot leva 50–80 s por negócio** (meta: ~4 s) (Mateus + Claude PM).
+  O keeper usa o mesmo modelo do atendimento. Medir com a chave (os evals medem) e testar um
+  modelo mais rápido pondo `KEEPER_MODEL` no Dokploy; o código não muda. Primeira passada
+  real: contexto 0,3 s · modelo 51,7 s · aplicar 0,7 s.
 - [ ] **Trocar o `AGENT_INTERNAL_TOKEN` por um forte** (Mateus) — o de hoje é curto e passou
   pelo chat; quem tem ele chama as rotas internas do agente (`/admin/runs` lista execuções e
   decisões de todas as equipes). Gerar um valor aleatório longo (ex.: `openssl rand -hex 32`),
@@ -116,6 +121,9 @@ As seis ondas estão na produção (13/09/2026). Handoff: `Sprints_PM_Handoff.md
   blocos do AI Studio, tarefas e agenda — com diff e desfazer (`future_sprint__mcp_v1.md` §5).
 - [ ] **Tirar o caminho antigo do Copilot** depois do piloto provado: Torre/Chão/Workflow,
   `/api/v1/sync`, o painel de aprovações antigo, `services/copilot.syncOpportunity`.
+- [ ] **O Sync espera o próximo minuto do despertador** (até 60 s antes de começar)
+  (Claude PM): o `crm_copilot_enqueue` pode acordar o agente na hora para o trabalho pedido
+  (`_copilot_tick()` depois de enfileirar; migração pequena, com ensaio).
 - [ ] **Precificar o chat** depois de ~20 conversas reais (os tempos e o modelo ficam em
   `copilot_messages.meta`).
 - [ ] **Sprint de integrações:** fundação (credenciais no Vault, catálogo de conectores,
@@ -140,6 +148,10 @@ As seis ondas estão na produção (13/09/2026). Handoff: `Sprints_PM_Handoff.md
 - [ ] **`chat-attachments` é público** e a política de delete deixa qualquer usuário logado
   apagar anexo de qualquer equipe (achado da Onda 4).
 - [ ] **Baseline de lint:** 85 avisos (0 erros) — baixar aos poucos.
+- [ ] **Número cru no rótulo do "O que fiz"** ("Valor Médio (R$): 700.0"): o rótulo do campo
+  número deveria sair em português ("700"; em R$, "R$ 700,00") no `_copilot_apply_one`.
+- [ ] **O `AppSidebar.tsx` não é usado** (o app usa o `TopNavbar`) e ainda aponta para
+  `/copiloto`, que agora redireciona — apagar numa limpeza.
 
 ## 📊 Para acompanhar no piloto do Copilot
 
