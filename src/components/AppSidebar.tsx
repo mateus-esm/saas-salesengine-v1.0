@@ -108,17 +108,18 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Owner acessa somente suporte; super_admin mantém o painel completo. */}
-        {hasRole("owner") && (
+        {/* Só o administrador geral (super_admin) abre o painel. `owner` é o
+            dono do time (cliente) e usa a tela /suporte para os próprios tickets. */}
+        {isSuperAdmin() && (
           <SidebarGroup>
             <SidebarGroupLabel className={!open ? "sr-only" : ""}>Administração</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <NavLink to={isSuperAdmin() ? "/admin" : "/admin?tab=tickets"} end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
+                    <NavLink to="/admin" end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
                       <Shield className="h-4 w-4 shrink-0" />
-                      {open && <span className="text-sm">{isSuperAdmin() ? "Admin Panel" : "Tickets de suporte"}</span>}
+                      {open && <span className="text-sm">Admin Panel</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
