@@ -34,6 +34,7 @@ import PublicProposal from "./pages/PublicProposal";
 import PublicReport from "./pages/PublicReport";
 import PublicForm from "./pages/PublicForm";
 import PublicDiscovery from "./pages/PublicDiscovery";
+import TeamAccessPage from "./pages/team/TeamAccessPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import DocsLayout from "./pages/docs/DocsLayout";
 import DocsIndex from "./pages/docs/DocsIndex";
@@ -155,6 +156,9 @@ const App = () => (
                     <Route path="contrato" element={<Navigate to="/billing/plano" replace />} />
                     <Route path="dados" element={<BillingDataPage />} />
                   </Route>
+                  {/* SE-TEAMACCESS-001 — o dono gerencia usuários da equipe.
+                      O guard de verdade é a edge function; a página só redireciona. */}
+                  <Route path="/equipe" element={<TeamAccessPage />} />
                   <Route path="/notificacoes" element={<NotificationsPage />} />
                   <Route path="/suporte" element={
                     <PageRouteGuard permissionKey="suporte">
