@@ -15,6 +15,7 @@ import {
   Star,
   Shield,
   Cpu,
+  Users,
   Menu,
   X,
 } from "lucide-react";
@@ -82,6 +83,13 @@ export function TopNavbar() {
       external: false,
       requiredRole: "admin",
       permissionKey: "webhooks",
+    },
+    {
+      title: "Equipe",
+      url: "/equipe",
+      icon: Users,
+      external: false,
+      requiredRole: "owner",
     },
     {
       title: "Billing",
