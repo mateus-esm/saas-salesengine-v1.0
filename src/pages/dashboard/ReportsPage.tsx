@@ -29,7 +29,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { WIDGET_CATALOG } from "@/config/widgetCatalog";
+import { useDashboardFilterOptions } from "@/hooks/useDashboardV2";
+import { readFilterList, toggleFilterValue, type ReportFilterKey } from "@/lib/reportFilters";
 import {
   useReportSchedules,
   type ReportFrequency,
@@ -47,14 +48,6 @@ const WEEKDAYS = [
   { v: 1, l: "Segunda" }, { v: 2, l: "Terça" }, { v: 3, l: "Quarta" },
   { v: 4, l: "Quinta" }, { v: 5, l: "Sexta" }, { v: 6, l: "Sábado" }, { v: 7, l: "Domingo" },
 ];
-
-/** Only widgets that survive being read as text on a phone. */
-const REPORTABLE = WIDGET_CATALOG.filter(
-  (w) =>
-    w.kind === "kpi" ||
-    w.id === "panel_loss_reasons" ||
-    w.id === "panel_top_opportunities",
-);
 
 export default function ReportsPage() {
   const { schedules, recipients, isLoading, createSchedule, updateSchedule, deleteSchedule, addRecipient, removeRecipient } =
@@ -156,12 +149,9 @@ function ScheduleCard({
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
 
-  const toggleSection = (id: string) => {
-    const next = s.sections.includes(id)
-      ? s.sections.filter((x) => x !== id)
-      : [...s.sections, id];
-    onUpdate({ sections: next });
-  };
+  const { data: options } = useDashboardFilterOptions();
+  const toggleFilter = (key: ReportFilterKey, id: string) =>
+    onUpdate({ filters: toggleFilterValue(s.filters, key, id) });
 
   return (
     <Card className={s.active ? "" : "opacity-70"}>
@@ -314,37 +304,52 @@ function ScheduleCard({
 
         <Separator />
 
-        {/* ---- o que vem ---- */}
-        <div>
-          <Label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-            O que entra no relatório
-          </Label>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {REPORTABLE.map((w) => {
-              const on = s.sections.includes(w.id);
-              return (
-                <button
-                  key={w.id}
-                  type="button"
-                  title={w.description}
-                  onClick={() => toggleSection(w.id)}
-                  className={
-                    "rounded-full border px-3 py-1.5 text-xs transition-colors " +
-                    (on
-                      ? "border-primary bg-primary/10 font-medium text-foreground"
-                      : "border-border text-muted-foreground hover:border-primary/40")
-                  }
-                >
-                  {w.label}
-                </button>
-              );
-            })}
-          </div>
-          {s.sections.length === 0 && (
-            <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
-              Nenhum bloco selecionado — o relatório sairia praticamente vazio.
+        {/* ---- o que vem ----
+            O relatório tem formato fixo (resumo, meta x realizado, marcos do
+            funil, touchpoints por vendedor, destaques): aqui o cliente escolhe
+            DE QUAL pipeline e com quais recortes, não quais seções existem. */}
+        <div className="space-y-3">
+          <div>
+            <Label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+              Pipeline
+            </Label>
+            <Select
+              value={s.pipeline_id ?? "all"}
+              onValueChange={(v) => onUpdate({ pipeline_id: v === "all" ? null : v })}
+            >
+              <SelectTrigger className="mt-1 h-8 w-[240px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">Todos os pipelines</SelectItem>
+                {(options?.pipelines ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Cada pipeline recebe o seu relatório: crie um agendamento por pipeline.
             </p>
-          )}
+          </div>
+
+          <ChipFilter
+            label="Canal"
+            items={(options?.channels ?? []).map((c) => ({ id: c, name: c }))}
+            selected={readFilterList(s.filters, "channels")}
+            onToggle={(id) => toggleFilter("channels", id)}
+          />
+          <ChipFilter
+            label="Vendedor"
+            items={(options?.responsibles ?? []).map((r) => ({ id: r.id, name: r.name || "Sem nome" }))}
+            selected={readFilterList(s.filters, "responsible_ids")}
+            onToggle={(id) => toggleFilter("responsible_ids", id)}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            O relatório sempre traz as mesmas cinco partes, na mesma ordem — com zero quando não
+            houve movimento.
+          </p>
         </div>
 
         <Separator />
@@ -427,5 +432,47 @@ function ScheduleCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** Recorte opcional: nenhum chip marcado = sem recorte (tudo). */
+function ChipFilter({
+  label,
+  items,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  items: { id: string; name: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <Label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+        {label} {selected.length === 0 && <span className="normal-case">(todos)</span>}
+      </Label>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {items.map((it) => {
+          const on = selected.includes(it.id);
+          return (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => onToggle(it.id)}
+              className={
+                "rounded-full border px-3 py-1.5 text-xs transition-colors " +
+                (on
+                  ? "border-primary bg-primary/10 font-medium text-foreground"
+                  : "border-border text-muted-foreground hover:border-primary/40")
+              }
+            >
+              {it.name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
