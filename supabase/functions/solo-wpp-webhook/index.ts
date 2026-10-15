@@ -22,6 +22,9 @@ import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryForInstance, entryLine, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { isTechnicalPhone, normalizePhone } from "../_shared/phone.ts"
 import { formatDisplayName } from "../_shared/displayName.ts"
+import { insertConversationOnce } from "../_shared/conversation-once.ts"
+import { classifyInbound } from "../_shared/inbound-filter.ts"
+import { shouldApplyName } from "../_shared/lead-name-policy.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -364,6 +367,26 @@ async function handleMessagesUpsert(
     })
   }
 
+  // ── 4b2. SE-SUP1-4 — filtro de entrada (um ponto só: _shared/inbound-filter) ──
+  // pushName de mensagem NOSSA (fromMe) é o nome do dono da instância, não do
+  // contato: usá-lo nomeava o lead com o nome do próprio vendedor.
+  const contactPushName = key.fromMe ? null : (pushName ?? null)
+  const verdict = classifyInbound({
+    phone: key.remoteJid,
+    name: contactPushName,
+    content: extractTextFromMessage(message as Record<string, unknown>),
+    messageType,
+  })
+  if (verdict.action === 'ignore') {
+    console.log('[solo-wpp] Mensagem de protocolo ignorada:', messageType)
+    return new Response(JSON.stringify({ ignored: true, reason: verdict.reason }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    })
+  }
+  // quarantine: a conversa e a mensagem são salvas, mas não nasce negócio.
+  const quarantined = verdict.action === 'quarantine'
+
   // ── 4c. Extract message fields ──
   const phone = extractPhoneFromJid(key.remoteJid)
   const phoneNorm = normalizePhone(phone)
@@ -401,13 +424,13 @@ async function handleMessagesUpsert(
 
   const isAgentEnabled = equipe?.is_crm_agent_enabled || false
 
-  let lead: { id: string; phone: string | null } | null = null
+  let lead: { id: string; phone: string | null; name?: string | null; name_locked?: boolean | null } | null = null
   let leadIsNew = false
 
   if (phoneNorm) {
     const { data: leadByPhone } = await supabase
       .from('leads')
-      .select('id, phone')
+      .select('id, phone, name, name_locked')
       .eq('phone_normalized', phoneNorm)
       .eq('equipe_id', equipeId)
       .is('deleted_at', null)
@@ -428,15 +451,17 @@ async function handleMessagesUpsert(
     // "Lead 186432031355045" is what the team saw in the CRM.
     const technicalJid = isTechnicalPhone(key.remoteJid)
     const senderName = technicalJid
-      ? formatDisplayName(pushName, null)
-      : (pushName || (phone ? `Lead ${phone}` : 'Novo Visitante'))
+      ? formatDisplayName(contactPushName, null)
+      : (contactPushName || (phone ? `Lead ${phone}` : 'Novo Visitante'))
 
     const baseLead = {
       phone: phone || null,
       phone_normalized: phoneNorm,
       name: senderName,
       equipe_id: equipeId,
-      lead_type: 'lead',
+      // Não-lead (serviço, código, sem identidade) entra como contato a revisar.
+      lead_type: quarantined ? 'contact' : 'lead',
+      ...(quarantined ? { needs_review: true, review_reason: verdict.reason } : {}),
       source: 'WhatsApp',
       origem: 'WhatsApp',
       channel: 'whatsapp',
@@ -447,7 +472,7 @@ async function handleMessagesUpsert(
       supabase
         .from('leads')
         .insert({ ...baseLead, creation_source: creationSource })
-        .select('id, phone')
+        .select('id, phone, name, name_locked')
         .single()
 
     let { data: newLead, error: createError } = await insertLead('solo_api')
@@ -470,7 +495,7 @@ async function handleMessagesUpsert(
         console.log('[solo-wpp] Race 23505 detectada, re-buscando lead vencedor...')
         const { data: winner } = await supabase
           .from('leads')
-          .select('id, phone')
+          .select('id, phone, name, name_locked')
           .eq('phone_normalized', phoneNorm)
           .eq('equipe_id', equipeId)
           .is('deleted_at', null)
@@ -493,11 +518,16 @@ async function handleMessagesUpsert(
 
   if (!lead) throw new Error("Falha inesperada: Lead nulo apos processamento")
 
-  // Update existing lead's last_message_at
+  // Update existing lead's last_message_at. O pushName só completa um nome
+  // vazio/técnico e nunca toca um nome travado (edição manual) — SE-SUP1-4.
   if (!leadIsNew && lead) {
+    const leadPatch: Record<string, unknown> = { last_message_at: messageDate }
+    if (shouldApplyName({ current: lead.name, incoming: contactPushName, locked: lead.name_locked, source: 'provider' })) {
+      leadPatch.name = (contactPushName as string).trim()
+    }
     await supabase
       .from('leads')
-      .update({ last_message_at: messageDate })
+      .update(leadPatch)
       .eq('id', lead.id)
   }
 
@@ -554,32 +584,24 @@ async function handleMessagesUpsert(
         .update(convUpdates)
         .eq('id', conversationId)
     } else {
-      const { data: newConv, error: convError } = await supabase
-        .from('conversations')
-        .insert({
-          lead_id: lead.id,
-          equipe_id: equipeId,
-          channel: 'whatsapp',
-          status: 'active',
-          atendido_por_agente: false,
-          solo_instance_id: instance.id,
-          last_message_at: messageDate,
-          unread_count: 0,
-        })
-        .select('id')
-        .single()
-
-      if (convError) {
-        console.error('[solo-wpp] Erro ao criar conversa:', convError)
-        throw convError
-      }
-      conversationId = newConv.id
-      console.log('[solo-wpp] Nova conversa criada:', conversationId)
+      // SE-SUP1-4: duas mensagens juntas não abrem duas conversas.
+      const once = await insertConversationOnce(supabase, {
+        lead_id: lead.id,
+        equipe_id: equipeId,
+        channel: 'whatsapp',
+        status: 'active',
+        atendido_por_agente: false,
+        solo_instance_id: instance.id,
+        last_message_at: messageDate,
+        unread_count: 0,
+      })
+      conversationId = once.id
+      console.log(once.created ? '[solo-wpp] Nova conversa criada:' : '[solo-wpp] Conversa vencedora da corrida reaproveitada:', conversationId)
     }
   }
 
-  // ── 4f. Opportunity + AI (customer messages only) ──
-  if (senderType === 'customer') {
+  // ── 4f. Opportunity + AI (customer messages only; não-lead não vira negócio) ──
+  if (senderType === 'customer' && !quarantined) {
     // resolveActiveOpportunity in background
     EdgeRuntime.waitUntil(
       (async () => {

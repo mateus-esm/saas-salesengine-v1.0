@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Lead, CreateLeadData, UpdateLeadData } from "@/types/crm";
 import { fetchAllPages } from "@/lib/fetchAllPages";
 import { createDebouncer } from "@/lib/debounce";
+import { withNameLock } from "@/lib/leadNameLock";
 
 export type { Lead, CreateLeadData, UpdateLeadData } from "@/types/crm";
 
@@ -118,7 +119,7 @@ export const useLeads = () => {
       const { data, error } = await sb
         .from("leads")
         .update({
-          ...updateData,
+          ...withNameLock(updateData),
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
@@ -213,7 +214,7 @@ export const useLeadMutations = () => {
     mutationFn: async ({ id, ...updateData }: UpdateLeadData) => {
       const { data, error } = await sb
         .from("leads")
-        .update({ ...updateData, updated_at: new Date().toISOString() })
+        .update({ ...withNameLock(updateData), updated_at: new Date().toISOString() })
         .eq("id", id)
         .select()
         .single();

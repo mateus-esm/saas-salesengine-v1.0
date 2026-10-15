@@ -11,6 +11,7 @@ import {
   executeActions,
 } from "../_shared/rule-engine.ts";
 import type { RuleEvalContext, ActionContext } from "../_shared/rule-engine.ts";
+import { shouldApplyName } from "../_shared/lead-name-policy.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -95,7 +96,7 @@ serve(async (req) => {
     // ============ LOAD CONTACT (identity only) ============
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id, name, email, equipe_id')
+      .select('id, name, name_locked, email, equipe_id')
       .eq('id', lead_id)
       .maybeSingle();
 
@@ -275,7 +276,8 @@ serve(async (req) => {
 
     // ============ IDENTITY UPDATES (leads) ============
     const leadUpdates: Record<string, unknown> = {};
-    if (data.name && data.name !== lead.name) leadUpdates.name = data.name;
+    // SE-SUP1-4: nome editado à mão (name_locked) nunca é sobrescrito pela IA.
+    if (shouldApplyName({ current: lead.name, incoming: data.name, locked: lead.name_locked, source: 'ai' })) leadUpdates.name = data.name;
     if (data.email && data.email !== lead.email) leadUpdates.email = data.email;
 
     if (data.intent === 'DISQUALIFIED') {

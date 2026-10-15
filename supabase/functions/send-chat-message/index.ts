@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendViaSolo } from '../_shared/solo-sender.ts'
 import { openManualGptConversation } from '../_shared/manual-conversation.ts'
+import { insertConversationOnce } from '../_shared/conversation-once.ts'
 import { isMetaChannel, isMetaWindowClosed } from '../_shared/meta-window.ts'
 import { isTechnicalPhone, normalizePhone as normalizeProviderPhone } from '../_shared/phone.ts'
 
@@ -323,7 +324,8 @@ async function persistManualGptOpening(
     const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId)
     if (error) throw error
   } else {
-    const { data, error } = await supabase.from('conversations').insert({
+    // SE-SUP1-4: perde a corrida contra um webhook? reaproveita a conversa dele.
+    conversationId = (await insertConversationOnce(supabase, {
       lead_id: input.leadId,
       equipe_id: input.equipeId,
       channel: 'whatsapp',
@@ -331,9 +333,7 @@ async function persistManualGptOpening(
       atendido_por_agente: false,
       unread_count: 0,
       ...patch,
-    }).select('id').single()
-    if (error) throw error
-    conversationId = data.id
+    })).id
   }
 
   const { error: messageError } = await supabase.from('messages').update({
@@ -398,16 +398,14 @@ async function persistManualSoloOpening(
     const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId)
     if (error) throw error
   } else {
-    const { data, error } = await supabase.from('conversations').insert({
+    conversationId = (await insertConversationOnce(supabase, {
       lead_id: input.leadId,
       equipe_id: input.equipeId,
       channel: 'whatsapp',
       atendido_por_agente: false,
       unread_count: 0,
       ...patch,
-    }).select('id').single()
-    if (error) throw error
-    conversationId = data.id
+    })).id
   }
 
   const { error: messageError } = await supabase.from('messages').update({

@@ -33,6 +33,7 @@ import {
   SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2";
 import { isTechnicalPhone } from "../_shared/phone.ts";
+import { insertConversationOnce } from "../_shared/conversation-once.ts";
 import {
   HttpError,
   resolveCaller,
@@ -345,9 +346,8 @@ async function persistOpenedConversation(
       conversationId,
     );
   } else {
-    const { data: created, error } = await supabase
-      .from("conversations")
-      .insert({
+    try {
+      conversationId = (await insertConversationOnce(supabase, {
         lead_id: input.leadId,
         equipe_id: input.equipeId,
         channel: "whatsapp",
@@ -355,14 +355,11 @@ async function persistOpenedConversation(
         atendido_por_agente: false,
         unread_count: 0,
         ...patch,
-      })
-      .select("id")
-      .single();
-    if (error) {
+      })).id;
+    } catch (error) {
       console.error("[start-conversation] falha ao criar conversa:", error);
       return null;
     }
-    conversationId = created.id;
   }
 
   // A mensagem enviada aparece no inbox como qualquer outra saída. O eco que o
