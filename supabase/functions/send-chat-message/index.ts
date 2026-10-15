@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendViaSolo } from '../_shared/solo-sender.ts'
 import { openManualGptConversation } from '../_shared/manual-conversation.ts'
-import { insertConversationOnce } from '../_shared/conversation-once.ts'
+import { insertConversationOnce, updateConversationOnce } from '../_shared/conversation-once.ts'
 import { isMetaChannel, isMetaWindowClosed } from '../_shared/meta-window.ts'
 import { isTechnicalPhone, normalizePhone as normalizeProviderPhone } from '../_shared/phone.ts'
 
@@ -96,6 +96,7 @@ async function loadAuthorizedContext(
       .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status, channel')
       .eq('lead_id', resolvedLeadId)
       .neq('status', 'deleted')
+      .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
       .order('last_message_at', { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle()
@@ -321,8 +322,8 @@ async function persistManualGptOpening(
   if (input.providerChatId) patch.gpt_maker_chat_id = input.providerChatId
 
   if (conversationId) {
-    const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId)
-    if (error) throw error
+    // Reabrir arquivada pode colidir com a ativa do mesmo lead (SE-SUP1-4).
+    conversationId = await updateConversationOnce(supabase, conversationId, patch, { lead_id: input.leadId, channel: 'whatsapp' })
   } else {
     // SE-SUP1-4: perde a corrida contra um webhook? reaproveita a conversa dele.
     conversationId = (await insertConversationOnce(supabase, {
@@ -395,8 +396,8 @@ async function persistManualSoloOpening(
   }
 
   if (conversationId) {
-    const { error } = await supabase.from('conversations').update(patch).eq('id', conversationId)
-    if (error) throw error
+    // Reabrir arquivada pode colidir com a ativa do mesmo lead (SE-SUP1-4).
+    conversationId = await updateConversationOnce(supabase, conversationId, patch, { lead_id: input.leadId, channel: 'whatsapp' })
   } else {
     conversationId = (await insertConversationOnce(supabase, {
       lead_id: input.leadId,

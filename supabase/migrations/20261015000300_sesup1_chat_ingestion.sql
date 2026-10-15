@@ -1,3 +1,14 @@
+-- ============================ ORDEM DE DEPLOY ============================
+--   1. ESTA migration (colunas + gatilho + índice condicional).
+--   2. Funções, nesta ordem: send-chat-message, start-conversation (e as que
+--      importam _shared/outreach/*: o dispatcher de cadências), gpt-maker-webhook,
+--      solo-wpp-webhook, analyze-message.
+--   Funções antes da migration quebram a busca de lead (select de name_locked).
+--   Se houver par de conversas ativas duplicado a migration NÃO cria o índice:
+--   resolva com supabase/scripts/2026-10-15_sesup1_merge_duplicate_conversation_309b4c09.sql
+--   e reaplique o bloco 3.
+-- =========================================================================
+--
 -- Sprint Suporte 1 · #9 — qualidade da ingestão do chat (3 sintomas).
 --
 -- (a) CONVERSA FATIADA. Dois webhooks (ou um webhook e um envio manual) que
@@ -30,10 +41,8 @@
 -- active criadas com 4 s de diferença, 05/10): criar o índice falharia. Em vez de
 -- decidir sozinha qual conversa sobrevive (há mensagens nas duas), a migration só
 -- cria o índice quando NÃO há duplicata ativa e avisa (NOTICE) quando há. Passo
--- manual, depois de olhar o par com supabase/scripts/2026-10-15_sesup1_chat_diagnostics.sql:
---     update public.messages set conversation_id = '<mantida>' where conversation_id = '<antiga>';
---     update public.conversations set status = 'archived', archived_at = now() where id = '<antiga>';
--- e então rodar de novo o bloco 3 (idempotente) ou esta migration inteira.
+-- manual, depois de olhar o par com supabase/scripts/2026-10-15_sesup1_chat_diagnostics.sql
+-- (mesclar com 2026-10-15_sesup1_merge_duplicate_conversation_309b4c09.sql), e então rodar de novo o bloco 3 (idempotente) ou esta migration inteira.
 -- Enquanto o índice não existe a corrida continua possível, só rara.
 
 begin;
@@ -49,7 +58,7 @@ comment on column public.leads.name_locked is
 comment on column public.leads.needs_review is
   'SE-SUP1-4: o filtro de entrada duvidou que seja lead (serviço, código, sem identidade). Fica fora do pipeline até alguém revisar.';
 comment on column public.leads.review_reason is
-  'SE-SUP1-4: service_sender | short_code | alphanumeric_sender | no_identity | automated_code.';
+  'SE-SUP1-4: service_sender | short_code | alphanumeric_sender | automated_code.';
 
 create index if not exists idx_leads_needs_review
   on public.leads (equipe_id) where needs_review and deleted_at is null;

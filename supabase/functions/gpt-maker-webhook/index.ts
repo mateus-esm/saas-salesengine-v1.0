@@ -3,8 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryLine, entryOfKind, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { resolveLeadIdentity } from "../_shared/lead-identity.ts"
-import { insertConversationOnce } from "../_shared/conversation-once.ts"
-import { classifyInbound } from "../_shared/inbound-filter.ts"
+import { insertConversationOnce, updateConversationOnce } from "../_shared/conversation-once.ts"
+import { classifyInbound, promotionPatch } from "../_shared/inbound-filter.ts"
 import { shouldApplyName } from "../_shared/lead-name-policy.ts"
 
 declare const EdgeRuntime: {
@@ -195,12 +195,12 @@ serve(async (req) => {
     // FOUND here and reused instead of turning into a second lead for the same
     // contact. New LID leads are stored without a phone key and are found by
     // the gpt_maker_chat_id lookup below.
-    let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null; name?: string | null; name_locked?: boolean | null } | null = null
+    let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null; name?: string | null; name_locked?: boolean | null; lead_type?: string | null; needs_review?: boolean | null } | null = null
 
     if (phoneNorm) {
       const { data: leadByPhone } = await supabase
         .from('leads')
-        .select('id, gpt_maker_chat_id, phone, name, name_locked')
+        .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
         .eq('phone_normalized', phoneNorm)
         .eq('equipe_id', equipeId)
         .is('deleted_at', null)
@@ -215,7 +215,7 @@ serve(async (req) => {
     if (!lead && chatId) {
       const { data: leadByChat } = await supabase
         .from('leads')
-        .select('id, gpt_maker_chat_id, phone, name, name_locked')
+        .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
         .eq('gpt_maker_chat_id', chatId)
         .eq('equipe_id', equipeId)
         .is('deleted_at', null)
@@ -271,7 +271,7 @@ serve(async (req) => {
           profile_picture: profilePicture,
           agent_name: agentName,
         })
-        .select('id, gpt_maker_chat_id, phone, name, name_locked')
+        .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
         .single()
 
       if (createError) {
@@ -280,7 +280,7 @@ serve(async (req) => {
           console.log('[Webhook] Race detectada (23505), re-buscando lead vencedor...')
           const { data: winner } = await supabase
             .from('leads')
-            .select('id, gpt_maker_chat_id, phone, name, name_locked')
+            .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
             .eq('phone_normalized', phoneNorm)
             .eq('equipe_id', equipeId)
             .is('deleted_at', null)
@@ -350,6 +350,11 @@ serve(async (req) => {
         updates.phone = identity.phone
       }
 
+      // Contato que o filtro tinha marcado e agora fala como lead: volta ao fluxo
+      // (o passo do negócio roda porque quarantined=false).
+      const promo = senderType === 'customer' ? promotionPatch(lead, verdict) : null
+      if (promo) Object.assign(updates, promo)
+
       // SE-SUP1-4: o contactName só completa nome vazio/técnico e nunca toca
       // um nome travado (edição manual do time).
       if (shouldApplyName({ current: lead.name, incoming: rawSenderName, locked: lead.name_locked, source: 'provider' })) {
@@ -391,6 +396,7 @@ serve(async (req) => {
         .eq('lead_id', lead.id)
         .eq('channel', channel)
         .neq('status', 'deleted')
+        .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
         .order('last_message_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle()
@@ -407,6 +413,7 @@ serve(async (req) => {
           .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
           .eq('gpt_maker_chat_id', chatId)
           .neq('status', 'deleted')
+          .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
           .order('last_message_at', { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle()
@@ -424,6 +431,7 @@ serve(async (req) => {
           .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
           .eq('lead_id', lead.id)
           .neq('status', 'deleted')
+          .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
           .order('last_message_at', { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle()
@@ -456,10 +464,15 @@ serve(async (req) => {
           // Only overwrite if we have a specific (non-default) channel detection
           convUpdates.channel = channel
         }
-        await supabase
-          .from('conversations')
-          .update(convUpdates)
-          .eq('id', conversationId)
+        try {
+          conversationId = await updateConversationOnce(supabase, conversationId, convUpdates, {
+            lead_id: lead.id,
+            channel: existingConv.channel,
+          })
+        } catch (convUpdErr) {
+          // A mensagem não pode se perder por um UPDATE de metadados da conversa.
+          console.error('[Webhook] Erro atualizando conversa:', convUpdErr)
+        }
       } else {
         // SE-SUP1-4: duas mensagens juntas não abrem duas conversas.
         const once = await insertConversationOnce(supabase, {

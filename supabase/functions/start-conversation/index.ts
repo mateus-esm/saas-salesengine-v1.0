@@ -33,7 +33,7 @@ import {
   SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2";
 import { isTechnicalPhone } from "../_shared/phone.ts";
-import { insertConversationOnce } from "../_shared/conversation-once.ts";
+import { insertConversationOnce, updateConversationOnce } from "../_shared/conversation-once.ts";
 import {
   HttpError,
   resolveCaller,
@@ -325,6 +325,7 @@ async function persistOpenedConversation(
     .eq("lead_id", input.leadId)
     .eq("channel", "whatsapp")
     .neq("status", "deleted")
+    .order("status", { ascending: true }) // 'active' < 'archived': prefere a ativa
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
@@ -341,10 +342,10 @@ async function persistOpenedConversation(
       update.status = "active";
       update.archived_at = null;
     }
-    await supabase.from("conversations").update(update).eq(
-      "id",
-      conversationId,
-    );
+    conversationId = await updateConversationOnce(supabase, existing.id, update, {
+      lead_id: input.leadId,
+      channel: "whatsapp",
+    });
   } else {
     try {
       conversationId = (await insertConversationOnce(supabase, {
