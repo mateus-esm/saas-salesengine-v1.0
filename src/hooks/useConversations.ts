@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { SERVICE_WINDOW_MS } from "@/lib/service-window";
+import { CUSTOMER_SIGNAL_LOOKBACK_MS } from "@/lib/service-window";
 import { toast } from "sonner";
 
 // Database types lag the new conversations table until `supabase gen types` reruns post-migration.
@@ -72,7 +72,7 @@ export type CustomerWindowSignal = Record<string, string>;
  *  por conversa. A RLS de `messages` já limita o resultado à equipe do usuário,
  *  então não é preciso enumerar ids de conversa. */
 async function fetchCustomerWindowSignal(): Promise<CustomerWindowSignal> {
-  const since = new Date(Date.now() - SERVICE_WINDOW_MS).toISOString();
+  const since = new Date(Date.now() - CUSTOMER_SIGNAL_LOOKBACK_MS).toISOString();
   const { data, error } = await sb
     .from("messages")
     .select("conversation_id, created_at")

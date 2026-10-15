@@ -18,6 +18,7 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { ChatInput } from "@/components/inbox/ChatInput";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
+import { useSetAttendant } from "@/hooks/useSetResponsible";
 import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -27,13 +28,15 @@ import { Lead } from "@/types/crm";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
-import { resolveServiceWindow } from "@/lib/service-window";
+import { isMetaWindowClosedMessage, readSendErrorMessage } from "@/lib/send-errors";
+import { META_HUMAN_AGENT_WINDOW_MS, resolveServiceWindow } from "@/lib/service-window";
 
 const Chat = () => {
   const { user, profile } = useAuth();
   const { isAdmin } = useRole();
   const currentUserId = user?.id;
   const { teamMembers } = useTeamMembers();
+  const setAttendant = useSetAttendant();
 
   // Leads still power CRM fields (stage, value, notes) and the details modal.
   const { leads, isLoading: loadingLeads, refetch: refetchLeads, updateLead, deleteLead } = useLeads();
@@ -138,6 +141,7 @@ const Chat = () => {
     messages,
     loading: loadingMessages,
     addOptimisticMessage,
+    removeOptimisticMessage,
     syncHistory,
     isSyncing: isSyncingHistory,
   } = useMessages(
@@ -210,6 +214,7 @@ const Chat = () => {
     // `src/lib/service-window.ts`.
     const serviceWindow = resolveServiceWindow({
       channel: selectedConversation.channel,
+      humanAgentWindowMs: META_HUMAN_AGENT_WINDOW_MS,
       conversationSoloInstanceId: selectedConversation.solo_instance_id,
       hasConnectedSoloInstance: hasSoloInstance,
       lastCustomerMessageAt:
@@ -239,6 +244,7 @@ const Chat = () => {
       channel: selectedConversation.channel || 'whatsapp',
       agentName: selectedConversation.agent_name || undefined,
       responsibleId: selectedConversation.responsible_id || undefined,
+      leadResponsibleId: lead?.responsible_id ?? null,
       crmData: {
         value: lead?.opportunity_value || 0,
         stage: lead?.stage_id || stageName,
@@ -268,6 +274,7 @@ const Chat = () => {
       // ignorava o canal — os dois indicadores discordavam entre si.
       const serviceWindow = resolveServiceWindow({
         channel: c.channel,
+        humanAgentWindowMs: META_HUMAN_AGENT_WINDOW_MS,
         conversationSoloInstanceId: c.solo_instance_id,
         hasConnectedSoloInstance: hasSoloInstance,
         lastCustomerMessageAt: lastCustomerMessageAtByConversation[c.id] ?? null,
@@ -311,8 +318,8 @@ const Chat = () => {
   const handleSendMessage = async (content: string, media?: { url: string; type: string }) => {
     if (!selectedConversationId || !selectedConversation) return;
 
+    const tempId = `temp-${Date.now()}`;
     try {
-      const tempId = `temp-${Date.now()}`;
       addOptimisticMessage({
         id: tempId,
         content,
@@ -324,16 +331,6 @@ const Chat = () => {
         media_url: media?.url || null,
         media_type: media?.type || null,
       } as any);
-
-      // T14 — a human typing takes the loop: flip to human handling instantly
-      // so the header morphs to "Vendedor no Loop" + "Devolver" without a manual
-      // toggle.
-      if (!selectedConversation.atendido_por_agente) {
-        void sb
-          .from('conversations')
-          .update({ atendido_por_agente: true })
-          .eq('id', selectedConversationId);
-      }
 
       const { error, data } = await supabase.functions.invoke('send-chat-message', {
         body: {
@@ -349,12 +346,31 @@ const Chat = () => {
 
       if (error) throw error;
 
+      // T14 — a human typing takes the loop: flip to human handling so the
+      // header morphs to "Vendedor no Loop" + "Devolver". Só depois do envio
+      // aceito: um envio rejeitado não pode deixar o agente de IA desligado.
+      if (!selectedConversation.atendido_por_agente) {
+        void sb
+          .from('conversations')
+          .update({ atendido_por_agente: true })
+          .eq('id', selectedConversationId);
+      }
+
       // T10 — Check delivery status
       if (data && typeof data === 'object' && 'delivered' in data && data.delivered === false) {
         toast.warning("Mensagem salva, mas não entregue — verifique os canais conectados.");
       }
     } catch (err) {
       console.error("Erro ao enviar:", err);
+      // SE-SUP1-2: a Meta recusaria; o servidor nem gravou a mensagem.
+      const serverMsg = await readSendErrorMessage(err);
+      if (isMetaWindowClosedMessage(serverMsg)) {
+        if (tempId) removeOptimisticMessage(tempId);
+        toast.error(
+          "Janela do Instagram fechada: só é possível responder até 24 h após a última mensagem do cliente.",
+        );
+        return;
+      }
       toast.error("Erro ao enviar mensagem");
     }
   };
@@ -409,15 +425,9 @@ const Chat = () => {
 
   const handleAssignResponsible = async (userId: string | null) => {
     if (!selectedConversationId) return;
-    try {
-      await sb
-        .from('conversations')
-        .update({ responsible_id: userId })
-        .eq('id', selectedConversationId);
-      toast.success(userId ? 'Responsável atribuído' : 'Responsável removido');
-    } catch (err) {
-      toast.error('Erro ao atribuir responsável');
-    }
+    // Sprint Suporte 1 · #11 — o seletor do cabeçalho é o ATENDENTE da conversa;
+    // o RPC valida a equipe e o hook já avisa/atualiza a lista.
+    setAttendant.mutate({ conversationId: selectedConversationId, userId });
   };
 
   const handleConversationStatusChange = (
@@ -639,6 +649,7 @@ const Chat = () => {
               disabled={loadingMessages}
               leadId={selectedConversation?.lead_id ?? undefined}
               hasSoloInstance={hasSoloInstance}
+              isMetaChannel={selectedSession?.serviceWindow?.channelKind === "meta"}
               metaWindowClosed={
                 selectedSession?.serviceWindow?.channelKind === "meta" &&
                 !selectedSession.serviceWindow.open

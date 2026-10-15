@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   NON_OFFICIAL_CHANNEL_TYPES,
+  CUSTOMER_SIGNAL_LOOKBACK_MS,
   META_HUMAN_AGENT_WINDOW_MS,
   SERVICE_WINDOW_MS,
   isMetaMessagingChannel,
@@ -228,5 +229,12 @@ describe("SE-SUP1-2 — Instagram/Messenger (Meta-messaging) não herdam a Solo 
 
   it("canal fora de WhatsApp/Meta (web, telegram) mantém o comportamento legado", () => {
     expect(resolveServiceWindow({ channel: "web", hasConnectedSoloInstance: true, now: NOW }).open).toBe(true);
+  });
+});
+
+describe("CUSTOMER_SIGNAL_LOOKBACK_MS", () => {
+  it("nunca é menor que a janela de 24 h nem que a extensão humana", () => {
+    expect(CUSTOMER_SIGNAL_LOOKBACK_MS).toBeGreaterThanOrEqual(SERVICE_WINDOW_MS);
+    expect(CUSTOMER_SIGNAL_LOOKBACK_MS).toBeGreaterThanOrEqual(META_HUMAN_AGENT_WINDOW_MS);
   });
 });

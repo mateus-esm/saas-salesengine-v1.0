@@ -35,10 +35,12 @@ interface ChatInputProps {
    * O compositor fica travado com a explicação e as saídas reais — enviar
    * seria recusado pela Meta, e a tela não deve prometer o contrário.
    */
+  /** Canal Meta: a Solo API é WhatsApp-only, então o selo de envio não vale. */
+  isMetaChannel?: boolean;
   metaWindowClosed?: { channel: string; hasPhone: boolean };
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId, hasSoloInstance, metaWindowClosed }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId, hasSoloInstance, isMetaChannel, metaWindowClosed }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -156,7 +158,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
             {name} só permite resposta até 24 h após a última mensagem do cliente.
           </p>
           <p className="mt-1 text-xs">
-            Como seguir: responda ao comentário ou story do cliente (isso reabre a conversa)
+            Como seguir: responda ao comentário ou story do cliente (pode abrir uma nova conversa)
             {metaWindowClosed.hasPhone
               ? " ou abra a conversa pelo WhatsApp, já que este lead tem telefone cadastrado."
               : "; se o lead informar um telefone, você poderá continuar pelo WhatsApp."}
@@ -330,7 +332,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
 
         {/* Send / Record buttons */}
             <div className="flex items-center gap-1">
-              {hasSoloInstance && (
+              {hasSoloInstance && !isMetaChannel && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>

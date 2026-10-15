@@ -86,6 +86,14 @@ export const useMessages = (
     });
   };
 
+  const removeOptimisticMessage = (id: string) => {
+    setMessages((current) => {
+      const next = current.filter((m) => m.id !== id);
+      if (conversationId) messagesCache.set(conversationId, next);
+      return next;
+    });
+  };
+
   const sortMessages = sortMessagesByDate;
 
   useEffect(() => {
@@ -237,6 +245,6 @@ export const useMessages = (
     }
   };
 
-  return { messages, loading, isSyncing, addOptimisticMessage, syncHistory };
+  return { messages, loading, isSyncing, addOptimisticMessage, removeOptimisticMessage, syncHistory };
 };
 

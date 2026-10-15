@@ -152,3 +152,5 @@ Ondas 1, 1B, 2, 4, 9 são independentes e podem ir em paralelo. 5→6→7 têm d
 3. Migrations: aplicar com `supabase db query` (nunca `db push --include-all`; memória do histórico de migrations), todo objeto novo em `public` com RLS na mesma transação, todo `%s` de função com cast de tipo.
 4. Deploy manual (sem CI); a cada onda, resposta ao ticket no painel (`support_tickets`) com o que mudou e fechamento.
 5. Verificação antes de fechar: teste automatizado + conferência no banco (ex.: Onda 1 → `select count(*) … stage_type='lost' and lost_reason is null` = 0 para novos).
+
+**Ao ligar a extensão HUMAN_AGENT:** mudar `META_HUMAN_AGENT_WINDOW_MS` em `src/lib/service-window.ts` e em `supabase/functions/_shared/meta-window.ts`. O recorte de busca dos inbounds no front (`CUSTOMER_SIGNAL_LOOKBACK_MS`, usado por `useConversations`) acompanha a constante sozinho; confirmar que `Chat.tsx` passa `humanAgentWindowMs` (já passa a constante) e reimplantar `send-chat-message`.

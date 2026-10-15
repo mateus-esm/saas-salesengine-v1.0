@@ -57,6 +57,15 @@ export const META_MESSAGING_CHANNELS = ["instagram", "messenger"] as const;
  */
 export const META_HUMAN_AGENT_WINDOW_MS = 0;
 
+/**
+ * Quanto tempo para trás buscar inbounds do cliente. Única fonte para o front:
+ * ligar a extensão humana aumenta o recorte junto, sem desalinhar da regra.
+ */
+export const CUSTOMER_SIGNAL_LOOKBACK_MS = Math.max(
+  SERVICE_WINDOW_MS,
+  META_HUMAN_AGENT_WINDOW_MS,
+);
+
 export type ChannelKind = "whatsapp" | "meta" | "other";
 
 export function isMetaMessagingChannel(channel: string | null | undefined): boolean {
