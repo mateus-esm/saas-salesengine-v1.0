@@ -22,6 +22,8 @@ export interface MoveRequest {
   toStageId: string;
   /** Shown in the dialog ("<name> foi movido para uma etapa de perda"). */
   leadName?: string;
+  /** Bulk move: number of deals; the dialog says the reason applies to all of them. */
+  count?: number;
   /** Saves the move. `lostReason` is set only when the target is a lost stage that needed one. */
   run: (lostReason: string | null) => void;
   /** The user dismissed the reason dialog: nothing was saved. For callers awaiting the move (a grid cell). */
@@ -68,6 +70,7 @@ export function useMoveToStage({ stages, pipeline }: Options) {
       onCancel={cancel}
       reasons={lossReasonsOf(pipeline)}
       leadName={pending?.leadName}
+      count={pending?.count}
       onConfirm={confirm}
     />
   );

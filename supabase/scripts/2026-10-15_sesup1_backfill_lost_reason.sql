@@ -1,5 +1,5 @@
 -- ============================================================================
--- APLICAR A MÃO — não rodar por `db push`.
+-- APLICAR A MÃO (script avulso, fora de supabase/migrations).
 -- ============================================================================
 -- Sprint Suporte 1 · #12 — backfill do motivo de perda.
 --

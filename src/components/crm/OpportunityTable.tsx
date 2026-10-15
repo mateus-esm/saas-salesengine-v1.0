@@ -570,7 +570,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
                 requestMove({
                   fromStageId: "",
                   toStageId,
-                  leadName: ids.length === 1 ? undefined : `${ids.length} negócios`,
+                  count: ids.length,
                   run: (lostReason) =>
                     updateMany.mutate(
                       { ids, patch: { stage_id: toStageId }, lostReason },

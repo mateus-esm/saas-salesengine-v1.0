@@ -35,6 +35,8 @@ interface Props {
   /** The pipeline's configured reasons, plus "Outro…" free text. */
   reasons: LossReasonOption[];
   leadName?: string;
+  /** Bulk move: how many deals share this one reason. */
+  count?: number;
   /** Called with the chosen, non-empty reason. */
   onConfirm: (reason: string) => void;
 }
@@ -44,6 +46,7 @@ export function LossReasonDialog({
   onCancel,
   reasons,
   leadName,
+  count,
   onConfirm,
 }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -64,7 +67,12 @@ export function LossReasonDialog({
         <DialogHeader>
           <DialogTitle className="text-base">Por que este negócio foi perdido?</DialogTitle>
           <DialogDescription className="text-xs">
-            {leadName ? (
+            {count && count > 1 ? (
+              <>
+                {count} negócios serão movidos para uma etapa de perda. O motivo escolhido
+                aplica-se aos {count} negócios.
+              </>
+            ) : leadName ? (
               <>
                 <span className="font-medium text-foreground">{leadName}</span> foi movido para
                 uma etapa de perda. O motivo alimenta o dashboard e o relatório.

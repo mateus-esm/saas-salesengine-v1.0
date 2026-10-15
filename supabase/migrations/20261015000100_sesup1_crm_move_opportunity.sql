@@ -26,7 +26,7 @@
 -- (profiles.equipe_id de auth.uid()); etapa de outro pipeline/equipe é recusada.
 --
 -- O backfill dos 528 perdidos antigos NÃO está aqui: é o arquivo seguinte
--- (…_sesup1_backfill_lost_reason_APLICAR_A_MAO.sql), aplicado manualmente.
+-- (supabase/scripts/2026-10-15_sesup1_backfill_lost_reason.sql), aplicado manualmente.
 
 begin;
 
@@ -115,7 +115,14 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  if new.status = 'lost' and nullif(btrim(coalesce(new.lost_reason, '')), '') is null then
+  -- Só age quando o negócio ENTRA em perda (insert já perdido, ou update que
+  -- troca etapa/status para perdido) sem motivo. Uma escrita qualquer num negócio
+  -- que já está perdido e sem motivo (o legado) não é tocada: isso é do backfill.
+  -- Idempotente: com motivo preenchido não faz nada.
+  if new.status = 'lost' and nullif(btrim(coalesce(new.lost_reason, '')), '') is null
+     and (tg_op = 'INSERT'
+          or old.status is distinct from 'lost'
+          or new.stage_id is distinct from old.stage_id) then
     new.lost_reason := 'Não informado';
   end if;
   return new;
@@ -123,11 +130,13 @@ end;
 $$;
 
 comment on function public.fn_opportunity_default_lost_reason() is
-  'Sprint Suporte 1 · #12: a lost deal never stays without a reason. Writers that do not go through crm_move_opportunity (webhook, Copilot, agent rules, API) get "Não informado", to be qualified later.';
+  'Sprint Suporte 1 · #12: a deal that ENTERS lost never stays without a reason. Writers that do not go through crm_move_opportunity (webhook, Copilot, agent rule engine, API) get "Não informado", to be qualified later.';
 
+-- Sem lista de colunas em "update of": o status pode virar perdido por qualquer
+-- caminho; o guarda acima filtra por transição. Roda por último ('z').
 drop trigger if exists trg_opportunity_z_lost_reason on public.opportunities;
 create trigger trg_opportunity_z_lost_reason
-  before insert or update of status, stage_id, lost_reason on public.opportunities
+  before insert or update of status, stage_id on public.opportunities
   for each row execute function public.fn_opportunity_default_lost_reason();
 
 commit;
