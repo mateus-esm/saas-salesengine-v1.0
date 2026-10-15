@@ -7,13 +7,19 @@
 import { Loader2 } from "lucide-react";
 import { ChartCard } from "@/components/dashboard/chart-primitives";
 import { BreakdownView } from "@/components/dashboard/BreakdownView";
-import { useDashboardFilterOptions, useFunnelBreakdown } from "@/hooks/useDashboardV2";
+import { TouchpointsBySellerView } from "@/components/dashboard/TouchpointsBySellerView";
+import {
+  useDashboardFilterOptions,
+  useFunnelBreakdown,
+  useTouchpointsBySeller,
+} from "@/hooks/useDashboardV2";
 import { useDashboardContext } from "./DashboardLayout";
 
 export default function TeamPage() {
   const { filters } = useDashboardContext();
   const { data: rows, isLoading } = useFunnelBreakdown(filters, "responsible");
   const { data: options } = useDashboardFilterOptions();
+  const { data: touchpoints } = useTouchpointsBySeller(filters);
 
   if (isLoading) {
     return (
@@ -41,6 +47,17 @@ export default function TeamPage() {
         description="Quanto valor cada pessoa tem em aberto agora."
       >
         <BreakdownView rows={rows ?? []} metric="open_value" />
+      </ChartCard>
+
+      <ChartCard
+        title="Touchpoints por vendedor"
+        description={
+          options?.can_see_team
+            ? "Quantos contatos cada pessoa registrou no período."
+            : "Seus contatos registrados no período."
+        }
+      >
+        <TouchpointsBySellerView data={touchpoints} />
       </ChartCard>
     </div>
   );

@@ -37,6 +37,7 @@ import {
   formatRate,
 } from "@/components/dashboard/chart-primitives";
 import { LossReasonList } from "@/components/dashboard/LossReasonList";
+import { TouchpointsBySellerView } from "@/components/dashboard/TouchpointsBySellerView";
 import { TopOpportunitiesTable } from "@/components/dashboard/TopOpportunitiesTable";
 import {
   isFunnelUnmapped,
@@ -46,6 +47,7 @@ import {
   useFunnelSeries,
   useLossReasons,
   useTopOpportunities,
+  useTouchpointsBySeller,
 } from "@/hooks/useDashboardV2";
 import { useDashboardLayout } from "@/hooks/useDashboardLayout";
 import { WIDGET_BY_ID } from "@/config/widgetCatalog";
@@ -67,6 +69,7 @@ export default function OverviewPage() {
   const { data: mapStatus } = useFunnelMapStatus();
   const { data: byChannel } = useFunnelBreakdown(filters, "channel");
   const { data: byResponsible } = useFunnelBreakdown(filters, "responsible");
+  const { data: touchpointsBySeller } = useTouchpointsBySeller(filters);
 
   const unmapped = isFunnelUnmapped(mapStatus);
 
@@ -281,6 +284,17 @@ export default function OverviewPage() {
           <div key={id} className="lg:col-span-2">
             <CustomFieldWidget filters={filters} />
           </div>
+        );
+      case "panel_touchpoints_by_seller":
+        return (
+          <ChartCard
+            key={id}
+            className="lg:col-span-2"
+            title="Touchpoints por vendedor"
+            description="Quantos contatos cada pessoa registrou no período."
+          >
+            <TouchpointsBySellerView data={touchpointsBySeller} />
+          </ChartCard>
         );
       case "panel_by_responsible":
         return (

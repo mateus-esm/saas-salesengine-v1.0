@@ -187,6 +187,15 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     span: 2,
   },
   {
+    id: "panel_touchpoints_by_seller",
+    label: "Touchpoints por vendedor",
+    description: "Quantos contatos cada pessoa registrou no período, e o total.",
+    kind: "panel",
+    group: "Volume",
+    defaultOn: false,
+    span: 2,
+  },
+  {
     id: "panel_by_responsible",
     label: "Por responsável",
     description: "Quem trouxe receita no período.",
