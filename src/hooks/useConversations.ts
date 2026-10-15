@@ -288,26 +288,6 @@ export const useConversations = () => {
     onError: () => toast.error("Erro ao marcar como lida"),
   });
 
-  const assignResponsible = useMutation({
-    mutationFn: async ({
-      id,
-      responsibleId,
-    }: {
-      id: string;
-      responsibleId: string | null;
-    }) => {
-      const { error } = await sb
-        .from("conversations")
-        .update({ responsible_id: responsibleId })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
-    },
-    onError: () => toast.error("Erro ao atribuir responsável"),
-  });
-
   const markRead = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
       const { error } = await sb
@@ -354,7 +334,6 @@ export const useConversations = () => {
     refetch: conversationsQuery.refetch,
     updateStatus,
     bulkUpdateStatus,
-    assignResponsible,
     toggleHandoff,
     markRead,
     bulkMarkRead,

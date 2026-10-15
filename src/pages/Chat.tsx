@@ -19,6 +19,8 @@ import { ChatInput } from "@/components/inbox/ChatInput";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
 import { useSetAttendant } from "@/hooks/useSetResponsible";
+import { useOpportunities } from "@/hooks/useOpportunities";
+import { resolveResponsibleId } from "@/lib/chatOwnership";
 import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -99,6 +101,8 @@ const Chat = () => {
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);
+  // Responsável exibido = dono do negócio aberto (mesmo cache do painel lateral).
+  const { opportunities: leadOpportunities } = useOpportunities({ leadId: selectedConversation?.lead_id });
 
   // T15 — Zero-Friction Chat Link: when navigated to /chat?contact=<leadId>,
   // focus that contact's thread (creating an internal thread if none exists).
@@ -244,7 +248,7 @@ const Chat = () => {
       channel: selectedConversation.channel || 'whatsapp',
       agentName: selectedConversation.agent_name || undefined,
       responsibleId: selectedConversation.responsible_id || undefined,
-      leadResponsibleId: lead?.responsible_id ?? null,
+      leadResponsibleId: resolveResponsibleId(leadOpportunities, lead?.responsible_id),
       crmData: {
         value: lead?.opportunity_value || 0,
         stage: lead?.stage_id || stageName,
@@ -259,6 +263,7 @@ const Chat = () => {
   }, [
     selectedConversation,
     selectedLead,
+    leadOpportunities,
     stages,
     hasSoloInstance,
     lastCustomerMessageAtByConversation,

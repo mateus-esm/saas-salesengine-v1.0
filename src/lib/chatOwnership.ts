@@ -51,3 +51,39 @@ export function buildChatOwnership(args: {
 export function summarizeChatDeal(opps: Opportunity[]): Opportunity | null {
   return opps.find((o) => o.status === "open") ?? opps[0] ?? null;
 }
+
+/**
+ * O Responsável exibido é o dono do negócio ABERTO (opportunities.owner_id), o que
+ * as métricas e a comissão seguem. leads.responsible_id só vale quando não há
+ * negócio aberto — senão o chat mostraria um dono que o pipeline não reconhece.
+ */
+export function resolveResponsibleId(
+  opps: Pick<Opportunity, "status" | "owner_id">[],
+  leadResponsibleId: string | null | undefined,
+): string | null {
+  const open = opps.find((o) => o.status === "open");
+  return open ? open.owner_id ?? null : leadResponsibleId ?? null;
+}
+
+/** Quantos negócios abertos mudariam de dono ao atribuir `userId`. */
+export function countDealsToReassign(
+  opps: Pick<Opportunity, "status" | "owner_id">[],
+  userId: string | null,
+): number {
+  return opps.filter((o) => o.status === "open" && (o.owner_id ?? null) !== userId).length;
+}
+
+/** Aviso antes de confirmar; null quando só um negócio (ou nenhum) muda. */
+export function reassignNotice(count: number): string | null {
+  return count > 1 ? `${count} negócios abertos terão o responsável alterado` : null;
+}
+
+/** Códigos das RPCs de responsável/atendente em mensagem para a pessoa. */
+export function ownershipErrorMessage(err: unknown, fallback: string): string {
+  const msg = String((err as { message?: string } | null)?.message ?? err ?? "");
+  if (msg.includes("owner_not_in_team")) return "Essa pessoa não pertence à equipe.";
+  if (msg.includes("lead_not_found")) return "Contato não encontrado.";
+  if (msg.includes("conversation_not_found")) return "Conversa não encontrada.";
+  if (msg.includes("not_authenticated")) return "Sessão expirada. Entre novamente.";
+  return fallback;
+}

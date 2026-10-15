@@ -17,7 +17,18 @@ import { ChatOwnershipBlock } from "@/components/inbox/ChatOwnershipBlock";
 import { ChatDealSummary } from "@/components/inbox/ChatDealSummary";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { useSetResponsible, useSetAttendant } from "@/hooks/useSetResponsible";
-import { buildChatOwnership } from "@/lib/chatOwnership";
+import { buildChatOwnership, countDealsToReassign, reassignNotice } from "@/lib/chatOwnership";
+import { useOpportunities } from "@/hooks/useOpportunities";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CRMContextPanelProps {
   session: ChatSession | null;
@@ -62,6 +73,9 @@ export function CRMContextPanel({
   const { members, nameOf } = useMemberDirectory();
   const setResponsible = useSetResponsible();
   const setAttendant = useSetAttendant();
+  const { opportunities } = useOpportunities({ leadId: session?.leadId });
+  // Troca de responsável que atinge vários negócios abertos pede confirmação.
+  const [pendingResponsible, setPendingResponsible] = useState<{ userId: string | null; notice: string } | null>(null);
 
   useEffect(() => {
     setNotes(session?.crmData.notes || "");
@@ -250,10 +264,15 @@ export function CRMContextPanel({
               nameOf,
             })}
             members={members}
-            disabled={setResponsible.isPending || setAttendant.isPending}
+            disabledResponsible={setResponsible.isPending}
+            disabledAttendant={setAttendant.isPending}
             onSetResponsible={
               session.leadId
-                ? (userId) => setResponsible.mutate({ leadId: session.leadId!, userId })
+                ? (userId) => {
+                    const notice = reassignNotice(countDealsToReassign(opportunities, userId));
+                    if (notice) setPendingResponsible({ userId, notice });
+                    else setResponsible.mutate({ leadId: session.leadId!, userId });
+                  }
                 : undefined
             }
             onSetAttendant={
@@ -267,6 +286,27 @@ export function CRMContextPanel({
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!pendingResponsible} onOpenChange={(o) => !o && setPendingResponsible(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterar responsável?</AlertDialogTitle>
+            <AlertDialogDescription>{pendingResponsible?.notice}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingResponsible && session.leadId)
+                  setResponsible.mutate({ leadId: session.leadId, userId: pendingResponsible.userId });
+                setPendingResponsible(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* SECTIONS 2 + 3 + 4 · Active Opportunities / Opportunity Detail */}
       {session.leadId && <LeadOpportunitiesSection leadId={session.leadId} />}

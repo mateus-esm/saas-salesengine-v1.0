@@ -14,7 +14,10 @@ interface Props {
   members: Member[];
   onSetResponsible?: (userId: string | null) => void;
   onSetAttendant?: (userId: string | null) => void;
-  disabled?: boolean;
+  disabledResponsible?: boolean;
+  disabledAttendant?: boolean;
+  /** Aviso mostrado sob o Responsável (ex.: vários negócios abertos mudarão). */
+  responsibleNotice?: string | null;
 }
 
 function Row({
@@ -60,7 +63,15 @@ function Row({
   );
 }
 
-export function ChatOwnershipBlock({ ownership, members, onSetResponsible, onSetAttendant, disabled }: Props) {
+export function ChatOwnershipBlock({
+  ownership,
+  members,
+  onSetResponsible,
+  onSetAttendant,
+  disabledResponsible,
+  disabledAttendant,
+  responsibleNotice,
+}: Props) {
   return (
     <div className="space-y-1.5" data-testid="chat-ownership">
       <Row
@@ -69,15 +80,16 @@ export function ChatOwnershipBlock({ ownership, members, onSetResponsible, onSet
         slot={ownership.responsible}
         members={members}
         onChange={onSetResponsible}
-        disabled={disabled}
+        disabled={disabledResponsible}
       />
+      {responsibleNotice && <p className="text-[11px] text-amber-600">{responsibleNotice}</p>}
       <Row
         label="Atendente"
         hint="Quem está atendendo esta conversa"
         slot={ownership.attendant}
         members={members}
         onChange={onSetAttendant}
-        disabled={disabled}
+        disabled={disabledAttendant}
       />
     </div>
   );

@@ -28,7 +28,7 @@ interface ChatListItemProps {
   isSelected: boolean;
   onClick: () => void;
   /** Resolved name of the responsible team member (lookup done by parent). */
-  responsibleName?: string;
+  attendantName?: string;
   /** Current conversation status — drives which kebab actions are shown. */
   conversationStatus?: ConversationStatus;
   /** Called when user picks Archive / Reopen / Delete from the kebab. */
@@ -101,7 +101,7 @@ export function ChatListItem({
   session,
   isSelected,
   onClick,
-  responsibleName,
+  attendantName,
   conversationStatus,
   onStatusChange,
   isChecked,
@@ -243,12 +243,12 @@ export function ChatListItem({
         </div>
 
         {/* Channel + Responsible line (Epic 1) */}
-        {(channelLabel || responsibleName) && (
+        {(channelLabel || attendantName) && (
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5 truncate">
             {channelLabel && <span>{channelLabel}</span>}
-            {channelLabel && responsibleName && <span>·</span>}
-            {responsibleName && (
-              <span className="truncate">{responsibleName}</span>
+            {channelLabel && attendantName && <span>·</span>}
+            {attendantName && (
+              <span className="truncate">{attendantName}</span>
             )}
           </div>
         )}
@@ -268,7 +268,7 @@ export function ChatListItem({
           ) : session.status === "human_handling" ? (
             <Badge variant="secondary" className="gap-1 text-xs bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300/90 dark:ring-1 dark:ring-orange-500/20">
               <User className="h-3 w-3" />
-              {responsibleName || 'Sem Responsável'}
+              {attendantName || 'Sem Atendente'}
             </Badge>
           ) : null}
 

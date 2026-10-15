@@ -7,6 +7,7 @@ const rpc = vi.fn();
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
+import { toast } from "sonner";
 import { useSetResponsible, useSetAttendant } from "../useSetResponsible";
 
 function wrapper() {
@@ -52,5 +53,21 @@ describe("useSetResponsible / useSetAttendant (Sprint Suporte 1 · #8/#11)", () 
     await act(async () => { await result.current.mutateAsync({ conversationId: "c1", userId: "u2" }); });
     expect(rpc).toHaveBeenCalledWith("crm_set_attendant", { p_conversation: "c1", p_user: "u2" });
     expect(spy.mock.calls.some((c) => (c[0] as { queryKey: unknown[] }).queryKey[0] === "conversations")).toBe(true);
+  });
+
+  it("reports how many open deals changed in the success toast", async () => {
+    rpc.mockResolvedValue({ data: { opportunities_updated: 2 }, error: null });
+    const { W } = wrapper();
+    const { result } = renderHook(() => useSetResponsible(), { wrapper: W });
+    await act(async () => { await result.current.mutateAsync({ leadId: "l1", userId: "u1" }); });
+    expect(toast.success).toHaveBeenCalledWith("Responsável atualizado em 2 negócios abertos");
+  });
+
+  it("shows a specific message for owner_not_in_team", async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: "owner_not_in_team: x" } });
+    const { W } = wrapper();
+    const { result } = renderHook(() => useSetResponsible(), { wrapper: W });
+    await act(async () => { await result.current.mutateAsync({ leadId: "l1", userId: "x" }).catch(() => {}); });
+    expect(toast.error).toHaveBeenCalledWith("Essa pessoa não pertence à equipe.");
   });
 });

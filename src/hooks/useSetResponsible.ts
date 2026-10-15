@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { ownershipErrorMessage } from "@/lib/chatOwnership";
 
 // As RPCs novas ainda não estão em types.ts (mesmo escape de useConversations).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,13 +24,17 @@ export function useSetResponsible() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_d, vars) => {
-      for (const key of ["leads", "opportunities", "board", "conversations"]) {
+    onSuccess: (data, vars) => {
+      // Prefixos reais: ["leads", equipe], ["opportunities", equipe, ...] (useOpportunities),
+      // ["board", equipe, ...] (boardKeys em useBoard).
+      for (const key of ["leads", "opportunities", "board"]) {
         qc.invalidateQueries({ queryKey: [key] });
       }
-      toast.success(vars.userId ? "Responsável atualizado" : "Responsável removido");
+      const n = Number((data as { opportunities_updated?: number } | null)?.opportunities_updated ?? 0);
+      const base = vars.userId ? "Responsável atualizado" : "Responsável removido";
+      toast.success(n > 0 ? `${base} em ${n} negócio${n > 1 ? "s" : ""} aberto${n > 1 ? "s" : ""}` : base);
     },
-    onError: () => toast.error("Erro ao atribuir responsável"),
+    onError: (e) => toast.error(ownershipErrorMessage(e, "Erro ao atribuir responsável")),
   });
 }
 
@@ -44,6 +49,6 @@ export function useSetAttendant() {
       qc.invalidateQueries({ queryKey: ["conversations"] });
       toast.success(vars.userId ? "Atendente atualizado" : "Atendente removido");
     },
-    onError: () => toast.error("Erro ao atribuir atendente"),
+    onError: (e) => toast.error(ownershipErrorMessage(e, "Erro ao atribuir atendente")),
   });
 }
