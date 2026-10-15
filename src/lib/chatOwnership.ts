@@ -58,19 +58,23 @@ export function summarizeChatDeal(opps: Opportunity[]): Opportunity | null {
  * negócio aberto — senão o chat mostraria um dono que o pipeline não reconhece.
  */
 export function resolveResponsibleId(
-  opps: Pick<Opportunity, "status" | "owner_id">[],
+  opps: Pick<Opportunity, "status" | "owner_id" | "lead_id">[],
   leadResponsibleId: string | null | undefined,
+  leadId: string | null | undefined,
 ): string | null {
-  const open = opps.find((o) => o.status === "open");
+  // Só negócios DESTE contato: uma lista sem filtro de lead não pode emprestar dono.
+  const open = leadId ? opps.find((o) => o.lead_id === leadId && o.status === "open") : undefined;
   return open ? open.owner_id ?? null : leadResponsibleId ?? null;
 }
 
 /** Quantos negócios abertos mudariam de dono ao atribuir `userId`. */
 export function countDealsToReassign(
-  opps: Pick<Opportunity, "status" | "owner_id">[],
+  opps: Pick<Opportunity, "status" | "owner_id" | "lead_id">[],
   userId: string | null,
+  leadId: string | null | undefined,
 ): number {
-  return opps.filter((o) => o.status === "open" && (o.owner_id ?? null) !== userId).length;
+  if (!leadId) return 0;
+  return opps.filter((o) => o.lead_id === leadId && o.status === "open" && (o.owner_id ?? null) !== userId).length;
 }
 
 /** Aviso antes de confirmar; null quando só um negócio (ou nenhum) muda. */

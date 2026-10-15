@@ -102,7 +102,10 @@ const Chat = () => {
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);
   // Responsável exibido = dono do negócio aberto (mesmo cache do painel lateral).
-  const { opportunities: leadOpportunities } = useOpportunities({ leadId: selectedConversation?.lead_id });
+  const { opportunities: leadOpportunities } = useOpportunities({
+    leadId: selectedConversation?.lead_id,
+    enabled: !!selectedConversation?.lead_id,
+  });
 
   // T15 — Zero-Friction Chat Link: when navigated to /chat?contact=<leadId>,
   // focus that contact's thread (creating an internal thread if none exists).
@@ -248,7 +251,7 @@ const Chat = () => {
       channel: selectedConversation.channel || 'whatsapp',
       agentName: selectedConversation.agent_name || undefined,
       responsibleId: selectedConversation.responsible_id || undefined,
-      leadResponsibleId: resolveResponsibleId(leadOpportunities, lead?.responsible_id),
+      leadResponsibleId: resolveResponsibleId(leadOpportunities, lead?.responsible_id, selectedConversation.lead_id),
       crmData: {
         value: lead?.opportunity_value || 0,
         stage: lead?.stage_id || stageName,

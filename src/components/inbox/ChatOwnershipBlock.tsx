@@ -16,8 +16,6 @@ interface Props {
   onSetAttendant?: (userId: string | null) => void;
   disabledResponsible?: boolean;
   disabledAttendant?: boolean;
-  /** Aviso mostrado sob o Responsável (ex.: vários negócios abertos mudarão). */
-  responsibleNotice?: string | null;
 }
 
 function Row({
@@ -70,7 +68,6 @@ export function ChatOwnershipBlock({
   onSetAttendant,
   disabledResponsible,
   disabledAttendant,
-  responsibleNotice,
 }: Props) {
   return (
     <div className="space-y-1.5" data-testid="chat-ownership">
@@ -82,7 +79,6 @@ export function ChatOwnershipBlock({
         onChange={onSetResponsible}
         disabled={disabledResponsible}
       />
-      {responsibleNotice && <p className="text-[11px] text-amber-600">{responsibleNotice}</p>}
       <Row
         label="Atendente"
         hint="Quem está atendendo esta conversa"

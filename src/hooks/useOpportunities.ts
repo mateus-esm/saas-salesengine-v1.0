@@ -63,6 +63,8 @@ const normalize = (row: OpportunityRow): Opportunity => ({
 interface UseOpportunitiesOptions {
   pipelineId?: string;
   leadId?: string;
+  /** Default true. Callers scoped to one lead pass false while they have no lead (no filter would mean the whole team). */
+  enabled?: boolean;
 }
 
 /**
@@ -73,7 +75,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
   const equipeId = profile?.equipe_id;
-  const { pipelineId, leadId } = opts;
+  const { pipelineId, leadId, enabled = true } = opts;
 
   const queryKey = ["opportunities", equipeId, pipelineId ?? null, leadId ?? null];
 
@@ -99,7 +101,7 @@ export const useOpportunities = (opts: UseOpportunitiesOptions = {}) => {
       });
       return rows.map(normalize);
     },
-    enabled: !!equipeId,
+    enabled: !!equipeId && enabled,
   });
 
   useEffect(() => {

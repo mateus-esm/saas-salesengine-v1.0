@@ -53,23 +53,33 @@ describe("summarizeChatDeal", () => {
 
 describe("Responsável vem do negócio aberto", () => {
   const opps = [
-    { status: "won", owner_id: "w" },
-    { status: "open", owner_id: "u2" },
-    { status: "open", owner_id: "u3" },
+    { lead_id: "L", status: "won", owner_id: "w" },
+    { lead_id: "L", status: "open", owner_id: "u2" },
+    { lead_id: "L", status: "open", owner_id: "u3" },
   ] as never;
   it("uses the open deal's owner, not the lead's", () => {
-    expect(resolveResponsibleId(opps, "lead-resp")).toBe("u2");
+    expect(resolveResponsibleId(opps, "lead-resp", "L")).toBe("u2");
   });
   it("an open deal without owner shows no owner (no fallback)", () => {
-    expect(resolveResponsibleId([{ status: "open", owner_id: null }] as never, "lead-resp")).toBeNull();
+    expect(resolveResponsibleId([{ lead_id: "L", status: "open", owner_id: null }] as never, "lead-resp", "L")).toBeNull();
   });
   it("falls back to the lead only without an open deal", () => {
-    expect(resolveResponsibleId([{ status: "won", owner_id: "w" }] as never, "lead-resp")).toBe("lead-resp");
-    expect(resolveResponsibleId([], null)).toBeNull();
+    expect(resolveResponsibleId([{ lead_id: "L", status: "won", owner_id: "w" }] as never, "lead-resp", "L")).toBe("lead-resp");
+    expect(resolveResponsibleId([], null, "L")).toBeNull();
+  });
+  it("ignores deals of another lead (an unfiltered list must not lend its owner)", () => {
+    const foreign = [{ lead_id: "OTHER", status: "open", owner_id: "stranger" }] as never;
+    expect(resolveResponsibleId(foreign, "lead-resp", "L")).toBe("lead-resp");
+    expect(countDealsToReassign(foreign, "u1", "L")).toBe(0);
+  });
+  it("a lead-less chat takes no deal at all", () => {
+    expect(resolveResponsibleId(opps, null, null)).toBeNull();
+    expect(resolveResponsibleId(opps, null, undefined)).toBeNull();
+    expect(countDealsToReassign(opps, "u9", null)).toBe(0);
   });
   it("counts only open deals that change owner and warns for more than one", () => {
-    expect(countDealsToReassign(opps, "u2")).toBe(1);
-    expect(countDealsToReassign(opps, "u9")).toBe(2);
+    expect(countDealsToReassign(opps, "u2", "L")).toBe(1);
+    expect(countDealsToReassign(opps, "u9", "L")).toBe(2);
     expect(reassignNotice(2)).toBe("2 negócios abertos terão o responsável alterado");
     expect(reassignNotice(1)).toBeNull();
     expect(reassignNotice(0)).toBeNull();

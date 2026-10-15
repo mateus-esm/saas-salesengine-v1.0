@@ -73,7 +73,7 @@ export function CRMContextPanel({
   const { members, nameOf } = useMemberDirectory();
   const setResponsible = useSetResponsible();
   const setAttendant = useSetAttendant();
-  const { opportunities } = useOpportunities({ leadId: session?.leadId });
+  const { opportunities } = useOpportunities({ leadId: session?.leadId, enabled: !!session?.leadId });
   // Troca de responsável que atinge vários negócios abertos pede confirmação.
   const [pendingResponsible, setPendingResponsible] = useState<{ userId: string | null; notice: string } | null>(null);
 
@@ -269,7 +269,7 @@ export function CRMContextPanel({
             onSetResponsible={
               session.leadId
                 ? (userId) => {
-                    const notice = reassignNotice(countDealsToReassign(opportunities, userId));
+                    const notice = reassignNotice(countDealsToReassign(opportunities, userId, session.leadId));
                     if (notice) setPendingResponsible({ userId, notice });
                     else setResponsible.mutate({ leadId: session.leadId!, userId });
                   }
