@@ -3,6 +3,9 @@ import {
   adjustSummaryForMove,
   cleanFilters,
   getNextPageOffset,
+  lossReasonsOf,
+  needsLossReason,
+  planStageMove,
   normalizeBoardCard,
   prependCardToPages,
   removeCardFromPages,
@@ -164,5 +167,43 @@ describe("getNextPageOffset", () => {
 
   it("stops on an empty page", () => {
     expect(getNextPageOffset([], [[]], 30)).toBeUndefined();
+  });
+});
+
+describe("needsLossReason / planStageMove (Sprint Suporte 1 · #12)", () => {
+  const stages = [
+    { id: "s-open", stage_type: "open" },
+    { id: "s-won", stage_type: "won" },
+    { id: "s-lost", stage_type: "lost" },
+  ];
+  const withReasons = { loss_reasons: [{ label: "Preço" }] };
+
+  it("asks only for a lost target when the pipeline has reasons", () => {
+    expect(needsLossReason(stages[2], withReasons)).toBe(true);
+    expect(needsLossReason(stages[1], withReasons)).toBe(false);
+    expect(needsLossReason(stages[0], withReasons)).toBe(false);
+  });
+
+  it("does not ask when the pipeline has no reasons configured", () => {
+    expect(needsLossReason(stages[2], { loss_reasons: [] })).toBe(false);
+    expect(needsLossReason(stages[2], {})).toBe(false);
+    expect(needsLossReason(stages[2], null)).toBe(false);
+  });
+
+  it("does not ask for an unknown stage", () => {
+    expect(needsLossReason(undefined, withReasons)).toBe(false);
+  });
+
+  it("lossReasonsOf tolerates a malformed column", () => {
+    expect(lossReasonsOf({ loss_reasons: "x" })).toEqual([]);
+    expect(lossReasonsOf(withReasons)).toEqual([{ label: "Preço" }]);
+  });
+
+  it("plans noop / direct / ask", () => {
+    expect(planStageMove(stages, withReasons, "s-open", "s-open")).toBe("noop");
+    expect(planStageMove(stages, withReasons, "s-open", "s-won")).toBe("direct");
+    expect(planStageMove(stages, withReasons, "s-open", "s-lost")).toBe("ask");
+    expect(planStageMove(stages, { loss_reasons: [] }, "s-open", "s-lost")).toBe("direct");
+    expect(planStageMove(stages, withReasons, "s-open", "missing")).toBe("noop");
   });
 });

@@ -128,6 +128,8 @@ function useInvalidateDeals(pipelineId: string | undefined) {
 export interface BulkUpdateVars {
   ids: string[];
   patch: { stage_id?: string; owner_id?: string | null };
+  /** Sprint Suporte 1 · #12 — saved with the stage change when the target is a lost stage (useMoveToStage asks for it). */
+  lostReason?: string | null;
   /** Extra fields to show at once while the server answers (e.g. owner_name). */
   display?: Partial<OppTableRow>;
 }
@@ -139,16 +141,39 @@ export function useUpdateOpportunities(pipelineId: string | undefined, filters: 
   const invalidate = useInvalidateDeals(pipelineId);
 
   return useMutation({
-    mutationFn: async ({ ids, patch }: BulkUpdateVars): Promise<number> => {
-      const { data, error } = await sb.rpc("crm_update_opportunities", { p_ids: ids, p_patch: patch });
-      if (error) throw error;
-      return Number(data) || 0;
+    mutationFn: async ({ ids, patch, lostReason }: BulkUpdateVars): Promise<number> => {
+      // A stage change goes through the single move engine (crm_move_opportunity),
+      // which carries the loss reason in the same call; an owner change keeps the
+      // bulk verb. The generic verb no longer moves stages on its own.
+      const { stage_id: stageId, ...rest } = patch;
+      let moved = 0;
+      if (stageId) {
+        const results = await Promise.all(
+          ids.map(async (id) => {
+            const { data, error } = await sb.rpc("crm_move_opportunity", {
+              p_opportunity: id,
+              p_stage: stageId,
+              p_lost_reason: lostReason ?? null,
+            });
+            if (error) throw error;
+            return data === true;
+          }),
+        );
+        moved = results.filter(Boolean).length;
+      }
+      if (Object.keys(rest).length > 0) {
+        const { data, error } = await sb.rpc("crm_update_opportunities", { p_ids: ids, p_patch: rest });
+        if (error) throw error;
+        return stageId ? moved : Number(data) || 0;
+      }
+      return moved;
     },
-    onMutate: async ({ ids, patch, display }: BulkUpdateVars) => {
+    onMutate: async ({ ids, patch, display, lostReason }: BulkUpdateVars) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<TablePages<OppTableRow>>(key);
       let next = previous;
-      for (const id of ids) next = patchRowInPages(next, id, { ...patch, ...display } as Partial<OppTableRow>);
+      const shown = lostReason ? { ...patch, lost_reason: lostReason, ...display } : { ...patch, ...display };
+      for (const id of ids) next = patchRowInPages(next, id, shown as Partial<OppTableRow>);
       if (next) queryClient.setQueryData(key, next);
       return { previous };
     },

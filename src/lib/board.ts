@@ -129,6 +129,47 @@ export function adjustSummaryForMove(
   });
 }
 
+/** A reason a deal can be lost for, as configured in pipelines.loss_reasons. */
+export interface LossReasonOption {
+  label: string;
+  color?: string;
+}
+
+/** The pipeline's configured loss reasons; a malformed column counts as none. */
+export function lossReasonsOf(pipeline: { loss_reasons?: unknown } | null | undefined): LossReasonOption[] {
+  const raw = pipeline?.loss_reasons;
+  return Array.isArray(raw) ? (raw as LossReasonOption[]) : [];
+}
+
+/**
+ * Sprint Suporte 1 · #12 — does moving a deal INTO this stage require a reason?
+ * Yes when the stage is a lost stage and the pipeline has reasons configured
+ * (same rule the crm_move_opportunity RPC enforces). A pipeline with no reasons
+ * has nothing to choose from, so it is never asked.
+ */
+export function needsLossReason(
+  stage: { stage_type?: string } | null | undefined,
+  pipeline: { loss_reasons?: unknown } | null | undefined,
+): boolean {
+  return stage?.stage_type === "lost" && lossReasonsOf(pipeline).length > 0;
+}
+
+/**
+ * What a move needs before it can be saved: nothing to do (`noop`: same stage or
+ * unknown target), go straight (`direct`), or ask for the loss reason first (`ask`).
+ */
+export function planStageMove(
+  stages: { id: string; stage_type?: string }[],
+  pipeline: { loss_reasons?: unknown } | null | undefined,
+  fromStageId: string,
+  toStageId: string,
+): "noop" | "direct" | "ask" {
+  if (fromStageId === toStageId) return "noop";
+  const target = stages.find((s) => s.id === toStageId);
+  if (!target) return "noop";
+  return needsLossReason(target, pipeline) ? "ask" : "direct";
+}
+
 /** Offset of the next page, or undefined once a page comes back short. */
 export function getNextPageOffset(
   lastPage: BoardCard[],

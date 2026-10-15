@@ -151,6 +151,8 @@ interface MoveVars {
   toStageId: string;
   /** Sprint 11 · T28 — the status the deal takes there (lib/outcome); the database decides it too. */
   toStatus?: BoardCard["status"];
+  /** Sprint Suporte 1 · #12 — saved with the move when the target is a lost stage (useMoveToStage asks for it). */
+  lostReason?: string | null;
 }
 
 /**
@@ -164,14 +166,18 @@ export function useMoveBoardCard(pipelineId: string | undefined, filters: CrmFil
   const f = useMemo(() => cleanFilters(filters), [filters]);
 
   return useMutation({
-    mutationFn: async ({ card, toStageId }: MoveVars) => {
-      const { error } = await sb
-        .from("opportunities")
-        .update({ stage_id: toStageId })
-        .eq("id", card.id);
+    // One RPC, stage and reason together (the database refuses a lost stage
+    // without a reason when the pipeline has reasons). It does the same UPDATE
+    // as before, so the stage-history and funnel-event triggers fire unchanged.
+    mutationFn: async ({ card, toStageId, lostReason }: MoveVars) => {
+      const { error } = await sb.rpc("crm_move_opportunity", {
+        p_opportunity: card.id,
+        p_stage: toStageId,
+        p_lost_reason: lostReason ?? null,
+      });
       if (error) throw error;
     },
-    onMutate: async ({ card, toStageId, toStatus }: MoveVars) => {
+    onMutate: async ({ card, toStageId, toStatus, lostReason }: MoveVars) => {
       const fromKey = boardKeys.stage(equipeId, pipelineId, card.stage_id, f);
       const toKey = boardKeys.stage(equipeId, pipelineId, toStageId, f);
       const summaryKey = boardKeys.summary(equipeId, pipelineId, f);
@@ -198,7 +204,7 @@ export function useMoveBoardCard(pipelineId: string | undefined, filters: CrmFil
         stage_entered_at: now,
         status,
         closed_at: status === "open" ? null : card.status === status ? card.closed_at : now,
-        lost_reason: status === "open" ? null : card.lost_reason,
+        lost_reason: status === "open" ? null : lostReason ?? card.lost_reason,
       };
       const toPages = prependCardToPages(previous.to, moved);
       if (toPages) queryClient.setQueryData(toKey, toPages);

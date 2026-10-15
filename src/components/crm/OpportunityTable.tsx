@@ -35,6 +35,8 @@ import { useBoardSummary } from "@/hooks/useBoard";
 import { useLead, useOpportunity } from "@/hooks/useLead";
 import { useLeadMutations } from "@/hooks/useLeads";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { useMoveToStage } from "@/hooks/useMoveToStage";
+import { stageForStatus } from "@/lib/outcome";
 import {
   useDeleteOpportunities,
   useOppCellUpdate,
@@ -263,6 +265,27 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
 
   const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
+  // Sprint Suporte 1 · #12 — every stage change in the table (cell, status cell,
+  // bulk) goes through the one move engine: a lost stage asks for the reason first.
+  const { requestMove, lossDialog } = useMoveToStage({ stages: orderedStages, pipeline });
+  const moveRowToStage = useCallback(
+    (id: string, fromStageId: string, toStageId: string, leadName?: string) =>
+      new Promise<void>((resolve, reject) => {
+        const plan = requestMove({
+          fromStageId,
+          toStageId,
+          leadName,
+          run: (lostReason) =>
+            updateMany
+              .mutateAsync({ ids: [id], patch: { stage_id: toStageId }, lostReason })
+              .then(() => resolve(), reject),
+          onCancel: () => reject(new Error("Movimentação cancelada: o motivo da perda é obrigatório.")),
+        });
+        if (plan === "noop") resolve();
+      }),
+    [requestMove, updateMany],
+  );
+
   // Sprint 11 · T26 — on a phone each deal is a line: name; stage · value ·
   // next contact; the owner. A tap opens the deal.
   const renderMobileRow = useCallback(
@@ -349,14 +372,21 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
 
       if (m.column.key === "stage_id") {
         if (!m.value) throw new Error("A etapa é obrigatória.");
-        await updateMany.mutateAsync({ ids: [row.id], patch: { stage_id: String(m.value) } });
+        await moveRowToStage(row.id, row.stage_id, String(m.value), row.lead?.name);
         return;
       }
 
       if (m.column.key === "status") {
         if (!m.value) throw new Error("O status é obrigatório.");
         const status = m.value as OpportunityStatus;
-        await updateCell(row.id, { status, closed_at: status === "open" ? null : new Date().toISOString() });
+        // Marking a deal "lost" moves it to the lost stage — through the same engine,
+        // so the reason is asked here too.
+        const lostStageId = status === "lost" ? stageForStatus(orderedStages, row.stage_id, status) : row.stage_id;
+        if (lostStageId !== row.stage_id) {
+          await moveRowToStage(row.id, row.stage_id, lostStageId, row.lead?.name);
+          return;
+        }
+        await updateCell(row.id,{ status, closed_at: status === "open" ? null : new Date().toISOString() });
         return;
       }
 
@@ -370,7 +400,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         await updateCell(row.id, { custom_data });
       }
     },
-    [rowById, equipeId, patchRow, updateMany, updateCell, nameOf],
+    [rowById, equipeId, patchRow, updateMany, updateCell, nameOf, moveRowToStage, orderedStages],
   );
 
   // ---- Bulk actions ---------------------------------------------------------
@@ -503,6 +533,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         }}
       />
 
+      {lossDialog}
+
       {/* Mover para etapa */}
       <Dialog open={moveIds.length > 0} onOpenChange={(o) => !o && setMoveIds([])}>
         <DialogContent className="sm:max-w-[425px]">
@@ -532,11 +564,19 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
               disabled={!moveStageId || updateMany.isPending}
               onClick={() => {
                 const ids = moveIds;
-                updateMany.mutate(
-                  { ids, patch: { stage_id: moveStageId } },
-                  { onSuccess: (n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`) },
-                );
+                const toStageId = moveStageId;
                 setMoveIds([]);
+                // One reason for the whole batch when the target is a lost stage.
+                requestMove({
+                  fromStageId: "",
+                  toStageId,
+                  leadName: ids.length === 1 ? undefined : `${ids.length} negócios`,
+                  run: (lostReason) =>
+                    updateMany.mutate(
+                      { ids, patch: { stage_id: toStageId }, lostReason },
+                      { onSuccess: (n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`) },
+                    ),
+                });
               }}
             >
               Mover
