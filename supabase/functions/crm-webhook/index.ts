@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
 import { resolveCustomDataKeys, type SchemaField } from "../_shared/custom-fields.ts";
+import { resolveInboundAction } from "../_shared/automation-actions.ts";
 import { entryForWebhook, entryOfKind, inboundTouchPayload, recordTouch } from "../_shared/attribution.ts";
 import { dispatchConversationOpen } from "../_shared/start-conversation.ts";
 
@@ -422,7 +423,7 @@ if (import.meta.main) {
       // 1. Look up webhook_config
       const { data: config, error: configError } = await supabase
         .from('webhook_configs')
-        .select('id, equipe_id, pipeline_id, field_mappings')
+        .select('id, equipe_id, pipeline_id, field_mappings, action')
         .eq('id', configId)
         .eq('inbound_function', 'receive_lead')
         .maybeSingle();
@@ -585,6 +586,45 @@ if (import.meta.main) {
         opportunityId,
       }, '[crm-webhook]');
 
+      // 5c. Sprint Suporte 1 · Onda 5 — a ação declarada neste webhook (mover etapa /
+      // atualizar campo / responsável) e as automações ligadas a ele. Sem ação
+      // configurada nada muda. Nunca derruba a porta: o resultado vai na resposta
+      // e cada execução fica em automation_runs.
+      const automationResults: unknown[] = [];
+      if (opportunityId) {
+        const runAction = async (automationId: string | null, action: unknown) => {
+          // A ação do webhook é resolvida aqui contra o payload; a de uma automação
+          // salva já carrega o que precisa (stage_id / from_payload) e o banco resolve.
+          const resolved = automationId ? null : resolveInboundAction(action, payload as Record<string, unknown>);
+          if (resolved && !resolved.ok) {
+            automationResults.push({ status: 'skipped', reason: resolved.reason });
+            return;
+          }
+          const { data, error } = await supabase.rpc('crm_run_automation', {
+            p_automation: automationId,
+            p_opportunity: opportunityId,
+            p_payload: payload,
+            p_event_key: null,
+            p_action: resolved && resolved.ok ? resolved.action : null,
+            p_equipe: automationId ? null : config.equipe_id,
+          });
+          automationResults.push(error ? { status: 'error', error: error.message } : data);
+        };
+        try {
+          if (config.action) await runAction(null, config.action);
+          const { data: linked } = await supabase
+            .from('crm_automations')
+            .select('id, action')
+            .eq('equipe_id', config.equipe_id)
+            .eq('enabled', true)
+            .eq('trigger->>event', 'webhook_received')
+            .eq('trigger->>webhook_id', config.id);
+          for (const a of linked ?? []) await runAction(a.id, a.action);
+        } catch (autoErr) {
+          console.error('[crm-webhook] automation failed:', autoErr);
+        }
+      }
+
       // 6. Log activity
       await supabase.from('lead_activities').insert({
         lead_id: leadId,
@@ -628,6 +668,7 @@ if (import.meta.main) {
           opportunity_id: opportunityId,
           is_new: isNewLead,
           conversation_open_dispatched: conversationOpen.dispatched,
+          ...(automationResults.length > 0 ? { automation: automationResults } : {}),
           message: isNewLead ? 'Lead created via inbound webhook' : 'Lead updated via inbound webhook',
         }),
         { status: isNewLead ? 201 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
