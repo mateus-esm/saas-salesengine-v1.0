@@ -13,6 +13,11 @@ import { Calendar as CalendarIcon, Copy, Mail, Phone, Building, Briefcase, Plus,
 import { toast } from "sonner";
 import { TouchpointsList } from "@/components/crm/TouchpointsList";
 import { LeadOpportunitiesSection } from "@/components/crm/LeadOpportunitiesSection";
+import { ChatOwnershipBlock } from "@/components/inbox/ChatOwnershipBlock";
+import { ChatDealSummary } from "@/components/inbox/ChatDealSummary";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { useSetResponsible, useSetAttendant } from "@/hooks/useSetResponsible";
+import { buildChatOwnership } from "@/lib/chatOwnership";
 
 interface CRMContextPanelProps {
   session: ChatSession | null;
@@ -54,6 +59,9 @@ export function CRMContextPanel({
   const [activeTab, setActiveTab] = useState("notes");
   const [newTask, setNewTask] = useState("");
   const [notes, setNotes] = useState(session?.crmData.notes || "");
+  const { members, nameOf } = useMemberDirectory();
+  const setResponsible = useSetResponsible();
+  const setAttendant = useSetAttendant();
 
   useEffect(() => {
     setNotes(session?.crmData.notes || "");
@@ -227,6 +235,36 @@ export function CRMContextPanel({
               </div>
             );
           })()}
+        </CardContent>
+      </Card>
+
+      {/* Sprint Suporte 1 · #8/#11 — Responsável (dono da conta/negócio) e
+          Atendente (quem está na conversa): dois papéis, editáveis aqui mesmo,
+          com o resumo do negócio pelo modelo do cartão do Kanban. */}
+      <Card>
+        <CardContent className="p-3 space-y-3">
+          <ChatOwnershipBlock
+            ownership={buildChatOwnership({
+              responsibleId: session.leadResponsibleId,
+              attendantId: session.responsibleId,
+              nameOf,
+            })}
+            members={members}
+            disabled={setResponsible.isPending || setAttendant.isPending}
+            onSetResponsible={
+              session.leadId
+                ? (userId) => setResponsible.mutate({ leadId: session.leadId!, userId })
+                : undefined
+            }
+            onSetAttendant={
+              session.conversationId
+                ? (userId) => setAttendant.mutate({ conversationId: session.conversationId!, userId })
+                : undefined
+            }
+          />
+          {session.leadId && (
+            <ChatDealSummary leadId={session.leadId} nextContact={session.crmData.next_contact} />
+          )}
         </CardContent>
       </Card>
 

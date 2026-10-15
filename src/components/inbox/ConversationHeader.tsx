@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { buildChatOwnership } from "@/lib/chatOwnership";
 
 interface ConversationHeaderProps {
   session: ChatSession & { responsibleId?: string };
@@ -72,6 +73,17 @@ export function ConversationHeader({
   const responsibleMember = teamMembers.find(m => m.id === (session as any).responsibleId);
   const responsibleInitials = responsibleMember?.nome_completo
     ?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
+
+  // Sprint Suporte 1 · #8/#11 — Responsável (dono da conta) e Atendente (quem
+  // está na conversa) aparecem juntos e nunca misturados; o seletor deste
+  // cabeçalho troca o ATENDENTE, o do painel lateral troca os dois.
+  const nameById = (id: string | null | undefined) =>
+    id ? teamMembers.find((m) => m.id === id)?.nome_completo ?? null : null;
+  const ownership = buildChatOwnership({
+    responsibleId: session.leadResponsibleId,
+    attendantId: session.responsibleId,
+    nameOf: nameById,
+  });
 
   // Canal badge label + estilo
   const channelLabel = (ch?: string): { label: string; cls: string } => {
@@ -154,6 +166,13 @@ export function ConversationHeader({
               )}
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400">{session.customerPhone}</p>
+            <p
+              className="text-[11px] text-slate-400 dark:text-slate-500 truncate"
+              data-testid="header-ownership"
+              title={`Responsável: ${ownership.responsible.label} · Atendente: ${ownership.attendant.label}`}
+            >
+              {ownership.compact}
+            </p>
           </div>
         </button>
       </div>
@@ -190,7 +209,7 @@ export function ConversationHeader({
                   variant="ghost"
                   size="sm"
                   className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2"
-                  title="Atribuir responsável"
+                  title="Atribuir atendente"
                 >
                   {responsibleMember ? (
                     <>
@@ -206,13 +225,13 @@ export function ConversationHeader({
                   ) : (
                     <>
                       <UserCheck className="h-4 w-4" />
-                      <span className="hidden lg:inline">Atribuir</span>
+                      <span className="hidden lg:inline">Atendente</span>
                     </>
                   )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel className="text-xs">Responsável</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">Atendente</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {teamMembers.map(member => (
                   <DropdownMenuItem
@@ -239,7 +258,7 @@ export function ConversationHeader({
                       className="gap-2 text-muted-foreground"
                     >
                       <UserX className="h-3.5 w-3.5" />
-                      Remover responsável
+                      Remover atendente
                     </DropdownMenuItem>
                   </>
                 )}

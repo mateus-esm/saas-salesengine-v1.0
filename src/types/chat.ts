@@ -46,7 +46,10 @@ export interface ChatSession {
   // Fase 2: Omnichannel
   channel?: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string;
   agentName?: string;
+  /** Atendente: quem está na conversa (conversations.responsible_id). */
   responsibleId?: string | null;
+  /** Responsável: dono da conta/negócio (leads.responsible_id). Não é o atendente. */
+  leadResponsibleId?: string | null;
   crmData: {
     value: number;
     stage: string;
