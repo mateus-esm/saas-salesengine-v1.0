@@ -48,6 +48,20 @@ describe("useMoveToStage (Sprint Suporte 1 · #12)", () => {
     expect(run).toHaveBeenCalledWith(null);
   });
 
+  it("a second ask while the dialog is open cancels the first (no promise left hanging)", () => {
+    const run1 = vi.fn();
+    const cancel1 = vi.fn();
+    const run2 = vi.fn();
+    const { result } = renderHook(() => useMoveToStage({ stages, pipeline: withReasons }));
+    act(() => { result.current.requestMove({ fromStageId: "open", toStageId: "lost", run: run1, onCancel: cancel1 }); });
+    act(() => { result.current.requestMove({ fromStageId: "open", toStageId: "lost", leadName: "Bia", run: run2 }); });
+    expect(cancel1).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingMove?.leadName).toBe("Bia");
+    act(() => { result.current.confirmMove("Preço"); });
+    expect(run1).not.toHaveBeenCalled();
+    expect(run2).toHaveBeenCalledWith("Preço");
+  });
+
   it("ignores a move to the same stage", () => {
     const run = vi.fn();
     const { result } = renderHook(() => useMoveToStage({ stages, pipeline: withReasons }));

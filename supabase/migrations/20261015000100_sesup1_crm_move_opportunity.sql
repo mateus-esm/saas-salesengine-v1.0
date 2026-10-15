@@ -25,6 +25,14 @@
 -- Isolamento: SECURITY DEFINER, mas só mexe em negócio da equipe de quem chama
 -- (profiles.equipe_id de auth.uid()); etapa de outro pipeline/equipe é recusada.
 --
+-- Autorização: as políticas de RLS de opportunities (20260419110000_epic2_pipelines)
+-- são só por equipe — "Users can manage their team opportunities" FOR ALL,
+-- equipe_id in (select equipe_id from profiles where id = auth.uid()) — sem regra
+-- de papel nem de dono; crm_update_opportunities também é SECURITY INVOKER sob essa
+-- mesma RLS. Verificar equipe_id (com profiles.id = auth.uid(), o mesmo padrão)
+-- é, portanto, exatamente o que um UPDATE normal permite; o dono do negócio é
+-- tratado à parte pelos gatilhos de owner, que continuam disparando.
+--
 -- O backfill dos 528 perdidos antigos NÃO está aqui: é o arquivo seguinte
 -- (supabase/scripts/2026-10-15_sesup1_backfill_lost_reason.sql), aplicado manualmente.
 

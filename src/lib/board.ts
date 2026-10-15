@@ -179,3 +179,33 @@ export function getNextPageOffset(
   if (lastPage.length < pageSize) return undefined;
   return allPages.reduce((sum, page) => sum + page.length, 0);
 }
+
+/**
+ * Sprint Suporte 1 · #12 — a bulk move is N independent calls, so some can fail
+ * while others commit. This turns the settled results into what the screen needs:
+ * how many moved, which ids failed (only those roll back) and the one-line summary.
+ * `moved` counts calls that changed something; a deal already in the stage is not a failure.
+ */
+export interface BulkMoveSummary {
+  moved: number;
+  failedIds: string[];
+  /** null when nothing failed. */
+  message: string | null;
+}
+
+export function summarizeBulkMove(ids: string[], results: PromiseSettledResult<boolean>[]): BulkMoveSummary {
+  const failedIds: string[] = [];
+  let moved = 0;
+  results.forEach((r, i) => {
+    if (r.status === "rejected") failedIds.push(ids[i]);
+    else if (r.value) moved += 1;
+  });
+  if (failedIds.length === 0) return { moved, failedIds, message: null };
+  const firstReason = results.find((r): r is PromiseRejectedResult => r.status === "rejected")?.reason;
+  const detail = firstReason instanceof Error ? firstReason.message : typeof firstReason === "object" && firstReason && "message" in firstReason ? String((firstReason as { message: unknown }).message) : "";
+  return {
+    moved,
+    failedIds,
+    message: `${moved} de ${ids.length} movidos; ${failedIds.length} falharam${detail ? ` (${detail})` : ""}`,
+  };
+}

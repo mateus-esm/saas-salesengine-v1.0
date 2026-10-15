@@ -6,6 +6,7 @@ import {
   lossReasonsOf,
   needsLossReason,
   planStageMove,
+  summarizeBulkMove,
   normalizeBoardCard,
   prependCardToPages,
   removeCardFromPages,
@@ -205,5 +206,29 @@ describe("needsLossReason / planStageMove (Sprint Suporte 1 · #12)", () => {
     expect(planStageMove(stages, withReasons, "s-open", "s-lost")).toBe("ask");
     expect(planStageMove(stages, { loss_reasons: [] }, "s-open", "s-lost")).toBe("direct");
     expect(planStageMove(stages, withReasons, "s-open", "missing")).toBe("noop");
+  });
+});
+
+describe("summarizeBulkMove", () => {
+  const ok = (v: boolean): PromiseSettledResult<boolean> => ({ status: "fulfilled", value: v });
+  const bad = (m: string): PromiseSettledResult<boolean> => ({ status: "rejected", reason: new Error(m) });
+
+  it("reports no message when everything went through (already-there counts as no failure)", () => {
+    const s = summarizeBulkMove(["a", "b"], [ok(true), ok(false)]);
+    expect(s).toEqual({ moved: 1, failedIds: [], message: null });
+  });
+
+  it("names the partial failure and only the failed ids", () => {
+    const s = summarizeBulkMove(["a", "b", "c"], [ok(true), bad("loss_reason_required"), ok(true)]);
+    expect(s.moved).toBe(2);
+    expect(s.failedIds).toEqual(["b"]);
+    expect(s.message).toBe("2 de 3 movidos; 1 falharam (loss_reason_required)");
+  });
+
+  it("all failed", () => {
+    const s = summarizeBulkMove(["a", "b"], [bad("x"), bad("x")]);
+    expect(s.moved).toBe(0);
+    expect(s.failedIds).toEqual(["a", "b"]);
+    expect(s.message).toBe("0 de 2 movidos; 2 falharam (x)");
   });
 });

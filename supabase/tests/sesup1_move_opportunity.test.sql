@@ -12,6 +12,8 @@
 --   4. outra equipe não move (opportunity_not_found) e etapa de outro pipeline é recusada
 --   5. reabrir (perdido → aberto) limpa o motivo; mover para a mesma etapa devolve false
 --   6. perdido → outra etapa de perda mantém o motivo existente
+--   7. ganho → perdido: sem motivo recusa, com motivo grava
+--   8. insert já perdido sem motivo recebe 'Não informado' (rede de segurança)
 
 begin;
 -- @include supabase/migrations/20261015000100_sesup1_crm_move_opportunity.sql
@@ -39,6 +41,7 @@ insert into public.pipeline_stages_v2 (id, equipe_id, pipeline_id, name, positio
   ('5e5d0000-0000-0000-0000-000000000011', '5e500000-0000-0000-0000-00000000000a', '5e5c0000-0000-0000-0000-000000000001', 'Aberta',    0, 'open'),
   ('5e5d0000-0000-0000-0000-000000000012', '5e500000-0000-0000-0000-00000000000a', '5e5c0000-0000-0000-0000-000000000001', 'Perdida 1', 1, 'lost'),
   ('5e5d0000-0000-0000-0000-000000000013', '5e500000-0000-0000-0000-00000000000a', '5e5c0000-0000-0000-0000-000000000001', 'Perdida 2', 2, 'lost'),
+  ('5e5d0000-0000-0000-0000-000000000014', '5e500000-0000-0000-0000-00000000000a', '5e5c0000-0000-0000-0000-000000000001', 'Ganha',     3, 'won'),
   ('5e5d0000-0000-0000-0000-000000000021', '5e500000-0000-0000-0000-00000000000a', '5e5c0000-0000-0000-0000-000000000002', 'Aberta',    0, 'open'),
   ('5e5d0000-0000-0000-0000-000000000022', '5e500000-0000-0000-0000-00000000000a', '5e5c0000-0000-0000-0000-000000000002', 'Perdida',   1, 'lost'),
   ('5e5d0000-0000-0000-0000-0000000000b1', '5e500000-0000-0000-0000-00000000000b', '5e5c0000-0000-0000-0000-0000000000bb', 'Aberta',    0, 'open');
@@ -49,7 +52,8 @@ insert into public.leads (id, equipe_id, name) values
 
 insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id) values
   ('5e5f0000-0000-0000-0000-000000000001', '5e500000-0000-0000-0000-00000000000a', '5e5e0000-0000-0000-0000-000000000001', '5e5c0000-0000-0000-0000-000000000001', '5e5d0000-0000-0000-0000-000000000011'),
-  ('5e5f0000-0000-0000-0000-000000000002', '5e500000-0000-0000-0000-00000000000a', '5e5e0000-0000-0000-0000-000000000002', '5e5c0000-0000-0000-0000-000000000002', '5e5d0000-0000-0000-0000-000000000021');
+  ('5e5f0000-0000-0000-0000-000000000002', '5e500000-0000-0000-0000-00000000000a', '5e5e0000-0000-0000-0000-000000000002', '5e5c0000-0000-0000-0000-000000000002', '5e5d0000-0000-0000-0000-000000000021'),
+  ('5e5f0000-0000-0000-0000-000000000003', '5e500000-0000-0000-0000-00000000000a', '5e5e0000-0000-0000-0000-000000000002', '5e5c0000-0000-0000-0000-000000000001', '5e5d0000-0000-0000-0000-000000000011');
 
 -- Tudo abaixo roda como o vendedor da equipe A.
 set local role authenticated;
@@ -104,6 +108,25 @@ begin
   perform public.crm_move_opportunity('5e5f0000-0000-0000-0000-000000000002', '5e5d0000-0000-0000-0000-000000000022', null);
   assert (select lost_reason from public.opportunities where id = '5e5f0000-0000-0000-0000-000000000002') = 'Não informado',
          'perdido nunca fica vazio';
+
+  -- 7. ganho → perdido sem motivo é recusado; com motivo passa.
+  perform public.crm_move_opportunity('5e5f0000-0000-0000-0000-000000000003', '5e5d0000-0000-0000-0000-000000000014', null);
+  assert (select status from public.opportunities where id = '5e5f0000-0000-0000-0000-000000000003') = 'won', 'foi para ganho';
+  begin
+    perform public.crm_move_opportunity('5e5f0000-0000-0000-0000-000000000003', '5e5d0000-0000-0000-0000-000000000012', null);
+    raise exception 'FALHA: ganho -> perdido sem motivo aceito';
+  exception when sqlstate '22023' then null;
+  end;
+  perform public.crm_move_opportunity('5e5f0000-0000-0000-0000-000000000003', '5e5d0000-0000-0000-0000-000000000012', 'Concorrente');
+  assert (select status || '/' || lost_reason from public.opportunities where id = '5e5f0000-0000-0000-0000-000000000003') = 'lost/Concorrente',
+         'ganho -> perdido com motivo';
+
+  -- 8. negócio que NASCE perdido sem motivo (insert direto: importação/webhook) ganha 'Não informado'.
+  insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id, status)
+  values ('5e5f0000-0000-0000-0000-000000000004', '5e500000-0000-0000-0000-00000000000a', '5e5e0000-0000-0000-0000-000000000001',
+          '5e5c0000-0000-0000-0000-000000000001', '5e5d0000-0000-0000-0000-000000000012', 'lost');
+  assert (select lost_reason from public.opportunities where id = '5e5f0000-0000-0000-0000-000000000004') = 'Não informado',
+         'insert já perdido sem motivo recebe o padrão';
 
   -- 4. etapa de outro pipeline e negócio de outra equipe.
   begin

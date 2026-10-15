@@ -19,9 +19,9 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { cleanFilters, normalizeBoardCard } from "@/lib/board";
+import { cleanFilters, normalizeBoardCard, summarizeBulkMove } from "@/lib/board";
 import { createDebouncer } from "@/lib/debounce";
-import { nextOffset, patchRowInPages, removeRowsFromPages, type TablePages } from "@/lib/tablePages";
+import { flattenPages, nextOffset, patchRowInPages, removeRowsFromPages, type TablePages } from "@/lib/tablePages";
 import type { CrmFilters, CrmSort } from "@/types/crmFilters";
 import type { OppTableRow } from "@/types/crmTables";
 
@@ -148,7 +148,9 @@ export function useUpdateOpportunities(pipelineId: string | undefined, filters: 
       const { stage_id: stageId, ...rest } = patch;
       let moved = 0;
       if (stageId) {
-        const results = await Promise.all(
+        // N independent calls: some can commit while others fail, so settle them
+        // all and report per item instead of failing the whole batch on the first error.
+        const results = await Promise.allSettled(
           ids.map(async (id) => {
             const { data, error } = await sb.rpc("crm_move_opportunity", {
               p_opportunity: id,
@@ -159,7 +161,11 @@ export function useUpdateOpportunities(pipelineId: string | undefined, filters: 
             return data === true;
           }),
         );
-        moved = results.filter(Boolean).length;
+        const summary = summarizeBulkMove(ids, results);
+        if (summary.failedIds.length > 0) {
+          throw new PartialMoveError(summary.message ?? "", summary.failedIds, summary.moved);
+        }
+        moved = summary.moved;
       }
       if (Object.keys(rest).length > 0) {
         const { data, error } = await sb.rpc("crm_update_opportunities", { p_ids: ids, p_patch: rest });
@@ -178,11 +184,31 @@ export function useUpdateOpportunities(pipelineId: string | undefined, filters: 
       return { previous };
     },
     onError: (e: Error, _vars, ctx) => {
+      if (e instanceof PartialMoveError && ctx?.previous) {
+        // Some deals did move: put back only the ones that failed.
+        let next = queryClient.getQueryData<TablePages<OppTableRow>>(key);
+        const before = flattenPages(ctx.previous);
+        for (const id of e.failedIds) {
+          const row = before.find((r) => r.id === id);
+          if (row) next = patchRowInPages(next, id, { stage_id: row.stage_id, lost_reason: row.lost_reason });
+        }
+        if (next) queryClient.setQueryData(key, next);
+        toast.error(e.message);
+        return;
+      }
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error("Não foi possível salvar: " + e.message);
     },
     onSettled: () => invalidate(),
   });
+}
+
+/** A bulk move where only some deals went through; carries who failed. */
+class PartialMoveError extends Error {
+  constructor(message: string, readonly failedIds: string[], readonly moved: number) {
+    super(message);
+    this.name = "PartialMoveError";
+  }
 }
 
 /** Soft-delete deals: the business verb, optimistic. */

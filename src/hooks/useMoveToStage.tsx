@@ -12,7 +12,7 @@
 // bulk RPC, a form's update): the reason arrives inside it, so stage and reason
 // are written in the same call, never "move now, ask later".
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { LossReasonDialog } from "@/components/crm/LossReasonDialog";
 import { lossReasonsOf, planStageMove } from "@/lib/board";
@@ -37,31 +37,39 @@ interface Options {
 
 export function useMoveToStage({ stages, pipeline }: Options) {
   const [pending, setPending] = useState<MoveRequest | null>(null);
+  // Mirror of `pending` readable from stable callbacks (no stale closure).
+  const pendingRef = useRef<MoveRequest | null>(null);
 
   /** Returns what happened: nothing to do, saved straight away, or waiting for the reason. */
   const requestMove = useCallback(
     (req: MoveRequest): "noop" | "direct" | "ask" => {
       const plan = planStageMove(stages, pipeline, req.fromStageId, req.toStageId);
       if (plan === "direct") req.run(null);
-      else if (plan === "ask") setPending(req);
+      else if (plan === "ask") {
+        // Only one reason dialog at a time: the request it replaces is cancelled,
+        // so a caller awaiting it (a grid cell) is never left hanging.
+        pendingRef.current?.onCancel?.();
+        pendingRef.current = req;
+        setPending(req);
+      }
       return plan;
     },
     [stages, pipeline],
   );
 
   const cancel = useCallback(() => {
-    pending?.onCancel?.();
+    const req = pendingRef.current;
+    pendingRef.current = null;
     setPending(null);
-  }, [pending]);
+    req?.onCancel?.();
+  }, []);
 
-  const confirm = useCallback(
-    (reason: string) => {
-      const req = pending;
-      setPending(null);
-      req?.run(reason);
-    },
-    [pending],
-  );
+  const confirm = useCallback((reason: string) => {
+    const req = pendingRef.current;
+    pendingRef.current = null;
+    setPending(null);
+    req?.run(reason);
+  }, []);
 
   // Render once per screen that moves deals.
   const lossDialog: ReactNode = (
