@@ -209,6 +209,7 @@ const Chat = () => {
     // contadas da última mensagem do cliente. A conta mora em um lugar só —
     // `src/lib/service-window.ts`.
     const serviceWindow = resolveServiceWindow({
+      channel: selectedConversation.channel,
       conversationSoloInstanceId: selectedConversation.solo_instance_id,
       hasConnectedSoloInstance: hasSoloInstance,
       lastCustomerMessageAt:
@@ -230,6 +231,7 @@ const Chat = () => {
       status: selectedConversation.atendido_por_agente ? 'human_handling' : 'bot_handling',
       isOnline: serviceWindow.open,
       isWindowAlwaysOpen: serviceWindow.alwaysOpen,
+      serviceWindow,
       unreadCount: selectedConversation.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(selectedConversation.last_message_at || selectedConversation.created_at || new Date()),
@@ -265,6 +267,7 @@ const Chat = () => {
       // comparava `last_message_at` (que o envio do time também atualiza) e
       // ignorava o canal — os dois indicadores discordavam entre si.
       const serviceWindow = resolveServiceWindow({
+        channel: c.channel,
         conversationSoloInstanceId: c.solo_instance_id,
         hasConnectedSoloInstance: hasSoloInstance,
         lastCustomerMessageAt: lastCustomerMessageAtByConversation[c.id] ?? null,
@@ -289,6 +292,7 @@ const Chat = () => {
         responsibleId: c.responsible_id,
         isOnline: serviceWindow.open,
         isWindowAlwaysOpen: serviceWindow.alwaysOpen,
+        serviceWindow,
         channel: c.channel || 'whatsapp',
         agentName: c.agent_name || undefined,
         crmData: {
@@ -635,6 +639,16 @@ const Chat = () => {
               disabled={loadingMessages}
               leadId={selectedConversation?.lead_id ?? undefined}
               hasSoloInstance={hasSoloInstance}
+              metaWindowClosed={
+                selectedSession?.serviceWindow?.channelKind === "meta" &&
+                !selectedSession.serviceWindow.open
+                  ? {
+                      channel: selectedConversation?.channel ?? "instagram",
+                      hasPhone:
+                        (selectedLead?.phone ?? "").replace(/\D/g, "").length >= 10,
+                    }
+                  : undefined
+              }
             />
           </>
         ) : (

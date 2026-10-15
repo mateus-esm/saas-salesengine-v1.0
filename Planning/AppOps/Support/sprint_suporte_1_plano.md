@@ -44,6 +44,13 @@ Mergear `task/SE-STAGEHOOK-001` (já cobre o *backend* de #3: etapa → webhook)
 2. **Liberar o envio humano até onde a Meta permite** — a tag `HUMAN_AGENT` permite resposta de atendente real por até 7 dias. (a) Sonda viva no provedor: enviar a uma conversa IG de teste com janela vencida e capturar status/corpo (mesma pendência de `sprint_7_api_reference.md` §2.3); (b) se o provedor aceitar a tag, `send-chat-message` a aplica só a mensagem de **humano** (nunca do agente de IA): janela IG = 24 h (IA) / 7 d (humano); (c) se não aceitar, o campo de mensagem mostra "fechado" com texto claro e as saídas reais (responder ao comentário/story; abrir WhatsApp se o lead tem telefone).
 - Resposta ao ticket: o canal segue aberto; explicar o que a Meta permite sem prometer envio ilimitado.
 
+**Sonda pendente (Onda 1B) — como testar o envio HUMAN_AGENT à mão** (implementação entregue com a extensão DESLIGADA: `META_HUMAN_AGENT_WINDOW_MS = 0` em `src/lib/service-window.ts` e `supabase/functions/_shared/meta-window.ts`).
+1. Escolha uma conversa Instagram de TESTE (conta nossa, nunca de cliente) cujo último inbound tenha mais de 24 h e menos de 7 dias.
+2. Pelo provedor (API de envio do canal Instagram do workspace, a mesma de `sprint_7_api_reference.md` §2.3), envie uma mensagem de texto curta com a tag `HUMAN_AGENT` (campo de tag/messaging type conforme a doc do provedor). Anote: status HTTP, corpo completo e se a mensagem chegou no app do Instagram.
+3. Repita sem a tag para ter o controle (esperado: recusa da Meta, código de janela).
+4. Resultado: (a) provedor aceita e entrega → mandar a tag só em mensagem de humano no `send-chat-message`, e ligar a constante nos dois lados (7 * 24 * 60 * 60 * 1000); (b) recusa → manter desligada; a UI já mostra "fechado" com as saídas (responder ao comentário/story; WhatsApp se houver telefone).
+5. Registrar status/corpo da sonda aqui antes de ligar. Nada disso roda em produção sem o dono executar.
+
 ### Onda 2 — Responsável e chat  → fecha **#8, #11**
 - Regra de produto (proposta): **Responsável** = dono da conta/negócio (`leads.responsible_id`/`owner_id`); **Atendente** = quem está na conversa (`conversations.assigned_to`). São dois papéis legítimos; a UI mostra os dois e nunca mistura.
 - `CRMContextPanel` + `ConversationHeader`: bloco "Responsável / Atendente" com seletor inline (usa `useMemberDirectory`), RPC única `crm_set_responsible(lead, user)` que mantém `leads` e `opportunities` coerentes e grava `owner_events` (já existe da Sprint 11 W2).

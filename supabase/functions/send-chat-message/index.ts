@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendViaSolo } from '../_shared/solo-sender.ts'
 import { openManualGptConversation } from '../_shared/manual-conversation.ts'
+import { isMetaChannel, isMetaWindowClosed } from '../_shared/meta-window.ts'
 import { isTechnicalPhone, normalizePhone as normalizeProviderPhone } from '../_shared/phone.ts'
 
 const corsHeaders = {
@@ -75,13 +76,14 @@ async function loadAuthorizedContext(
   let resolvedLeadId: string | null = body.lead_id || null
   let resolvedChatId: string | null = body.chat_id || null
   let resolvedSoloInstanceId: string | null = null
+  let resolvedChannel: string | null = null
 
   let conversation: Record<string, any> | null = null
 
   if (resolvedConversationId) {
     const { data, error } = await supabase
       .from('conversations')
-      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status')
+      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status, channel')
       .eq('id', resolvedConversationId)
       .maybeSingle()
     if (error) throw error
@@ -90,7 +92,7 @@ async function loadAuthorizedContext(
   } else if (resolvedLeadId) {
     const { data, error } = await supabase
       .from('conversations')
-      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status')
+      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status, channel')
       .eq('lead_id', resolvedLeadId)
       .neq('status', 'deleted')
       .order('last_message_at', { ascending: false, nullsFirst: false })
@@ -101,7 +103,7 @@ async function loadAuthorizedContext(
   } else if (resolvedChatId) {
     const { data, error } = await supabase
       .from('conversations')
-      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status')
+      .select('id, lead_id, gpt_maker_chat_id, solo_instance_id, status, channel')
       .eq('gpt_maker_chat_id', resolvedChatId)
       .neq('status', 'deleted')
       .maybeSingle()
@@ -127,6 +129,7 @@ async function loadAuthorizedContext(
     resolvedLeadId = conversation.lead_id
     resolvedChatId = conversation.gpt_maker_chat_id || null
     resolvedSoloInstanceId = conversation.solo_instance_id || null
+    resolvedChannel = conversation.channel || null
   } else if (resolvedLeadId) {
     resolvedChatId = null
   }
@@ -165,6 +168,7 @@ async function loadAuthorizedContext(
     resolvedLeadId,
     resolvedChatId,
     resolvedSoloInstanceId,
+    resolvedChannel,
     leadPhone: lead.phone as string | null,
     equipeId: lead.equipe_id as string,
   }
@@ -466,6 +470,7 @@ serve(async (req) => {
       resolvedLeadId,
       resolvedChatId,
       resolvedSoloInstanceId,
+      resolvedChannel,
       leadPhone,
       equipeId,
     } = context
@@ -479,6 +484,26 @@ serve(async (req) => {
       })
 
       return jsonResponse({ success: response.ok })
+    }
+
+    // SE-SUP1-2 (#16) — Instagram/Messenger: a Meta recusa envio >24 h após a
+    // última mensagem do cliente. Barrar aqui evita gravar uma mensagem que
+    // nunca sai e devolve um código que a UI sabe explicar.
+    if (resolvedConversationId && isMetaChannel(resolvedChannel)) {
+      const { data: lastInbound } = await supabase
+        .from('messages')
+        .select('created_at')
+        .eq('conversation_id', resolvedConversationId)
+        .eq('sender_type', 'customer')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (isMetaWindowClosed(resolvedChannel, lastInbound?.created_at ?? null)) {
+        throw new HttpError(
+          'meta_window_closed: o Instagram/Messenger só permite resposta até 24 h após a última mensagem do cliente.',
+          422,
+        )
+      }
     }
 
     const { data: msg, error: dbError } = await supabase

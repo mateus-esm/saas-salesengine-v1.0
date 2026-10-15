@@ -30,9 +30,15 @@ interface ChatInputProps {
   pipelineId?: string;
   /** T10: when set, composer is never blocked by 24h window and shows indicator */
   hasSoloInstance?: boolean;
+  /**
+   * SE-SUP1-2: canal Meta (Instagram/Messenger) com a janela de 24 h vencida.
+   * O compositor fica travado com a explicação e as saídas reais — enviar
+   * seria recusado pela Meta, e a tela não deve prometer o contrário.
+   */
+  metaWindowClosed?: { channel: string; hasPhone: boolean };
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId, hasSoloInstance }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem...", leadId, pipelineId, hasSoloInstance, metaWindowClosed }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -140,6 +146,25 @@ export function ChatInput({ onSend, disabled, placeholder = "Digite sua mensagem
       if (file.type.startsWith('image/')) return <Paperclip className="h-4 w-4" />; // Could use ImageIcon but Paperclip is generic enough for preview
       return <Paperclip className="h-4 w-4" />;
   };
+
+  if (metaWindowClosed) {
+    const name = metaWindowClosed.channel.toLowerCase() === "messenger" ? "Messenger" : "Instagram";
+    return (
+      <div className="p-3" role="status" data-testid="meta-window-closed">
+        <div className="rounded-md border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20">
+          <p className="font-medium">
+            {name} só permite resposta até 24 h após a última mensagem do cliente.
+          </p>
+          <p className="mt-1 text-xs">
+            Como seguir: responda ao comentário ou story do cliente (isso reabre a conversa)
+            {metaWindowClosed.hasPhone
+              ? " ou abra a conversa pelo WhatsApp, já que este lead tem telefone cadastrado."
+              : "; se o lead informar um telefone, você poderá continuar pelo WhatsApp."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(
