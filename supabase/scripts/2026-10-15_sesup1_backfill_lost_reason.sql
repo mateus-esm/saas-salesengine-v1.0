@@ -20,13 +20,15 @@
 --    where s.stage_type = 'lost' and o.deleted_at is null
 --      and nullif(btrim(coalesce(o.lost_reason, '')), '') is null;   -- esperado: ~528
 
+-- Revisão 16/10: somente Solo Energia, sem registros apagados.
+-- EXECUÇÃO PENDENTE DE AUTORIZAÇÃO EXPLÍCITA (auto-review recusou o lote).
 begin;
-
-update public.opportunities o
-   set lost_reason = 'Não informado'
-  from public.pipeline_stages_v2 s
- where s.id = o.stage_id
-   and s.stage_type = 'lost'
-   and nullif(btrim(coalesce(o.lost_reason, '')), '') is null;
-
+set local lock_timeout='5s';
+do $$ declare v_team uuid; begin
+  select id into strict v_team from public.equipes where nome='Solo Energia';
+  update public.opportunities o set lost_reason='Não informado'
+   from public.pipeline_stages_v2 s
+   where s.id=o.stage_id and s.stage_type='lost' and o.equipe_id=v_team
+     and o.deleted_at is null and nullif(btrim(coalesce(o.lost_reason,'')),'') is null;
+end $$;
 commit;

@@ -34,9 +34,10 @@ a proibição de produção do plano de implementação descreve a fase anterior
   em BEGIN/ROLLBACK contra o projeto linkado. Nenhuma fixture foi persistida.
 - 89 testes Deno alterados passaram (incluindo autenticação interna).
 - Typecheck e build de produção passaram.
-- Suíte frontend completa: um teste de Outreach excedeu o prazo sob carga;
-  os sete testes de Outreach passam isolados no release e no checkout original.
+- Suíte frontend completa: **571 testes, 76 arquivos, todos passaram** com
+  `--maxWorkers=2`. A falha inicial de Outreach foi um timeout sob carga.
   Configuração pública fictícia foi usada nos testes/build locais, nunca secrets.
+- CI do PR #56: backend unitário, typecheck e build passaram; preview Netlify pronto.
 - Backups locais das dez funções Edge e definições SQL anteriores em
   `../saas-salesengine-v1.0/tmp/sup1-release-backup` (não versionar).
 
@@ -68,3 +69,22 @@ Não enviar mensagens de suporte nem fechar tickets sem validação do cliente.
 A revisão também identificou que `gpt-maker-webhook` recebe eventos públicos sem
 assinatura/segredo de origem. Isso é anterior à sprint; endurecer esse canal exige
 coordenar o segredo com a configuração de entrega do provedor para não parar a ingestão.
+
+## Resultado em produção
+
+- 12 migrations `sesup1` aplicadas e registradas, com lock_timeout de 5 s.
+- 10 funções Edge publicadas; todas ACTIVE, versão aumentada e verify_jwt igual
+  ao anterior. Backups de todas as versões anteriores foram salvos localmente.
+- Sondas sem efeitos: analyze-message/solo-wpp-webhook/reports-cron/
+  send-chat-message/start-conversation/manage-agent-settings recusam sem credencial
+  (401); public-form recusa token malformado (400).
+- Oito tabelas novas com RLS. `anon` não executa intake e `authenticated` não
+  executa o motor interno da roleta.
+- **528 motivos históricos continuam vazios.** Auto-review recusou o backfill:
+  mudança em lote de dados históricos exige autorização explícita adicional.
+  O script avulso foi limitado a Solo Energia e registros não apagados para revisão.
+- Advisor: `ai_model_catalog_state` sem policies é intencional (service role);
+  RPCs SECURITY DEFINER autenticadas têm guardas de equipe testadas.
+  Permanecem os avisos anteriores nas views `v_tenant_entitlements`,
+  `v_admin_notification_matrix`, `v_admin_team_billing` e na proteção de senhas.
+  Referência: https://supabase.com/docs/guides/database/database-linter?lint=0010_security_definer_view
