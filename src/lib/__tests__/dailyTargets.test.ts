@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDailyTargets, serializeDailyTargets } from "@/lib/dailyTargets";
+import { dailyTargetsToSave, parseDailyTargets, serializeDailyTargets } from "@/lib/dailyTargets";
 
 describe("parseDailyTargets", () => {
   it("lê números e texto; lixo e ausência viram vazio", () => {
@@ -35,5 +35,18 @@ describe("serializeDailyTargets", () => {
   it("ida e volta", () => {
     const stored = serializeDailyTargets({ touchpoints: "40", qualified: "3" });
     expect(parseDailyTargets(stored)).toEqual({ touchpoints: "40", qualified: "3" });
+  });
+});
+
+describe("dailyTargetsToSave (rascunho antigo)", () => {
+  const stored = { touchpoints: 30, deals_won: 2 };
+  it("rascunho sem o campo restaura e salva sem apagar o que existe", () => {
+    expect(dailyTargetsToSave(undefined, stored)).toBe(stored);
+  });
+  it("campo presente e vazio é decisão explícita: apaga", () => {
+    expect(dailyTargetsToSave({}, stored)).toBeUndefined();
+  });
+  it("campo presente grava o novo valor", () => {
+    expect(dailyTargetsToSave({ touchpoints: "40" }, stored)).toEqual({ touchpoints: 40 });
   });
 });

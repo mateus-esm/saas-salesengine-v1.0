@@ -50,3 +50,15 @@ export function serializeDailyTargets(
   }
   return Object.keys(out).length ? out : undefined;
 }
+
+/**
+ * O que gravar em revenue_config.daily_targets ao salvar o formulário.
+ *
+ * Rascunho SEM o campo (`undefined`) é um rascunho antigo, de antes deste bloco
+ * existir: o usuário nunca viu os inputs, então salvar NÃO pode apagar o que
+ * está no banco — devolve o valor existente intacto. Só um rascunho que tem o
+ * campo (mesmo vazio, `{}`) é decisão explícita e passa por serializeDailyTargets.
+ */
+export function dailyTargetsToSave(draft: DailyTargetsDraft | undefined, existing: unknown): unknown {
+  return draft === undefined ? existing : serializeDailyTargets(draft, existing);
+}

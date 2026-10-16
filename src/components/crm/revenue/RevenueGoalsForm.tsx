@@ -22,7 +22,7 @@ import { useDraftAutosave } from "@/hooks/useDraftAutosave";
 import { useAuth } from "@/contexts/AuthContext";
 import { periodBounds } from "@/hooks/useForecast";
 import { formatBRL } from "@/lib/scoreboard";
-import { DAILY_TARGET_FIELDS, parseDailyTargets, serializeDailyTargets, type DailyTargetsDraft } from "@/lib/dailyTargets";
+import { DAILY_TARGET_FIELDS, dailyTargetsToSave, parseDailyTargets, type DailyTargetsDraft } from "@/lib/dailyTargets";
 import {
   buildRevenuePlan,
   formatInt,
@@ -262,7 +262,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
         Object.keys(conversion_overrides).length > 0 ? conversion_overrides : undefined,
       target_lead_time_days: targetLeadTimeNum > 0 ? targetLeadTimeNum : undefined,
       // Vazio apaga a chave: o relatório volta a derivar da meta do período.
-      daily_targets: serializeDailyTargets(state.dailyTargets, existing.daily_targets),
+      daily_targets: dailyTargetsToSave(state.dailyTargets, existing.daily_targets),
     };
     await sb
       .from("pipelines")
@@ -358,9 +358,9 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                   id={`daily-${f.key}`}
                   type="number"
                   min={0}
-                  value={state.dailyTargets?.[f.key] ?? ""}
+                  value={(state.dailyTargets ?? parseDailyTargets(config?.daily_targets))[f.key] ?? ""}
                   onChange={(e) =>
-                    updateField("dailyTargets", { ...(state.dailyTargets ?? {}), [f.key]: e.target.value })
+                    updateField("dailyTargets", { ...(state.dailyTargets ?? parseDailyTargets(config?.daily_targets)), [f.key]: e.target.value })
                   }
                   placeholder="derivar"
                   className="h-9"
