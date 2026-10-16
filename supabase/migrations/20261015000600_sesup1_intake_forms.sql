@@ -23,10 +23,10 @@
 --   4. Rate limit (janela de 1 min, em crm_form_submissions): 5 por (formulário, IP
 --      com hash) e 60 por formulário; honeypot. Validação recusada também conta.
 --
--- DISTRIBUIÇÃO (Task 8): NÃO está aqui. O responsável vem de crm_forms.responsible_id
--- (nulo = sem dono). O ponto de extensão é o bloco marcado "GANCHO DE DISTRIBUIÇÃO"
--- em _crm_intake_submit: quando a Task 8 criar crm_assign_next(opportunity), é nesse
--- ponto que ela entra, só quando responsible_id é nulo.
+-- DISTRIBUIÇÃO: NÃO está aqui. O responsável vem de crm_forms.responsible_id; nulo =
+-- a roleta do pipeline decide (SE-SUP1-8, 20261015000800: gatilho BEFORE INSERT
+-- trg_opportunity_distribution -> crm_assign_next), como em qualquer outro caminho
+-- que cria negócio. Nada a chamar daqui.
 --
 -- creation_source: o CHECK de leads não aceita 'form'; esta migration o recria
 -- (idempotente) incluindo 'form'. crm_entries.kind também ganha 'form'.
@@ -445,10 +445,9 @@ begin
     returning id into v_opp_id;
   end if;
 
-  -- GANCHO DE DISTRIBUIÇÃO (Task 8): quando existir crm_assign_next(uuid), chamá-la
-  -- aqui, só se v_form.responsible_id is null e o negócio ainda estiver sem dono:
-  --   if v_form.responsible_id is null then perform public.crm_assign_next(v_opp_id); end if;
-  -- (crm_record_touch abaixo já aplica a regra de dono da ENTRADA do formulário.)
+  -- DISTRIBUIÇÃO: com v_form.responsible_id nulo, o INSERT acima já passou pela
+  -- roleta do pipeline (trg_opportunity_distribution, SE-SUP1-8). Se ela não deu
+  -- dono, crm_record_touch abaixo ainda aplica a regra de dono da ENTRADA.
 
   -- Toque de origem: a entrada do formulário (criada na primeira vez).
   v_entry := v_form.entry_id;

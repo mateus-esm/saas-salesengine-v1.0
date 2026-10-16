@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Settings,
+  Shuffle,
   Star,
   StarOff,
   Tag,
@@ -62,6 +63,7 @@ import { PipelineNaturesEditor } from "@/components/crm/pipeline-settings/Pipeli
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
 import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
 import { IntakeFormsManager } from "@/components/crm/pipeline-settings/IntakeFormsManager";
+import { DistributionEditor } from "@/components/crm/pipeline-settings/DistributionEditor";
 import { OriginTaxonomyEditor } from "@/components/crm/pipeline-settings/OriginTaxonomyEditor";
 import { ContactFieldsEditor } from "@/components/crm/pipeline-settings/ContactFieldsEditor";
 import { RevenueGoalsForm } from "@/components/crm/revenue/RevenueGoalsForm";
@@ -359,6 +361,7 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const [metasOpen, setMetasOpen] = useState(false);
   const [automacoesOpen, setAutomacoesOpen] = useState(false);
   const [formulariosOpen, setFormulariosOpen] = useState(false);
+  const [distribuicaoOpen, setDistribuicaoOpen] = useState(false);
   const [origemOpen, setOrigemOpen] = useState(false);
   const [camposOpen, setCamposOpen] = useState(false);
   const [geralOpen, setGeralOpen] = useState(false);
@@ -632,6 +635,33 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
           <CollapsibleContent>
             <CardContent>
               <IntakeFormsManager pipeline={pipeline} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── Distribuição (SE-SUP1-8): a roleta — quem recebe cada negócio novo sem dono ── */}
+      <Collapsible open={distribuicaoOpen} onOpenChange={setDistribuicaoOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shuffle className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Distribuição</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!distribuicaoOpen && (
+                <CardDescription className="mt-1">
+                  Roleta: rodízio, por peso ou por regra (origem, fonte, campo), com limite de negócios abertos e pular ausentes.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              {distribuicaoOpen && <DistributionEditor pipeline={pipeline} />}
             </CardContent>
           </CollapsibleContent>
         </Card>
