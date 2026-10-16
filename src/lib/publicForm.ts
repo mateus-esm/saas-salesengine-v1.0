@@ -93,6 +93,8 @@ export function publicFormErrorText(error: string | undefined, fieldLabel?: stri
     case "form_expired":
     case "form_revoked":
       return "Este link não vale mais. Peça um novo a quem enviou.";
+    case "rate_limited":
+      return "Muitos envios em pouco tempo. Tente de novo em instantes.";
     case "form_not_found":
       return "Formulário não encontrado. Confira o link.";
     default:

@@ -12,7 +12,22 @@ Deno.test("parsePublicFormRequest: ler é o padrão; enviar precisa dos valores"
     action: "submit",
     token: TOKEN,
     values: { cpf: "1" },
+    kind: "contract",
   });
+});
+
+Deno.test("parsePublicFormRequest: o envio do formulário de ingestão leva kind intake", () => {
+  assertEquals(parsePublicFormRequest({ action: "submit", token: TOKEN, kind: "intake", values: { _hp: "" } }), {
+    action: "submit",
+    token: TOKEN,
+    values: { _hp: "" },
+    kind: "intake",
+  });
+  assertEquals(parsePublicFormRequest({ action: "submit", token: TOKEN, kind: "x", values: {} }), { error: "unknown_kind" });
+});
+
+Deno.test("publicFormError: excesso de envios vira 429", () => {
+  assertEquals(publicFormError("rate_limited"), { status: 429, error: "rate_limited" });
 });
 
 Deno.test("parsePublicFormRequest recusa o que não é do formulário", () => {
