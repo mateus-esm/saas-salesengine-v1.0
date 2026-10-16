@@ -17,6 +17,8 @@ interface Props {
  * Ação opcional de um webhook de entrada, executada sobre o negócio que o webhook
  * cria/atualiza (a mesma ação das Automações). Sem ação, o webhook só cria o lead.
  */
+const omitLostReason = ({ lost_reason: _drop, ...rest }: Record<string, unknown>) => rest;
+
 export const InboundActionEditor = ({ value, onChange }: Props) => {
   const { stages } = useTeamStages();
   const { members } = useMemberDirectory();
@@ -37,7 +39,7 @@ export const InboundActionEditor = ({ value, onChange }: Props) => {
         </SelectContent>
       </Select>
       {type === "move_stage" && (
-        <Select value={String(params.stage_id ?? "")} onValueChange={(v) => setParams({ stage_id: v })}>
+        <Select value={String(params.stage_id ?? "")} onValueChange={(v) => value && onChange({ ...value, params: { ...omitLostReason(params), stage_id: v } })}>
           <SelectTrigger><SelectValue placeholder="Etapa de destino" /></SelectTrigger>
           <SelectContent>
             {stages.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}{s.pipeline_name ? ` · ${s.pipeline_name}` : ""}</SelectItem>)}

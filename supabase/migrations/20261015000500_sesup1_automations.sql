@@ -109,6 +109,9 @@ begin
         || coalesce((select array_agg(m.value) from jsonb_each_text(
               case when jsonb_typeof(v_params->'map') = 'object' then v_params->'map' else '{}'::jsonb end) m), '{}');
   foreach v_id in array v_ids loop
+    if v_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      return 'invalid_stage';
+    end if;
     select s.stage_type, pl.loss_reasons into v_row
       from public.pipeline_stages_v2 s join public.pipelines pl on pl.id = s.pipeline_id
      where s.id = v_id::uuid and s.equipe_id = p_equipe and s.deleted_at is null;
@@ -130,6 +133,7 @@ revoke all on function public.fn_automation_action_problem(uuid, jsonb) from pub
 create or replace function public.fn_validate_automation_action()
 returns trigger
 language plpgsql
+security definer
 set search_path = public, extensions
 as $$
 declare v_problem text;
@@ -141,6 +145,8 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.fn_validate_automation_action() from public, anon, authenticated;
 
 drop trigger if exists trg_crm_automations_validate on public.crm_automations;
 create trigger trg_crm_automations_validate
