@@ -38,6 +38,7 @@ import {
 } from "@/components/dashboard/chart-primitives";
 import { LossReasonList } from "@/components/dashboard/LossReasonList";
 import { TouchpointsBySellerView } from "@/components/dashboard/TouchpointsBySellerView";
+import { FunnelMilestonesWidget } from "@/components/dashboard/FunnelMilestonesWidget";
 import { TopOpportunitiesTable } from "@/components/dashboard/TopOpportunitiesTable";
 import {
   isFunnelUnmapped,
@@ -283,6 +284,12 @@ export default function OverviewPage() {
         return (
           <div key={id} className="lg:col-span-2">
             <CustomFieldWidget filters={filters} />
+          </div>
+        );
+      case "panel_funnel_milestones":
+        return (
+          <div key={id} className="lg:col-span-2">
+            <FunnelMilestonesWidget filters={filters} />
           </div>
         );
       case "panel_touchpoints_by_seller":

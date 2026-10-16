@@ -56,6 +56,7 @@ Deno.test("snapshot totalmente vazio: mesmas seções, zeros explícitos", () =>
       "• Reuniões realizadas: 0",
       "• No-show: 0",
       "• Fechamentos: 0",
+      "• Por vendedor: nenhum marco no período",
       "",
       "*4. Touchpoints por vendedor*",
       "• Total: 0 touchpoints",
@@ -114,6 +115,15 @@ const POPULATED: ReportSnapshot = {
   top_won: [{ lead_name: "Maria Silva", value: 18000, responsible_name: "Ana" }],
   top_opportunities: [{ lead_name: "Casa Verde", value: 90000, days_in_stage: 20 }],
   loss_reasons: [{ reason: "Preço", count: 2, value: 5000 }],
+  funnel_milestones: {
+    by_seller: [
+      { seller_id: "u1", seller_name: "Ana", qualified: 3, proposal_sent: 2, meeting_scheduled: 4, meeting_done: 2, no_show: 1, won: 1 },
+      { seller_id: null, seller_name: null, qualified: 1, proposal_sent: 1, meeting_scheduled: 1, meeting_done: 1, no_show: 0, won: 0 },
+      { seller_id: "u3", seller_name: "Caio", qualified: 0, proposal_sent: 0, meeting_scheduled: 0, meeting_done: 0, no_show: 0, won: 0 },
+    ],
+    // O primeiro no-show registrado é DENTRO da janela: a série começa nele.
+    since: { qualified: "2026-08-01T12:00:00Z", no_show: "2026-10-14T15:00:00Z" },
+  },
 };
 
 Deno.test("snapshot preenchido: números, metas, gap e destaques", () => {
@@ -146,8 +156,11 @@ Deno.test("snapshot preenchido: números, metas, gap e destaques", () => {
       "• Propostas enviadas: 3",
       "• Reuniões agendadas: 5",
       "• Reuniões realizadas: 3",
-      "• No-show: 1",
+      "• No-show: 1 · série começa em 14/10/2026",
       "• Fechamentos: 1",
+      "• Por vendedor:",
+      "   – Ana: Qualif. 3 · Prop. 2 · Agend. 4 · Realiz. 2 · No-show 1 · Fech. 1",
+      "   – Não atribuído: Qualif. 1 · Prop. 1 · Agend. 1 · Realiz. 1 · No-show 0 · Fech. 0",
       "",
       "*4. Touchpoints por vendedor*",
       "• Total: 41 touchpoints",
@@ -232,4 +245,33 @@ Deno.test("`sections` do agendamento antigo é ignorado", () => {
   const a = renderReportText({ ...BASE, snapshot: { period: PERIOD, sections: [] } });
   const b = renderReportText({ ...BASE, snapshot: { period: PERIOD, sections: ["kpi_new_leads"] } });
   assertEquals(a, b);
+});
+
+Deno.test("seção 3: no-show nunca registrado diz que a série não tem dado", () => {
+  const text = renderReportText({
+    ...BASE,
+    snapshot: { period: PERIOD, funnel_milestones: { by_seller: [], since: { no_show: null } } },
+  });
+  assertEquals(text.includes("• No-show: 0 · série ainda sem registros\n"), true);
+  assertEquals(text.includes("• Por vendedor: nenhum marco no período\n"), true);
+});
+
+Deno.test("seção 3: no-show com histórico anterior à janela é zero de verdade", () => {
+  const text = renderReportText({
+    ...BASE,
+    snapshot: { period: PERIOD, funnel_milestones: { since: { no_show: "2026-09-01T12:00:00Z" } } },
+  });
+  assertEquals(text.includes("• No-show: 0\n"), true);
+});
+
+Deno.test("seção 3 tem sempre as mesmas sete linhas-título, vazio ou cheio", () => {
+  for (const snapshot of [{ period: PERIOD }, POPULATED, {}]) {
+    const text = renderReportText({ ...BASE, snapshot });
+    const block = text.split("\n*3. Marcos do funil*\n")[1].split("\n\n")[0].split("\n")
+      .filter((l) => l.startsWith("•"));
+    assertEquals(block.map((l) => l.split(":")[0]), [
+      "• Qualificados", "• Propostas enviadas", "• Reuniões agendadas", "• Reuniões realizadas",
+      "• No-show", "• Fechamentos", "• Por vendedor",
+    ]);
+  }
 });

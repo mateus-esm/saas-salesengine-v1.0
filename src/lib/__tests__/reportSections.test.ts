@@ -51,4 +51,29 @@ describe("buildFixedSections", () => {
     const s = buildFixedSections({ goals: { window_business_days: 0, pipelines: [{ goal_deals: 10 }] } });
     expect(s.goals[0].value).toBe("0 · dia sem meta");
   });
+
+  it("marcos: por vendedor e nota de história do no-show (mesmo texto do WhatsApp)", () => {
+    const s = buildFixedSections({
+      period: { from: "2026-10-14T03:00:00Z", to: "2026-10-15T03:00:00Z" },
+      overview: { no_shows: 1 },
+      funnel_milestones: {
+        by_seller: [
+          { seller_id: "a", seller_name: "Ana", meeting_done: 2, no_show: 1 },
+          { seller_id: "b", seller_name: "Bia" },
+        ],
+        since: { no_show: "2026-10-14T15:00:00Z" },
+      },
+    });
+    expect(s.milestones).toHaveLength(6);
+    expect(s.milestones.find((l) => l.label === "No-show")?.value).toBe("1 · série começa em 14/10/2026");
+    expect(s.milestoneSellers).toEqual([
+      { name: "Ana", value: "Qualif. 0 · Prop. 0 · Agend. 0 · Realiz. 2 · No-show 1 · Fech. 0" },
+    ]);
+  });
+
+  it("marcos: snapshot antigo sem funnel_milestones não inventa nota", () => {
+    const s = buildFixedSections({ overview: { no_shows: 0 } });
+    expect(s.milestones.find((l) => l.label === "No-show")?.value).toBe("0");
+    expect(s.milestoneSellers).toEqual([]);
+  });
 });

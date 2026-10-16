@@ -7,6 +7,12 @@
 // touchpoints_by_seller, top_won...): o que falta vira zero / "sem meta".
 
 import { gapOf, resolveDailyTargets, type GoalsInput } from "../../supabase/functions/_shared/report-targets";
+import {
+  compactCounts,
+  hasAnyMilestone,
+  normalizeMilestones,
+  seriesNote,
+} from "../../supabase/functions/_shared/funnel-milestones";
 
 export interface FixedSnapshot {
   overview?: Record<string, number | null>;
@@ -24,6 +30,9 @@ export interface FixedSnapshot {
     rows?: { seller_id: string | null; seller_name: string | null; touchpoints: number }[];
   };
   goals?: GoalsInput;
+  period?: { from: string; to: string };
+  /** SE-SUP1-8 (#10): marcos por vendedor + primeiro evento de cada marco. */
+  funnel_milestones?: { by_seller?: Record<string, unknown>[]; since?: Record<string, string | null> };
 }
 
 export interface Line {
@@ -35,6 +44,8 @@ export interface FixedSections {
   summary: Line[];
   goals: Line[];
   milestones: Line[];
+  /** Quem teve algum marco na janela; vazio = "nenhum marco no período". */
+  milestoneSellers: { name: string; value: string }[];
   touchpoints: { total: number; rows: { name: string; touchpoints: number }[] };
   highlights: Line[];
 }
@@ -86,6 +97,11 @@ export function buildFixedSections(snapshot: FixedSnapshot | null | undefined): 
     goalLine("Receita", n("won_value"), brl(n("won_value")), w.revenue, brl),
   ];
 
+  // Mesma regra do texto de WhatsApp (report-render.ts): nota só quando o
+  // snapshot traz os marcos — um snapshot antigo não sabe quando a série começou.
+  const fm = s.funnel_milestones ? normalizeMilestones(s.funnel_milestones) : null;
+  const noShowNote = fm && s.period ? seriesNote(fm.since.no_show, s.period.from) : null;
+
   const won = s.top_won?.[0];
   const open = s.top_opportunities?.[0];
   const loss = s.loss_reasons?.[0];
@@ -104,9 +120,10 @@ export function buildFixedSections(snapshot: FixedSnapshot | null | undefined): 
       { label: "Propostas enviadas", value: int(n("proposals_sent")) },
       { label: "Reuniões agendadas", value: int(n("meetings_scheduled")) },
       { label: "Reuniões realizadas", value: int(n("meetings_done")) },
-      { label: "No-show", value: int(n("no_shows")) },
+      { label: "No-show", value: `${int(n("no_shows"))}${noShowNote ? ` · ${noShowNote}` : ""}` },
       { label: "Fechamentos", value: int(n("deals_won")) },
     ],
+    milestoneSellers: (fm?.by_seller ?? []).filter(hasAnyMilestone).map((r) => ({ name: r.name, value: compactCounts(r) })),
     touchpoints: {
       total: tpTotal,
       rows: (s.touchpoints_by_seller?.rows ?? [])

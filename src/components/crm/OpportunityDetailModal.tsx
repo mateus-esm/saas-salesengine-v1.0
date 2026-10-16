@@ -60,6 +60,8 @@ import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { normalizeNatures } from "@/lib/natures";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
+import { MeetingOutcomeButtons } from "./MeetingOutcomeButtons";
+import { canRecordOutcome, outcomeLabel } from "@/lib/meetingOutcome";
 import { DealItemsSection } from "./deal/DealItemsSection";
 import { DealRevenueSection } from "./deal/DealRevenueSection";
 import { DealArtifactsSection } from "./deal/DealArtifactsSection";
@@ -340,6 +342,13 @@ export const OpportunityDetailModal = ({
                     </div>
                   </div>
 
+                  {/* SE-SUP1-8 (#10) — a reunião aconteceu? Não move etapa: grava o marco
+                      (funnel_events) pelo mesmo caminho manual de sempre. */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Registrar reunião</Label>
+                    <MeetingOutcomeButtons opportunityId={opportunity.id} />
+                  </div>
+
                   {/* Sprint 11 · T30 — what the deal sells; with items, the value is their sum. */}
                   <DealItemsSection
                     opportunityId={opportunity.id}
@@ -470,16 +479,32 @@ export const OpportunityDetailModal = ({
                     ) : (
                       <div className="space-y-1.5">
                         {cardEvents.map((e) => (
-                          <div key={e.id} className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground/70">{e.title}</span>
-                            <span className="ml-1">
-                              {new Date(e.starts_at).toLocaleString("pt-BR", {
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
+                          <div key={e.id} className="space-y-1 text-xs text-muted-foreground">
+                            <div>
+                              <span className="font-medium text-foreground/70">{e.title}</span>
+                              <span className="ml-1">
+                                {new Date(e.starts_at).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              {outcomeLabel(e.outcome) && (
+                                <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">
+                                  {outcomeLabel(e.outcome)}
+                                </Badge>
+                              )}
+                            </div>
+                            {/* SE-SUP1-8 (#10): o desfecho desta reunião, ligado a ESTE negócio. */}
+                            {canRecordOutcome(e) && (
+                              <MeetingOutcomeButtons
+                                compact
+                                agendaEventId={e.id}
+                                opportunityId={e.opportunity_id ?? opportunity.id}
+                                current={e.outcome}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>

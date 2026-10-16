@@ -269,7 +269,27 @@ function FixedReport({
       <p className="text-xs text-muted-foreground">{pipelineName}</p>
       {block(1, summaryTitle, <LineList lines={fixed.summary} />)}
       {block(2, SECTION_TITLES.goals, <LineList lines={fixed.goals} />)}
-      {block(3, SECTION_TITLES.milestones, <LineList lines={fixed.milestones} />)}
+      {block(
+        3,
+        SECTION_TITLES.milestones,
+        <div className="space-y-3">
+          <LineList lines={fixed.milestones} />
+          {/* SE-SUP1-8 (#10): o mesmo "por vendedor" do texto de WhatsApp. */}
+          <div className="space-y-1.5 border-t border-border/60 pt-2">
+            <div className="text-xs font-medium text-foreground">Por vendedor</div>
+            {fixed.milestoneSellers.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum marco no período</p>
+            ) : (
+              fixed.milestoneSellers.map((r) => (
+                <div key={r.name} className="flex items-baseline justify-between gap-3 text-xs">
+                  <span className="text-muted-foreground">{r.name}</span>
+                  <span className="text-right tabular-nums text-foreground">{r.value}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>,
+      )}
       {block(
         4,
         SECTION_TITLES.touchpoints,

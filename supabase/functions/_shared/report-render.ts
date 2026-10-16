@@ -22,6 +22,7 @@
 // ============================================================================
 
 import { gapOf, resolveDailyTargets, type GoalsInput } from "./report-targets.ts";
+import { compactCounts, hasAnyMilestone, normalizeMilestones, seriesNote } from "./funnel-milestones.ts";
 
 export interface ReportSnapshot {
   equipe_name?: string;
@@ -44,6 +45,14 @@ export interface ReportSnapshot {
     rows?: { seller_id: string | null; seller_name: string | null; touchpoints: number }[];
   };
   goals?: GoalsInput;
+  /**
+   * SE-SUP1-8 (#10): marcos por vendedor e a data do primeiro evento de cada
+   * marco (`since`), de _funnel_milestones_core. Ausente em snapshot antigo.
+   */
+  funnel_milestones?: {
+    by_seller?: Record<string, unknown>[];
+    since?: Record<string, string | null>;
+  };
 }
 
 const brl = (v: number | null | undefined): string =>
@@ -184,13 +193,26 @@ export function renderReportText({
   lines.push("");
 
   // --- 3. marcos do funil ------------------------------------------------
+  // SE-SUP1-8 (#10): os totais continuam vindo do overview (o mesmo número da
+  // seção 2); o bloco de marcos acrescenta o "por vendedor" e a nota de história
+  // do no-show — que só existe desde o registro manual, e um 0 antes disso
+  // leria como "ninguém faltou".
+  const fm = snapshot.funnel_milestones ? normalizeMilestones(snapshot.funnel_milestones) : null;
+  const noShowNote = fm && snapshot.period ? seriesNote(fm.since.no_show, snapshot.period.from, timezone) : null;
   lines.push("*3. Marcos do funil*");
   lines.push(`• Qualificados: ${int(actual.qualified)}`);
   lines.push(`• Propostas enviadas: ${int(actual.proposals_sent)}`);
   lines.push(`• Reuniões agendadas: ${int(actual.meetings_scheduled)}`);
   lines.push(`• Reuniões realizadas: ${int(actual.meetings_done)}`);
-  lines.push(`• No-show: ${int(n("no_shows"))}`);
+  lines.push(`• No-show: ${int(n("no_shows"))}${noShowNote ? ` · ${noShowNote}` : ""}`);
   lines.push(`• Fechamentos: ${int(actual.deals_won)}`);
+  const milestoneSellers = (fm?.by_seller ?? []).filter(hasAnyMilestone);
+  if (milestoneSellers.length === 0) {
+    lines.push("• Por vendedor: nenhum marco no período");
+  } else {
+    lines.push("• Por vendedor:");
+    for (const r of milestoneSellers) lines.push(`   – ${r.name}: ${compactCounts(r)}`);
+  }
   lines.push("");
 
   // --- 4. touchpoints por vendedor --------------------------------------

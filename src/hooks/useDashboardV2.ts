@@ -15,6 +15,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { normalizeTouchpoints, type TouchpointsBySeller } from "@/lib/touchpointsBySeller";
+import {
+  normalizeMilestones,
+  type FunnelMilestones,
+} from "../../supabase/functions/_shared/funnel-milestones";
 import type {
   BreakdownDimension,
   DashboardFilterOptions,
@@ -134,6 +138,32 @@ export function useTouchpointsBySeller(filters: DashboardFilters) {
       });
       if (error) throw error;
       return normalizeTouchpoints(data);
+    },
+  });
+}
+
+/**
+ * SE-SUP1-8 (#10) — os seis marcos por balde, por vendedor e por pipeline, com
+ * os mesmos filtros (inclusive o período personalizado) do resto do painel.
+ * `enabled` deixa o widget pedir só quando está na tela.
+ */
+export function useFunnelMilestones(
+  filters: DashboardFilters,
+  granularity: SeriesGranularity,
+  enabled = true,
+) {
+  const { profile } = useAuth();
+  return useQuery({
+    queryKey: ["funnel_milestones", profile?.equipe_id, granularity, ...filterKey(filters)],
+    enabled: enabled && !!profile?.equipe_id,
+    staleTime: STALE,
+    queryFn: async (): Promise<FunnelMilestones> => {
+      const { data, error } = await sb.rpc("get_funnel_milestones", {
+        ...rpcArgs(filters),
+        p_granularity: granularity,
+      });
+      if (error) throw error;
+      return normalizeMilestones(data);
     },
   });
 }

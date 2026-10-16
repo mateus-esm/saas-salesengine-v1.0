@@ -14,6 +14,10 @@ export interface AgendaEvent {
   lead_id: string | null;
   notes: string | null;
   created_at: string;
+  // SE-SUP1-8 (#10): o desfecho marcado (só atalho de UI; a contagem vem de
+  // funnel_events) e o negócio da reunião. Ausentes antes da migration 000700.
+  opportunity_id?: string | null;
+  outcome?: "done" | "no_show" | "technical_visit" | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
