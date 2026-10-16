@@ -6,6 +6,7 @@ import {
   filterWebhookLogs,
   isFailedDelivery,
   type StageLink,
+  lossReasonMissing,
 } from "@/lib/webhookCatalog";
 import type { WebhookConfig, WebhookLog } from "@/types/webhook";
 
@@ -60,6 +61,17 @@ describe("sampleEventPayload", () => {
     const p = sampleEventPayload("lead_created") as Record<string, any>;
     expect(p.lead.name).toBeTruthy();
     expect(p.opportunity.pipeline_id).toBeTruthy();
+  });
+});
+
+describe("lossReasonMissing", () => {
+  const lost: StageLink = { id: "s", name: "Perdida", stage_type: "lost", loss_reasons: ["Preço"] };
+  it("exige motivo só em etapa de perda com lista", () => {
+    expect(lossReasonMissing(lost, "")).toBe(true);
+    expect(lossReasonMissing(lost, "Preço")).toBe(false);
+    expect(lossReasonMissing({ ...lost, loss_reasons: [] }, "")).toBe(false);
+    expect(lossReasonMissing({ ...lost, stage_type: "open" }, "")).toBe(false);
+    expect(lossReasonMissing(undefined, "")).toBe(false);
   });
 });
 

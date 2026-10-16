@@ -74,7 +74,8 @@ export const useWebhookConfigs = () => {
           inbound_function: configData.inbound_function ?? null,
           pipeline_id: configData.pipeline_id ?? null,
           field_mappings: configData.field_mappings ?? [],
-          action: configData.action ?? null,
+          // Só com ação: a coluna nasce com a migration, e criar sem ela tem de continuar funcionando.
+          ...(configData.action ? { action: configData.action } : {}),
         })
         .select()
         .single();

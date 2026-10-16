@@ -116,13 +116,14 @@ export function useTeamStages() {
     queryFn: async (): Promise<StageLink[]> => {
       const run = (cols: string) =>
         db.from("pipeline_stages_v2").select(cols).eq("equipe_id", equipeId).is("deleted_at", null).order("position");
-      let res = await run("id, name, pipeline_id, webhook_triggers");
-      if (res.error) res = await run("id, name, pipeline_id");
+      let res = await run("id, name, pipeline_id, stage_type, webhook_triggers");
+      if (res.error) res = await run("id, name, pipeline_id, stage_type");
       if (res.error) throw res.error;
-      const { data: pipes } = await db.from("pipelines").select("id, name").eq("equipe_id", equipeId);
-      const names = new Map<string, string>((pipes ?? []).map((p: { id: string; name: string }) => [p.id, p.name]));
+      const { data: pipes } = await db.from("pipelines").select("id, name, loss_reasons").eq("equipe_id", equipeId);
+      const pipeMap = new Map<string, { name: string; loss_reasons?: string[] }>((pipes ?? []).map((p: { id: string; name: string; loss_reasons?: string[] }) => [p.id, p]));
       return (res.data ?? []).map((s: StageLink & { pipeline_id: string }) => ({
-        id: s.id, name: s.name, pipeline_name: names.get(s.pipeline_id), webhook_triggers: s.webhook_triggers ?? null,
+        id: s.id, name: s.name, pipeline_name: pipeMap.get(s.pipeline_id)?.name, webhook_triggers: s.webhook_triggers ?? null,
+        stage_type: s.stage_type, loss_reasons: Array.isArray(pipeMap.get(s.pipeline_id)?.loss_reasons) ? pipeMap.get(s.pipeline_id)?.loss_reasons : [],
       }));
     },
   });

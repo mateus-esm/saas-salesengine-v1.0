@@ -204,7 +204,8 @@ export const WebhookConfigModal = ({
         inbound_function: isInbound ? "receive_lead" : null,
         pipeline_id: isInbound ? (data.pipelineId || null) : null,
         field_mappings: isInbound ? data.fieldMappings : [],
-        action: isInbound ? data.action : null,
+        // Só quando há (ou havia) ação — antes da migration a coluna não existe.
+        ...(isInbound && (data.action || config?.action) ? { action: data.action } : {}),
       };
 
       if (isEditing && config) {

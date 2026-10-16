@@ -9,6 +9,15 @@ export interface StageLink {
   pipeline_name?: string;
   /** pipeline_stages_v2.webhook_triggers — [{event:'on_stage_entered', webhook_id}] (ausente até a SE-STAGEHOOK-001 ser aplicada). */
   webhook_triggers?: Array<{ event?: string; webhook_id?: string }> | null;
+  stage_type?: string;
+  /** Motivos de perda do pipeline da etapa (pipelines.loss_reasons). */
+  loss_reasons?: string[];
+}
+
+/** Mover para etapa de perda de um pipeline com lista de motivos exige o motivo na ação (mesma regra do mover etapa). */
+export function lossReasonMissing(stage: StageLink | undefined, lostReason: unknown): boolean {
+  return !!stage && stage.stage_type === "lost" && (stage.loss_reasons?.length ?? 0) > 0 &&
+    !String(lostReason ?? "").trim();
 }
 
 export interface WebhookOrigin {

@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { resolveInboundAction, valueAtPath } from "./automation-actions.ts";
+import { inboundEventKey, publicRunResult, resolveInboundAction, valueAtPath } from "./automation-actions.ts";
 
 Deno.test("valueAtPath - caminho pontilhado e ausente", () => {
   assertEquals(valueAtPath({ a: { b: 3 } }, "a.b"), 3);
@@ -54,4 +54,18 @@ Deno.test("set_responsible e call_webhook", () => {
 Deno.test("ação ausente ou inválida", () => {
   assertEquals(resolveInboundAction(null, {}), { ok: false, reason: "no_action" });
   assertEquals(resolveInboundAction({ type: "explode" }, {}), { ok: false, reason: "unknown_type" });
+});
+
+Deno.test("inboundEventKey - estável por webhook+corpo, muda com qualquer um", async () => {
+  const a = await inboundEventKey("w1", { x: 1 });
+  assertEquals(a, await inboundEventKey("w1", { x: 1 }));
+  assertEquals(a === (await inboundEventKey("w2", { x: 1 })), false);
+  assertEquals(a === (await inboundEventKey("w1", { x: 2 })), false);
+});
+
+Deno.test("publicRunResult - nunca devolve texto de erro do banco", () => {
+  assertEquals(publicRunResult({ status: "error", error: "relation x does not exist", run_id: "r" }, false), { status: "error" });
+  assertEquals(publicRunResult({ status: "ok", run_id: "r" }, false), { status: "ok" });
+  assertEquals(publicRunResult({ status: "skipped", reason: "already_ran" }, false), { status: "skipped", reason: "already_ran" });
+  assertEquals(publicRunResult(null, true), { status: "error" });
 });

@@ -19,6 +19,12 @@
 -- o escopo vem da própria automação e o UPDATE é o mesmo que a RPC faria — os
 -- gatilhos de etapa/dono/perda disparam igual).
 
+-- ORDEM DE DEPLOY (obrigatória): 1) esta migration; 2) functions (crm-webhook);
+-- 3) frontend. O crm-webhook e a UI toleram a migration ausente (leem/gravam
+-- `action` só quando há ação), mas ações e automações só funcionam depois dela.
+-- Gravação de crm_automations segue a regra de webhook_configs: qualquer membro da
+-- equipe (política por equipe, sem papel) — não há guarda de papel a copiar.
+
 begin;
 
 create table if not exists public.crm_automations (
@@ -57,8 +63,9 @@ create table if not exists public.automation_runs (
 
 create index if not exists idx_automation_runs_equipe on public.automation_runs (equipe_id, created_at desc);
 -- Só execuções que não falharam seguram a chave: o que deu erro pode ser tentado de novo.
+-- coalesce: ação avulsa (webhook de entrada, sem automation_id) também deduplica.
 create unique index if not exists uq_automation_runs_event_key
-  on public.automation_runs (automation_id, opportunity_id, event_key)
+  on public.automation_runs ((coalesce(automation_id, '00000000-0000-0000-0000-000000000000'::uuid)), opportunity_id, event_key)
   where event_key is not null and status <> 'error';
 
 alter table public.crm_automations enable row level security;
@@ -77,6 +84,74 @@ create policy "tenant_read_automation_runs" on public.automation_runs
 
 -- Ação opcional num webhook de ENTRADA ({type, params}); sem ela o webhook só cria lead.
 alter table public.webhook_configs add column if not exists action jsonb;
+
+-- ============================================================================
+-- Validação ao salvar: mover para etapa de perda exige o motivo
+-- ============================================================================
+
+create or replace function public.fn_automation_action_problem(p_equipe uuid, p_action jsonb)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_params jsonb := coalesce(p_action->'params', '{}'::jsonb);
+  v_ids    text[];
+  v_id     text;
+  v_row    record;
+begin
+  if p_action is null or p_action->>'type' is distinct from 'move_stage' then
+    return null;
+  end if;
+  v_ids := array_remove(array[v_params->>'stage_id'], null)
+        || coalesce((select array_agg(m.value) from jsonb_each_text(
+              case when jsonb_typeof(v_params->'map') = 'object' then v_params->'map' else '{}'::jsonb end) m), '{}');
+  foreach v_id in array v_ids loop
+    select s.stage_type, pl.loss_reasons into v_row
+      from public.pipeline_stages_v2 s join public.pipelines pl on pl.id = s.pipeline_id
+     where s.id = v_id::uuid and s.equipe_id = p_equipe and s.deleted_at is null;
+    if not found then
+      return 'invalid_stage';
+    end if;
+    if v_row.stage_type = 'lost' and jsonb_typeof(v_row.loss_reasons) = 'array'
+       and jsonb_array_length(v_row.loss_reasons) > 0
+       and nullif(btrim(coalesce(v_params->>'lost_reason', '')), '') is null then
+      return 'loss_reason_required';
+    end if;
+  end loop;
+  return null;
+end;
+$$;
+
+revoke all on function public.fn_automation_action_problem(uuid, jsonb) from public, anon, authenticated;
+
+create or replace function public.fn_validate_automation_action()
+returns trigger
+language plpgsql
+set search_path = public, extensions
+as $$
+declare v_problem text;
+begin
+  v_problem := public.fn_automation_action_problem(new.equipe_id, new.action);
+  if v_problem is not null then
+    raise exception '%', v_problem using errcode = '22023';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_crm_automations_validate on public.crm_automations;
+create trigger trg_crm_automations_validate
+  before insert or update of action on public.crm_automations
+  for each row execute function public.fn_validate_automation_action();
+
+drop trigger if exists trg_webhook_configs_validate_action on public.webhook_configs;
+create trigger trg_webhook_configs_validate_action
+  before insert or update of action on public.webhook_configs
+  for each row when (new.action is not null)
+  execute function public.fn_validate_automation_action();
 
 -- ============================================================================
 -- Executor
@@ -99,7 +174,9 @@ as $$
 declare
   v_caller   uuid := auth.uid();
   v_equipe   uuid;
-  v_auto     record;
+  v_enabled  boolean := true;
+  v_equipe_a uuid;
+  v_aid      uuid;
   v_action   jsonb;
   v_type     text;
   v_params   jsonb;
@@ -113,6 +190,10 @@ declare
   v_fid      text;
   v_value    jsonb;
   v_hook     record;
+  v_pl_loss  jsonb;
+  v_f        jsonb;
+  v_ftype    text;
+  v_ok       boolean := true;
 begin
   if v_caller is not null then
     select p.equipe_id into v_equipe from public.profiles p where p.id = v_caller;
@@ -122,12 +203,14 @@ begin
   end if;
 
   if p_automation is not null then
-    select a.* into v_auto from public.crm_automations a where a.id = p_automation;
-    if not found or (v_equipe is not null and v_auto.equipe_id <> v_equipe) then
+    -- Variáveis soltas (não um record): no caminho avulso nada é lido de uma linha ausente.
+    select a.equipe_id, a.action, a.enabled into v_equipe_a, v_action, v_enabled
+      from public.crm_automations a where a.id = p_automation;
+    if not found or (v_equipe is not null and v_equipe_a <> v_equipe) then
       raise exception 'automation_not_found' using errcode = 'P0002';
     end if;
-    v_equipe := v_auto.equipe_id;
-    v_action := v_auto.action;
+    v_equipe := v_equipe_a;
+    v_aid := p_automation;
   else
     -- Ação avulsa: só o servidor (sem auth.uid()) pode declará-la, e informa a equipe.
     if v_caller is not null or p_action is null or p_equipe is null then
@@ -143,16 +226,18 @@ begin
   select o.id, o.lead_id, o.pipeline_id, o.stage_id, o.custom_data
     into v_opp
     from public.opportunities o
-   where o.id = p_opportunity and o.equipe_id = v_equipe and o.deleted_at is null;
+   where o.id = p_opportunity and o.equipe_id = v_equipe and o.deleted_at is null
+     and exists (select 1 from public.leads l where l.id = o.lead_id and l.deleted_at is null)
+   for update of o;
   if not found then
     raise exception 'opportunity_not_found' using errcode = 'P0002';
   end if;
 
   -- Idempotência: o mesmo evento não roda duas vezes para o mesmo negócio.
   insert into public.automation_runs (automation_id, equipe_id, opportunity_id, status, input, event_key)
-  values (p_automation, v_equipe, p_opportunity, 'running',
+  values (v_aid, v_equipe, p_opportunity, 'running',
           jsonb_build_object('action', v_action, 'payload', v_payload), p_event_key)
-  on conflict (automation_id, opportunity_id, event_key)
+  on conflict ((coalesce(automation_id, '00000000-0000-0000-0000-000000000000'::uuid)), opportunity_id, event_key)
     where event_key is not null and status <> 'error'
   do nothing
   returning id into v_run;
@@ -161,7 +246,7 @@ begin
   end if;
 
   begin
-    if v_auto.id is not null and not v_auto.enabled then
+    if not v_enabled then
       raise exception 'automation_disabled' using errcode = '22023';
     end if;
 
@@ -171,18 +256,25 @@ begin
       if v_stage is null then
         raise exception 'stage_required' using errcode = '22023';
       end if;
+      select s.stage_type, pl.loss_reasons into v_stage_t, v_pl_loss
+        from public.pipeline_stages_v2 s join public.pipelines pl on pl.id = s.pipeline_id
+       where s.id = v_stage and s.pipeline_id = v_opp.pipeline_id
+         and s.equipe_id = v_equipe and s.deleted_at is null;
+      if v_stage_t is null then
+        raise exception 'invalid_stage' using errcode = '22023';
+      end if;
+      -- A regra do motivo de perda vale para a automação como para a tela: sem
+      -- motivo configurado a execução falha (não grava 'Não informado' calada).
+      if v_stage_t = 'lost' and jsonb_typeof(v_pl_loss) = 'array' and jsonb_array_length(v_pl_loss) > 0
+         and nullif(btrim(coalesce(v_params->>'lost_reason', '')), '') is null then
+        raise exception 'loss_reason_required' using errcode = '22023';
+      end if;
       if v_caller is not null then
-        -- O motor único da interface: recusa motivo ausente quando o pipeline exige.
-        perform public.crm_move_opportunity(p_opportunity, v_stage,
-                  coalesce(nullif(btrim(v_params->>'lost_reason'), ''), 'Não informado'));
+        -- O motor único da interface.
+        perform public.crm_move_opportunity(p_opportunity, v_stage, nullif(btrim(v_params->>'lost_reason'), ''));
       else
-        select s.stage_type into v_stage_t from public.pipeline_stages_v2 s
-         where s.id = v_stage and s.pipeline_id = v_opp.pipeline_id
-           and s.equipe_id = v_equipe and s.deleted_at is null;
-        if v_stage_t is null then
-          raise exception 'invalid_stage' using errcode = '22023';
-        end if;
-        -- Mesmo UPDATE da RPC; a rede de segurança preenche 'Não informado' se perder sem motivo.
+        -- Mesmo UPDATE da RPC (linha já travada acima); a rede de segurança preenche
+        -- 'Não informado' só quando o pipeline não tem lista de motivos.
         update public.opportunities o
            set stage_id = v_stage,
                lost_reason = case when v_stage_t = 'lost'
@@ -213,18 +305,38 @@ begin
     elsif v_type = 'update_field' then
       v_field := v_params->>'field';
       -- O campo vem pelo key (ou field_id) e o valor mora em custom_data[field_id].
-      select f->>'field_id' into v_fid
+      select f into v_f
         from public.pipelines p, jsonb_array_elements(p.custom_fields_schema) f
        where p.id = v_opp.pipeline_id and jsonb_typeof(p.custom_fields_schema) = 'array'
          and not coalesce((f->>'is_deleted')::boolean, false)
          and (f->>'field_id' = v_field or f->>'key' = v_field)
        limit 1;
-      if v_fid is null then
+      if v_f is null then
         raise exception 'field_not_declared: %', coalesce(v_field, '') using errcode = '22023';
       end if;
+      v_fid := v_f->>'field_id';
+      v_ftype := v_f->>'type';
       v_value := case when v_params ? 'from_payload'
                       then v_payload #> string_to_array(v_params->>'from_payload', '.')
                       else v_params->'value' end;
+      if v_params ? 'from_payload' and (v_value is null or v_value = 'null'::jsonb) then
+        -- Campo ausente no payload: não apaga o que já está no negócio.
+        update public.automation_runs set status = 'skipped', error = 'source_missing' where id = v_run;
+        return jsonb_build_object('status', 'skipped', 'reason', 'source_missing', 'run_id', v_run);
+      end if;
+      -- Conferência mínima do tipo declarado (espelho enxuto de _shared/custom-fields.ts).
+      if v_value is not null and v_value <> 'null'::jsonb then
+        v_ok := case
+          when v_ftype in ('number', 'currency') then (v_value #>> '{}') ~ '^-?[0-9]+([.][0-9]+)?$'
+          when v_ftype = 'boolean' then jsonb_typeof(v_value) = 'boolean' or (v_value #>> '{}') in ('true', 'false')
+          when v_ftype = 'date' then (v_value #>> '{}') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+          when v_ftype = 'select' and jsonb_typeof(v_f->'options') = 'array' and jsonb_array_length(v_f->'options') > 0
+            then v_f->'options' @> to_jsonb(v_value #>> '{}')
+          else true end;
+        if not v_ok then
+          raise exception 'invalid_value_for_field: % (%)', v_field, v_ftype using errcode = '22023';
+        end if;
+      end if;
       update public.opportunities o
          set custom_data = coalesce(o.custom_data, '{}'::jsonb) || jsonb_build_object(v_fid, coalesce(v_value, 'null'::jsonb))
        where o.id = v_opp.id and o.equipe_id = v_equipe;
@@ -280,16 +392,20 @@ as $$
 declare
   a record;
 begin
-  -- Uma automação que move etapa não dispara outra em cascata (evita laço A -> B -> A).
-  if pg_trigger_depth() > 1 then
-    return null;
-  end if;
   for a in
     select x.id from public.crm_automations x
      where x.equipe_id = new.equipe_id and x.enabled
        and x.trigger->>'event' = 'stage_entered'
        and x.trigger->>'stage_id' = new.stage_id::text
   loop
+    -- Uma automação que move etapa não dispara outra em cascata (evita laço A -> B -> A);
+    -- a execução barrada fica registrada, para quem se pergunta por que não rodou.
+    if pg_trigger_depth() > 1 then
+      insert into public.automation_runs (automation_id, equipe_id, opportunity_id, status, error, input)
+      values (a.id, new.equipe_id, new.id, 'skipped', 'cascade',
+              jsonb_build_object('payload', jsonb_build_object('from_stage', old.stage_id, 'to_stage', new.stage_id)));
+      continue;
+    end if;
     -- crm_run_automation não levanta erro de ação; o que sobrar não pode travar a movimentação.
     begin
       perform public.crm_run_automation(a.id, new.id,

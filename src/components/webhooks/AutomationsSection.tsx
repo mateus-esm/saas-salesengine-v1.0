@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAutomations, useTeamStages, type AutomationAction, type AutomationTrigger, type CrmAutomation } from "@/hooks/useAutomations";
+import { lossReasonMissing } from "@/lib/webhookCatalog";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 
@@ -48,6 +49,7 @@ export const AutomationsSection = () => {
   const [triggerWebhook, setTriggerWebhook] = useState("");
   const [type, setType] = useState<AutomationAction["type"]>("move_stage");
   const [targetStage, setTargetStage] = useState("");
+  const [lostReason, setLostReason] = useState("");
   const [field, setField] = useState("");
   const [fieldValue, setFieldValue] = useState("");
   const [user, setUser] = useState("");
@@ -68,11 +70,13 @@ export const AutomationsSection = () => {
     event === "stage_entered" ? (triggerStage ? { event, stage_id: triggerStage } : null)
       : triggerWebhook ? { event, webhook_id: triggerWebhook } : null;
   const action: AutomationAction | null =
-    type === "move_stage" ? (targetStage ? { type, params: { stage_id: targetStage } } : null)
+    type === "move_stage" ? (targetStage ? { type, params: { stage_id: targetStage, ...(lostReason ? { lost_reason: lostReason } : {}) } } : null)
       : type === "update_field" ? (field.trim() ? { type, params: { field: field.trim(), value: fieldValue } } : null)
         : type === "set_responsible" ? (user ? { type, params: { user_id: user } } : null)
           : callWebhook ? { type, params: { webhook_id: callWebhook } } : null;
-  const valid = !!name.trim() && !!trigger && !!action;
+  const target = stages.find((s) => s.id === targetStage);
+  const needsReason = type === "move_stage" && lossReasonMissing(target, lostReason);
+  const valid = !!name.trim() && !!trigger && !!action && !needsReason;
 
   const submit = async () => {
     if (!trigger || !action) return;
@@ -127,7 +131,10 @@ export const AutomationsSection = () => {
                 </Select>
               </div>
               <div className="space-y-1">
-                {type === "move_stage" && (<><Label>Etapa de destino</Label>{pick(targetStage, setTargetStage, stageOptions, "Escolha a etapa")}</>)}
+                {type === "move_stage" && (<><Label>Etapa de destino</Label>{pick(targetStage, (v) => { setTargetStage(v); setLostReason(""); }, stageOptions, "Escolha a etapa")}
+                  {target?.stage_type === "lost" && (target.loss_reasons?.length ?? 0) > 0 && (<>
+                    <Label>Motivo da perda (obrigatório neste pipeline)</Label>
+                    {pick(lostReason, setLostReason, (target.loss_reasons ?? []).map((r) => ({ id: r, label: r })), "Escolha o motivo")}</>)}</>)}
                 {type === "update_field" && (<><Label>Campo (key) e valor</Label><div className="flex gap-2">
                   <Input value={field} onChange={(e) => setField(e.target.value)} placeholder="key do campo" />
                   <Input value={fieldValue} onChange={(e) => setFieldValue(e.target.value)} placeholder="valor" /></div></>)}

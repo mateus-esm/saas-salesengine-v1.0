@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts";
 import { resolveCustomDataKeys, type SchemaField } from "../_shared/custom-fields.ts";
-import { resolveInboundAction } from "../_shared/automation-actions.ts";
+import { inboundEventKey, publicRunResult, resolveInboundAction } from "../_shared/automation-actions.ts";
 import { entryForWebhook, entryOfKind, inboundTouchPayload, recordTouch } from "../_shared/attribution.ts";
 import { dispatchConversationOpen } from "../_shared/start-conversation.ts";
 
@@ -423,7 +423,7 @@ if (import.meta.main) {
       // 1. Look up webhook_config
       const { data: config, error: configError } = await supabase
         .from('webhook_configs')
-        .select('id, equipe_id, pipeline_id, field_mappings, action')
+        .select('id, equipe_id, pipeline_id, field_mappings')
         .eq('id', configId)
         .eq('inbound_function', 'receive_lead')
         .maybeSingle();
@@ -600,19 +600,27 @@ if (import.meta.main) {
             automationResults.push({ status: 'skipped', reason: resolved.reason });
             return;
           }
+          // m4: o mesmo corpo reenviado pelo remetente não roda a ação duas vezes.
+          const eventKey = automationId ? null : await inboundEventKey(config.id, payload);
           const { data, error } = await supabase.rpc('crm_run_automation', {
             p_automation: automationId,
             p_opportunity: opportunityId,
             p_payload: payload,
-            p_event_key: null,
+            p_event_key: eventKey,
             p_action: resolved && resolved.ok ? resolved.action : null,
             p_equipe: automationId ? null : config.equipe_id,
           });
-          automationResults.push(error ? { status: 'error', error: error.message } : data);
+          // m3: quem chama é anônimo — só o status volta; o motivo fica em automation_runs.
+          if (error) console.error('[crm-webhook] crm_run_automation:', error.message);
+          automationResults.push(publicRunResult(data, !!error));
         };
         try {
-          if (config.action) await runAction(null, config.action);
-          const { data: linked } = await supabase
+          // `action` é lida à parte e com tolerância: sem a migration a coluna não existe,
+          // e isso não pode derrubar os webhooks de entrada que não usam ação.
+          const { data: actionRow, error: actionErr } = await supabase
+            .from('webhook_configs').select('action').eq('id', config.id).maybeSingle();
+          if (!actionErr && actionRow?.action) await runAction(null, actionRow.action);
+          const { data: linked } = await supabase  // tabela ausente (sem migration) => linked nulo
             .from('crm_automations')
             .select('id, action')
             .eq('equipe_id', config.equipe_id)

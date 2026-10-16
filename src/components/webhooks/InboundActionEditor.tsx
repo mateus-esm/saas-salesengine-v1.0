@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useTeamStages } from "@/hooks/useAutomations";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import type { WebhookAction } from "@/types/webhook";
+import { lossReasonMissing } from "@/lib/webhookCatalog";
 
 const NONE = "none";
 
@@ -43,6 +44,18 @@ export const InboundActionEditor = ({ value, onChange }: Props) => {
           </SelectContent>
         </Select>
       )}
+      {type === "move_stage" && (() => {
+        const target = stages.find((s) => s.id === params.stage_id);
+        if (target?.stage_type !== "lost" || (target.loss_reasons?.length ?? 0) === 0) return null;
+        return (
+          <Select value={String(params.lost_reason ?? "")} onValueChange={(v) => setParams({ lost_reason: v })}>
+            <SelectTrigger className={lossReasonMissing(target, params.lost_reason) ? "border-destructive" : ""}>
+              <SelectValue placeholder="Motivo da perda (obrigatório neste pipeline)" />
+            </SelectTrigger>
+            <SelectContent>{(target.loss_reasons ?? []).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+          </Select>
+        );
+      })()}
       {type === "update_field" && (
         <div className="flex gap-2">
           <Input placeholder="key do campo do negócio" value={String(params.field ?? "")} onChange={(e) => setParams({ field: e.target.value })} />

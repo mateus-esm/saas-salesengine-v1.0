@@ -83,3 +83,23 @@ export function resolveInboundAction(action: unknown, payload: Record<string, un
     }
   }
 }
+
+/** Chave de idempotência da chegada: o mesmo corpo no mesmo webhook é o mesmo evento. */
+export async function inboundEventKey(configId: string, payload: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(`${configId}:${JSON.stringify(payload ?? null)}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return "inbound:" + Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * O que o chamador anônimo do webhook pode ver de uma execução: só o status (e o
+ * motivo de uma ação ignorada, que vem de uma lista fixa). Texto de erro do banco fica
+ * em automation_runs.
+ */
+export function publicRunResult(data: unknown, rpcFailed: boolean): Record<string, unknown> {
+  if (rpcFailed || !data || typeof data !== "object") return { status: "error" };
+  const d = data as Record<string, unknown>;
+  const status = ["ok", "skipped", "error"].includes(String(d.status)) ? String(d.status) : "error";
+  const reason = status === "skipped" && typeof d.reason === "string" ? { reason: d.reason } : {};
+  return { status, ...reason };
+}
