@@ -8,17 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { WebhookConfigModal } from "@/components/webhooks/WebhookConfigModal";
-import { WebhookConfig, WebhookLog, WEBHOOK_TRIGGER_EVENTS } from "@/types/webhook";
+import { WebhookLogsPanel } from "@/components/webhooks/WebhookLogsPanel";
+import { AutomationsSection } from "@/components/webhooks/AutomationsSection";
+import { WebhookOriginBadge, WebhookSamplePayload } from "@/components/webhooks/WebhookSamplePayload";
+import { useButtonWebhooks, useTeamStages } from "@/hooks/useAutomations";
+import { webhookOrigin } from "@/lib/webhookCatalog";
+import { WebhookConfig, WEBHOOK_TRIGGER_EVENTS } from "@/types/webhook";
 import {
   Plus,
   Copy,
@@ -29,11 +25,7 @@ import {
   Webhook,
   ArrowDownLeft,
   ArrowUpRight,
-  CheckCircle,
-  XCircle,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -41,7 +33,10 @@ import { useQuery } from "@tanstack/react-query";
 const Webhooks = () => {
   const { equipe } = useAuth();
   const { configs, isLoading: configsLoading, updateConfig, deleteConfig, refetch: refetchConfigs } = useWebhookConfigs();
-  const { logs, isLoading: logsLoading, refetch: refetchLogs } = useWebhookLogs({ limit: 100 });
+  const { logs, isLoading: logsLoading, refetch: refetchLogs } = useWebhookLogs({ limit: 300 });
+
+  const { stages } = useTeamStages();
+  const buttonWebhooks = useButtonWebhooks();
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<WebhookConfig | null>(null);
@@ -106,23 +101,10 @@ const Webhooks = () => {
 
   const getEventLabel = (event: string) => {
     const found = WEBHOOK_TRIGGER_EVENTS.find(e => e.value === event);
-    return found?.label || event;
-  };
-
-  const getStatusBadge = (log: WebhookLog) => {
-    if (log.error_message) {
-      return <Badge variant="destructive">Erro</Badge>;
-    }
-    if (log.response_status && log.response_status >= 200 && log.response_status < 300) {
-      return <Badge className="bg-green-600">Sucesso</Badge>;
-    }
-    if (log.response_status) {
-      return <Badge variant="destructive">HTTP {log.response_status}</Badge>;
-    }
-    if (log.response_body?.startsWith("Queued by pg_net")) {
-      return <Badge variant="outline">Enfileirado</Badge>;
-    }
-    return <Badge variant="outline">Pendente</Badge>;
+    if (found) return found.label;
+    if (event.startsWith("stage_entered:")) return "Etapa → ao entrar";
+    if (event.startsWith("artifact_action:")) return "Botão → ao clicar";
+    return event;
   };
 
   if (configsLoading) {
@@ -167,6 +149,9 @@ const Webhooks = () => {
           <TabsTrigger value="outbound" className="flex items-center gap-2">
             <ArrowUpRight className="h-4 w-4" />
             Saída (Outbound)
+          </TabsTrigger>
+          <TabsTrigger value="automations">
+            Automações
           </TabsTrigger>
           <TabsTrigger value="logs">
             Logs
@@ -336,9 +321,8 @@ const Webhooks = () => {
                         <p className="text-sm text-muted-foreground font-mono truncate max-w-md">
                           {config.url}
                         </p>
-                        <Badge variant="outline">
-                          {getEventLabel(config.trigger_event)}
-                        </Badge>
+                        <WebhookOriginBadge origin={webhookOrigin(config, stages)} />
+                        <WebhookSamplePayload triggerEvent={config.trigger_event} />
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch
@@ -362,68 +346,39 @@ const Webhooks = () => {
               ))}
             </div>
           )}
+          {buttonWebhooks.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-lg font-medium">Webhooks de botões das tabelas</h3>
+              <p className="text-sm text-muted-foreground">Configurados na própria tabela; aparecem aqui para você ver o que dispara e o formato enviado.</p>
+              {buttonWebhooks.map((config) => (
+                <Card key={config.id}>
+                  <CardContent className="pt-6 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium">{config.name}</h3>
+                      {config.active ? <Badge className="bg-green-600">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge>}
+                    </div>
+                    <p className="text-sm text-muted-foreground font-mono truncate max-w-md">{config.url}</p>
+                    <WebhookOriginBadge origin={webhookOrigin(config, stages)} />
+                    <WebhookSamplePayload triggerEvent={config.trigger_event} />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Automations */}
+        <TabsContent value="automations">
+          <AutomationsSection />
         </TabsContent>
 
         {/* Logs */}
         <TabsContent value="logs">
-          <Card>
-            <CardHeader>
-              <CardTitle>Histórico de Webhooks</CardTitle>
-              <CardDescription>
-                Últimas 100 chamadas de webhooks
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {logsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : logs.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhum log de webhook encontrado
-                </p>
-              ) : (
-                <ScrollArea className="h-[400px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Data</TableHead>
-                        <TableHead>Direção</TableHead>
-                        <TableHead>Evento</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {logs.map((log) => (
-                        <TableRow key={log.id}>
-                          <TableCell className="whitespace-nowrap">
-                            {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>
-                            {log.direction === "inbound" ? (
-                              <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                                <ArrowDownLeft className="h-3 w-3" />
-                                Entrada
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                                <ArrowUpRight className="h-3 w-3" />
-                                Saída
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {log.event_type === "test" ? "Teste manual" : getEventLabel(log.event_type)}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(log)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
+          <WebhookLogsPanel
+            logs={logs}
+            isLoading={logsLoading}
+            eventLabel={(e) => (e === "test" ? "Teste manual" : getEventLabel(e))}
+          />
         </TabsContent>
       </Tabs>
 

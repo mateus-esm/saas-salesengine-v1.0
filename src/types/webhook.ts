@@ -14,6 +14,12 @@ export interface WebhookLog {
   created_at: string;
 }
 
+/** Ação opcional de um webhook de entrada (ver supabase/functions/_shared/automation-actions.ts). */
+export interface WebhookAction {
+  type: 'move_stage' | 'update_field' | 'set_responsible' | 'call_webhook';
+  params: Record<string, unknown>;
+}
+
 export interface WebhookConfig {
   id: string;
   equipe_id: string;
@@ -28,6 +34,7 @@ export interface WebhookConfig {
   inbound_function?: string | null;
   pipeline_id?: string | null;
   field_mappings?: FieldMapping[];
+  action?: WebhookAction | null;
 }
 
 export const DEFAULT_LEAD_CREATED_PAYLOAD = {
