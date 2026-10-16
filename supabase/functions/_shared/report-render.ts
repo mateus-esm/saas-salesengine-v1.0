@@ -161,36 +161,26 @@ export function renderReportText({
     meetings_done: n("meetings_done"),
     deals_won: n("deals_won"),
   };
-  const scale = frequency === "daily" ? "diária" : frequency === "weekly" ? "da semana" : "do mês";
   lines.push("*2. Meta x realizado*");
-  // Fechamentos e receita sempre aparecem; os demais marcos só entram aqui se o
-  // gestor definiu meta — senão seriam cinco linhas "sem meta", ruído que o
-  // bloco 3 já cobre com os números.
-  const deals = targets.window.deals_won;
-  lines.push(
-    deals === undefined
-      ? `• Fechamentos: ${int(actual.deals_won)} · sem meta ${scale} definida`
-      : `• Fechamentos: ${int(actual.deals_won)} de ${num1(deals)} · gap: ${num1(gapOf(deals, actual.deals_won))}`,
-  );
-  const rev = targets.window.revenue;
-  lines.push(
-    rev === undefined
-      ? `• Receita: ${brl(n("won_value"))} · sem meta ${scale} definida`
-      : `• Receita: ${brl(n("won_value"))} de ${brl(rev)} · gap: ${brl(gapOf(rev, n("won_value")))}`,
-  );
-  const extra: [string, keyof typeof actual][] = [
-    ["Touchpoints", "touchpoints"],
-    ["Qualificados", "qualified"],
-    ["Propostas", "proposals_sent"],
-    ["Reuniões agendadas", "meetings_scheduled"],
-    ["Reuniões realizadas", "meetings_done"],
-  ];
-  for (const [label, key] of extra) {
-    const t = targets.window[key];
-    if (t !== undefined) {
-      lines.push(`• ${label}: ${int(actual[key])} de ${num1(t)} · gap: ${num1(gapOf(t, actual[key]))}`);
-    }
-  }
+  // Sempre as MESMAS oito linhas, na mesma ordem (template fixo): "realizado de
+  // meta · gap" quando há meta, "sem meta" quando não, "dia sem meta" numa
+  // janela sem dia útil (fim de semana) — nunca "de 0", que leria como meta
+  // zerada batida.
+  const noBusinessDay = snapshot.goals?.window_business_days === 0;
+  const goalLine = (label: string, done: string, target: number | undefined, fmt: (v: number) => string, got: number) => {
+    if (noBusinessDay) return `• ${label}: ${done} · dia sem meta`;
+    if (target === undefined) return `• ${label}: ${done} · sem meta`;
+    return `• ${label}: ${done} de ${fmt(target)} · gap: ${fmt(gapOf(target, got))}`;
+  };
+  lines.push(goalLine("Touchpoints", int(actual.touchpoints), targets.window.touchpoints, num1, actual.touchpoints));
+  lines.push(goalLine("Qualificados", int(actual.qualified), targets.window.qualified, num1, actual.qualified));
+  lines.push(goalLine("Propostas", int(actual.proposals_sent), targets.window.proposals_sent, num1, actual.proposals_sent));
+  lines.push(goalLine("Reuniões agendadas", int(actual.meetings_scheduled), targets.window.meetings_scheduled, num1, actual.meetings_scheduled));
+  lines.push(goalLine("Reuniões realizadas", int(actual.meetings_done), targets.window.meetings_done, num1, actual.meetings_done));
+  // No-show é teto, não meta a bater: não tem gap.
+  lines.push(`• No-show: ${int(n("no_shows"))} · sem meta`);
+  lines.push(goalLine("Fechamentos", int(actual.deals_won), targets.window.deals_won, num1, actual.deals_won));
+  lines.push(goalLine("Receita", brl(n("won_value")), targets.window.revenue, brl, n("won_value")));
   lines.push("");
 
   // --- 3. marcos do funil ------------------------------------------------

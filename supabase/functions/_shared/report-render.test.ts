@@ -40,8 +40,14 @@ Deno.test("snapshot totalmente vazio: mesmas seções, zeros explícitos", () =>
       "• Pipeline aberto: R$ 0 (0)",
       "",
       "*2. Meta x realizado*",
-      "• Fechamentos: 0 · sem meta diária definida",
-      "• Receita: R$ 0 · sem meta diária definida",
+      "• Touchpoints: 0 · sem meta",
+      "• Qualificados: 0 · sem meta",
+      "• Propostas: 0 · sem meta",
+      "• Reuniões agendadas: 0 · sem meta",
+      "• Reuniões realizadas: 0 · sem meta",
+      "• No-show: 0 · sem meta",
+      "• Fechamentos: 0 · sem meta",
+      "• Receita: R$ 0 · sem meta",
       "",
       "*3. Marcos do funil*",
       "• Qualificados: 0",
@@ -126,10 +132,14 @@ Deno.test("snapshot preenchido: números, metas, gap e destaques", () => {
       "• Pipeline aberto: R$ 250.000 (9)",
       "",
       "*2. Meta x realizado*",
+      "• Touchpoints: 41 de 50 · gap: 9",
+      "• Qualificados: 4 · sem meta",
+      "• Propostas: 3 · sem meta",
+      "• Reuniões agendadas: 5 · sem meta",
+      "• Reuniões realizadas: 3 de 4 · gap: 1",
+      "• No-show: 1 · sem meta",
       "• Fechamentos: 1 de 2 · gap: 1",
       "• Receita: R$ 18.000 de R$ 20.000 · gap: R$ 2.000",
-      "• Touchpoints: 41 de 50 · gap: 9",
-      "• Reuniões realizadas: 3 de 4 · gap: 1",
       "",
       "*3. Marcos do funil*",
       "• Qualificados: 4",
@@ -167,6 +177,28 @@ Deno.test("meta batida com folga: gap 0, nunca negativo", () => {
     }),
   );
   assertEquals(text.includes("• Fechamentos: 5 de 2 · gap: 0"), true);
+});
+
+Deno.test("janela sem dia útil: 'dia sem meta', nunca 'de 0'", () => {
+  const text = norm(
+    renderReportText({
+      ...BASE,
+      snapshot: { period: PERIOD, goals: { window_business_days: 0, month_business_days: 20, pipelines: [{ goal_deals: 40 }] } },
+    }),
+  );
+  assertEquals(text.includes("• Fechamentos: 0 · dia sem meta"), true);
+  assertEquals(text.includes(" de 0"), false);
+});
+
+Deno.test("seção 2 tem sempre as mesmas oito linhas, vazio ou cheio", () => {
+  for (const snapshot of [{ period: PERIOD }, POPULATED]) {
+    const text = renderReportText({ ...BASE, snapshot });
+    const block = text.split("\n*2. Meta x realizado*\n")[1].split("\n\n")[0].split("\n");
+    assertEquals(block.map((l) => l.split(":")[0]), [
+      "• Touchpoints", "• Qualificados", "• Propostas", "• Reuniões agendadas",
+      "• Reuniões realizadas", "• No-show", "• Fechamentos", "• Receita",
+    ]);
+  }
 });
 
 Deno.test("as cinco seções existem, na mesma ordem, vazio ou cheio", () => {

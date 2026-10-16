@@ -22,6 +22,7 @@ import {
   paramsToPeriod,
   periodRange,
   periodToParams,
+  selectPreset,
   type CustomDays,
   type PeriodPreset,
 } from "@/lib/dashboardPeriod";
@@ -132,7 +133,7 @@ export default function DashboardLayout() {
         <div className="border-b border-border bg-background px-4 py-2.5 sm:px-6">
           <DashboardFilterBar
             preset={preset}
-            onPresetChange={(p) => setPeriod({ preset: p, custom: p === "custom" ? custom : null })}
+            onPresetChange={(p) => setPeriod(selectPreset(p, custom))}
             custom={custom}
             onCustomChange={(days) => setPeriod({ preset: "custom", custom: days })}
             filters={filters}

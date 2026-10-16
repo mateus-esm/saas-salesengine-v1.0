@@ -50,7 +50,7 @@ begin
   select coalesce(jsonb_agg(
            jsonb_build_object(
              'seller_id',   s.seller_id,
-             'seller_name', coalesce(pr.nome_completo, case when s.seller_id is null then 'Não atribuído' end),
+             'seller_name', case when s.seller_id is null then 'Não atribuído' else coalesce(pr.nome_completo, 'Usuário removido') end,
              'touchpoints', s.n
            ) order by s.n desc, pr.nome_completo nulls last),
          '[]'::jsonb)

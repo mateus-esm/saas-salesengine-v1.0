@@ -15,6 +15,10 @@
 -- A assinatura de build_report_snapshot ganha p_pipeline_id e p_timezone: a
 -- antiga é removida para não deixar duas sobrecargas com defaults ambíguas.
 -- Chamadas por nome (reports-cron, preview) continuam valendo.
+--
+-- ORDEM DE DEPLOY: aplicar esta migration (e a 000401, de que ela depende)
+-- ANTES de publicar o reports-cron novo — ele passa p_pipeline_id/p_timezone e
+-- seleciona a coluna pipeline_id, que só existem depois daqui.
 
 begin;
 
@@ -61,7 +65,7 @@ create trigger trg_report_schedule_pipeline_same_team
 create or replace function public._business_days(p_from date, p_to_exclusive date)
 returns integer
 language sql
-immutable
+stable
 set search_path = public, extensions
 as $$
   select case when p_to_exclusive <= p_from then 0
@@ -122,6 +126,10 @@ begin
   elsif p_filters ? 'pipeline_ids' and jsonb_typeof(p_filters->'pipeline_ids') = 'array'
         and jsonb_array_length(p_filters->'pipeline_ids') > 0 then
     v_pipelines := array(select (jsonb_array_elements_text(p_filters->'pipeline_ids'))::uuid);
+    -- Filtro legado: o cabeçalho do relatório nomeia o recorte em vez de dizer
+    -- "Todos os pipelines".
+    select string_agg(p.name, ', ' order by p.name) into v_pipe_name
+      from public.pipelines p where p.equipe_id = p_equipe and p.id = any(v_pipelines);
   end if;
 
   -- Recortes: o cliente escolhe canal e vendedor; não escolhe seções.
@@ -183,7 +191,7 @@ begin
     'equipe_name', v_equipe,
     'period',      jsonb_build_object('from', p_from, 'to', p_to),
     'sections',    to_jsonb(v_sections),
-    'pipeline',    case when p_pipeline_id is not null
+    'pipeline',    case when v_pipe_name is not null
                         then jsonb_build_object('id', p_pipeline_id, 'name', v_pipe_name) end,
     'overview',    public._funnel_overview_core(p_equipe, null, p_from, p_to, v_pipelines, v_resp, v_channels),
     'loss_reasons',      public._loss_reasons_core(p_equipe, null, p_from, p_to, v_pipelines),

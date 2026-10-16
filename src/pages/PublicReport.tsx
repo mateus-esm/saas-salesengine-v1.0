@@ -18,6 +18,7 @@ import { AlertCircle, Clock, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
+import { SECTION_TITLES, buildFixedSections, type FixedSnapshot, type Line } from "@/lib/reportSections";
 
 interface ReportData {
   name: string;
@@ -26,8 +27,9 @@ interface ReportData {
   period_start: string;
   period_end: string;
   created_at: string;
-  snapshot: {
+  snapshot: FixedSnapshot & {
     equipe_name?: string;
+    pipeline?: { id: string | null; name: string } | null;
     sections?: string[];
     overview?: Record<string, number | null>;
     loss_reasons?: { reason: string; count: number; value: number }[];
@@ -122,6 +124,7 @@ export default function PublicReport() {
   }
 
   const o = report.snapshot.overview ?? {};
+  const fixed = buildFixedSections(report.snapshot);
   const sections = new Set(report.snapshot.sections ?? []);
   const has = (id: string) => sections.has(id);
 
@@ -149,7 +152,14 @@ export default function PublicReport() {
           <Logo className="h-7 w-auto shrink-0 opacity-80" />
         </header>
 
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* SE-SUP1-5: as cinco seções fixas, sempre, na mesma ordem do WhatsApp. */}
+        <FixedReport
+          fixed={fixed}
+          summaryTitle={SECTION_TITLES.summary[report.frequency] ?? "Resumo"}
+          pipelineName={report.snapshot.pipeline?.name ?? "Todos os pipelines"}
+        />
+
+        <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {has("kpi_won_value") && (
             <Stat label="Receita ganha" value={brl(o.won_value)} hint={`${int(o.deals_won)} negócios`} emphasis />
           )}
@@ -220,6 +230,66 @@ export default function PublicReport() {
           </p>
         </footer>
       </div>
+    </div>
+  );
+}
+
+function LineList({ lines }: { lines: Line[] }) {
+  return (
+    <div className="space-y-1.5">
+      {lines.map((l) => (
+        <div key={l.label} className="flex items-baseline justify-between gap-3 text-xs">
+          <span className="text-muted-foreground">{l.label}</span>
+          <span className="text-right font-medium tabular-nums text-foreground">{l.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FixedReport({
+  fixed,
+  summaryTitle,
+  pipelineName,
+}: {
+  fixed: ReturnType<typeof buildFixedSections>;
+  summaryTitle: string;
+  pipelineName: string;
+}) {
+  const block = (n: number, title: string, body: React.ReactNode) => (
+    <Card className="p-4">
+      <h2 className="mb-3 text-sm font-semibold text-foreground">
+        {n}. {title}
+      </h2>
+      {body}
+    </Card>
+  );
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">{pipelineName}</p>
+      {block(1, summaryTitle, <LineList lines={fixed.summary} />)}
+      {block(2, SECTION_TITLES.goals, <LineList lines={fixed.goals} />)}
+      {block(3, SECTION_TITLES.milestones, <LineList lines={fixed.milestones} />)}
+      {block(
+        4,
+        SECTION_TITLES.touchpoints,
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-foreground">
+            Total: {fixed.touchpoints.total} {fixed.touchpoints.total === 1 ? "touchpoint" : "touchpoints"}
+          </div>
+          {fixed.touchpoints.rows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhum touchpoint registrado por vendedor</p>
+          ) : (
+            fixed.touchpoints.rows.map((r) => (
+              <div key={r.name} className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">{r.name}</span>
+                <span className="tabular-nums text-foreground">{r.touchpoints}</span>
+              </div>
+            ))
+          )}
+        </div>,
+      )}
+      {block(5, SECTION_TITLES.highlights, <LineList lines={fixed.highlights} />)}
     </div>
   );
 }

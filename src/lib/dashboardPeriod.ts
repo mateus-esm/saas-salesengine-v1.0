@@ -86,15 +86,26 @@ export interface PeriodState {
 
 const PRESETS = Object.keys(PERIOD_LABELS) as PeriodPreset[];
 
-export function paramsToPeriod(params: URLSearchParams): PeriodState {
+export function paramsToPeriod(params: URLSearchParams, now = new Date()): PeriodState {
   const raw = params.get("periodo") as PeriodPreset | null;
   const preset = raw && PRESETS.includes(raw) ? raw : DEFAULT_PRESET;
   if (preset !== "custom") return { preset, custom: null };
-  const from = parseDay(params.get("de"));
-  // Sem dia inicial válido o link não diz nada: volta ao padrão em vez de "hoje".
+  const rawFrom = params.get("de");
+  // `periodo=custom` sem `de` é o estado logo após escolher o preset: vale "hoje".
+  // Já um `de` PRESENTE e inválido é link quebrado: volta ao padrão.
+  const from = rawFrom === null ? startOfDay(now) : parseDay(rawFrom);
   if (!from) return { preset: DEFAULT_PRESET, custom: null };
   const to = parseDay(params.get("ate"));
   return { preset, custom: { from, to: to ?? undefined } };
+}
+
+/**
+ * Troca de preset pelo select. Escolher "Personalizado" semeia o dia de hoje
+ * (ou o intervalo já escolhido), para a URL nunca ficar em `custom` sem dias.
+ */
+export function selectPreset(preset: PeriodPreset, current: CustomDays | null, now = new Date()): PeriodState {
+  if (preset !== "custom") return { preset, custom: null };
+  return { preset, custom: current ?? { from: startOfDay(now) } };
 }
 
 /** Escreve o período em `base` sem tocar nos outros parâmetros. */
