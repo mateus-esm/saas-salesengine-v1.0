@@ -25,6 +25,7 @@ import { usePipelineDistribution } from "@/hooks/usePipelineDistribution";
 import {
   DEFAULT_DISTRIBUTION,
   MODE_LABEL,
+  RULE_FIELDS_HINT,
   ruleFieldOptions,
   validateDistribution,
   type DistributionConfig,
@@ -198,6 +199,7 @@ export function DistributionEditor({ pipeline }: { pipeline: Pipeline }) {
               <Plus className="mr-1 h-3 w-3" /> Adicionar regra
             </Button>
           </div>
+          <p className="text-[11px] text-muted-foreground">{RULE_FIELDS_HINT}</p>
           {draft.rules.length === 0 && (
             <p className="text-xs text-muted-foreground">Nenhuma regra. Ex.: se origem = Indicação → Ana e Bruno.</p>
           )}
@@ -216,6 +218,12 @@ export function DistributionEditor({ pipeline }: { pipeline: Pipeline }) {
                         {f.label}
                       </SelectItem>
                     ))}
+                    {/* Regra antiga com campo que não serve mais: aparece para ser trocada. */}
+                    {!fieldOptions.some((f) => f.value === r.field) && (
+                      <SelectItem value={r.field} disabled>
+                        {r.field} (não disponível)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 <span className="text-xs text-muted-foreground">=</span>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DISTRIBUTION,
   describeRule,
+  fieldLabel,
   distributionErrorMessage,
   normalizeDistribution,
   ruleFieldOptions,
@@ -76,9 +77,15 @@ describe("regras", () => {
   it("campos: lista fechada + campos personalizados vivos do pipeline", () => {
     const opts = ruleFieldOptions(schema);
     expect(opts.map((o) => o.value)).toEqual([
-      "origem", "source", "origin_category", "origin_detail", "origin_platform", "channel", "custom:f1",
+      "origem", "source", "channel", "custom:f1",
     ]);
     expect(opts.at(-1)?.label).toBe("Tipo de imóvel");
+  });
+
+  it("campos preenchidos depois da criação não são oferecidos (nunca casariam no INSERT)", () => {
+    const values = ruleFieldOptions(schema).map((o) => o.value);
+    for (const f of ["origin_category", "origin_platform", "origin_detail"]) expect(values).not.toContain(f);
+    expect(fieldLabel("origin_category", schema)).toBe("campo");
   });
 
   it("describeRule usa o MESMO formato do motivo gravado pelo banco", () => {

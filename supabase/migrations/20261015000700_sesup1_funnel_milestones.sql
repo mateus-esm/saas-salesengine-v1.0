@@ -25,6 +25,20 @@
 --      Duplo clique / etapa + botão no MESMO dia local: o mesmo marco para o mesmo
 --      negócio no mesmo dia não é gravado duas vezes (already_recorded).
 --
+--      EXCLUSÃO MÚTUA (realizada x no-show). Um negócio, um dia local: no máximo
+--      UM desfecho de reunião. A regra mais simples que fecha os dois buracos:
+--        * o evento da agenda que muda o PRÓPRIO desfecho substitui a linha dele
+--          (a correção acima);
+--        * qualquer outro caso em que o desfecho oposto já existe para o negócio
+--          naquele dia (gravado pelo card, por outro evento ou por uma etapa) é
+--          RECUSADO com `outcome_conflict` — a tela diz qual existe e pede para
+--          desfazer primeiro. Recusar em vez de apagar: a linha alheia pode ter
+--          vindo de uma etapa ou de outra pessoa, e apagá-la em silêncio mudaria um
+--          número que alguém já viu.
+--      Por isso o mapa da Solo deixa Reunião de Apresentação / Visita Técnica SEM
+--      marco por padrão (script 2026-10-16): a realizada vem só do botão, e entrar
+--      na etapa antes da reunião não grava uma realizada que depois vira no-show.
+--
 --   2. OS NÚMEROS POR DATA. _funnel_milestones_core devolve, para a janela pedida,
 --      os seis marcos por balde (dia/semana/mês NO FUSO DO CLIENTE), por vendedor
 --      (funnel_events.owner_id, o dono no momento do marco) e por pipeline, mais
@@ -169,6 +183,19 @@ begin
   v_at := coalesce(p_occurred_at,
                    case when v_ev.id is not null then least(v_ev.starts_at, now()) end,
                    now());
+
+  -- Exclusão mútua: o desfecho OPOSTO já existe para este negócio neste dia (a
+  -- linha do próprio evento já foi apagada acima, então não conta).
+  if exists (
+    select 1 from public.funnel_events fe
+     where fe.opportunity_id = v_opp
+       and fe.event = case v_event when 'no_show' then 'meeting_done' else 'no_show' end
+       and (fe.occurred_at at time zone v_tz)::date = (v_at at time zone v_tz)::date
+  ) then
+    raise exception 'outcome_conflict: já existe % para este negócio neste dia; desfaça antes',
+      case v_event when 'no_show' then 'reunião realizada' else 'no-show' end
+      using errcode = '23P01';
+  end if;
 
   -- Mesmo marco, mesmo negócio, mesmo dia local: já contado (duplo clique, ou a
   -- etapa mapeada já gravou a reunião hoje).

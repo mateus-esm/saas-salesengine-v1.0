@@ -14,7 +14,8 @@
 --   5. limite de abertos pula quem chegou nele; todos no limite -> sem dono + 'no_candidate'
 --   6. ausente pulado com skip_away; recebe sem skip_away
 --   7. por regra: origem (sem caixa/espaço), campo personalizado, padrão; grupo todo
---      ausente cai no padrão dizendo por quê
+--      ausente cai no padrão dizendo por quê; origin_category (preenchido depois do
+--      INSERT) é recusado ao salvar e, numa regra legada, nunca casa nem quebra
 --   8. erro dentro da roleta NUNCA bloqueia: negócio criado sem dono + run 'error'
 --   9. RLS: outra equipe não lê a roleta nem as decisões
 
@@ -102,6 +103,14 @@ begin
     raise exception 'FALHA: campo fora da lista';
   exception when sqlstate '22023' then assert sqlerrm like 'invalid_rule_field:1%', sqlerrm;
   end;
+  -- Campo preenchido só depois do INSERT (primeiro toque) não é aceito numa regra.
+  begin
+    perform public.crm_save_pipeline_distribution('5e9c0000-0000-0000-0000-000000000001',
+      '{"mode":"by_rule","members":[{"user_id":"5e9b0000-0000-0000-0000-0000000000a1"}],
+        "rules":[{"field":"origin_category","value":"paid_social","user_ids":["5e9b0000-0000-0000-0000-0000000000a1"]}]}');
+    raise exception 'FALHA: origin_category aceito';
+  exception when sqlstate '22023' then assert sqlerrm like 'invalid_rule_field:1%', sqlerrm;
+  end;
 
   -- Rodízio Ana, Bruno (Ana repetida é descartada; peso fora de faixa vira 1..100).
   v := public.crm_save_pipeline_distribution('5e9c0000-0000-0000-0000-000000000001',
@@ -140,7 +149,8 @@ insert into public.pipeline_distribution (pipeline_id, equipe_id, mode, members,
    '[{"user_id":"5e9b0000-0000-0000-0000-0000000000a1"},{"user_id":"5e9b0000-0000-0000-0000-0000000000a2"},{"user_id":"5e9b0000-0000-0000-0000-0000000000a3","away":true}]',
    '[{"field":"origem","value":"Indicação","user_ids":["5e9b0000-0000-0000-0000-0000000000a2"]},
      {"field":"custom:f1","value":"Casa","user_ids":["5e9b0000-0000-0000-0000-0000000000a1"]},
-     {"field":"source","value":"Feira","user_ids":["5e9b0000-0000-0000-0000-0000000000a3"]}]', null, true, true),
+     {"field":"source","value":"Feira","user_ids":["5e9b0000-0000-0000-0000-0000000000a3"]},
+     {"field":"origin_category","value":"paid_social","user_ids":["5e9b0000-0000-0000-0000-0000000000a3"]}]', null, true, true),
   ('5e9c0000-0000-0000-0000-000000000006', '5e900000-0000-0000-0000-00000000000a', 'round_robin',
    '[{"user_id":"5e9b0000-0000-0000-0000-0000000000a1"}]', '[]', null, true, true);
 
@@ -227,6 +237,14 @@ begin
   returning id into v_opp;
   assert (select owner_id from public.opportunities where id = v_opp) in (v_a1, v_a2), 'fallback para o padrão';
   assert (select reason from public.pipeline_distribution_runs where opportunity_id = v_opp) like 'regra 3: fonte=Feira — grupo indisponível, padrão%', 'motivo do fallback';
+
+  -- Regra antiga gravada com campo removido (origin_category): não quebra, só não casa.
+  insert into public.leads (equipe_id, name, origin_category) values ('5e900000-0000-0000-0000-00000000000a', 'Legado', 'paid_social') returning id into v_lead;
+  insert into public.opportunities (equipe_id, lead_id, pipeline_id, stage_id)
+  values ('5e900000-0000-0000-0000-00000000000a', v_lead, '5e9c0000-0000-0000-0000-000000000005', '5e9d0000-0000-0000-0000-000000000051')
+  returning id into v_opp;
+  assert (select status from public.pipeline_distribution_runs where opportunity_id = v_opp) = 'assigned', 'regra legada não vira erro';
+  assert (select reason from public.pipeline_distribution_runs where opportunity_id = v_opp) like 'padrão%', 'regra legada não casa: cai no padrão';
 
   -- 8. erro dentro da roleta não bloqueia
   update public.pipeline_distribution set state = jsonb_build_object('all:' || v_a1::text, 'x')

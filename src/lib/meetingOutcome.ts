@@ -26,6 +26,9 @@ export function nextOutcome(current: string | null | undefined, clicked: Meeting
 }
 
 const ERRORS: [RegExp, string][] = [
+  // Realizada e no-show são exclusivos por negócio e dia: o banco recusa o oposto.
+  [/outcome_conflict: já existe no-show/, "Já há um no-show registrado hoje para este negócio. Desfaça-o antes de marcar como realizada."],
+  [/outcome_conflict/, "Já há uma reunião realizada registrada hoje para este negócio. Desfaça-a antes de marcar no-show."],
   [/opportunity_required/, "Este contato não tem negócio aberto para registrar a reunião."],
   [/opportunity_not_found/, "Negócio não encontrado."],
   [/agenda_event_not_found/, "Evento da agenda não encontrado."],

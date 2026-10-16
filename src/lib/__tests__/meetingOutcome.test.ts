@@ -36,6 +36,10 @@ describe("meetingOutcome", () => {
     expect(outcomeErrorMessage({ message: "opportunity_required" })).toMatch(/não tem negócio aberto/);
     expect(outcomeErrorMessage({ message: "forbidden" })).toMatch(/Sem permissão/);
     expect(outcomeErrorMessage(new Error("boom"))).toBe("Não foi possível registrar o desfecho.");
+    expect(outcomeErrorMessage({ message: "outcome_conflict: já existe no-show para este negócio neste dia; desfaça antes" }))
+      .toMatch(/no-show registrado hoje/);
+    expect(outcomeErrorMessage({ message: "outcome_conflict: já existe reunião realizada para este negócio neste dia; desfaça antes" }))
+      .toMatch(/reunião realizada registrada hoje/);
   });
 
   it("toast distingue gravado, já contado e desfeito", () => {

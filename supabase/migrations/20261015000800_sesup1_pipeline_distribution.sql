@@ -6,7 +6,8 @@
 --   pipeline_distribution (uma linha por pipeline)
 --     mode     round_robin | weighted | by_rule
 --     members  [{user_id, weight, away}]     quem participa da roleta
---     rules    [{field, value, user_ids}]    só by_rule; avaliadas EM ORDEM; nenhuma
+--     rules    [{field, value, user_ids}]    só by_rule; avaliadas EM ORDEM (campos:
+--                                            origem, fonte, canal, personalizados); nenhuma
 --                                            casou = padrão (todos os membros)
 --     max_open_per_seller                    limite de negócios ABERTOS do vendedor
 --                                            neste pipeline (nulo = sem limite)
@@ -174,6 +175,15 @@ $$;
 -- 4. CAMPOS QUE UMA REGRA PODE LER
 -- ============================================================================
 
+-- SÓ CAMPOS QUE EXISTEM NO INSERT. A regra é avaliada no nascimento do negócio,
+-- e origin_category / origin_platform / origin_detail são preenchidos DEPOIS dele
+-- por crm_record_touch (primeiro toque) — num lead novo de webhook, formulário ou
+-- chat estariam sempre vazios e toda regra sobre eles cairia no padrão. (E
+-- origin_category guarda códigos internos, como paid_social, que o gestor não
+-- digitaria.) Ficam: origem, origin, source, channel (gravados com o lead) e os
+-- campos personalizados do negócio. Uma regra antiga com campo removido não
+-- quebra: simplesmente nunca casa.
+
 -- Rótulo em português do campo, para o motivo ("regra 2: origem=Indicação").
 create or replace function public._distribution_field_label(p_field text, p_schema jsonb)
 returns text
@@ -185,9 +195,6 @@ as $$
     when 'origem'          then 'origem'
     when 'origin'          then 'origem'
     when 'source'          then 'fonte'
-    when 'origin_category' then 'categoria de origem'
-    when 'origin_detail'   then 'detalhe da origem'
-    when 'origin_platform' then 'plataforma'
     when 'channel'         then 'canal'
     else coalesce((select f->>'label' from jsonb_array_elements(coalesce(p_schema, '[]'::jsonb)) f
                     where 'custom:' || (f->>'field_id') = p_field limit 1), 'campo')
@@ -216,9 +223,6 @@ begin
     when 'origem'          then to_jsonb(p_lead.origem)
     when 'origin'          then to_jsonb(p_lead.origin)
     when 'source'          then to_jsonb(p_lead.source)
-    when 'origin_category' then to_jsonb(p_lead.origin_category)
-    when 'origin_detail'   then to_jsonb(p_lead.origin_detail)
-    when 'origin_platform' then to_jsonb(p_lead.origin_platform)
     when 'channel'         then to_jsonb(p_lead.channel)
     else case when p_field like 'custom:%' then coalesce(p_custom, '{}'::jsonb) -> substr(p_field, 8) end
   end;
@@ -530,7 +534,7 @@ begin
     end if;
     v_field := btrim(coalesce(v_rule->>'field', ''));
     v_value := btrim(coalesce(v_rule->>'value', ''));
-    if v_field not in ('origem', 'origin', 'source', 'origin_category', 'origin_detail', 'origin_platform', 'channel')
+    if v_field not in ('origem', 'origin', 'source', 'channel')
        and not (v_field like 'custom:%' and exists (
              select 1 from jsonb_array_elements(coalesce(v_schema, '[]'::jsonb)) f
               where 'custom:' || (f->>'field_id') = v_field

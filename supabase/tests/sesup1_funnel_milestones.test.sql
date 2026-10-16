@@ -7,8 +7,10 @@
 -- O que protege:
 --   1. card: "realizada" grava meeting_done (source manual) pelo record_funnel_event;
 --      repetir no mesmo dia não duplica (already_recorded)
---   2. agenda: no-show grava no_show e marca o atalho; trocar o desfecho apaga a
+--   2. agenda: no-show grava no_show e marca o atalho; trocar o desfecho SUBSTITUI a
 --      linha que ESTE evento gravou; desfazer limpa o atalho e não toca o que é de outro caminho
+--   2'. exclusão mútua: realizada e no-show nunca coexistem para o negócio no mesmo dia
+--      (card x card, card x agenda, agenda x card) -> outcome_conflict (23P01)
 --   3. visita técnica conta como meeting_done
 --   4. desfecho inválido -> 22023; outra equipe -> P0002; evento sem negócio -> opportunity_required
 --   5. _funnel_milestones_core: baldes no dia LOCAL (22h30 de Brasília é do dia, não do seguinte),
@@ -41,59 +43,96 @@ insert into public.pipeline_stages_v2 (id, equipe_id, pipeline_id, name, positio
 
 insert into public.leads (id, equipe_id, name) values
   ('5e8e0000-0000-0000-0000-000000000001', '5e800000-0000-0000-0000-00000000000a', 'Lead com negócio'),
-  ('5e8e0000-0000-0000-0000-000000000002', '5e800000-0000-0000-0000-00000000000a', 'Lead sem negócio');
+  ('5e8e0000-0000-0000-0000-000000000002', '5e800000-0000-0000-0000-00000000000a', 'Lead sem negócio'),
+  ('5e8e0000-0000-0000-0000-000000000003', '5e800000-0000-0000-0000-00000000000a', 'Lead da agenda');
 
--- Nasce em "Agendamento": o gatilho da Sprint 9 grava meeting_scheduled (birth).
+-- Nascem em "Agendamento": o gatilho da Sprint 9 grava meeting_scheduled (birth).
 insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id, owner_id) values
   ('5e8f0000-0000-0000-0000-000000000001', '5e800000-0000-0000-0000-00000000000a', '5e8e0000-0000-0000-0000-000000000001',
+   '5e8c0000-0000-0000-0000-000000000001', '5e8d0000-0000-0000-0000-000000000011', '5e8b0000-0000-0000-0000-0000000000a1'),
+  ('5e8f0000-0000-0000-0000-000000000002', '5e800000-0000-0000-0000-00000000000a', '5e8e0000-0000-0000-0000-000000000003',
    '5e8c0000-0000-0000-0000-000000000001', '5e8d0000-0000-0000-0000-000000000011', '5e8b0000-0000-0000-0000-0000000000a1');
 
+-- E1 = reunião do Lead da agenda (negócio O2); E2 = lead sem negócio; E3 = outra
+-- reunião do Lead com negócio (O1), que já terá a realizada do card.
 insert into public.agenda_events (id, equipe_id, title, type, starts_at, ends_at, lead_id) values
-  ('5e8a0000-0000-0000-0000-000000000001', '5e800000-0000-0000-0000-00000000000a', 'Apresentação', 'meeting', now(), now() + interval '1 hour', '5e8e0000-0000-0000-0000-000000000001'),
-  ('5e8a0000-0000-0000-0000-000000000002', '5e800000-0000-0000-0000-00000000000a', 'Sem negócio',  'meeting', now() - interval '2 hours', now() - interval '1 hour', '5e8e0000-0000-0000-0000-000000000002');
+  ('5e8a0000-0000-0000-0000-000000000001', '5e800000-0000-0000-0000-00000000000a', 'Apresentação', 'meeting', now(), now() + interval '1 hour', '5e8e0000-0000-0000-0000-000000000003'),
+  ('5e8a0000-0000-0000-0000-000000000002', '5e800000-0000-0000-0000-00000000000a', 'Sem negócio',  'meeting', now(), now() + interval '1 hour', '5e8e0000-0000-0000-0000-000000000002'),
+  ('5e8a0000-0000-0000-0000-000000000003', '5e800000-0000-0000-0000-00000000000a', 'Retorno',      'meeting', now(), now() + interval '1 hour', '5e8e0000-0000-0000-0000-000000000001');
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"5e8b0000-0000-0000-0000-0000000000a1","role":"authenticated"}';
 
 do $$
 declare
-  v_r jsonb;
-  v_opp constant uuid := '5e8f0000-0000-0000-0000-000000000001';
-  v_ev  constant uuid := '5e8a0000-0000-0000-0000-000000000001';
+  v_r   jsonb;
+  v_o1  constant uuid := '5e8f0000-0000-0000-0000-000000000001';
+  v_o2  constant uuid := '5e8f0000-0000-0000-0000-000000000002';
+  v_e1  constant uuid := '5e8a0000-0000-0000-0000-000000000001';
+  v_e3  constant uuid := '5e8a0000-0000-0000-0000-000000000003';
 begin
   -- 1. card
-  v_r := public.crm_record_meeting_outcome(v_opp, 'done');
+  v_r := public.crm_record_meeting_outcome(v_o1, 'done');
   assert (v_r->>'already_recorded')::boolean = false, 'primeira realizada grava: ' || v_r::text;
-  assert (select count(*) from public.funnel_events where opportunity_id = v_opp and event = 'meeting_done' and source = 'manual') = 1, 'meeting_done manual';
-  v_r := public.crm_record_meeting_outcome(v_opp, 'done');
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o1 and event = 'meeting_done' and source = 'manual') = 1, 'meeting_done manual';
+  v_r := public.crm_record_meeting_outcome(v_o1, 'done');
   assert (v_r->>'already_recorded')::boolean, 'duplo clique no mesmo dia não duplica';
-  assert (select count(*) from public.funnel_events where opportunity_id = v_opp and event = 'meeting_done') = 1, 'ainda 1';
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o1 and event = 'meeting_done') = 1, 'ainda 1';
+
+  -- 1b. exclusão mútua no card: no-show no mesmo dia de uma realizada é recusado
+  begin
+    perform public.crm_record_meeting_outcome(v_o1, 'no_show');
+    raise exception 'FALHA: realizada e no-show no mesmo dia';
+  exception when sqlstate '23P01' then assert sqlerrm like 'outcome_conflict%', sqlerrm;
+  end;
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o1 and event = 'no_show') = 0, 'nenhum no-show gravado';
 
   -- 2. agenda: no-show (o negócio vem do lead)
-  v_r := public.crm_record_meeting_outcome(null, 'no_show', v_ev);
-  assert (v_r->>'opportunity_id')::uuid = v_opp, 'negócio aberto do lead';
-  assert (select outcome from public.agenda_events where id = v_ev) = 'no_show', 'atalho marcado';
-  assert (select outcome_event_id from public.agenda_events where id = v_ev) = (v_r->>'funnel_event_id')::bigint, 'evento dono da linha';
-  assert (select count(*) from public.funnel_events where opportunity_id = v_opp and event = 'no_show') = 1, 'no_show gravado';
+  v_r := public.crm_record_meeting_outcome(null, 'no_show', v_e1);
+  assert (v_r->>'opportunity_id')::uuid = v_o2, 'negócio aberto do lead';
+  assert (select outcome from public.agenda_events where id = v_e1) = 'no_show', 'atalho marcado';
+  assert (select outcome_event_id from public.agenda_events where id = v_e1) = (v_r->>'funnel_event_id')::bigint, 'evento dono da linha';
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o2 and event = 'no_show') = 1, 'no_show gravado';
 
-  -- trocar para realizada: o no-show deste evento some; a realizada de hoje já existia
-  v_r := public.crm_record_meeting_outcome(null, 'done', v_ev);
-  assert (select count(*) from public.funnel_events where opportunity_id = v_opp and event = 'no_show') = 0, 'correção apaga o no-show do evento';
+  -- trocar para realizada: o próprio evento SUBSTITUI (nunca os dois desfechos)
+  v_r := public.crm_record_meeting_outcome(null, 'done', v_e1);
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o2 and event = 'no_show') = 0, 'correção apaga o no-show do evento';
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o2 and event = 'meeting_done') = 1, 'realizada no lugar';
+  assert (select outcome_event_id from public.agenda_events where id = v_e1) = (v_r->>'funnel_event_id')::bigint, 'evento dono da nova linha';
+
+  -- 2b. o card não grava no-show por cima da realizada do evento
+  begin
+    perform public.crm_record_meeting_outcome(v_o2, 'no_show');
+    raise exception 'FALHA: no-show por cima da realizada do evento';
+  exception when sqlstate '23P01' then null;
+  end;
+
+  -- 2c. desfazer apaga a linha do próprio evento
+  v_r := public.crm_record_meeting_outcome(null, null, v_e1);
+  assert (select outcome from public.agenda_events where id = v_e1) is null, 'atalho limpo';
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o2 and event in ('meeting_done', 'no_show')) = 0, 'desfeito';
+
+  -- 2d. outro evento do negócio que já tem a realizada do card: no-show recusado;
+  -- realizada vira already_recorded sem ser dona da linha; desfazer não apaga a do card
+  begin
+    perform public.crm_record_meeting_outcome(null, 'no_show', v_e3);
+    raise exception 'FALHA: no-show na agenda por cima da realizada do card';
+  exception when sqlstate '23P01' then null;
+  end;
+  assert (select outcome from public.agenda_events where id = v_e3) is null, 'recusa não marca o atalho';
+  v_r := public.crm_record_meeting_outcome(null, 'done', v_e3);
   assert (v_r->>'already_recorded')::boolean, 'realizada de hoje já contada pelo card';
-  assert (select outcome_event_id from public.agenda_events where id = v_ev) is null, 'evento não é dono da linha do card';
-
-  -- desfazer: limpa o atalho e NÃO apaga a realizada do card
-  v_r := public.crm_record_meeting_outcome(null, null, v_ev);
-  assert (select outcome from public.agenda_events where id = v_ev) is null, 'atalho limpo';
-  assert (select count(*) from public.funnel_events where opportunity_id = v_opp and event = 'meeting_done') = 1, 'realizada do card fica';
+  assert (select outcome_event_id from public.agenda_events where id = v_e3) is null, 'evento não é dono da linha do card';
+  v_r := public.crm_record_meeting_outcome(null, null, v_e3);
+  assert (select count(*) from public.funnel_events where opportunity_id = v_o1 and event = 'meeting_done') = 1, 'realizada do card fica';
 
   -- 3. visita técnica = meeting_done (outro dia, para não deduplicar)
-  v_r := public.crm_record_meeting_outcome(v_opp, 'technical_visit', null, now() - interval '3 days');
+  v_r := public.crm_record_meeting_outcome(v_o1, 'technical_visit', null, now() - interval '3 days');
   assert v_r->>'event' = 'meeting_done', 'visita técnica é meeting_done';
 
   -- 4. erros
   begin
-    perform public.crm_record_meeting_outcome(v_opp, 'remarcada');
+    perform public.crm_record_meeting_outcome(v_o1, 'remarcada');
     raise exception 'FALHA: desfecho inválido aceito';
   exception when sqlstate '22023' then null;
   end;
@@ -155,7 +194,7 @@ begin
   -- Semana: um balde por semana ISO.
   v_m := public._funnel_milestones_core(v_a, null, now() - interval '20 days', now() + interval '1 day', 'week');
   assert (v_m->'totals'->>'meeting_done')::int = 2, 'card + visita técnica';
-  assert (v_m->'totals'->>'meeting_scheduled')::int = 1, 'birth em Agendamento';
+  assert (v_m->'totals'->>'meeting_scheduled')::int = 2, 'birth em Agendamento (O1, O2)';
 
   -- Assento restrito a outro vendedor não vê os marcos da Ana.
   v_m := public._funnel_milestones_core(v_a, '5e8b0000-0000-0000-0000-0000000000b1', now() - interval '20 days', now() + interval '1 day', 'day');

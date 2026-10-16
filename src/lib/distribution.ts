@@ -45,15 +45,21 @@ export const MODE_LABEL: Record<DistributionMode, string> = {
   by_rule: "Por regra",
 };
 
-/** Mesmos rótulos do _distribution_field_label no banco. */
+/**
+ * Mesmos rótulos do _distribution_field_label no banco. Só campos gravados JUNTO
+ * com o lead: a regra roda no nascimento do negócio, e categoria/plataforma/
+ * detalhe da origem só chegam depois (primeiro toque) — uma regra sobre eles
+ * nunca casaria num lead novo.
+ */
 const LEAD_FIELDS: { value: string; label: string }[] = [
   { value: "origem", label: "origem" },
   { value: "source", label: "fonte" },
-  { value: "origin_category", label: "categoria de origem" },
-  { value: "origin_detail", label: "detalhe da origem" },
-  { value: "origin_platform", label: "plataforma" },
   { value: "channel", label: "canal" },
 ];
+
+/** Aviso da tela de regras. */
+export const RULE_FIELDS_HINT =
+  "Só dá para usar campos que já existem quando o negócio é criado (origem, fonte, canal e campos personalizados). Categoria, plataforma e detalhe da origem são preenchidos depois e não servem para a roleta.";
 
 interface SchemaField {
   field_id: string;
