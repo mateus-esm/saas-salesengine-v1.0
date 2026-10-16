@@ -52,6 +52,18 @@ const FIXED_TARGETS = new Set<string>(LEAD_TARGETS.map((t) => t.value));
 
 export const isValidTarget = (t: string): boolean => FIXED_TARGETS.has(t) || CUSTOM_RE.test(t);
 
+/** Twin of _crm_is_valid_date: the shape AND a real calendar day (2026-13-45 is not). */
+export const isValidIsoDate = (s: string): boolean => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return y >= 1 && dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+};
+
+/** Mirrors the cap in _crm_forms_validate. */
+export const MAX_INTAKE_FIELDS = 40;
+
 const isEmpty = (v: unknown) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
 
 /** Twin of normalize_phone_br's "is it a phone" gate: at least 8 digits after the zeros. */
@@ -81,7 +93,7 @@ export function validateIntakeValues(
       (field.type === "email" && !EMAIL_RE.test(s)) ||
       (field.type === "phone" && !looksLikePhone(s)) ||
       (field.type === "number" && !/^-?[0-9]+([.,][0-9]+)?$/.test(s)) ||
-      (field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(s)) ||
+      (field.type === "date" && !isValidIsoDate(s)) ||
       (field.type === "select" && !(field.options ?? []).includes(s));
     if (bad) errors.push({ key: field.key, message: `${field.label}: valor inválido` });
   }
@@ -96,6 +108,7 @@ export function validateIntakeValues(
 export function validateIntakeDefinition(fields: IntakeField[]): string[] {
   const problems: string[] = [];
   const seen = new Set<string>();
+  if (fields.length > MAX_INTAKE_FIELDS) problems.push(`No máximo ${MAX_INTAKE_FIELDS} campos por formulário`);
   for (const field of fields) {
     if (!KEY_RE.test(field.key) || field.key === "_hp") problems.push(`Chave inválida: ${field.key || "(vazia)"}`);
     if (seen.has(field.key)) problems.push(`Chave repetida: ${field.key}`);

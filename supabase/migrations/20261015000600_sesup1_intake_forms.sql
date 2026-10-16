@@ -20,7 +20,8 @@
 --      cria o negócio na etapa configurada (ou reaproveita o aberto do mesmo
 --      pipeline), grava os campos personalizados por field_id e registra o toque
 --      de origem (crm_record_touch) numa entrada kind='form'.
---   4. Rate limit por token (janela de 1 min, em crm_form_submissions) e honeypot.
+--   4. Rate limit (janela de 1 min, em crm_form_submissions): 5 por (formulário, IP
+--      com hash) e 60 por formulário; honeypot. Validação recusada também conta.
 --
 -- DISTRIBUIÇÃO (Task 8): NÃO está aqui. O responsável vem de crm_forms.responsible_id
 -- (nulo = sem dono). O ponto de extensão é o bloco marcado "GANCHO DE DISTRIBUIÇÃO"
@@ -33,7 +34,6 @@
 -- ORDEM DE DEPLOY: migration -> função public-form. Sem a migration a edge responde
 -- como antes (a RPC nova ainda não existe e a edge trata PGRST202 caindo no formulário de contrato).
 
-begin;
 
 -- 1. Valores novos nos CHECKs ------------------------------------------------
 alter table public.leads drop constraint if exists leads_creation_source_check;
@@ -83,7 +83,10 @@ create table if not exists public.crm_form_submissions (
   id             uuid primary key default gen_random_uuid(),
   form_id        uuid not null references public.crm_forms(id) on delete cascade,
   equipe_id      uuid not null references public.equipes(id) on delete cascade,
-  status         text not null check (status in ('ok', 'honeypot')),
+  -- 'rejected' = validação falhou (também conta para o limite de envios).
+  status         text not null check (status in ('ok', 'honeypot', 'rejected')),
+  -- sha256(ip + token) calculado pela edge; nunca o IP cru. Nulo = IP desconhecido.
+  ip_hash        text,
   lead_id        uuid references public.leads(id) on delete set null,
   opportunity_id uuid references public.opportunities(id) on delete set null,
   -- O que a pessoa digitou, como veio: nada se perde quando o lead já existia e
@@ -93,6 +96,7 @@ create table if not exists public.crm_form_submissions (
 );
 
 create index if not exists idx_crm_form_submissions_window on public.crm_form_submissions (form_id, created_at desc);
+create index if not exists idx_crm_form_submissions_ip on public.crm_form_submissions (form_id, ip_hash, created_at desc);
 create index if not exists idx_crm_forms_equipe on public.crm_forms (equipe_id);
 
 alter table public.crm_forms enable row level security;
@@ -112,6 +116,20 @@ create policy "tenant_read_crm_form_submissions"
   for select
   using (equipe_id in (select p.equipe_id from public.profiles p where p.id = auth.uid()));
 
+-- Data válida de verdade (2026-13-45 passa na regex e estoura no cast).
+create or replace function public._crm_is_valid_date(p_value text)
+returns boolean
+language plpgsql
+immutable
+set search_path = public, extensions
+as $$
+begin
+  return p_value ~ '^\d{4}-\d{2}-\d{2}$' and to_char(p_value::date, 'YYYY-MM-DD') = p_value;
+exception when others then
+  return false;
+end;
+$$;
+
 -- 3. A definição do formulário é validada ao gravar --------------------------
 -- RLS só confere a equipe da linha; pipeline, etapa, responsável e o destino de
 -- cada campo precisam ser da MESMA equipe (senão alguém aponta o formulário para
@@ -128,6 +146,13 @@ declare
   v_names  integer := 0;
   v_ident  integer := 0;
 begin
+  -- O envio público só grava entry_id (a entrada de origem, criada no 1o envio).
+  -- Isso não pode revalidar a forma: etapa apagada depois faria todo envio dar 500.
+  if tg_op = 'UPDATE'
+     and (to_jsonb(new) - 'entry_id' - 'updated_at') = (to_jsonb(old) - 'entry_id' - 'updated_at') then
+    return new;
+  end if;
+
   if not exists (select 1 from public.pipelines p where p.id = new.pipeline_id and p.equipe_id = new.equipe_id) then
     raise exception 'invalid_form: pipeline fora da equipe' using errcode = '23514';
   end if;
@@ -139,6 +164,10 @@ begin
   if new.responsible_id is not null
      and not exists (select 1 from public.profiles p where p.id = new.responsible_id and p.equipe_id = new.equipe_id) then
     raise exception 'invalid_form: responsável fora da equipe' using errcode = '23514';
+  end if;
+
+  if jsonb_array_length(new.fields) > 40 then
+    raise exception 'invalid_form: máximo de 40 campos' using errcode = '23514';
   end if;
 
   for f in select * from jsonb_array_elements(new.fields) loop
@@ -156,6 +185,18 @@ begin
     if v_target not in ('lead.name', 'lead.phone', 'lead.email', 'lead.observations', 'attribution.indicated_by')
        and v_target !~ '^custom:[0-9a-fA-F-]{36}$' then
       raise exception 'invalid_form: destino inválido %', v_target using errcode = '23514';
+    end if;
+    -- custom:<id> só vale se o campo existe (e está vivo) no schema do pipeline do
+    -- formulário; senão chave arbitrária cairia em opportunities.custom_data.
+    if v_target like 'custom:%' and not exists (
+         select 1
+           from public.pipelines p,
+                jsonb_array_elements(case when jsonb_typeof(p.custom_fields_schema) = 'array'
+                                          then p.custom_fields_schema else '[]'::jsonb end) cf
+          where p.id = new.pipeline_id and p.equipe_id = new.equipe_id
+            and cf->>'field_id' = substring(v_target from 8)
+            and coalesce((cf->>'is_deleted')::boolean, false) = false) then
+      raise exception 'invalid_form: campo personalizado fora do pipeline %', v_target using errcode = '23514';
     end if;
     if v_target = 'lead.name' then v_names := v_names + 1; end if;
     if v_target in ('lead.phone', 'lead.email') then v_ident := v_ident + 1; end if;
@@ -217,7 +258,7 @@ end;
 $$;
 
 -- 5. O envio -----------------------------------------------------------------
-create or replace function public._crm_intake_submit(p_token text, p_values jsonb)
+create or replace function public._crm_intake_submit(p_token text, p_values jsonb, p_ip_hash text default null)
 returns jsonb
 language plpgsql
 security definer
@@ -246,6 +287,8 @@ declare
   v_owner   uuid;
   v_detail  text;
   v_new     boolean := false;
+  v_ip      text := nullif(btrim(p_ip_hash::text), '');
+  v_err     text;
 begin
   if jsonb_typeof(p_values) is distinct from 'object' then
     raise exception 'invalid_values' using errcode = '22023';
@@ -259,20 +302,28 @@ begin
     raise exception 'form_revoked' using errcode = '22023';
   end if;
 
-  -- Honeypot: campo escondido que gente não preenche. Responde ok e não cria nada.
-  if length(btrim(coalesce(p_values->>'_hp', ''))) > 0 then
-    insert into public.crm_form_submissions (form_id, equipe_id, status) values (v_form.id, v_form.equipe_id, 'honeypot');
-    return jsonb_build_object('ok', true);
-  end if;
-
-  -- Rate limit por formulário: o `for update` acima serializa os envios do mesmo
-  -- token, então a contagem não corre. 10 por minuto basta para uma indicação.
+  -- Rate limit (o `for update` acima serializa os envios do mesmo formulário, então
+  -- a contagem não corre). Conta TODO envio: ok, honeypot e validação recusada.
+  --   por IP (hash): 5/min, para um IP não passar de uma indicação por vez;
+  --   por formulário: 60/min, teto global alto o bastante para um IP sozinho não
+  --   conseguir trancar os outros (ele esbarra nos 5/min dele muito antes).
   if (select count(*) from public.crm_form_submissions s
-       where s.form_id = v_form.id and s.created_at > now() - interval '1 minute') >= 10 then
+       where s.form_id = v_form.id and s.created_at > now() - interval '1 minute') >= 60
+     or (v_ip is not null and (select count(*) from public.crm_form_submissions s
+       where s.form_id = v_form.id and s.ip_hash = v_ip and s.created_at > now() - interval '1 minute') >= 5) then
     raise exception 'rate_limited' using errcode = '53400';
   end if;
 
-  -- Valida cada campo declarado (o que sobra em p_values é ignorado).
+  -- Honeypot: campo escondido que gente não preenche. Responde ok e não cria nada.
+  if length(btrim(coalesce(p_values->>'_hp', ''))) > 0 then
+    insert into public.crm_form_submissions (form_id, equipe_id, status, ip_hash) values (v_form.id, v_form.equipe_id, 'honeypot', v_ip);
+    return jsonb_build_object('ok', true);
+  end if;
+
+  -- Valida cada campo declarado (o que sobra em p_values é ignorado). Um erro de
+  -- validação NÃO propaga como exceção (reverteria o registro da tentativa): vira
+  -- {ok:false, error:'required:key'} depois de gravar a linha 'rejected'.
+  begin
   for f in select * from jsonb_array_elements(v_form.fields) loop
     v_key    := f->>'key';
     v_type   := f->>'type';
@@ -297,7 +348,7 @@ begin
       raise exception 'invalid_field:%', v_key using errcode = '22023';
     elsif v_type = 'number' and v_raw !~ '^-?[0-9]+([.,][0-9]+)?$' then
       raise exception 'invalid_field:%', v_key using errcode = '22023';
-    elsif v_type = 'date' and v_raw !~ '^\d{4}-\d{2}-\d{2}$' then
+    elsif v_type = 'date' and not public._crm_is_valid_date(v_raw) then
       raise exception 'invalid_field:%', v_key using errcode = '22023';
     elsif v_type = 'select' and not (f->'options') @> to_jsonb(v_raw) then
       raise exception 'invalid_field:%', v_key using errcode = '22023';
@@ -323,6 +374,13 @@ begin
 
   if v_phone is null and v_email is null then
     raise exception 'required:%', coalesce(v_pkey, v_ekey, 'contact') using errcode = '22023';
+  end if;
+  exception when sqlstate '22023' then
+    v_err := sqlerrm;
+  end;
+  if v_err is not null then
+    insert into public.crm_form_submissions (form_id, equipe_id, status, ip_hash) values (v_form.id, v_form.equipe_id, 'rejected', v_ip);
+    return jsonb_build_object('ok', false, 'error', v_err);
   end if;
 
   v_norm   := public.normalize_phone_br(v_phone);
@@ -350,14 +408,24 @@ begin
      where l.id = v_lead.id;
     v_lead_id := v_lead.id;
   else
-    insert into public.leads (
-      equipe_id, name, email, phone, observations, source, origem, origin_category, origin_detail,
-      creation_source, created_by_type, lead_type, contact_type, atendido_por_agente, responsible_id)
-    values (
-      v_form.equipe_id, v_name, v_email, v_phone, v_obs, v_form.origin_label, v_form.origin_label,
-      v_form.origin_category, v_detail, 'form', 'automation', 'lead', 'opportunity', false, v_form.responsible_id)
-    returning id into v_lead_id;
-    v_new := true;
+    begin
+      insert into public.leads (
+        equipe_id, name, email, phone, observations, source, origem, origin_category, origin_detail,
+        creation_source, created_by_type, lead_type, contact_type, atendido_por_agente, responsible_id)
+      values (
+        v_form.equipe_id, v_name, v_email, v_phone, v_obs, v_form.origin_label, v_form.origin_label,
+        v_form.origin_category, v_detail, 'form', 'automation', 'lead', 'opportunity', false, v_form.responsible_id)
+      returning id into v_lead_id;
+      v_new := true;
+    exception when unique_violation then
+      -- Outro envio/canal criou o mesmo telefone entre o select e o insert: reaproveita.
+      select l.id into v_lead_id from public.leads l
+       where l.equipe_id = v_form.equipe_id and l.deleted_at is null and l.phone_normalized = v_norm
+       order by l.created_at limit 1;
+      if v_lead_id is null then
+        raise;
+      end if;
+    end;
   end if;
 
   -- O negócio: o aberto do mesmo pipeline é reaproveitado (um indicado não vira
@@ -397,8 +465,8 @@ begin
       'form_id', v_form.id::text, 'form_name', v_form.title, 'indicated_by', v_by)),
     v_opp_id);
 
-  insert into public.crm_form_submissions (form_id, equipe_id, status, lead_id, opportunity_id, "values")
-  values (v_form.id, v_form.equipe_id, 'ok', v_lead_id, v_opp_id, p_values - '_hp');
+  insert into public.crm_form_submissions (form_id, equipe_id, status, ip_hash, lead_id, opportunity_id, "values")
+  values (v_form.id, v_form.equipe_id, 'ok', v_ip, v_lead_id, v_opp_id, p_values - '_hp');
 
   return jsonb_build_object('ok', true);
 end;
@@ -406,8 +474,8 @@ $$;
 
 revoke all on function public._crm_forms_validate() from public, anon, authenticated;
 revoke all on function public._crm_intake_form_get(text) from public, anon, authenticated;
-revoke all on function public._crm_intake_submit(text, jsonb) from public, anon, authenticated;
+revoke all on function public._crm_is_valid_date(text) from public, anon, authenticated;
+revoke all on function public._crm_intake_submit(text, jsonb, text) from public, anon, authenticated;
 grant execute on function public._crm_intake_form_get(text) to service_role;
-grant execute on function public._crm_intake_submit(text, jsonb) to service_role;
+grant execute on function public._crm_intake_submit(text, jsonb, text) to service_role;
 
-commit;

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   INDICACAO_PRESET,
   intakeFormUrl,
+  isValidIsoDate,
+  MAX_INTAKE_FIELDS,
   slugify,
   validateIntakeDefinition,
   validateIntakeValues,
@@ -33,7 +35,37 @@ describe("validateIntakeValues", () => {
   });
 });
 
+describe("datas", () => {
+  it("isValidIsoDate recusa dia que não existe", () => {
+    expect(isValidIsoDate("2026-10-16")).toBe(true);
+    expect(isValidIsoDate("2024-02-29")).toBe(true);
+    expect(isValidIsoDate("2026-02-29")).toBe(false);
+    expect(isValidIsoDate("2026-13-45")).toBe(false);
+    expect(isValidIsoDate("2026-1-5")).toBe(false);
+  });
+
+  it("validateIntakeValues recusa data impossível", () => {
+    const fields: IntakeField[] = [
+      f({}),
+      f({ key: "tel", label: "Telefone", type: "phone", required: false, target: "lead.phone" }),
+      f({ key: "nasc", label: "Nascimento", type: "date", required: false, target: "lead.observations" }),
+    ];
+    const base = { nome: "Ana", tel: "(85) 99262-5840" };
+    expect(validateIntakeValues(fields, { ...base, nasc: "2026-13-45" }).map((e) => e.key)).toEqual(["nasc"]);
+    expect(validateIntakeValues(fields, { ...base, nasc: "2026-10-16" })).toEqual([]);
+  });
+});
+
 describe("validateIntakeDefinition", () => {
+  it("limita o número de campos", () => {
+    const many = [
+      ...INDICACAO_PRESET.fields,
+      ...Array.from({ length: MAX_INTAKE_FIELDS }, (_, i) =>
+        f({ key: `extra${i}`, label: `Extra ${i}`, required: false, target: "lead.observations" })),
+    ];
+    expect(validateIntakeDefinition(many).join()).toMatch(/máximo 40|No máximo 40/);
+  });
+
   it("o modelo de Indicação é válido", () => {
     expect(validateIntakeDefinition(INDICACAO_PRESET.fields)).toEqual([]);
   });

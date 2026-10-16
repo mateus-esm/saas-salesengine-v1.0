@@ -22,8 +22,8 @@ import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 interface PublicFormField {
   key: string;
   label: string;
-  // Intake forms (SE-SUP1-7) add textarea/email; the renderer shows both as text and
-  // the intake rules (validateIntakeValues) check the e-mail shape.
+  // Intake forms (SE-SUP1-7) add textarea/email; the renderer draws them through
+  // `textVariants` and the intake rules (validateIntakeValues) check the e-mail shape.
   type: CustomFieldType | "textarea" | "email";
   options: string[];
   required: boolean;
@@ -86,6 +86,17 @@ export default function PublicForm() {
       cancelled = true;
     };
   }, [token]);
+
+  // textarea/email render as such through the renderer's text variants.
+  const textVariants = useMemo(
+    () =>
+      Object.fromEntries(
+        (form?.fields ?? [])
+          .filter((f) => f.type === "textarea" || f.type === "email")
+          .map((f) => [f.key, f.type as "textarea" | "email"]),
+      ),
+    [form],
+  );
 
   // The renderer addresses by field_id; on the public side the key plays it.
   const schema: CustomFieldSchema[] = useMemo(
@@ -169,7 +180,7 @@ export default function PublicForm() {
         </header>
 
         <Card className="space-y-5 p-5">
-          <DynamicFieldRenderer schema={schema} value={values} onChange={setValues} disabled={sending} />
+          <DynamicFieldRenderer schema={schema} value={values} onChange={setValues} disabled={sending} textVariants={textVariants} />
           {intake && (
             <input
               type="text"

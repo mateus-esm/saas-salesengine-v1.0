@@ -46,3 +46,30 @@ export function publicFormError(message: string): { status: number; error: strin
   if (message.includes("invalid_values")) return { status: 422, error: "invalid_values" };
   return { status: 500, error: "internal_error" };
 }
+
+/** First hop of x-forwarded-for (the client), as public-proposal reads it. */
+export function clientIpFrom(headers: { get(name: string): string | null }): string | null {
+  const ip = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return ip ? ip : null;
+}
+
+/**
+ * sha256(ip + ":" + token) in hex: the rate limit needs "same visitor, same form"
+ * and nothing else, so the raw IP is never stored and the hash does not link a
+ * visitor across forms. Null IP (unknown) = null: only the form-wide ceiling applies.
+ */
+export async function hashClientIp(ip: string | null, token: string): Promise<string | null> {
+  if (!ip) return null;
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${ip}:${token}`));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * _crm_intake_submit answers a rejected validation as { ok: false, error: "required:key" }
+ * (it must not raise, or the attempt would not be counted by the rate limit).
+ * Returns the HTTP answer for it, or null when the data is not a rejection.
+ */
+export function intakeRejection(data: unknown): { status: number; error: string; field?: string } | null {
+  if (!isObject(data) || data.ok !== false) return null;
+  return publicFormError(typeof data.error === "string" ? data.error : "");
+}

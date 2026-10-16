@@ -12,7 +12,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { parsePublicFormRequest, publicFormError } from "../_shared/public-form.ts";
+import { clientIpFrom, hashClientIp, intakeRejection, parsePublicFormRequest, publicFormError } from "../_shared/public-form.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,7 +49,10 @@ if (import.meta.main) {
         result = await db.rpc("_crm_public_form_get", { p_token: parsed.token });
       }
     } else if (parsed.kind === "intake") {
-      result = await db.rpc("_crm_intake_submit", { p_token: parsed.token, p_values: parsed.values });
+      const ipHash = await hashClientIp(clientIpFrom(req.headers), parsed.token);
+      result = await db.rpc("_crm_intake_submit", { p_token: parsed.token, p_values: parsed.values, p_ip_hash: ipHash });
+      const rejected = intakeRejection(result.data);
+      if (!result.error && rejected) return json(rejected, rejected.status);
     } else {
       result = await db.rpc("_crm_public_form_submit", { p_token: parsed.token, p_values: parsed.values });
     }
