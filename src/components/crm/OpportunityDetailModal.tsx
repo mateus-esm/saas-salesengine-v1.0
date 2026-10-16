@@ -53,12 +53,15 @@ import type {
   PipelineStageV2,
 } from "@/types/pipelines";
 import { useOpportunityMutations } from "@/hooks/useOpportunities";
+import { useMoveToStage } from "@/hooks/useMoveToStage";
 import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { stageForStatus, statusForStage } from "@/lib/outcome";
 import { normalizeNatures } from "@/lib/natures";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
+import { MeetingOutcomeButtons } from "./MeetingOutcomeButtons";
+import { canRecordOutcome, outcomeLabel } from "@/lib/meetingOutcome";
 import { DealItemsSection } from "./deal/DealItemsSection";
 import { DealRevenueSection } from "./deal/DealRevenueSection";
 import { DealArtifactsSection } from "./deal/DealArtifactsSection";
@@ -116,6 +119,7 @@ export const OpportunityDetailModal = ({
   // deal of the team) just to get these two functions.
   const { updateOpportunity, deleteOpportunity, setOwner } = useOpportunityMutations();
   const { nameOf } = useMemberDirectory();
+  const { requestMove, lossDialog } = useMoveToStage({ stages, pipeline });
 
   const queryClient = useQueryClient();
   const { profile, equipe } = useAuth();
@@ -178,14 +182,26 @@ export const OpportunityDetailModal = ({
     }
     // Sprint 11 · T28 — the database closes/reopens by the stage (and dates the
     // close); the form only keeps stage and outcome in agreement.
-    updateOpportunity.mutate({
-      id: opportunity.id,
-      stage_id: stageId,
-      status,
-      ...(hasItems ? {} : { value: value === "" ? null : Number(value) }),
-      custom_data: customData,
+    // Sprint Suporte 1 · #12 — a new lost stage asks for the reason first; the
+    // reason is saved in this same update, and cancelling keeps the modal open.
+    const save = (lostReason: string | null) => {
+      updateOpportunity.mutate({
+        id: opportunity.id,
+        stage_id: stageId,
+        status,
+        ...(lostReason ? { lost_reason: lostReason } : {}),
+        ...(hasItems ? {} : { value: value === "" ? null : Number(value) }),
+        custom_data: customData,
+      });
+      onClose();
+    };
+    const plan = requestMove({
+      fromStageId: opportunity.stage_id,
+      toStageId: stageId,
+      leadName: lead?.name,
+      run: save,
     });
-    onClose();
+    if (plan === "noop") save(null);
   };
 
   const handleStageChange = (id: string) => {
@@ -222,6 +238,7 @@ export const OpportunityDetailModal = ({
           scroll surfaces. Left = live timeline, right = identity + engineering. */}
       {/* Sprint 11 · T26 — full screen on a phone. */}
       <DialogContent className="max-w-5xl w-[min(96vw,1100px)] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden max-md:left-0 max-md:top-0 max-md:translate-x-0 max-md:translate-y-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:w-full max-md:max-w-none max-md:rounded-none max-md:border-0">
+        {lossDialog}
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3 border-b border-border/60 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1 min-w-0">
@@ -323,6 +340,13 @@ export const OpportunityDetailModal = ({
                         aria-readonly={hasItems}
                       />
                     </div>
+                  </div>
+
+                  {/* SE-SUP1-8 (#10) — a reunião aconteceu? Não move etapa: grava o marco
+                      (funnel_events) pelo mesmo caminho manual de sempre. */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Registrar reunião</Label>
+                    <MeetingOutcomeButtons opportunityId={opportunity.id} />
                   </div>
 
                   {/* Sprint 11 · T30 — what the deal sells; with items, the value is their sum. */}
@@ -455,16 +479,32 @@ export const OpportunityDetailModal = ({
                     ) : (
                       <div className="space-y-1.5">
                         {cardEvents.map((e) => (
-                          <div key={e.id} className="text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground/70">{e.title}</span>
-                            <span className="ml-1">
-                              {new Date(e.starts_at).toLocaleString("pt-BR", {
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
+                          <div key={e.id} className="space-y-1 text-xs text-muted-foreground">
+                            <div>
+                              <span className="font-medium text-foreground/70">{e.title}</span>
+                              <span className="ml-1">
+                                {new Date(e.starts_at).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              {outcomeLabel(e.outcome) && (
+                                <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">
+                                  {outcomeLabel(e.outcome)}
+                                </Badge>
+                              )}
+                            </div>
+                            {/* SE-SUP1-8 (#10): o desfecho desta reunião, ligado a ESTE negócio. */}
+                            {canRecordOutcome(e) && (
+                              <MeetingOutcomeButtons
+                                compact
+                                agendaEventId={e.id}
+                                opportunityId={e.opportunity_id ?? opportunity.id}
+                                current={e.outcome}
+                              />
+                            )}
                           </div>
                         ))}
                       </div>

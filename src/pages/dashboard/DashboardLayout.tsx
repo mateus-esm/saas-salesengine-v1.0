@@ -11,17 +11,21 @@
  * unreachable tabs on mobile once already; the fix is cheap and the regression
  * is not.
  */
-import { useMemo, useState } from "react";
-import { NavLink, Navigate, Outlet, useLocation, useOutletContext } from "react-router-dom";
+import { useCallback, useMemo, useState } from "react";
+import { NavLink, Navigate, Outlet, useLocation, useOutletContext, useSearchParams } from "react-router-dom";
 import { BarChart3, Filter, Radio, Send, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { DashboardFilterBar } from "@/components/dashboard/DashboardFilterBar";
 import {
-  DashboardFilterBar,
+  paramsToPeriod,
   periodRange,
+  periodToParams,
+  selectPreset,
+  type CustomDays,
   type PeriodPreset,
-} from "@/components/dashboard/DashboardFilterBar";
+} from "@/lib/dashboardPeriod";
 import { useDashboardFilterOptions } from "@/hooks/useDashboardV2";
 import type { DashboardFilters } from "@/types/dashboard";
 
@@ -46,7 +50,15 @@ export function useDashboardContext() {
 export default function DashboardLayout() {
   const location = useLocation();
   const { profile, loading } = useAuth();
-  const [preset, setPreset] = useState<PeriodPreset>("30d");
+  // O período mora na URL (#14): o link copiado abre o mesmo recorte, e trocar
+  // de aba do dashboard (que mantém a query) não o perde.
+  const [params, setParams] = useSearchParams();
+  const { preset, custom } = useMemo(() => paramsToPeriod(params), [params]);
+  const setPeriod = useCallback(
+    (next: { preset: PeriodPreset; custom: CustomDays | null }) =>
+      setParams((prev) => periodToParams(next, new URLSearchParams(prev)), { replace: true }),
+    [setParams],
+  );
   const [extra, setExtra] = useState<Omit<DashboardFilters, "from" | "to">>({});
 
   const { data: options } = useDashboardFilterOptions();
@@ -55,9 +67,11 @@ export default function DashboardLayout() {
   // the preset changes — not on every render, which would produce a new
   // react-query key each time and refetch the whole page in a loop.
   const filters = useMemo<DashboardFilters>(() => {
-    const { from, to } = periodRange(preset);
+    const { from, to } = periodRange(preset, new Date(), custom);
     return { from, to, ...extra };
-  }, [preset, extra]);
+    // `custom` é novo objeto a cada leitura da URL; a chave estável é o texto dos params.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset, custom?.from.getTime(), custom?.to?.getTime(), extra]);
 
   if (location.pathname === "/dashboard" || location.pathname === "/dashboard/") {
     return <Navigate to="/dashboard/visao-geral" replace />;
@@ -119,7 +133,9 @@ export default function DashboardLayout() {
         <div className="border-b border-border bg-background px-4 py-2.5 sm:px-6">
           <DashboardFilterBar
             preset={preset}
-            onPresetChange={setPreset}
+            onPresetChange={(p) => setPeriod(selectPreset(p, custom))}
+            custom={custom}
+            onCustomChange={(days) => setPeriod({ preset: "custom", custom: days })}
             filters={filters}
             onFiltersChange={({ from: _f, to: _t, ...rest }) => setExtra(rest)}
             options={options}

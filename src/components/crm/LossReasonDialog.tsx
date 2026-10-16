@@ -5,12 +5,11 @@
  * it is captured when the deal is lost — asking later means asking someone to
  * remember, and what comes back is "não sei" or nothing.
  *
- * So this opens on the drop into a lost stage, and it is deliberately NOT
- * blocking: the deal moves either way. A dialog that refuses to let a seller
- * close a lost deal without filling a form is a dialog that teaches them to
- * leave dead deals sitting in "Negociação" forever, and then the pipeline
- * number — the one on the dashboard — becomes fiction. Better a loss with no
- * reason than a loss that never gets recorded.
+ * Sprint Suporte 1 · #12 — it used to be skippable ("Pular") and only opened on
+ * the Kanban drag, so 528 of 533 lost deals of one client had no reason. It is
+ * now mandatory and opens from every move path (useMoveToStage): there is no
+ * skip, and closing it (Cancelar, Esc, click outside) CANCELS the move — the deal
+ * stays where it was, so a loss is never recorded without its reason.
  */
 import { useEffect, useState } from "react";
 import {
@@ -25,26 +24,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-export interface LossReasonOption {
-  label: string;
-  color?: string;
-}
+import type { LossReasonOption } from "@/lib/board";
+
+export type { LossReasonOption };
 
 interface Props {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** The pipeline's configured reasons. Empty = free text only. */
+  /** Fired when the dialog is dismissed without a reason: the move is cancelled. */
+  onCancel: () => void;
+  /** The pipeline's configured reasons, plus "Outro…" free text. */
   reasons: LossReasonOption[];
   leadName?: string;
-  /** Called with the chosen reason, or null when the user skips. */
-  onConfirm: (reason: string | null) => void;
+  /** Bulk move: how many deals share this one reason. */
+  count?: number;
+  /** Called with the chosen, non-empty reason. */
+  onConfirm: (reason: string) => void;
 }
 
 export function LossReasonDialog({
   open,
-  onOpenChange,
+  onCancel,
   reasons,
   leadName,
+  count,
   onConfirm,
 }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -60,12 +62,17 @@ export function LossReasonDialog({
   const finalReason = selected === "__other__" ? other.trim() || null : selected;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle className="text-base">Por que este negócio foi perdido?</DialogTitle>
           <DialogDescription className="text-xs">
-            {leadName ? (
+            {count && count > 1 ? (
+              <>
+                {count} negócios serão movidos para uma etapa de perda. O motivo escolhido
+                aplica-se aos {count} negócios.
+              </>
+            ) : leadName ? (
               <>
                 <span className="font-medium text-foreground">{leadName}</span> foi movido para
                 uma etapa de perda. O motivo alimenta o dashboard e o relatório.
@@ -125,28 +132,24 @@ export function LossReasonDialog({
         )}
 
         <DialogFooter className="gap-2 sm:gap-2">
-          {/* Skipping is a first-class option, not a hidden escape hatch. */}
+          {/* No "skip": cancelling leaves the deal in its stage. */}
           <Button
             variant="ghost"
             size="sm"
             className="text-xs text-muted-foreground"
-            onClick={() => {
-              onConfirm(null);
-              onOpenChange(false);
-            }}
+            onClick={onCancel}
           >
-            Pular
+            Cancelar
           </Button>
           <Button
             size="sm"
             className="text-xs"
             disabled={!finalReason}
             onClick={() => {
-              onConfirm(finalReason);
-              onOpenChange(false);
+              if (finalReason) onConfirm(finalReason);
             }}
           >
-            Salvar motivo
+            Confirmar perda
           </Button>
         </DialogFooter>
       </DialogContent>

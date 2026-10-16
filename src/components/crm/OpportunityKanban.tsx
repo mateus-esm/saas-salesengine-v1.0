@@ -22,11 +22,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { LossReasonDialog, type LossReasonOption } from "./LossReasonDialog";
 import { useBoardRealtime, useBoardSummary, useMoveBoardCard } from "@/hooks/useBoard";
 import { useLead, useOpportunity } from "@/hooks/useLead";
 import { useLeadMutations } from "@/hooks/useLeads";
-import { useOpportunityMutations } from "@/hooks/useOpportunities";
+import { useMoveToStage } from "@/hooks/useMoveToStage";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
@@ -103,7 +102,6 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
 
   useBoardRealtime(pipelineId);
   const moveCard = useMoveBoardCard(pipelineId, filters);
-  const { updateOpportunity } = useOpportunityMutations();
   const { updateLead, deleteLead } = useLeadMutations();
 
   const [activeCard, setActiveCard] = useState<BoardCard | null>(null);
@@ -121,6 +119,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     () => [...stages].sort((a, b) => a.position - b.position),
     [stages],
   );
+  const { requestMove, lossDialog } = useMoveToStage({ stages: orderedStages, pipeline });
 
   // Set initial active stage for mobile
   useEffect(() => {
@@ -196,12 +195,21 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     setActiveCard(card ?? null);
   };
 
-  const [pendingLoss, setPendingLoss] = useState<{ id: string; leadName?: string } | null>(null);
-
-  const lossReasons: LossReasonOption[] = useMemo(() => {
-    const raw = (pipeline as { loss_reasons?: unknown })?.loss_reasons;
-    return Array.isArray(raw) ? (raw as LossReasonOption[]) : [];
-  }, [pipeline]);
+  // Sprint Suporte 1 · #12 — drag and mobile share the one move engine: a lost
+  // target asks for the reason first and saves it with the move.
+  const moveCardToStage = (card: BoardCard, targetStageId: string) =>
+    requestMove({
+      fromStageId: card.stage_id,
+      toStageId: targetStageId,
+      leadName: card.lead?.name,
+      run: (lostReason) =>
+        moveCard.mutate({
+          card,
+          toStageId: targetStageId,
+          toStatus: statusForStage(orderedStages, targetStageId, card.status),
+          lostReason,
+        }),
+    });
 
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -220,34 +228,11 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     else targetStageId = String(over.id);
 
     if (!targetStageId || !orderedStages.some((s) => s.id === targetStageId)) return;
-    if (targetStageId === card.stage_id) return;
-
-    moveCard.mutate(
-      { card, toStageId: targetStageId, toStatus: statusForStage(orderedStages, targetStageId, card.status) },
-      {
-        onSuccess: () => {
-          const target = orderedStages.find((s) => s.id === targetStageId);
-          if (target?.stage_type === "lost") {
-            setPendingLoss({ id: card.id, leadName: card.lead?.name });
-          }
-        },
-      },
-    );
+    moveCardToStage(card, targetStageId);
   };
 
   const handleMobileMove = (card: BoardCard, targetStageId: string) => {
-    if (targetStageId === card.stage_id) return;
-    moveCard.mutate(
-      { card, toStageId: targetStageId, toStatus: statusForStage(orderedStages, targetStageId, card.status) },
-      {
-        onSuccess: () => {
-          const target = orderedStages.find((s) => s.id === targetStageId);
-          if (target?.stage_type === "lost") {
-            setPendingLoss({ id: card.id, leadName: card.lead?.name });
-          }
-        },
-      },
-    );
+    moveCardToStage(card, targetStageId);
   };
 
   const openCardConfig = () => {
@@ -408,18 +393,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         )}
 
         {/* Loss Reason Dialog */}
-        <LossReasonDialog
-          open={!!pendingLoss}
-          onOpenChange={(o) => { if (!o) setPendingLoss(null); }}
-          reasons={lossReasons}
-          leadName={pendingLoss?.leadName}
-          onConfirm={(reason) => {
-            if (pendingLoss && reason) {
-              updateOpportunity.mutate({ id: pendingLoss.id, lost_reason: reason });
-            }
-            setPendingLoss(null);
-          }}
-        />
+        {lossDialog}
 
         {/* Mobile Move to Stage Sheet */}
         {moveSheetCard && (

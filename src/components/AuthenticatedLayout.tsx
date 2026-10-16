@@ -16,7 +16,7 @@ export const AuthenticatedLayout = () => {
   useTenantTheme();
 
   return (
-    <div className="min-h-screen flex flex-col w-full bg-background">
+    <div className="min-h-dvh flex flex-col w-full bg-background">
       <TopNavbar />
       <main className="flex-1 flex flex-col overflow-hidden">
         <Outlet />

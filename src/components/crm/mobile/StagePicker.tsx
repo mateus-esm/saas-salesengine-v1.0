@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { PipelineStageV2 } from "@/types/pipelines";
 import type { BoardStageSummary } from "@/types/board";
 import { cn } from "@/lib/utils";
@@ -16,9 +17,19 @@ export function StagePicker({
   onSelectStage,
 }: StagePickerProps) {
   const summaryMap = new Map(summary.map((s) => [s.stage_id, s.count]));
+  const rail = useRef<HTMLDivElement>(null);
+
+  // A etapa inicial pode ser a 7ª de 10 (a primeira com negócios): sem isto a
+  // trilha abre parada no começo e o chip ativo fica fora da tela. `inline`
+  // centraliza só no eixo da trilha; `block: "nearest"` não arrasta a página.
+  useEffect(() => {
+    rail.current
+      ?.querySelector<HTMLElement>('[aria-current="true"]')
+      ?.scrollIntoView?.({ block: "nearest", inline: "center" });
+  }, [activeStageId]);
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-2 px-3 select-none overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div ref={rail} className="flex items-center gap-1.5 overflow-x-auto pb-2 px-3 select-none overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {stages.map((stage) => {
         const count = summaryMap.get(stage.id) ?? 0;
         const isActive = stage.id === activeStageId;
@@ -28,6 +39,7 @@ export function StagePicker({
             key={stage.id}
             type="button"
             onClick={() => onSelectStage(stage.id)}
+            aria-current={isActive ? "true" : undefined}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition-colors border",
               isActive

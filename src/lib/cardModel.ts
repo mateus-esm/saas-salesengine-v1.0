@@ -157,3 +157,13 @@ export function buildCardModel(
     touchpointCount,
   };
 }
+
+/** The pipeline's configured card fields, in order (the same rule the Kanban uses). */
+export function cardFieldsFor(
+  pipeline: { card_field_ids?: string[] | null; custom_fields_schema?: CustomFieldSchema[] | null } | undefined,
+): CustomFieldSchema[] {
+  const ids = pipeline?.card_field_ids ?? [];
+  return (pipeline?.custom_fields_schema ?? [])
+    .filter((f) => !f.is_deleted && ids.includes(f.field_id))
+    .sort((a, b) => a.position - b.position);
+}

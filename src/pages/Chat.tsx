@@ -18,6 +18,9 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { ChatInput } from "@/components/inbox/ChatInput";
 import { ConversationHeader } from "@/components/inbox/ConversationHeader";
 import { CRMContextPanel } from "@/components/inbox/CRMContextPanel";
+import { useSetAttendant } from "@/hooks/useSetResponsible";
+import { useOpportunities } from "@/hooks/useOpportunities";
+import { resolveResponsibleId } from "@/lib/chatOwnership";
 import { MessageSquare, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -27,13 +30,15 @@ import { Lead } from "@/types/crm";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatDisplayName } from "@/lib/displayName";
-import { resolveServiceWindow } from "@/lib/service-window";
+import { isMetaWindowClosedMessage, readSendErrorMessage } from "@/lib/send-errors";
+import { META_HUMAN_AGENT_WINDOW_MS, resolveServiceWindow } from "@/lib/service-window";
 
 const Chat = () => {
   const { user, profile } = useAuth();
   const { isAdmin } = useRole();
   const currentUserId = user?.id;
   const { teamMembers } = useTeamMembers();
+  const setAttendant = useSetAttendant();
 
   // Leads still power CRM fields (stage, value, notes) and the details modal.
   const { leads, isLoading: loadingLeads, refetch: refetchLeads, updateLead, deleteLead } = useLeads();
@@ -96,6 +101,11 @@ const Chat = () => {
 
   const selectedConversation = conversations.find(c => c.id === selectedConversationId);
   const selectedLead = leads?.find(l => l.id === selectedConversation?.lead_id);
+  // Responsável exibido = dono do negócio aberto (mesmo cache do painel lateral).
+  const { opportunities: leadOpportunities } = useOpportunities({
+    leadId: selectedConversation?.lead_id,
+    enabled: !!selectedConversation?.lead_id,
+  });
 
   // T15 — Zero-Friction Chat Link: when navigated to /chat?contact=<leadId>,
   // focus that contact's thread (creating an internal thread if none exists).
@@ -106,6 +116,7 @@ const Chat = () => {
     const existing = conversations.find((c) => c.lead_id === contactId);
     if (existing) {
       setSelectedConversationId(existing.id);
+      if (window.innerWidth < 1024) setShowInbox(false);
       setSearchParams({}, { replace: true });
       return;
     }
@@ -126,6 +137,7 @@ const Chat = () => {
       if (!cancelled && !error && data?.id) {
         await queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
         setSelectedConversationId(data.id as string);
+        if (window.innerWidth < 1024) setShowInbox(false);
       }
       if (!cancelled) setSearchParams({}, { replace: true });
     })();
@@ -138,6 +150,7 @@ const Chat = () => {
     messages,
     loading: loadingMessages,
     addOptimisticMessage,
+    removeOptimisticMessage,
     syncHistory,
     isSyncing: isSyncingHistory,
   } = useMessages(
@@ -209,6 +222,8 @@ const Chat = () => {
     // contadas da última mensagem do cliente. A conta mora em um lugar só —
     // `src/lib/service-window.ts`.
     const serviceWindow = resolveServiceWindow({
+      channel: selectedConversation.channel,
+      humanAgentWindowMs: META_HUMAN_AGENT_WINDOW_MS,
       conversationSoloInstanceId: selectedConversation.solo_instance_id,
       hasConnectedSoloInstance: hasSoloInstance,
       lastCustomerMessageAt:
@@ -230,6 +245,7 @@ const Chat = () => {
       status: selectedConversation.atendido_por_agente ? 'human_handling' : 'bot_handling',
       isOnline: serviceWindow.open,
       isWindowAlwaysOpen: serviceWindow.alwaysOpen,
+      serviceWindow,
       unreadCount: selectedConversation.unread_count || 0,
       lastMessage: "Clique para ver",
       lastMessageTime: new Date(selectedConversation.last_message_at || selectedConversation.created_at || new Date()),
@@ -237,6 +253,7 @@ const Chat = () => {
       channel: selectedConversation.channel || 'whatsapp',
       agentName: selectedConversation.agent_name || undefined,
       responsibleId: selectedConversation.responsible_id || undefined,
+      leadResponsibleId: resolveResponsibleId(leadOpportunities, lead?.responsible_id, selectedConversation.lead_id),
       crmData: {
         value: lead?.opportunity_value || 0,
         stage: lead?.stage_id || stageName,
@@ -251,6 +268,7 @@ const Chat = () => {
   }, [
     selectedConversation,
     selectedLead,
+    leadOpportunities,
     stages,
     hasSoloInstance,
     lastCustomerMessageAtByConversation,
@@ -265,6 +283,8 @@ const Chat = () => {
       // comparava `last_message_at` (que o envio do time também atualiza) e
       // ignorava o canal — os dois indicadores discordavam entre si.
       const serviceWindow = resolveServiceWindow({
+        channel: c.channel,
+        humanAgentWindowMs: META_HUMAN_AGENT_WINDOW_MS,
         conversationSoloInstanceId: c.solo_instance_id,
         hasConnectedSoloInstance: hasSoloInstance,
         lastCustomerMessageAt: lastCustomerMessageAtByConversation[c.id] ?? null,
@@ -289,6 +309,7 @@ const Chat = () => {
         responsibleId: c.responsible_id,
         isOnline: serviceWindow.open,
         isWindowAlwaysOpen: serviceWindow.alwaysOpen,
+        serviceWindow,
         channel: c.channel || 'whatsapp',
         agentName: c.agent_name || undefined,
         crmData: {
@@ -307,8 +328,8 @@ const Chat = () => {
   const handleSendMessage = async (content: string, media?: { url: string; type: string }) => {
     if (!selectedConversationId || !selectedConversation) return;
 
+    const tempId = `temp-${Date.now()}`;
     try {
-      const tempId = `temp-${Date.now()}`;
       addOptimisticMessage({
         id: tempId,
         content,
@@ -320,16 +341,6 @@ const Chat = () => {
         media_url: media?.url || null,
         media_type: media?.type || null,
       } as any);
-
-      // T14 — a human typing takes the loop: flip to human handling instantly
-      // so the header morphs to "Vendedor no Loop" + "Devolver" without a manual
-      // toggle.
-      if (!selectedConversation.atendido_por_agente) {
-        void sb
-          .from('conversations')
-          .update({ atendido_por_agente: true })
-          .eq('id', selectedConversationId);
-      }
 
       const { error, data } = await supabase.functions.invoke('send-chat-message', {
         body: {
@@ -345,12 +356,31 @@ const Chat = () => {
 
       if (error) throw error;
 
+      // T14 — a human typing takes the loop: flip to human handling so the
+      // header morphs to "Vendedor no Loop" + "Devolver". Só depois do envio
+      // aceito: um envio rejeitado não pode deixar o agente de IA desligado.
+      if (!selectedConversation.atendido_por_agente) {
+        void sb
+          .from('conversations')
+          .update({ atendido_por_agente: true })
+          .eq('id', selectedConversationId);
+      }
+
       // T10 — Check delivery status
       if (data && typeof data === 'object' && 'delivered' in data && data.delivered === false) {
         toast.warning("Mensagem salva, mas não entregue — verifique os canais conectados.");
       }
     } catch (err) {
       console.error("Erro ao enviar:", err);
+      // SE-SUP1-2: a Meta recusaria; o servidor nem gravou a mensagem.
+      const serverMsg = await readSendErrorMessage(err);
+      if (isMetaWindowClosedMessage(serverMsg)) {
+        if (tempId) removeOptimisticMessage(tempId);
+        toast.error(
+          "Janela do Instagram fechada: só é possível responder até 24 h após a última mensagem do cliente.",
+        );
+        return;
+      }
       toast.error("Erro ao enviar mensagem");
     }
   };
@@ -405,15 +435,9 @@ const Chat = () => {
 
   const handleAssignResponsible = async (userId: string | null) => {
     if (!selectedConversationId) return;
-    try {
-      await sb
-        .from('conversations')
-        .update({ responsible_id: userId })
-        .eq('id', selectedConversationId);
-      toast.success(userId ? 'Responsável atribuído' : 'Responsável removido');
-    } catch (err) {
-      toast.error('Erro ao atribuir responsável');
-    }
+    // Sprint Suporte 1 · #11 — o seletor do cabeçalho é o ATENDENTE da conversa;
+    // o RPC valida a equipe e o hook já avisa/atualiza a lista.
+    setAttendant.mutate({ conversationId: selectedConversationId, userId });
   };
 
   const handleConversationStatusChange = (
@@ -460,7 +484,7 @@ const Chat = () => {
   const loadingInbox = loadingLeads || loadingConversations;
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background dark:bg-zinc-950">
+    <div className="h-[calc(100dvh-4rem)] flex overflow-hidden bg-background dark:bg-zinc-950">
       {!showInbox && (
         <Button
           variant="ghost"
@@ -475,7 +499,7 @@ const Chat = () => {
       {/* Coluna 1: Inbox */}
       <div className={cn(
         "divider-idv-right flex-shrink-0 transition-all duration-300 relative",
-        showInbox ? "w-1/4 min-w-[280px] max-w-[360px]" : "w-0 min-w-0 overflow-hidden"
+        showInbox ? "w-1/4 min-w-[280px] max-w-[360px] max-md:w-full max-md:min-w-0 max-md:max-w-none" : "w-0 min-w-0 overflow-hidden"
       )}>
         {showInbox && (
           <>
@@ -512,11 +536,11 @@ const Chat = () => {
       </div>
 
       {/* Coluna 2: Chat */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={cn("flex-1 flex flex-col min-w-0", showInbox && "max-md:hidden")}>
         {selectedConversationId && selectedSession ? (
           <>
             <div className="flex items-center justify-between divider-idv-bottom">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <ConversationHeader
                   session={selectedSession}
                   teamMembers={teamMembers}
@@ -532,7 +556,7 @@ const Chat = () => {
                   isSyncingHistory={isSyncingHistory}
                 />
               </div>
-              <div className="flex items-center gap-1 mr-2">
+              <div className="flex shrink-0 items-center gap-1 mr-2">
                 {!showInbox && (
                   <Button variant="ghost" size="icon" onClick={() => setShowInbox(true)}>
                     <PanelLeft className="h-5 w-5" />
@@ -635,6 +659,17 @@ const Chat = () => {
               disabled={loadingMessages}
               leadId={selectedConversation?.lead_id ?? undefined}
               hasSoloInstance={hasSoloInstance}
+              isMetaChannel={selectedSession?.serviceWindow?.channelKind === "meta"}
+              metaWindowClosed={
+                selectedSession?.serviceWindow?.channelKind === "meta" &&
+                !selectedSession.serviceWindow.open
+                  ? {
+                      channel: selectedConversation?.channel ?? "instagram",
+                      hasPhone:
+                        (selectedLead?.phone ?? "").replace(/\D/g, "").length >= 10,
+                    }
+                  : undefined
+              }
             />
           </>
         ) : (

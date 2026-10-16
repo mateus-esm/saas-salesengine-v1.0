@@ -40,11 +40,16 @@ export interface ChatSession {
    * a flag existe para o indicador dizer POR QUE está aberta.
    */
   isWindowAlwaysOpen?: boolean;
+  /** SE-SUP1-2: decisão completa da janela (motivo, canal, quando fecha). */
+  serviceWindow?: import("@/lib/service-window").ServiceWindow;
   tags: string[];
   // Fase 2: Omnichannel
   channel?: 'whatsapp' | 'instagram' | 'telegram' | 'web' | 'messenger' | string;
   agentName?: string;
+  /** Atendente: quem está na conversa (conversations.responsible_id). */
   responsibleId?: string | null;
+  /** Responsável: dono da conta/negócio (leads.responsible_id). Não é o atendente. */
+  leadResponsibleId?: string | null;
   crmData: {
     value: number;
     stage: string;

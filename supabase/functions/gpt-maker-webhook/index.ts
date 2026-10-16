@@ -3,6 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryLine, entryOfKind, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
 import { resolveLeadIdentity } from "../_shared/lead-identity.ts"
+import { insertConversationOnce, updateConversationOnce } from "../_shared/conversation-once.ts"
+import { classifyInbound, promotionPatch } from "../_shared/inbound-filter.ts"
+import { shouldApplyName } from "../_shared/lead-name-policy.ts"
 
 declare const EdgeRuntime: {
   waitUntil: (promise: Promise<void>) => void;
@@ -132,6 +135,22 @@ serve(async (req) => {
       console.log('[Webhook] Mensagem do cliente')
     }
 
+    // 5b. SE-SUP1-4 — filtro de entrada (um ponto só: _shared/inbound-filter).
+    // quarantine: conversa e mensagem são salvas, mas o contato não vira negócio.
+    const verdict = classifyInbound({
+      phone: senderPhone,
+      name: rawSenderName,
+      content: messageContent,
+      messageType: typeof payload.messageType === 'string' ? payload.messageType : null,
+    })
+    if (verdict.action === 'ignore') {
+      return new Response(JSON.stringify({ ignored: true, reason: verdict.reason }), {
+        headers: corsHeaders,
+        status: 200,
+      })
+    }
+    const quarantined = verdict.action === 'quarantine'
+
     // 6. Inicializa Supabase Admin
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -176,12 +195,12 @@ serve(async (req) => {
     // FOUND here and reused instead of turning into a second lead for the same
     // contact. New LID leads are stored without a phone key and are found by
     // the gpt_maker_chat_id lookup below.
-    let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null } | null = null
+    let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null; name?: string | null; name_locked?: boolean | null; lead_type?: string | null; needs_review?: boolean | null } | null = null
 
     if (phoneNorm) {
       const { data: leadByPhone } = await supabase
         .from('leads')
-        .select('id, gpt_maker_chat_id, phone')
+        .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
         .eq('phone_normalized', phoneNorm)
         .eq('equipe_id', equipeId)
         .is('deleted_at', null)
@@ -196,7 +215,7 @@ serve(async (req) => {
     if (!lead && chatId) {
       const { data: leadByChat } = await supabase
         .from('leads')
-        .select('id, gpt_maker_chat_id, phone')
+        .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
         .eq('gpt_maker_chat_id', chatId)
         .eq('equipe_id', equipeId)
         .is('deleted_at', null)
@@ -241,7 +260,9 @@ serve(async (req) => {
           name: finalName,
           equipe_id: equipeId,
           gpt_maker_chat_id: chatId,
-          lead_type: 'lead',
+          // Não-lead (serviço, código, sem identidade) entra como contato a revisar.
+          lead_type: quarantined ? 'contact' : 'lead',
+          ...(quarantined ? { needs_review: true, review_reason: verdict.reason } : {}),
           creation_source: 'ai_agent',
           source: 'IA',
           origem: 'IA',
@@ -250,7 +271,7 @@ serve(async (req) => {
           profile_picture: profilePicture,
           agent_name: agentName,
         })
-        .select('id, gpt_maker_chat_id, phone')
+        .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
         .single()
 
       if (createError) {
@@ -259,7 +280,7 @@ serve(async (req) => {
           console.log('[Webhook] Race detectada (23505), re-buscando lead vencedor...')
           const { data: winner } = await supabase
             .from('leads')
-            .select('id, gpt_maker_chat_id, phone')
+            .select('id, gpt_maker_chat_id, phone, name, name_locked, lead_type, needs_review')
             .eq('phone_normalized', phoneNorm)
             .eq('equipe_id', equipeId)
             .is('deleted_at', null)
@@ -329,6 +350,17 @@ serve(async (req) => {
         updates.phone = identity.phone
       }
 
+      // Contato que o filtro tinha marcado e agora fala como lead: volta ao fluxo
+      // (o passo do negócio roda porque quarantined=false).
+      const promo = senderType === 'customer' ? promotionPatch(lead, verdict) : null
+      if (promo) Object.assign(updates, promo)
+
+      // SE-SUP1-4: o contactName só completa nome vazio/técnico e nunca toca
+      // um nome travado (edição manual do time).
+      if (shouldApplyName({ current: lead.name, incoming: rawSenderName, locked: lead.name_locked, source: 'provider' })) {
+        updates.name = rawSenderName.trim()
+      }
+
       // Fase 2: Enriquecimento — atualizar metadados quando disponíveis
       if (profilePicture) updates.profile_picture = profilePicture
       if (agentName) updates.agent_name = agentName
@@ -364,6 +396,7 @@ serve(async (req) => {
         .eq('lead_id', lead.id)
         .eq('channel', channel)
         .neq('status', 'deleted')
+        .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
         .order('last_message_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle()
@@ -380,6 +413,7 @@ serve(async (req) => {
           .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
           .eq('gpt_maker_chat_id', chatId)
           .neq('status', 'deleted')
+          .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
           .order('last_message_at', { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle()
@@ -397,6 +431,7 @@ serve(async (req) => {
           .select('id, status, gpt_maker_chat_id, agent_name, atendido_por_agente, channel')
           .eq('lead_id', lead.id)
           .neq('status', 'deleted')
+          .order('status', { ascending: true }) // 'active' < 'archived': prefere a ativa
           .order('last_message_at', { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle()
@@ -429,33 +464,30 @@ serve(async (req) => {
           // Only overwrite if we have a specific (non-default) channel detection
           convUpdates.channel = channel
         }
-        await supabase
-          .from('conversations')
-          .update(convUpdates)
-          .eq('id', conversationId)
-      } else {
-        const { data: newConv, error: convError } = await supabase
-          .from('conversations')
-          .insert({
+        try {
+          conversationId = await updateConversationOnce(supabase, conversationId, convUpdates, {
             lead_id: lead.id,
-            equipe_id: equipeId,
-            channel,
-            status: 'active',
-            atendido_por_agente: false,
-            agent_name: agentName,
-            gpt_maker_chat_id: chatId,
-            last_message_at: messageDate,
-            unread_count: 0,
+            channel: existingConv.channel,
           })
-          .select('id')
-          .single()
-
-        if (convError) {
-          console.error('[Webhook] Erro ao criar conversa:', convError)
-          throw convError
+        } catch (convUpdErr) {
+          // A mensagem não pode se perder por um UPDATE de metadados da conversa.
+          console.error('[Webhook] Erro atualizando conversa:', convUpdErr)
         }
-        conversationId = newConv.id
-        console.log('[Webhook] Nova conversa criada:', conversationId)
+      } else {
+        // SE-SUP1-4: duas mensagens juntas não abrem duas conversas.
+        const once = await insertConversationOnce(supabase, {
+          lead_id: lead.id,
+          equipe_id: equipeId,
+          channel,
+          status: 'active',
+          atendido_por_agente: false,
+          agent_name: agentName,
+          gpt_maker_chat_id: chatId,
+          last_message_at: messageDate,
+          unread_count: 0,
+        })
+        conversationId = once.id
+        console.log(once.created ? '[Webhook] Nova conversa criada:' : '[Webhook] Conversa vencedora da corrida reaproveitada:', conversationId)
       }
     }
 
@@ -464,7 +496,7 @@ serve(async (req) => {
     // default_pipeline_id configurado, o contato vira uma Opportunity
     // no primeiro stage 'open'. Idempotente: só cria se não houver uma
     // Opportunity aberta para o lead. Mensagens de agente NÃO disparam.
-    if (senderType === 'customer') {
+    if (senderType === 'customer' && !quarantined) {
       try {
         // Sprint 11 · T55 — the agent's entry, looked up once: a new deal goes
         // to its line (none = the team default), and the touch goes through it.

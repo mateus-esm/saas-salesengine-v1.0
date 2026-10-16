@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { WebhookConfig, FieldMapping, DEFAULT_LEAD_CREATED_PAYLOAD } from "@/types/webhook";
+import { WebhookConfig, FieldMapping, WebhookAction, DEFAULT_LEAD_CREATED_PAYLOAD } from "@/types/webhook";
 
 interface CreateWebhookData {
   name: string;
@@ -14,6 +14,7 @@ interface CreateWebhookData {
   inbound_function?: string | null;
   pipeline_id?: string | null;
   field_mappings?: FieldMapping[];
+  action?: WebhookAction | null;
 }
 
 interface UpdateWebhookData {
@@ -27,6 +28,7 @@ interface UpdateWebhookData {
   inbound_function?: string | null;
   pipeline_id?: string | null;
   field_mappings?: FieldMapping[];
+  action?: WebhookAction | null;
 }
 
 export const useWebhookConfigs = () => {
@@ -72,6 +74,8 @@ export const useWebhookConfigs = () => {
           inbound_function: configData.inbound_function ?? null,
           pipeline_id: configData.pipeline_id ?? null,
           field_mappings: configData.field_mappings ?? [],
+          // Só com ação: a coluna nasce com a migration, e criar sem ela tem de continuar funcionando.
+          ...(configData.action ? { action: configData.action } : {}),
         })
         .select()
         .single();

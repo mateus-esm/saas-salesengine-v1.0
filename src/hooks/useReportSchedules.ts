@@ -27,6 +27,8 @@ export interface ReportSchedule {
   timezone: string;
   sections: string[];
   filters: Record<string, unknown>;
+  /** SE-SUP1-5: um relatório por pipeline; null = todos. */
+  pipeline_id: string | null;
   active: boolean;
   last_run_at: string | null;
   next_run_at: string | null;

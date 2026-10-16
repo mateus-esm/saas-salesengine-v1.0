@@ -1,4 +1,5 @@
 import type { DeliveryResult, OutreachLine } from "./providers.ts";
+import { insertConversationOnce, updateConversationOnce } from "../conversation-once.ts";
 
 export async function persistDeliveredMessage(
   // deno-lint-ignore no-explicit-any
@@ -22,6 +23,7 @@ export async function persistDeliveredMessage(
     .eq("lead_id", input.leadId)
     .eq("channel", "whatsapp")
     .neq("status", "deleted")
+    .order("status", { ascending: true }) // 'active' < 'archived': prefere a ativa
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
@@ -49,24 +51,20 @@ export async function persistDeliveredMessage(
       patch.status = "active";
       patch.archived_at = null;
     }
-    const { error } = await supabase.from("conversations").update(patch).eq(
-      "id",
-      conversationId,
-    );
-    if (error) throw error;
+    conversationId = await updateConversationOnce(supabase, conversationId, patch, {
+      lead_id: input.leadId,
+      channel: "whatsapp",
+    });
   } else {
-    const { data: created, error } = await supabase.from("conversations")
-      .insert({
-        lead_id: input.leadId,
-        equipe_id: input.equipeId,
-        channel: "whatsapp",
-        status: "active",
-        atendido_por_agente: false,
-        unread_count: 0,
-        ...patch,
-      }).select("id").single();
-    if (error) throw error;
-    conversationId = created.id;
+    conversationId = (await insertConversationOnce(supabase, {
+      lead_id: input.leadId,
+      equipe_id: input.equipeId,
+      channel: "whatsapp",
+      status: "active",
+      atendido_por_agente: false,
+      unread_count: 0,
+      ...patch,
+    })).id;
   }
 
   const { error: messageError } = await supabase.from("messages").insert({

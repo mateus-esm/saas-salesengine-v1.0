@@ -43,13 +43,13 @@ interface InboxSidebarProps {
   currentUserId?: string;
   /** Admins/Owners see all chats; regular sellers only see theirs */
   isAdmin?: boolean;
-  /** Team members for the Responsible filter dropdown */
+  /** Team members for the Atendente filter dropdown */
   teamMembers?: TeamMember[];
 }
 
 type StatusTab = "active" | "archived";
 
-// Special sentinel values for the Responsible filter
+// Special sentinel values for the Atendente filter (conversations.responsible_id)
 const RESP_ALL = "__all__";
 const RESP_MINE = "__mine__";
 const RESP_AI = "__ai__";
@@ -280,20 +280,20 @@ export function InboxSidebar({
             ))}
           </div>
 
-          {/* Responsible filter */}
+          {/* Atendente filter — quem está na conversa; o Responsável (dono do negócio) é outro papel */}
           <Select
             value={responsibleFilter}
             onValueChange={setResponsibleFilter}
           >
             <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Responsável" />
+              <SelectValue placeholder="Atendente" />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
                 <SelectItem value={RESP_ALL}>Todos os chats</SelectItem>
                 <SelectItem value={RESP_MINE}>Meus chats</SelectItem>
                 <SelectItem value={RESP_AI}>Gerenciado pela IA</SelectItem>
-                <SelectItem value={RESP_UNASSIGNED}>Sem responsável</SelectItem>
+                <SelectItem value={RESP_UNASSIGNED}>Sem atendente</SelectItem>
               </SelectGroup>
               {teamMembers.length > 0 && (
                 <>
@@ -354,7 +354,7 @@ export function InboxSidebar({
               session={session}
               isSelected={session.id === selectedSessionId}
               onClick={() => onSelectSession(session.id)}
-              responsibleName={
+              attendantName={
                 session.responsibleId
                   ? teamMemberById.get(session.responsibleId)
                   : undefined

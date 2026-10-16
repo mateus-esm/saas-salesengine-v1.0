@@ -5,13 +5,14 @@
 // person holds only the link (/f/:token). This reads with the service role and
 // returns only what the form shows; `anon` never touches the tables. Every field
 // is validated by the database (_crm_public_form_submit), never trusted from the
-// browser. The link works until the form is sent, or for 30 days.
+// browser. The contract link works until the form is sent, or for 30 days; an
+// intake form (SE-SUP1-7, crm_forms) works while it is active.
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { parsePublicFormRequest, publicFormError } from "../_shared/public-form.ts";
+import { clientIpFrom, hashClientIp, intakeRejection, parsePublicFormRequest, publicFormError } from "../_shared/public-form.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,10 +34,29 @@ if (import.meta.main) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data, error } =
-      parsed.action === "get"
-        ? await db.rpc("_crm_public_form_get", { p_token: parsed.token })
-        : await db.rpc("_crm_public_form_submit", { p_token: parsed.token, p_values: parsed.values });
+    // SE-SUP1-7: the same /f/:token serves two kinds. `get` asks the intake forms
+    // (crm_forms) first — NULL means "not one of mine" — then the contract form.
+    // `submit` is told the kind by the page, which learned it from `get`.
+    let result: { data: unknown; error: { message: string } | null };
+    if (parsed.action === "get") {
+      const intake = await db.rpc("_crm_intake_form_get", { p_token: parsed.token });
+      // PGRST202 = the RPC is not deployed yet (function before migration): the
+      // contract forms must keep working in that window.
+      const notDeployed = (intake.error as { code?: string } | null)?.code === "PGRST202";
+      if ((intake.error && !notDeployed) || intake.data) {
+        result = intake;
+      } else {
+        result = await db.rpc("_crm_public_form_get", { p_token: parsed.token });
+      }
+    } else if (parsed.kind === "intake") {
+      const ipHash = await hashClientIp(clientIpFrom(req.headers), parsed.token);
+      result = await db.rpc("_crm_intake_submit", { p_token: parsed.token, p_values: parsed.values, p_ip_hash: ipHash });
+      const rejected = intakeRejection(result.data);
+      if (!result.error && rejected) return json(rejected, rejected.status);
+    } else {
+      result = await db.rpc("_crm_public_form_submit", { p_token: parsed.token, p_values: parsed.values });
+    }
+    const { data, error } = result;
 
     if (error) {
       const answer = publicFormError(error.message);

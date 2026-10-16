@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Check, ChevronDown, Cpu, Sparkles } from "lucide-react";
+import { Loader2, Check, ChevronDown, Cpu, Sparkles, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +21,10 @@ interface CatalogModel {
   creditsPerMessage: number;
   isNew?: boolean;
   isBeta?: boolean;
+  // Onda 9: preço inferido (modelo novo ainda sem tabela) e modelo que o
+  // provedor deixou de listar mas o agente ainda usa.
+  provisionalPrice?: boolean;
+  unlisted?: boolean;
 }
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -38,16 +42,19 @@ export function ModelSelector() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stale, setStale] = useState(false);
   const { toast } = useToast();
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     try {
       setLoading(true);
       const [modelsRes, settingsRes] = await Promise.all([
-        supabase.functions.invoke("manage-agent-settings?action=models"),
+        supabase.functions.invoke(`manage-agent-settings?action=models${force ? "&refresh=1" : ""}`),
         supabase.functions.invoke("manage-agent-settings"),
       ]);
       setModels(modelsRes.data?.models ?? []);
+      setStale(Boolean(modelsRes.data?.stale));
       // T7 note: the settings key is `prefferModel`, not `model`. The old code
       // read settingsRes.data?.model, which never matched, so the current model
       // was never pre-selected.
@@ -62,6 +69,12 @@ export function ModelSelector() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchData(true);
+    setRefreshing(false);
+  };
 
   const handleSelect = async (modelId: string) => {
     setOpen(false);
@@ -129,6 +142,11 @@ export function ModelSelector() {
                     {selectedModel.creditsPerMessage} cr/msg
                   </span>
                 </div>
+                {selectedModel.unlisted && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-700 border-amber-300">
+                    FORA DA LISTA
+                  </Badge>
+                )}
                 {selectedModel.isNew && (
                   <Badge className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20">
                     NEW
@@ -149,6 +167,21 @@ export function ModelSelector() {
         </PopoverTrigger>
 
         <PopoverContent className="w-[320px] p-0 border border-border" align="start">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60">
+            <span className="text-[11px] text-muted-foreground">
+              {stale ? "Provedor indisponível: mostrando a última lista salva." : "Lista de modelos do provedor"}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+            >
+              <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin")} />
+              Atualizar lista
+            </Button>
+          </div>
           <div className="max-h-[420px] overflow-y-auto">
             {Object.entries(grouped).map(([vendor, vendorModels]) => (
               <div key={vendor}>
@@ -187,6 +220,11 @@ export function ModelSelector() {
                             {model.isNew && (
                               <Sparkles className="w-3 h-3 text-primary" />
                             )}
+                            {model.provisionalPrice && (
+                              <Badge variant="outline" className="text-[9px] px-1 py-0" title="Preço provisório até a equipe precificar este modelo">
+                                NOVO
+                              </Badge>
+                            )}
                             {model.isBeta && (
                               <Badge variant="outline" className="text-[9px] px-1 py-0">
                                 BETA
@@ -196,10 +234,16 @@ export function ModelSelector() {
                           <span className="text-[11px] font-mono text-muted-foreground">
                             {model.id}
                           </span>
+                          {model.unlisted && (
+                            <span className="flex items-center gap-1 text-[11px] text-amber-700">
+                              <AlertTriangle className="w-3 h-3" />
+                              O provedor não lista mais este modelo
+                            </span>
+                          )}
                         </div>
                       </div>
                       <span className="text-xs font-mono text-muted-foreground shrink-0">
-                        {model.creditsPerMessage} cr/msg
+                        {model.provisionalPrice ? "~" : ""}{model.creditsPerMessage} cr/msg
                       </span>
                     </button>
                   ))}

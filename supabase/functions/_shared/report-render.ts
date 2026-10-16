@@ -1,21 +1,28 @@
 // ============================================================================
 // Sprint 9 · T13 — turning a report snapshot into a WhatsApp message.
+// SE-SUP1-5 (#15) — agora com TEMPLATE FIXO.
 //
 // WHAT THIS IS OPTIMISED FOR
 //
 // A phone screen, read in ten seconds, probably before 9am, probably while
 // walking. That rules out a table (WhatsApp has no monospace alignment worth
-// relying on), rules out every metric the client did not ask for, and rules out
-// decimal places on counts.
+// relying on) and decimal places on counts.
 //
-// It also rules out sending zeros for things that did not happen. A daily
-// report that reads "0 propostas · 0 reuniões · 0 no-show" every Sunday trains
-// the client to stop opening it, and then the one Monday it matters they miss
-// it too. Empty lines are dropped; when nothing at all happened the message
-// says so in one sentence.
+// WHY THE TEMPLATE IS FIXED (it used to drop empty lines)
+//
+// A report that omits what did not happen cannot be compared with yesterday's:
+// the reader has to notice an ABSENCE, and a client who saw "touchpoints" on
+// Monday and nothing on Tuesday does not know whether the day was empty or the
+// section broke. So the same sections come out, in the same order, every time,
+// and an empty one says so in numbers ("0 touchpoints"). The client picks the
+// RECORTES (pipeline, channel, seller) — never which sections exist. The
+// `sections` list in the snapshot is kept for old rows and ignored here.
 //
 // The link at the end is the escape hatch for everything left out.
 // ============================================================================
+
+import { gapOf, resolveDailyTargets, type GoalsInput } from "./report-targets.ts";
+import { compactCounts, hasAnyMilestone, normalizeMilestones, seriesNote } from "./funnel-milestones.ts";
 
 export interface ReportSnapshot {
   equipe_name?: string;
@@ -29,6 +36,23 @@ export interface ReportSnapshot {
     days_in_stage: number;
     responsible_name?: string | null;
   }[];
+  /** Maiores negócios ganhos NA janela (destaque positivo do dia). */
+  top_won?: { lead_name: string; value: number; responsible_name?: string | null }[];
+  /** Pipeline do relatório; ausente/null = todos. */
+  pipeline?: { id: string; name: string } | null;
+  touchpoints_by_seller?: {
+    total?: number;
+    rows?: { seller_id: string | null; seller_name: string | null; touchpoints: number }[];
+  };
+  goals?: GoalsInput;
+  /**
+   * SE-SUP1-8 (#10): marcos por vendedor e a data do primeiro evento de cada
+   * marco (`since`), de _funnel_milestones_core. Ausente em snapshot antigo.
+   */
+  funnel_milestones?: {
+    by_seller?: Record<string, unknown>[];
+    since?: Record<string, string | null>;
+  };
 }
 
 const brl = (v: number | null | undefined): string =>
@@ -41,13 +65,26 @@ const brl = (v: number | null | undefined): string =>
 const int = (v: number | null | undefined): string =>
   new Intl.NumberFormat("pt-BR").format(Number(v) || 0);
 
+const num1 = (v: number): string =>
+  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(v);
+
 const pct = (v: number | null | undefined): string =>
   v === null || v === undefined ? "—" : `${String(v).replace(".", ",")}%`;
+
+/** "1 touchpoint" / "0 touchpoints". */
+const plural = (v: number, one: string, many: string): string =>
+  `${int(v)} ${Number(v) === 1 ? one : many}`;
 
 export const FREQUENCY_LABEL: Record<string, string> = {
   daily: "Relatório diário",
   weekly: "Relatório semanal",
   monthly: "Relatório mensal",
+};
+
+const SCOPE_LABEL: Record<string, string> = {
+  daily: "Resumo do dia",
+  weekly: "Resumo da semana",
+  monthly: "Resumo do mês",
 };
 
 /** dd/MM, in the schedule's timezone rather than the server's. */
@@ -100,7 +137,7 @@ export function renderReportText({
   link,
 }: RenderArgs): string {
   const o = snapshot.overview ?? {};
-  const sections = new Set(snapshot.sections ?? []);
+  const n = (k: string): number => Number(o[k]) || 0;
   const lines: string[] = [];
 
   const title = scheduleName?.trim() || FREQUENCY_LABEL[frequency] || "Relatório comercial";
@@ -109,72 +146,111 @@ export function renderReportText({
     : "";
 
   lines.push(`*${title}*${period ? ` · ${period}` : ""}`);
-  if (snapshot.equipe_name) lines.push(`_${snapshot.equipe_name}_`);
+  lines.push(
+    `_${[snapshot.equipe_name, snapshot.pipeline?.name ?? "Todos os pipelines"].filter(Boolean).join(" · ")}_`,
+  );
   lines.push("");
 
-  // --- the money, first --------------------------------------------------
-  const money: string[] = [];
-  if (sections.has("kpi_won_value") && Number(o.deals_won) > 0) {
-    money.push(`✅ ${int(o.deals_won)} ganhos · ${brl(o.won_value)}`);
-  }
-  if (sections.has("kpi_win_rate") && o.win_rate !== null && o.win_rate !== undefined) {
-    money.push(`📈 Taxa de ganho: ${pct(o.win_rate)}`);
-  }
-  if (sections.has("kpi_open_value") && Number(o.open_value) > 0) {
-    money.push(`💼 Pipeline aberto: ${brl(o.open_value)} (${int(o.open_count)})`);
-  }
-  if (money.length) lines.push(...money, "");
+  // --- 1. resumo ---------------------------------------------------------
+  lines.push(`*1. ${SCOPE_LABEL[frequency] ?? "Resumo"}*`);
+  lines.push(`• Novos leads: ${int(n("new_leads"))}`);
+  lines.push(`• Ganhos: ${int(n("deals_won"))} · ${brl(n("won_value"))}`);
+  lines.push(`• Perdidos: ${int(n("deals_lost"))}`);
+  lines.push(`• Taxa de ganho: ${pct(o.win_rate)}`);
+  lines.push(`• Pipeline aberto: ${brl(n("open_value"))} (${int(n("open_count"))})`);
+  lines.push("");
 
-  // --- the work ----------------------------------------------------------
-  const work: string[] = [];
-  if (sections.has("kpi_new_leads") && Number(o.new_leads) > 0) {
-    work.push(`🆕 ${int(o.new_leads)} novos leads`);
-  }
-  if (sections.has("kpi_proposals") && Number(o.proposals_sent) > 0) {
-    work.push(`📄 ${int(o.proposals_sent)} propostas enviadas`);
-  }
-  if (sections.has("kpi_meetings") && Number(o.meetings_done) > 0) {
-    work.push(`🤝 ${int(o.meetings_done)} reuniões realizadas`);
-  }
-  if (sections.has("kpi_no_show") && Number(o.no_shows) > 0) {
-    work.push(`🚫 ${int(o.no_shows)} no-show`);
-  }
-  if (sections.has("kpi_touchpoints") && Number(o.touchpoints) > 0) {
-    work.push(`💬 ${int(o.touchpoints)} interações`);
-  }
-  if (work.length) lines.push(...work, "");
+  // --- 2. meta x realizado ----------------------------------------------
+  const targets = resolveDailyTargets(snapshot.goals);
+  const actual = {
+    touchpoints: Number(snapshot.touchpoints_by_seller?.total ?? o.touchpoints) || 0,
+    qualified: n("qualified"),
+    proposals_sent: n("proposals_sent"),
+    meetings_scheduled: n("meetings_scheduled"),
+    meetings_done: n("meetings_done"),
+    deals_won: n("deals_won"),
+  };
+  lines.push("*2. Meta x realizado*");
+  // Sempre as MESMAS oito linhas, na mesma ordem (template fixo): "realizado de
+  // meta · gap" quando há meta, "sem meta" quando não, "dia sem meta" numa
+  // janela sem dia útil (fim de semana) — nunca "de 0", que leria como meta
+  // zerada batida.
+  const noBusinessDay = snapshot.goals?.window_business_days === 0;
+  const goalLine = (label: string, done: string, target: number | undefined, fmt: (v: number) => string, got: number) => {
+    if (noBusinessDay) return `• ${label}: ${done} · dia sem meta`;
+    if (target === undefined) return `• ${label}: ${done} · sem meta`;
+    return `• ${label}: ${done} de ${fmt(target)} · gap: ${fmt(gapOf(target, got))}`;
+  };
+  lines.push(goalLine("Touchpoints", int(actual.touchpoints), targets.window.touchpoints, num1, actual.touchpoints));
+  lines.push(goalLine("Qualificados", int(actual.qualified), targets.window.qualified, num1, actual.qualified));
+  lines.push(goalLine("Propostas", int(actual.proposals_sent), targets.window.proposals_sent, num1, actual.proposals_sent));
+  lines.push(goalLine("Reuniões agendadas", int(actual.meetings_scheduled), targets.window.meetings_scheduled, num1, actual.meetings_scheduled));
+  lines.push(goalLine("Reuniões realizadas", int(actual.meetings_done), targets.window.meetings_done, num1, actual.meetings_done));
+  // No-show é teto, não meta a bater: não tem gap.
+  lines.push(`• No-show: ${int(n("no_shows"))} · sem meta`);
+  lines.push(goalLine("Fechamentos", int(actual.deals_won), targets.window.deals_won, num1, actual.deals_won));
+  lines.push(goalLine("Receita", brl(n("won_value")), targets.window.revenue, brl, n("won_value")));
+  lines.push("");
 
-  // --- what went wrong ---------------------------------------------------
-  if (sections.has("panel_loss_reasons") && snapshot.loss_reasons?.length) {
-    lines.push(`❌ *Perdas* (${int(o.deals_lost)})`);
-    for (const r of snapshot.loss_reasons.slice(0, 3)) {
-      lines.push(`   • ${r.reason}: ${r.count}`);
+  // --- 3. marcos do funil ------------------------------------------------
+  // SE-SUP1-8 (#10): os totais continuam vindo do overview (o mesmo número da
+  // seção 2); o bloco de marcos acrescenta o "por vendedor" e a nota de história
+  // do no-show — que só existe desde o registro manual, e um 0 antes disso
+  // leria como "ninguém faltou".
+  const fm = snapshot.funnel_milestones ? normalizeMilestones(snapshot.funnel_milestones) : null;
+  const noShowNote = fm && snapshot.period ? seriesNote(fm.since.no_show, snapshot.period.from, timezone) : null;
+  lines.push("*3. Marcos do funil*");
+  lines.push(`• Qualificados: ${int(actual.qualified)}`);
+  lines.push(`• Propostas enviadas: ${int(actual.proposals_sent)}`);
+  lines.push(`• Reuniões agendadas: ${int(actual.meetings_scheduled)}`);
+  lines.push(`• Reuniões realizadas: ${int(actual.meetings_done)}`);
+  lines.push(`• No-show: ${int(n("no_shows"))}${noShowNote ? ` · ${noShowNote}` : ""}`);
+  lines.push(`• Fechamentos: ${int(actual.deals_won)}`);
+  const milestoneSellers = (fm?.by_seller ?? []).filter(hasAnyMilestone);
+  if (milestoneSellers.length === 0) {
+    lines.push("• Por vendedor: nenhum marco no período");
+  } else {
+    lines.push("• Por vendedor:");
+    for (const r of milestoneSellers) lines.push(`   – ${r.name}: ${compactCounts(r)}`);
+  }
+  lines.push("");
+
+  // --- 4. touchpoints por vendedor --------------------------------------
+  const sellers = (snapshot.touchpoints_by_seller?.rows ?? []).filter((r) => Number(r.touchpoints) > 0);
+  lines.push("*4. Touchpoints por vendedor*");
+  lines.push(`• Total: ${plural(actual.touchpoints, "touchpoint", "touchpoints")}`);
+  if (sellers.length === 0) {
+    lines.push("• Nenhum touchpoint registrado por vendedor");
+  } else {
+    for (const r of sellers) {
+      lines.push(`   – ${r.seller_name?.trim() || "Não atribuído"}: ${int(r.touchpoints)}`);
     }
-    lines.push("");
   }
+  lines.push("");
 
-  // --- what to do today --------------------------------------------------
-  if (sections.has("panel_top_opportunities") && snapshot.top_opportunities?.length) {
-    lines.push("⭐ *Maiores oportunidades abertas*");
-    for (const t of snapshot.top_opportunities.slice(0, 3)) {
-      const stale = t.days_in_stage >= 14 ? ` ⚠️ ${t.days_in_stage}d parada` : "";
-      lines.push(`   • ${t.lead_name} — ${brl(t.value)}${stale}`);
-    }
-    lines.push("");
-  }
-
-  // Nothing happened. Say it once, plainly, instead of five zeros.
-  const quiet = money.length === 0 && work.length === 0;
-  if (quiet) {
-    lines.push("Nenhuma movimentação comercial registrada neste período.");
-    lines.push("");
-  }
+  // --- 5. destaques ------------------------------------------------------
+  lines.push("*5. Destaques*");
+  const won = snapshot.top_won?.[0];
+  lines.push(
+    won
+      ? `• Maior ganho: ${won.lead_name} — ${brl(won.value)}${won.responsible_name ? ` (${won.responsible_name})` : ""}`
+      : "• Maior ganho: nenhum negócio ganho no período",
+  );
+  const open = snapshot.top_opportunities?.[0];
+  lines.push(
+    open
+      ? `• Maior oportunidade aberta: ${open.lead_name} — ${brl(open.value)}${open.days_in_stage >= 14 ? ` ⚠️ ${open.days_in_stage}d parada` : ""}`
+      : "• Maior oportunidade aberta: nenhuma oportunidade aberta",
+  );
+  const loss = snapshot.loss_reasons?.[0];
+  lines.push(
+    loss
+      ? `• Principal motivo de perda: ${loss.reason} (${int(loss.count)} de ${int(n("deals_lost"))})`
+      : "• Principal motivo de perda: nenhuma perda no período",
+  );
+  lines.push("");
 
   if (link) lines.push(`Ver relatório completo: ${link}`);
 
-  // Collapse the runs of blank lines the conditional blocks leave behind.
-  return lines
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }

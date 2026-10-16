@@ -13,6 +13,22 @@ import { Calendar as CalendarIcon, Copy, Mail, Phone, Building, Briefcase, Plus,
 import { toast } from "sonner";
 import { TouchpointsList } from "@/components/crm/TouchpointsList";
 import { LeadOpportunitiesSection } from "@/components/crm/LeadOpportunitiesSection";
+import { ChatOwnershipBlock } from "@/components/inbox/ChatOwnershipBlock";
+import { ChatDealSummary } from "@/components/inbox/ChatDealSummary";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
+import { useSetResponsible, useSetAttendant } from "@/hooks/useSetResponsible";
+import { buildChatOwnership, countDealsToReassign, reassignNotice } from "@/lib/chatOwnership";
+import { useOpportunities } from "@/hooks/useOpportunities";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CRMContextPanelProps {
   session: ChatSession | null;
@@ -54,6 +70,12 @@ export function CRMContextPanel({
   const [activeTab, setActiveTab] = useState("notes");
   const [newTask, setNewTask] = useState("");
   const [notes, setNotes] = useState(session?.crmData.notes || "");
+  const { members, nameOf } = useMemberDirectory();
+  const setResponsible = useSetResponsible();
+  const setAttendant = useSetAttendant();
+  const { opportunities } = useOpportunities({ leadId: session?.leadId, enabled: !!session?.leadId });
+  // Troca de responsável que atinge vários negócios abertos pede confirmação.
+  const [pendingResponsible, setPendingResponsible] = useState<{ userId: string | null; notice: string } | null>(null);
 
   useEffect(() => {
     setNotes(session?.crmData.notes || "");
@@ -229,6 +251,62 @@ export function CRMContextPanel({
           })()}
         </CardContent>
       </Card>
+
+      {/* Sprint Suporte 1 · #8/#11 — Responsável (dono da conta/negócio) e
+          Atendente (quem está na conversa): dois papéis, editáveis aqui mesmo,
+          com o resumo do negócio pelo modelo do cartão do Kanban. */}
+      <Card>
+        <CardContent className="p-3 space-y-3">
+          <ChatOwnershipBlock
+            ownership={buildChatOwnership({
+              responsibleId: session.leadResponsibleId,
+              attendantId: session.responsibleId,
+              nameOf,
+            })}
+            members={members}
+            disabledResponsible={setResponsible.isPending}
+            disabledAttendant={setAttendant.isPending}
+            onSetResponsible={
+              session.leadId
+                ? (userId) => {
+                    const notice = reassignNotice(countDealsToReassign(opportunities, userId, session.leadId));
+                    if (notice) setPendingResponsible({ userId, notice });
+                    else setResponsible.mutate({ leadId: session.leadId!, userId });
+                  }
+                : undefined
+            }
+            onSetAttendant={
+              session.conversationId
+                ? (userId) => setAttendant.mutate({ conversationId: session.conversationId!, userId })
+                : undefined
+            }
+          />
+          {session.leadId && (
+            <ChatDealSummary leadId={session.leadId} nextContact={session.crmData.next_contact} />
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={!!pendingResponsible} onOpenChange={(o) => !o && setPendingResponsible(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterar responsável?</AlertDialogTitle>
+            <AlertDialogDescription>{pendingResponsible?.notice}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingResponsible && session.leadId)
+                  setResponsible.mutate({ leadId: session.leadId, userId: pendingResponsible.userId });
+                setPendingResponsible(null);
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* SECTIONS 2 + 3 + 4 · Active Opportunities / Opportunity Detail */}
       {session.leadId && <LeadOpportunitiesSection leadId={session.leadId} />}

@@ -5,11 +5,13 @@ import {
   Bot,
   ChevronDown,
   Grip,
+  FileInput,
   Info,
   Loader2,
   Plus,
   Save,
   Settings,
+  Shuffle,
   Star,
   StarOff,
   Tag,
@@ -60,6 +62,8 @@ import { StagesEditor } from "@/components/crm/pipeline-settings/StagesEditor";
 import { PipelineNaturesEditor } from "@/components/crm/pipeline-settings/PipelineNaturesEditor";
 import { CustomFieldsEditor } from "@/components/crm/pipeline-settings/CustomFieldsEditor";
 import { CardFieldsPicker } from "@/components/crm/pipeline-settings/CardFieldsPicker";
+import { IntakeFormsManager } from "@/components/crm/pipeline-settings/IntakeFormsManager";
+import { DistributionEditor } from "@/components/crm/pipeline-settings/DistributionEditor";
 import { OriginTaxonomyEditor } from "@/components/crm/pipeline-settings/OriginTaxonomyEditor";
 import { ContactFieldsEditor } from "@/components/crm/pipeline-settings/ContactFieldsEditor";
 import { RevenueGoalsForm } from "@/components/crm/revenue/RevenueGoalsForm";
@@ -356,6 +360,8 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
   const [naturezaOpen, setNaturezaOpen] = useState(false);
   const [metasOpen, setMetasOpen] = useState(false);
   const [automacoesOpen, setAutomacoesOpen] = useState(false);
+  const [formulariosOpen, setFormulariosOpen] = useState(false);
+  const [distribuicaoOpen, setDistribuicaoOpen] = useState(false);
   const [origemOpen, setOrigemOpen] = useState(false);
   const [camposOpen, setCamposOpen] = useState(false);
   const [geralOpen, setGeralOpen] = useState(false);
@@ -602,6 +608,60 @@ const PipelineEditor = ({ pipeline, onSave }: PipelineEditorProps) => {
               <p className="text-xs text-muted-foreground">
                 Inclui: gatilhos baseados em intenção do lead, mensagens recebidas, tempo ocioso, entrada em etapas e campos preenchidos.
               </p>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── Formulários (SE-SUP1-7): links públicos que criam contato + negócio nesta pipeline ── */}
+      <Collapsible open={formulariosOpen} onOpenChange={setFormulariosOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileInput className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Formulários</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!formulariosOpen && (
+                <CardDescription className="mt-1">
+                  Formulário de Indicação e outros links públicos que cadastram o contato e abrem o negócio.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <IntakeFormsManager pipeline={pipeline} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* ── Distribuição (SE-SUP1-8): a roleta — quem recebe cada negócio novo sem dono ── */}
+      <Collapsible open={distribuicaoOpen} onOpenChange={setDistribuicaoOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shuffle className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Distribuição</CardTitle>
+                </div>
+                <SectionChevron />
+              </div>
+              {!distribuicaoOpen && (
+                <CardDescription className="mt-1">
+                  Roleta: rodízio, por peso ou por regra (origem, fonte, campo), com limite de negócios abertos e pular ausentes.
+                </CardDescription>
+              )}
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              {distribuicaoOpen && <DistributionEditor pipeline={pipeline} />}
             </CardContent>
           </CollapsibleContent>
         </Card>

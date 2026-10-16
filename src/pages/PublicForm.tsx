@@ -15,19 +15,24 @@ import { DynamicFieldRenderer, validateCustomData } from "@/components/crm/Dynam
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { validateIntakeValues, type IntakeFieldView } from "@/lib/intakeForms";
 import { publicFormErrorText } from "@/lib/publicForm";
 import type { CustomFieldSchema, CustomFieldType } from "@/types/pipelines";
 
 interface PublicFormField {
   key: string;
   label: string;
-  type: CustomFieldType;
+  // Intake forms (SE-SUP1-7) add textarea/email; the renderer draws them through
+  // `textVariants` and the intake rules (validateIntakeValues) check the e-mail shape.
+  type: CustomFieldType | "textarea" | "email";
   options: string[];
   required: boolean;
   value: unknown;
 }
 
 interface PublicFormData {
+  /** "intake" = a crm_forms form that creates a lead + deal; absent = the contract form. */
+  kind?: "intake";
   team: string | null;
   title: string;
   intro: string;
@@ -59,6 +64,9 @@ export default function PublicForm() {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // Honeypot (intake only): a field no person sees; bots fill it and the database drops the submission.
+  const [honeypot, setHoneypot] = useState("");
+  const intake = form?.kind === "intake";
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +87,17 @@ export default function PublicForm() {
     };
   }, [token]);
 
+  // textarea/email render as such through the renderer's text variants.
+  const textVariants = useMemo(
+    () =>
+      Object.fromEntries(
+        (form?.fields ?? [])
+          .filter((f) => f.type === "textarea" || f.type === "email")
+          .map((f) => [f.key, f.type as "textarea" | "email"]),
+      ),
+    [form],
+  );
+
   // The renderer addresses by field_id; on the public side the key plays it.
   const schema: CustomFieldSchema[] = useMemo(
     () =>
@@ -86,7 +105,7 @@ export default function PublicForm() {
         field_id: f.key,
         key: f.key,
         label: f.label,
-        type: f.type,
+        type: (f.type === "textarea" || f.type === "email" ? "text" : f.type) as CustomFieldType,
         required: f.required,
         options: f.options,
         position: i,
@@ -95,14 +114,19 @@ export default function PublicForm() {
   );
 
   const submit = async () => {
-    const errors = validateCustomData(schema, values);
+    // The server validates everything again; this only saves the round trip.
+    const errors = intake
+      ? validateIntakeValues((form?.fields ?? []) as IntakeFieldView[], values).map((e) => ({ message: e.message }))
+      : validateCustomData(schema, values);
     if (errors.length > 0) {
       setProblem(errors[0].message);
       return;
     }
     setSending(true);
     setProblem(null);
-    const answer = await call({ action: "submit", token, values });
+    const answer = intake
+      ? await call({ action: "submit", token, kind: "intake", values: { ...values, _hp: honeypot } })
+      : await call({ action: "submit", token, values });
     setSending(false);
     if (answer.ok) {
       setState("sent");
@@ -156,7 +180,19 @@ export default function PublicForm() {
         </header>
 
         <Card className="space-y-5 p-5">
-          <DynamicFieldRenderer schema={schema} value={values} onChange={setValues} disabled={sending} />
+          <DynamicFieldRenderer schema={schema} value={values} onChange={setValues} disabled={sending} textVariants={textVariants} />
+          {intake && (
+            <input
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+              className="absolute left-[-9999px] h-0 w-0 opacity-0"
+            />
+          )}
           {problem && <p className="text-sm text-destructive">{problem}</p>}
           <Button className="w-full" onClick={() => void submit()} disabled={sending}>
             {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

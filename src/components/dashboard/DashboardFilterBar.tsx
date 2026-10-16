@@ -11,7 +11,9 @@
  */
 import { useState } from "react";
 import { Calendar as CalendarIcon, Check, ChevronDown, RotateCcw } from "lucide-react";
-import { endOfDay, endOfMonth, startOfDay, startOfMonth, subDays, subMonths } from "date-fns";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import type { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,49 +23,24 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PERIOD_LABELS, periodRange, type CustomDays, type PeriodPreset } from "@/lib/dashboardPeriod";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DashboardFilterOptions, DashboardFilters } from "@/types/dashboard";
 import { cn } from "@/lib/utils";
 
-export type PeriodPreset = "today" | "7d" | "30d" | "month" | "last_month" | "90d";
-
-export const PERIOD_LABELS: Record<PeriodPreset, string> = {
-  today: "Hoje",
-  "7d": "Últimos 7 dias",
-  "30d": "Últimos 30 dias",
-  month: "Este mês",
-  last_month: "Mês passado",
-  "90d": "Últimos 90 dias",
-};
-
-/**
- * Ranges are half-open [from, to): the RPCs filter `>= from and < to`.
- * Using `<= endOfDay` instead would double-count anything landing exactly on
- * the boundary microsecond when two adjacent periods are compared.
- */
-export function periodRange(preset: PeriodPreset, now = new Date()): { from: Date; to: Date } {
-  switch (preset) {
-    case "today":
-      return { from: startOfDay(now), to: endOfDay(now) };
-    case "7d":
-      return { from: startOfDay(subDays(now, 6)), to: endOfDay(now) };
-    case "30d":
-      return { from: startOfDay(subDays(now, 29)), to: endOfDay(now) };
-    case "month":
-      return { from: startOfMonth(now), to: endOfDay(now) };
-    case "last_month": {
-      const prev = subMonths(now, 1);
-      return { from: startOfMonth(prev), to: endOfMonth(prev) };
-    }
-    case "90d":
-    default:
-      return { from: startOfDay(subDays(now, 89)), to: endOfDay(now) };
-  }
-}
+// O cálculo do período vive em lib/dashboardPeriod (puro, testado); reexportado
+// aqui para quem já importava da barra.
+export { PERIOD_LABELS, periodRange };
+export type { PeriodPreset };
 
 interface Props {
   preset: PeriodPreset;
   onPresetChange: (p: PeriodPreset) => void;
+  /** Dias escolhidos no "Personalizado" (um dia, ou início e fim inclusivos). */
+  custom?: CustomDays | null;
+  onCustomChange?: (days: CustomDays) => void;
   filters: DashboardFilters;
   onFiltersChange: (f: DashboardFilters) => void;
   options?: DashboardFilterOptions;
@@ -72,11 +49,14 @@ interface Props {
 export function DashboardFilterBar({
   preset,
   onPresetChange,
+  custom,
+  onCustomChange,
   filters,
   onFiltersChange,
   options,
 }: Props) {
   const [open, setOpen] = useState<string | null>(null);
+  const [calOpen, setCalOpen] = useState(false);
 
   const toggle = (key: "pipelineIds" | "responsibleIds" | "channels", id: string) => {
     const current = filters[key] ?? [];
@@ -93,7 +73,15 @@ export function DashboardFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={preset} onValueChange={(v) => onPresetChange(v as PeriodPreset)}>
+      <Select
+        value={preset}
+        onValueChange={(v) => {
+          onPresetChange(v as PeriodPreset);
+          // Escolher "Personalizado" abre o calendário na hora: um preset sem
+          // dias escolhidos seria só "hoje" disfarçado.
+          if (v === "custom") setCalOpen(true);
+        }}
+      >
         <SelectTrigger className="h-8 w-[168px] text-xs">
           <CalendarIcon className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <SelectValue />
@@ -106,6 +94,35 @@ export function DashboardFilterBar({
           ))}
         </SelectContent>
       </Select>
+
+      {preset === "custom" && onCustomChange && (
+        <Popover open={calOpen} onOpenChange={setCalOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+              <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+              {customLabel(custom)}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              locale={ptBR}
+              numberOfMonths={1}
+              selected={custom ? ({ from: custom.from, to: custom.to ?? custom.from } as DateRange) : undefined}
+              onSelect={(range) => {
+                if (!range?.from) return;
+                // Um clique só = um dia; o segundo clique fecha o intervalo.
+                onCustomChange({ from: range.from, to: range.to });
+                if (range.to && range.to.getTime() !== range.from.getTime()) setCalOpen(false);
+              }}
+              initialFocus
+            />
+            <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+              Clique em um dia, ou em dois para um intervalo.
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
 
       <MultiFilter
         label="Pipeline"
@@ -152,6 +169,12 @@ export function DashboardFilterBar({
       )}
     </div>
   );
+}
+
+function customLabel(custom?: CustomDays | null): string {
+  if (!custom) return "Escolher dias";
+  const f = (d: Date) => format(d, "dd/MM/yyyy", { locale: ptBR });
+  return custom.to && f(custom.to) !== f(custom.from) ? `${f(custom.from)} – ${f(custom.to)}` : f(custom.from);
 }
 
 function MultiFilter({

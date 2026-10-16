@@ -7,6 +7,7 @@
 // sent ~1,250 UUIDs in the URL.
 
 import { useEffect, useMemo } from "react";
+import { withNameLock } from "@/lib/leadNameLock";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -172,7 +173,7 @@ export function useContactCellUpdate(filters: ContactFilters, sort: CrmSort | nu
     const previous = queryClient.getQueryData<TablePages<ContactRow>>(key);
     const next = patchRowInPages(previous, id, patch as Partial<ContactRow>);
     if (next) queryClient.setQueryData(key, next);
-    const { error } = await sb.from("leads").update(patch).eq("id", id);
+    const { error } = await sb.from("leads").update(withNameLock(patch)).eq("id", id);
     if (error) {
       if (previous) queryClient.setQueryData(key, previous);
       throw new Error(error.message);

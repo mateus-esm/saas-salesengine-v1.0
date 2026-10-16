@@ -24,6 +24,7 @@ import {
 
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { useOpportunities } from "@/hooks/useOpportunities";
+import { useMoveToStage } from "@/hooks/useMoveToStage";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { stageForStatus, statusForStage } from "@/lib/outcome";
@@ -179,6 +180,7 @@ interface OpportunityRowProps {
     status?: OpportunityStatus;
     custom_data?: Record<string, unknown>;
     closed_at?: string | null;
+    lost_reason?: string | null;
   }) => void;
 }
 
@@ -190,6 +192,7 @@ const OpportunityRow = ({
   onUpdate,
 }: OpportunityRowProps) => {
   const { stages } = usePipelineStagesV2(opportunity.pipeline_id);
+  const { requestMove, lossDialog } = useMoveToStage({ stages, pipeline });
   const { nameOf } = useMemberDirectory();
   const ownerName = opportunity.owner_id ? nameOf(opportunity.owner_id) : null;
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -230,12 +233,22 @@ const OpportunityRow = ({
       return;
     }
     // Sprint 11 · T28 — the database closes/reopens by the stage.
-    onUpdate({
-      stage_id: stageId,
-      status,
-      value: value === "" ? null : Number(value),
-      custom_data: customData,
+    // Sprint Suporte 1 · #12 — a new lost stage asks for the reason first (the
+    // chat panel and the contact modal share this row); it is saved with the move.
+    const save = (lostReason: string | null) =>
+      onUpdate({
+        stage_id: stageId,
+        status,
+        ...(lostReason ? { lost_reason: lostReason } : {}),
+        value: value === "" ? null : Number(value),
+        custom_data: customData,
+      });
+    const plan = requestMove({
+      fromStageId: opportunity.stage_id,
+      toStageId: stageId,
+      run: save,
     });
+    if (plan === "noop") save(null);
   };
 
   const handleStageChange = (id: string) => {
@@ -250,6 +263,7 @@ const OpportunityRow = ({
 
   return (
     <div className="border border-border rounded-md bg-card">
+      {lossDialog}
       <div className="flex items-stretch">
         <button
           type="button"

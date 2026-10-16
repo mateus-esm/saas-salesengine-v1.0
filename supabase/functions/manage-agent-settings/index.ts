@@ -10,7 +10,10 @@ const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 
 // Credit pricing (provider price + resale markup) lives in one place.
 import type { ModelInfo } from "../_shared/credit-pricing.ts";
-import { toPublicModel } from "../_shared/credit-pricing.ts";
+import {
+  decideRefresh, fetchProviderModels, localPublicCatalog, mergeCatalog, PROVIDER_TIMEOUT_MS,
+  CATALOG_TTL_MS, type ProviderModel,
+} from "../_shared/model-catalog.ts";
 
 const MODEL_CATALOG: ModelInfo[] = [
   { id: 'GPT_5',                 label: 'GPT-5',          vendor: 'OpenAI',    providerCredits: 4 },
@@ -77,6 +80,86 @@ const SETTINGS_KEYS = [
   'knowledgeByFunction', 'onLackKnowLedge', 'resumeTransferHumanAI',
 ] as const;
 
+// A rota da lista de modelos NÃO está nos docs publicados nem no
+// sprint_7.2_api_reference.md: `/models` é a suposição, sobrescrevível por
+// secret sem redeploy. Sonda pré-deploy pendente — se errar, o provedor devolve
+// 404, caímos no cache/catálogo local e nada quebra.
+const MODELS_PATH = Deno.env.get('GPT_MAKER_MODELS_PATH') ?? '/models';
+
+// deno-lint-ignore no-explicit-any
+async function loadModels(opts: { supabase: any; engineHeaders: Record<string, string>; agentId: string; force: boolean }) {
+  const { supabase, engineHeaders, agentId, force } = opts;
+
+  const { data: cachedRows } = await supabase
+    .from('ai_model_catalog').select('id,label,vendor,synced_at');
+  const cached: ProviderModel[] = (cachedRows ?? []).map(
+    (r: { id: string; label: string | null; vendor: string | null }) => ({
+      id: r.id, ...(r.label ? { label: r.label } : {}), ...(r.vendor ? { vendor: r.vendor } : {}),
+    }));
+  const lastSync = (cachedRows ?? []).reduce(
+    (m: number | null, r: { synced_at: string }) => {
+      const t = Date.parse(r.synced_at);
+      return m === null || t > m ? t : m;
+    }, null);
+
+  const { data: state } = await supabase
+    .from('ai_model_catalog_state').select('last_attempt_at').eq('id', true).maybeSingle();
+  const lastAttempt = state?.last_attempt_at ? Date.parse(state.last_attempt_at) : null;
+
+  let list: ProviderModel[] | null = cached.length ? cached : null;
+  let source: 'provider' | 'cache' | 'local' = cached.length ? 'cache' : 'local';
+  // O throttle de uma tentativa falha não torna o catálogo local/cache fresco.
+  let stale = lastSync === null || Date.now() - lastSync >= CATALOG_TTL_MS;
+
+  if (decideRefresh(cached.length ? lastSync : null, lastAttempt, Date.now(), force) === 'refresh') {
+    // Marca a tentativa ANTES: sucesso ou falha, ninguém chama o provedor de novo em ~1 min.
+    await supabase.from('ai_model_catalog_state')
+      .upsert({ id: true, last_attempt_at: new Date().toISOString() }, { onConflict: 'id' });
+    try {
+      // Lança em HTTP != 2xx, timeout e lista vazia (ver fetchProviderModels).
+      const fresh = await fetchProviderModels(fetch, `${AI_ENGINE_BASE}${MODELS_PATH}`, engineHeaders);
+      const now = new Date().toISOString();
+      // upsert (e não replace) para preservar alerted_at dos ids que ficam.
+      await supabase.from('ai_model_catalog').upsert(
+        fresh.map((m) => ({ id: m.id, label: m.label ?? null, vendor: m.vendor ?? null, synced_at: now })),
+        { onConflict: 'id' },
+      );
+      await supabase.from('ai_model_catalog').delete()
+        .not('id', 'in', `(${fresh.map((m) => `"${m.id}"`).join(',')})`);
+      list = fresh;
+      source = 'provider';
+      stale = false;
+    } catch (err) {
+      // Falha do provedor: serve o último cache (ou o catálogo local).
+      console.error('models refresh failed, serving cache:', err);
+      stale = true;
+    }
+  }
+
+  // Modelo em uso hoje pelo agente desta equipe; falhar aqui não derruba a lista.
+  const inUse: string[] = [];
+  try {
+    const sRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/settings`, {
+      headers: engineHeaders, signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    if (sRes.ok) {
+      const s = await sRes.json();
+      if (typeof s?.prefferModel === 'string') inUse.push(s.prefferModel);
+    }
+  } catch (_) { /* sem inUse */ }
+
+  const { models, unpriced } = mergeCatalog({ local: MODEL_CATALOG, provider: list, inUse });
+
+  // Alerta ao painel admin: a RPC só dispara uma vez por modelo (alerted_at).
+  for (const id of unpriced) {
+    const { error } = await supabase.rpc('ai_model_alert_unpriced', { p_model_id: id });
+    if (error) console.error('ai_model_alert_unpriced failed:', id, error.message);
+  }
+
+  // `catalog`: tabela local inteira, para o painel de uso resolver rótulo/custo de ids históricos.
+  return { models, catalog: localPublicCatalog(MODEL_CATALOG), source, stale };
+}
+
 // The whole bug in one function: which upstream resource an action targets.
 export function upstreamFor(action: string, agentId: string): string {
   const base = `${AI_ENGINE_BASE}/agent/${agentId}`;
@@ -137,11 +220,15 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action') || 'get';
 
-    // Serve the model catalog without any provider call.
+    // Onda 9 (#2): a lista vem do provedor e é cacheada em ai_model_catalog
+    // (TTL 6 h); MODEL_CATALOG só dá preço e rótulo. `refresh=1` é o botão
+    // "Atualizar lista".
     if (action === 'models') {
-      // Converted to BILLED credits here — the provider's own price never
-      // leaves this function. See _shared/credit-pricing.ts.
-      return new Response(JSON.stringify({ models: MODEL_CATALOG.map(toPublicModel) }), {
+      const result = await loadModels({
+        supabase, engineHeaders, agentId,
+        force: url.searchParams.get('refresh') === '1',
+      });
+      return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

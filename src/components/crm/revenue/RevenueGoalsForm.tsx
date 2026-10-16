@@ -22,6 +22,7 @@ import { useDraftAutosave } from "@/hooks/useDraftAutosave";
 import { useAuth } from "@/contexts/AuthContext";
 import { periodBounds } from "@/hooks/useForecast";
 import { formatBRL } from "@/lib/scoreboard";
+import { DAILY_TARGET_FIELDS, dailyTargetsToSave, parseDailyTargets, type DailyTargetsDraft } from "@/lib/dailyTargets";
 import {
   buildRevenuePlan,
   formatInt,
@@ -43,6 +44,8 @@ interface RevenueGoalsDraft {
   passGoals: Record<string, string>;
   /** SE-FIX-002 — lead time alvo do funil inteiro, em dias. */
   targetLeadTimeDays: string;
+  /** SE-SUP1-5 — meta diária por marco (revenue_config.daily_targets). Vazio = derivar. */
+  dailyTargets?: DailyTargetsDraft;
 }
 
 const EMPTY_DRAFT: RevenueGoalsDraft = {
@@ -52,6 +55,7 @@ const EMPTY_DRAFT: RevenueGoalsDraft = {
   ownerGoals: [],
   passGoals: {},
   targetLeadTimeDays: "",
+  dailyTargets: {},
 };
 
 // SE-FIX-002 — o shape do rascunho mudou (0–1 → % e lead time alvo). A chave
@@ -134,6 +138,7 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
         passGoals: pct,
         targetLeadTimeDays:
           config.target_lead_time_days != null ? String(config.target_lead_time_days) : "",
+        dailyTargets: parseDailyTargets(config.daily_targets),
       });
     }
   }, [config, hasDraft, setState]);
@@ -256,6 +261,8 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
       conversion_overrides:
         Object.keys(conversion_overrides).length > 0 ? conversion_overrides : undefined,
       target_lead_time_days: targetLeadTimeNum > 0 ? targetLeadTimeNum : undefined,
+      // Vazio apaga a chave: o relatório volta a derivar da meta do período.
+      daily_targets: dailyTargetsToSave(state.dailyTargets, existing.daily_targets),
     };
     await sb
       .from("pipelines")
@@ -325,6 +332,41 @@ export function RevenueGoalsForm({ pipelineId }: RevenueGoalsFormProps) {
                 Vale para a meta e para o realizado mostrado abaixo
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Meta diária por marco (SE-SUP1-5) — alimenta "Meta x realizado" do relatório */}
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
+            <h3 className="text-sm font-semibold">Meta diária por marco</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Quanto o time precisa fazer por dia útil. Campo vazio = calculado a partir da meta
+            principal dividida pelos dias úteis (só vale para fechamentos e receita); sem meta
+            nenhuma, o relatório mostra "sem meta".
+          </p>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {DAILY_TARGET_FIELDS.map((f) => (
+              <div key={f.key} className="space-y-1.5">
+                <Label htmlFor={`daily-${f.key}`} className="text-xs text-muted-foreground font-medium">
+                  {f.label}
+                </Label>
+                <Input
+                  id={`daily-${f.key}`}
+                  type="number"
+                  min={0}
+                  value={(state.dailyTargets ?? parseDailyTargets(config?.daily_targets))[f.key] ?? ""}
+                  onChange={(e) =>
+                    updateField("dailyTargets", { ...(state.dailyTargets ?? parseDailyTargets(config?.daily_targets)), [f.key]: e.target.value })
+                  }
+                  placeholder="derivar"
+                  className="h-9"
+                />
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

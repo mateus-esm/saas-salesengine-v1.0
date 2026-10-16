@@ -51,6 +51,8 @@ interface Schedule {
   timezone: string;
   sections: string[];
   filters: Record<string, unknown>;
+  /** SE-SUP1-5: null = todos os pipelines da equipe. */
+  pipeline_id: string | null;
   next_run_at: string;
 }
 
@@ -77,7 +79,7 @@ serve(async (req) => {
 
   let q = db
     .from("report_schedules")
-    .select("id, equipe_id, name, frequency, send_hour, weekday, monthday, timezone, sections, filters, next_run_at")
+    .select("id, equipe_id, name, frequency, send_hour, weekday, monthday, timezone, sections, filters, pipeline_id, next_run_at")
     .eq("active", true)
     .order("next_run_at", { ascending: true })
     .limit(body.limit ?? 50);
@@ -137,6 +139,10 @@ async function runSchedule(
     p_to: periodEnd,
     p_sections: s.sections,
     p_filters: s.filters ?? {},
+    // SE-SUP1-5: um relatório por pipeline, no fuso do agendamento (dias úteis e
+    // o dia do touchpoint dependem dele).
+    p_pipeline_id: s.pipeline_id ?? null,
+    p_timezone: s.timezone,
   });
   if (sErr) throw new Error(`build_report_snapshot: ${sErr.message}`);
 

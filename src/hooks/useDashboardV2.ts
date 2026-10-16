@@ -14,6 +14,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { normalizeTouchpoints, type TouchpointsBySeller } from "@/lib/touchpointsBySeller";
+import {
+  normalizeMilestones,
+  type FunnelMilestones,
+} from "../../supabase/functions/_shared/funnel-milestones";
 import type {
   BreakdownDimension,
   DashboardFilterOptions,
@@ -108,6 +113,57 @@ export function useFunnelBreakdown(
       });
       if (error) throw error;
       return (data ?? []) as FunnelBreakdownRow[];
+    },
+  });
+}
+
+/**
+ * SE-SUP1-5 (#13) — touchpoints por vendedor. Sem p_responsible_ids de
+ * propósito: o RPC mostra a equipe (ou só o próprio assento, no servidor); o
+ * filtro de responsável do dashboard fala de DONO do negócio, não de quem
+ * registrou o contato.
+ */
+export function useTouchpointsBySeller(filters: DashboardFilters) {
+  const { profile } = useAuth();
+  return useQuery({
+    queryKey: ["touchpoints_by_seller", profile?.equipe_id, ...filterKey(filters)],
+    enabled: !!profile?.equipe_id,
+    staleTime: STALE,
+    queryFn: async (): Promise<TouchpointsBySeller> => {
+      const { data, error } = await sb.rpc("get_touchpoints_by_seller", {
+        p_from: filters.from.toISOString(),
+        p_to: filters.to.toISOString(),
+        p_pipeline_ids: filters.pipelineIds?.length ? filters.pipelineIds : null,
+        p_channels: filters.channels?.length ? filters.channels : null,
+      });
+      if (error) throw error;
+      return normalizeTouchpoints(data);
+    },
+  });
+}
+
+/**
+ * SE-SUP1-8 (#10) — os seis marcos por balde, por vendedor e por pipeline, com
+ * os mesmos filtros (inclusive o período personalizado) do resto do painel.
+ * `enabled` deixa o widget pedir só quando está na tela.
+ */
+export function useFunnelMilestones(
+  filters: DashboardFilters,
+  granularity: SeriesGranularity,
+  enabled = true,
+) {
+  const { profile } = useAuth();
+  return useQuery({
+    queryKey: ["funnel_milestones", profile?.equipe_id, granularity, ...filterKey(filters)],
+    enabled: enabled && !!profile?.equipe_id,
+    staleTime: STALE,
+    queryFn: async (): Promise<FunnelMilestones> => {
+      const { data, error } = await sb.rpc("get_funnel_milestones", {
+        ...rpcArgs(filters),
+        p_granularity: granularity,
+      });
+      if (error) throw error;
+      return normalizeMilestones(data);
     },
   });
 }

@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,8 @@ interface DynamicFieldRendererProps {
   hideDeleted?: boolean;
   /** Layout: "stack" (default) or "grid" two columns. */
   layout?: "stack" | "grid";
+  /** Public intake forms: render a `text` field (by field_id) as a textarea or an e-mail input. */
+  textVariants?: Record<string, "textarea" | "email">;
 }
 
 /**
@@ -74,6 +77,7 @@ export const DynamicFieldRenderer = ({
   disabled = false,
   hideDeleted = true,
   layout = "stack",
+  textVariants,
 }: DynamicFieldRendererProps) => {
   const visibleSchema = useMemo(() => {
     const filtered = hideDeleted
@@ -110,6 +114,7 @@ export const DynamicFieldRenderer = ({
           value={value[field.field_id] as CustomDataValue}
           onChange={(next) => handleField(field.field_id, next)}
           disabled={disabled}
+          textVariant={textVariants?.[field.field_id]}
         />
       ))}
     </div>
@@ -125,9 +130,10 @@ interface FieldInputProps {
   value: CustomDataValue;
   onChange: (next: CustomDataValue) => void;
   disabled: boolean;
+  textVariant?: "textarea" | "email";
 }
 
-const FieldInput = ({ field, value, onChange, disabled }: FieldInputProps) => {
+const FieldInput = ({ field, value, onChange, disabled, textVariant }: FieldInputProps) => {
   const inputId = `cf-${field.field_id}`;
   const required = field.required;
 
@@ -140,11 +146,27 @@ const FieldInput = ({ field, value, onChange, disabled }: FieldInputProps) => {
 
   switch (field.type) {
     case "text":
+      if (textVariant === "textarea") {
+        return (
+          <div className="space-y-1.5">
+            {labelNode}
+            <Textarea
+              id={inputId}
+              rows={4}
+              value={(value as string) ?? ""}
+              onChange={(e) => onChange(e.target.value || null)}
+              disabled={disabled}
+              placeholder={field.description}
+            />
+          </div>
+        );
+      }
       return (
         <div className="space-y-1.5">
           {labelNode}
           <Input
             id={inputId}
+            type={textVariant === "email" ? "email" : undefined}
             value={(value as string) ?? ""}
             onChange={(e) => onChange(e.target.value || null)}
             disabled={disabled}

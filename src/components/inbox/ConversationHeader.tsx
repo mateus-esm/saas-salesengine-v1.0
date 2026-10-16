@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { buildChatOwnership } from "@/lib/chatOwnership";
 
 interface ConversationHeaderProps {
   session: ChatSession & { responsibleId?: string };
@@ -73,6 +74,17 @@ export function ConversationHeader({
   const responsibleInitials = responsibleMember?.nome_completo
     ?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
 
+  // Sprint Suporte 1 · #8/#11 — Responsável (dono da conta) e Atendente (quem
+  // está na conversa) aparecem juntos e nunca misturados; o seletor deste
+  // cabeçalho troca o ATENDENTE, o do painel lateral troca os dois.
+  const nameById = (id: string | null | undefined) =>
+    id ? teamMembers.find((m) => m.id === id)?.nome_completo ?? null : null;
+  const ownership = buildChatOwnership({
+    responsibleId: session.leadResponsibleId,
+    attendantId: session.responsibleId,
+    nameOf: nameById,
+  });
+
   // Canal badge label + estilo
   const channelLabel = (ch?: string): { label: string; cls: string } => {
     switch (ch) {
@@ -86,8 +98,8 @@ export function ConversationHeader({
   const ch = channelLabel(session.channel);
 
   return (
-    <div className="flex items-center justify-between p-3 divider-idv-bottom bg-white dark:bg-zinc-950">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-2 p-3 divider-idv-bottom bg-white dark:bg-zinc-950">
+      <div className="flex min-w-0 items-center gap-3">
         {/* Back Button (Mobile) */}
         {onBack && (
           <Button 
@@ -103,7 +115,7 @@ export function ConversationHeader({
         {/* Avatar and Info Block */}
         <button 
           onClick={onOpenLeadDetails}
-          className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity focus:outline-none"
+          className="flex min-w-0 items-center gap-3 text-left hover:opacity-80 transition-opacity focus:outline-none"
         >
           <div className="relative">
             <Avatar className="h-10 w-10">
@@ -128,9 +140,9 @@ export function ConversationHeader({
             )}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-medium text-slate-900 dark:text-slate-100">
+              <span className="truncate font-medium text-slate-900 dark:text-slate-100">
                 {session.customerName}
               </span>
               {/* Canal badge */}
@@ -154,11 +166,18 @@ export function ConversationHeader({
               )}
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400">{session.customerPhone}</p>
+            <p
+              className="text-[11px] text-slate-400 dark:text-slate-500 truncate"
+              data-testid="header-ownership"
+              title={`Responsável: ${ownership.responsible.label} · Atendente: ${ownership.attendant.label}`}
+            >
+              {ownership.compact}
+            </p>
           </div>
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {/* Quick Actions Area */}
         <div
           className="hidden md:flex items-center gap-2 mr-2 pr-2 border-r"
@@ -190,7 +209,7 @@ export function ConversationHeader({
                   variant="ghost"
                   size="sm"
                   className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2"
-                  title="Atribuir responsável"
+                  title="Atribuir atendente"
                 >
                   {responsibleMember ? (
                     <>
@@ -206,13 +225,13 @@ export function ConversationHeader({
                   ) : (
                     <>
                       <UserCheck className="h-4 w-4" />
-                      <span className="hidden lg:inline">Atribuir</span>
+                      <span className="hidden lg:inline">Atendente</span>
                     </>
                   )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel className="text-xs">Responsável</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">Atendente</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {teamMembers.map(member => (
                   <DropdownMenuItem
@@ -239,7 +258,7 @@ export function ConversationHeader({
                       className="gap-2 text-muted-foreground"
                     >
                       <UserX className="h-3.5 w-3.5" />
-                      Remover responsável
+                      Remover atendente
                     </DropdownMenuItem>
                   </>
                 )}

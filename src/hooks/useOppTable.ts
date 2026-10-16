@@ -19,9 +19,9 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { cleanFilters, normalizeBoardCard } from "@/lib/board";
+import { cleanFilters, normalizeBoardCard, summarizeBulkMove } from "@/lib/board";
 import { createDebouncer } from "@/lib/debounce";
-import { nextOffset, patchRowInPages, removeRowsFromPages, type TablePages } from "@/lib/tablePages";
+import { flattenPages, nextOffset, patchRowInPages, removeRowsFromPages, type TablePages } from "@/lib/tablePages";
 import type { CrmFilters, CrmSort } from "@/types/crmFilters";
 import type { OppTableRow } from "@/types/crmTables";
 
@@ -128,6 +128,8 @@ function useInvalidateDeals(pipelineId: string | undefined) {
 export interface BulkUpdateVars {
   ids: string[];
   patch: { stage_id?: string; owner_id?: string | null };
+  /** Sprint Suporte 1 · #12 — saved with the stage change when the target is a lost stage (useMoveToStage asks for it). */
+  lostReason?: string | null;
   /** Extra fields to show at once while the server answers (e.g. owner_name). */
   display?: Partial<OppTableRow>;
 }
@@ -139,25 +141,74 @@ export function useUpdateOpportunities(pipelineId: string | undefined, filters: 
   const invalidate = useInvalidateDeals(pipelineId);
 
   return useMutation({
-    mutationFn: async ({ ids, patch }: BulkUpdateVars): Promise<number> => {
-      const { data, error } = await sb.rpc("crm_update_opportunities", { p_ids: ids, p_patch: patch });
-      if (error) throw error;
-      return Number(data) || 0;
+    mutationFn: async ({ ids, patch, lostReason }: BulkUpdateVars): Promise<number> => {
+      // A stage change goes through the single move engine (crm_move_opportunity),
+      // which carries the loss reason in the same call; an owner change keeps the
+      // bulk verb. The generic verb no longer moves stages on its own.
+      const { stage_id: stageId, ...rest } = patch;
+      let moved = 0;
+      if (stageId) {
+        // N independent calls: some can commit while others fail, so settle them
+        // all and report per item instead of failing the whole batch on the first error.
+        const results = await Promise.allSettled(
+          ids.map(async (id) => {
+            const { data, error } = await sb.rpc("crm_move_opportunity", {
+              p_opportunity: id,
+              p_stage: stageId,
+              p_lost_reason: lostReason ?? null,
+            });
+            if (error) throw error;
+            return data === true;
+          }),
+        );
+        const summary = summarizeBulkMove(ids, results);
+        if (summary.failedIds.length > 0) {
+          throw new PartialMoveError(summary.message ?? "", summary.failedIds, summary.moved);
+        }
+        moved = summary.moved;
+      }
+      if (Object.keys(rest).length > 0) {
+        const { data, error } = await sb.rpc("crm_update_opportunities", { p_ids: ids, p_patch: rest });
+        if (error) throw error;
+        return stageId ? moved : Number(data) || 0;
+      }
+      return moved;
     },
-    onMutate: async ({ ids, patch, display }: BulkUpdateVars) => {
+    onMutate: async ({ ids, patch, display, lostReason }: BulkUpdateVars) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<TablePages<OppTableRow>>(key);
       let next = previous;
-      for (const id of ids) next = patchRowInPages(next, id, { ...patch, ...display } as Partial<OppTableRow>);
+      const shown = lostReason ? { ...patch, lost_reason: lostReason, ...display } : { ...patch, ...display };
+      for (const id of ids) next = patchRowInPages(next, id, shown as Partial<OppTableRow>);
       if (next) queryClient.setQueryData(key, next);
       return { previous };
     },
     onError: (e: Error, _vars, ctx) => {
+      if (e instanceof PartialMoveError && ctx?.previous) {
+        // Some deals did move: put back only the ones that failed.
+        let next = queryClient.getQueryData<TablePages<OppTableRow>>(key);
+        const before = flattenPages(ctx.previous);
+        for (const id of e.failedIds) {
+          const row = before.find((r) => r.id === id);
+          if (row) next = patchRowInPages(next, id, { stage_id: row.stage_id, lost_reason: row.lost_reason });
+        }
+        if (next) queryClient.setQueryData(key, next);
+        toast.error(e.message);
+        return;
+      }
       if (ctx?.previous) queryClient.setQueryData(key, ctx.previous);
       toast.error("Não foi possível salvar: " + e.message);
     },
     onSettled: () => invalidate(),
   });
+}
+
+/** A bulk move where only some deals went through; carries who failed. */
+class PartialMoveError extends Error {
+  constructor(message: string, readonly failedIds: string[], readonly moved: number) {
+    super(message);
+    this.name = "PartialMoveError";
+  }
 }
 
 /** Soft-delete deals: the business verb, optimistic. */

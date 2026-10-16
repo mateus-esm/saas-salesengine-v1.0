@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   NON_OFFICIAL_CHANNEL_TYPES,
+  CUSTOMER_SIGNAL_LOOKBACK_MS,
+  META_HUMAN_AGENT_WINDOW_MS,
   SERVICE_WINDOW_MS,
+  isMetaMessagingChannel,
   isNonOfficialConnection,
   isWithinServiceWindow,
   resolveServiceWindow,
@@ -83,14 +86,14 @@ describe("isWithinServiceWindow", () => {
 describe("resolveServiceWindow", () => {
   it("CONEXÃO NÃO OFICIAL está sempre aberta, mesmo sem mensagem do cliente", () => {
     for (const providerChannelType of NON_OFFICIAL_CHANNEL_TYPES) {
-      expect(resolveServiceWindow({ providerChannelType, now: NOW })).toEqual({
+      expect(resolveServiceWindow({ providerChannelType, now: NOW })).toMatchObject({
         alwaysOpen: true,
         open: true,
       });
       // Cliente falou há uma semana: continua aberta.
       expect(
         resolveServiceWindow({ providerChannelType, lastCustomerMessageAt: ago(168), now: NOW }),
-      ).toEqual({ alwaysOpen: true, open: true });
+      ).toMatchObject({ alwaysOpen: true, open: true });
     }
   });
 
@@ -113,7 +116,7 @@ describe("resolveServiceWindow", () => {
         lastCustomerMessageAt: ago(2),
         now: NOW,
       }),
-    ).toEqual({ alwaysOpen: false, open: true });
+    ).toMatchObject({ alwaysOpen: false, open: true });
   });
 
   it("CLOUD_API fora das 24 h: JANELA FECHADA (a regra antiga é mantida)", () => {
@@ -123,11 +126,11 @@ describe("resolveServiceWindow", () => {
         lastCustomerMessageAt: ago(25),
         now: NOW,
       }),
-    ).toEqual({ alwaysOpen: false, open: false });
+    ).toMatchObject({ alwaysOpen: false, open: false });
   });
 
   it("CLOUD_API sem mensagem do cliente: fechada", () => {
-    expect(resolveServiceWindow({ providerChannelType: "CLOUD_API", now: NOW })).toEqual({
+    expect(resolveServiceWindow({ providerChannelType: "CLOUD_API", now: NOW })).toMatchObject({
       alwaysOpen: false,
       open: false,
     });
@@ -136,13 +139,102 @@ describe("resolveServiceWindow", () => {
   it("tipo desconhecido cai na regra de 24 h (nunca abre por falta de dado)", () => {
     expect(
       resolveServiceWindow({ providerChannelType: "SOMETHING_NEW", now: NOW }),
-    ).toEqual({ alwaysOpen: false, open: false });
+    ).toMatchObject({ alwaysOpen: false, open: false });
     expect(
       resolveServiceWindow({
         providerChannelType: "SOMETHING_NEW",
         lastCustomerMessageAt: ago(1),
         now: NOW,
       }),
-    ).toEqual({ alwaysOpen: false, open: true });
+    ).toMatchObject({ alwaysOpen: false, open: true });
+  });
+});
+
+describe("SE-SUP1-2 — Instagram/Messenger (Meta-messaging) não herdam a Solo API", () => {
+  it("reconhece os canais Meta pelo nome normalizado", () => {
+    expect(isMetaMessagingChannel("instagram")).toBe(true);
+    expect(isMetaMessagingChannel(" Messenger ")).toBe(true);
+    expect(isMetaMessagingChannel("whatsapp")).toBe(false);
+    expect(isMetaMessagingChannel(null)).toBe(false);
+  });
+
+  it("IG + tenant com Solo conectada + último inbound há 30 h: FECHADA", () => {
+    const w = resolveServiceWindow({
+      channel: "instagram",
+      hasConnectedSoloInstance: true,
+      lastCustomerMessageAt: ago(30),
+      now: NOW,
+    });
+    expect(w).toMatchObject({
+      open: false,
+      alwaysOpen: false,
+      channelKind: "meta",
+      reason: "window_expired",
+    });
+    expect(w.expiresAt?.getTime()).toBe(NOW - 30 * HOUR + SERVICE_WINDOW_MS);
+  });
+
+  it("IG dentro das 24 h: aberta, com a hora em que fecha", () => {
+    const w = resolveServiceWindow({
+      channel: "instagram",
+      hasConnectedSoloInstance: true,
+      lastCustomerMessageAt: ago(3),
+      now: NOW,
+    });
+    expect(w).toMatchObject({ open: true, alwaysOpen: false, reason: "within_window" });
+    expect(w.expiresAt?.getTime()).toBe(NOW - 3 * HOUR + SERVICE_WINDOW_MS);
+  });
+
+  it("IG sem mensagem do cliente: fechada (no_customer_message)", () => {
+    expect(
+      resolveServiceWindow({ channel: "instagram", hasConnectedSoloInstance: true, now: NOW }),
+    ).toMatchObject({ open: false, reason: "no_customer_message", expiresAt: null });
+  });
+
+  it("Messenger segue a mesma regra do Instagram", () => {
+    expect(
+      resolveServiceWindow({ channel: "messenger", hasConnectedSoloInstance: true, lastCustomerMessageAt: ago(30), now: NOW }).open,
+    ).toBe(false);
+  });
+
+  it("solo_instance_id da conversa não abre canal Meta", () => {
+    expect(
+      resolveServiceWindow({ channel: "instagram", conversationSoloInstanceId: "i", lastCustomerMessageAt: ago(30), now: NOW }).open,
+    ).toBe(false);
+  });
+
+  it("extensão de 7 dias do atendente humano: DESLIGADA por padrão", () => {
+    expect(META_HUMAN_AGENT_WINDOW_MS).toBe(0);
+    expect(
+      resolveServiceWindow({ channel: "instagram", lastCustomerMessageAt: ago(48), now: NOW }).open,
+    ).toBe(false);
+  });
+
+  it("com a extensão ligada: 24 h < t <= 7 d abre como human_agent_extension; passou de 7 d fecha", () => {
+    const humanAgentWindowMs = 7 * 24 * HOUR;
+    expect(
+      resolveServiceWindow({ channel: "instagram", lastCustomerMessageAt: ago(48), humanAgentWindowMs, now: NOW }),
+    ).toMatchObject({ open: true, reason: "human_agent_extension" });
+    expect(
+      resolveServiceWindow({ channel: "instagram", lastCustomerMessageAt: ago(24 * 8), humanAgentWindowMs, now: NOW }),
+    ).toMatchObject({ open: false, reason: "window_expired" });
+  });
+
+  it("WhatsApp não oficial segue como antes (canal whatsapp ou ausente)", () => {
+    expect(
+      resolveServiceWindow({ channel: "whatsapp", hasConnectedSoloInstance: true, lastCustomerMessageAt: ago(500), now: NOW }),
+    ).toMatchObject({ alwaysOpen: true, open: true, channelKind: "whatsapp", reason: "always_open" });
+    expect(resolveServiceWindow({ hasConnectedSoloInstance: true, now: NOW }).open).toBe(true);
+  });
+
+  it("canal fora de WhatsApp/Meta (web, telegram) mantém o comportamento legado", () => {
+    expect(resolveServiceWindow({ channel: "web", hasConnectedSoloInstance: true, now: NOW }).open).toBe(true);
+  });
+});
+
+describe("CUSTOMER_SIGNAL_LOOKBACK_MS", () => {
+  it("nunca é menor que a janela de 24 h nem que a extensão humana", () => {
+    expect(CUSTOMER_SIGNAL_LOOKBACK_MS).toBeGreaterThanOrEqual(SERVICE_WINDOW_MS);
+    expect(CUSTOMER_SIGNAL_LOOKBACK_MS).toBeGreaterThanOrEqual(META_HUMAN_AGENT_WINDOW_MS);
   });
 });

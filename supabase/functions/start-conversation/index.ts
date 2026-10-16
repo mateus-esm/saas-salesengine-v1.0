@@ -33,6 +33,7 @@ import {
   SupabaseClient,
 } from "https://esm.sh/@supabase/supabase-js@2";
 import { isTechnicalPhone } from "../_shared/phone.ts";
+import { insertConversationOnce, updateConversationOnce } from "../_shared/conversation-once.ts";
 import {
   HttpError,
   resolveCaller,
@@ -324,6 +325,7 @@ async function persistOpenedConversation(
     .eq("lead_id", input.leadId)
     .eq("channel", "whatsapp")
     .neq("status", "deleted")
+    .order("status", { ascending: true }) // 'active' < 'archived': prefere a ativa
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
@@ -340,14 +342,13 @@ async function persistOpenedConversation(
       update.status = "active";
       update.archived_at = null;
     }
-    await supabase.from("conversations").update(update).eq(
-      "id",
-      conversationId,
-    );
+    conversationId = await updateConversationOnce(supabase, existing.id, update, {
+      lead_id: input.leadId,
+      channel: "whatsapp",
+    });
   } else {
-    const { data: created, error } = await supabase
-      .from("conversations")
-      .insert({
+    try {
+      conversationId = (await insertConversationOnce(supabase, {
         lead_id: input.leadId,
         equipe_id: input.equipeId,
         channel: "whatsapp",
@@ -355,14 +356,11 @@ async function persistOpenedConversation(
         atendido_por_agente: false,
         unread_count: 0,
         ...patch,
-      })
-      .select("id")
-      .single();
-    if (error) {
+      })).id;
+    } catch (error) {
       console.error("[start-conversation] falha ao criar conversa:", error);
       return null;
     }
-    conversationId = created.id;
   }
 
   // A mensagem enviada aparece no inbox como qualquer outra saída. O eco que o

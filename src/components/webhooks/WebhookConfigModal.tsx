@@ -24,10 +24,12 @@ import {
   RadioGroupItem,
 } from "@/components/ui/radio-group";
 import { useQuery } from "@tanstack/react-query";
+import { InboundActionEditor } from "@/components/webhooks/InboundActionEditor";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   WebhookConfig,
+  WebhookAction,
   WEBHOOK_TRIGGER_EVENTS,
   FieldMapping,
   FieldMappingTargetType,
@@ -49,6 +51,7 @@ interface FormValues {
   webhookType: "outbound" | "inbound";
   pipelineId: string;
   fieldMappings: FieldMapping[];
+  action: WebhookAction | null;
 }
 
 interface WebhookConfigModalProps {
@@ -84,6 +87,7 @@ export const WebhookConfigModal = ({
       webhookType: "outbound",
       pipelineId: "",
       fieldMappings: [],
+      action: null,
     },
   });
   const { fields, append, remove } = useFieldArray({
@@ -112,6 +116,7 @@ export const WebhookConfigModal = ({
         webhookType: config.inbound_function === "receive_lead" ? "inbound" : "outbound",
         pipelineId: config.pipeline_id || "",
         fieldMappings: config.field_mappings || [],
+        action: config.action ?? null,
       });
     } else {
       reset({
@@ -124,6 +129,7 @@ export const WebhookConfigModal = ({
         webhookType: "outbound",
         pipelineId: "",
         fieldMappings: [],
+        action: null,
       });
     }
   }, [config, open, reset]);
@@ -198,6 +204,8 @@ export const WebhookConfigModal = ({
         inbound_function: isInbound ? "receive_lead" : null,
         pipeline_id: isInbound ? (data.pipelineId || null) : null,
         field_mappings: isInbound ? data.fieldMappings : [],
+        // Só quando há (ou havia) ação — antes da migration a coluna não existe.
+        ...(isInbound && (data.action || config?.action) ? { action: data.action } : {}),
       };
 
       if (isEditing && config) {
@@ -505,6 +513,12 @@ export const WebhookConfigModal = ({
                   Adicionar mapeamento
                 </Button>
               </div>
+
+              <Controller
+                control={control}
+                name="action"
+                render={({ field }) => <InboundActionEditor value={field.value} onChange={field.onChange} />}
+              />
             </>
           )}
 

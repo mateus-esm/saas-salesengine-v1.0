@@ -13,7 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useAgendaEvents } from "@/hooks/useAgendaEvents";
+import { useAgendaEvents, type AgendaEvent } from "@/hooks/useAgendaEvents";
+import { MeetingOutcomeButtons } from "./MeetingOutcomeButtons";
+import { canRecordOutcome } from "@/lib/meetingOutcome";
 import { cn } from "@/lib/utils";
 
 function roundHour(d: Date, offset: number) {
@@ -126,11 +128,15 @@ export function AgendaView() {
     setWeekStart(startOfWeek(today, { weekStartsOn: 0 }));
   }
 
-  function renderEventRow(ev: { id: string; type: string; title: string; starts_at: string; ends_at: string }) {
+  function renderEventRow(ev: AgendaEvent) {
     return (
-      <div key={ev.id} className="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-accent/30 group">
+      <div key={ev.id} className="flex flex-wrap items-center gap-2 text-sm py-1 px-2 rounded hover:bg-accent/30 group">
         <span className="text-xs">{typeIcon[ev.type] ?? "\u{1F4CC}"}</span>
         <span className="flex-1">{ev.title}</span>
+        {/* SE-SUP1-8 (#10): realizada / no-show / visita técnica, sem abrir o negócio. */}
+        {canRecordOutcome(ev) && (
+          <MeetingOutcomeButtons compact agendaEventId={ev.id} opportunityId={ev.opportunity_id} current={ev.outcome} />
+        )}
         <span className="text-[10px] text-muted-foreground font-mono">
           {format(parseISO(ev.starts_at), "HH:mm")}-{format(parseISO(ev.ends_at), "HH:mm")}
         </span>

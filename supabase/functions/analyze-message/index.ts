@@ -11,6 +11,8 @@ import {
   executeActions,
 } from "../_shared/rule-engine.ts";
 import type { RuleEvalContext, ActionContext } from "../_shared/rule-engine.ts";
+import { isInternalServiceRequest } from "../_shared/internal-auth.ts";
+import { shouldApplyName } from "../_shared/lead-name-policy.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,6 +67,16 @@ Hoje:`;
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  // Somente os webhooks internos chamam esta análise com a service role.
+  // Validar antes de ler o body impede escrita/consumo de IA por lead_id arbitrário.
+  if (!isInternalServiceRequest(req.headers, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'method_not_allowed' }), { status: 405, headers: corsHeaders });
+  }
+
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -95,7 +107,7 @@ serve(async (req) => {
     // ============ LOAD CONTACT (identity only) ============
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id, name, email, equipe_id')
+      .select('id, name, name_locked, email, equipe_id')
       .eq('id', lead_id)
       .maybeSingle();
 
@@ -275,7 +287,8 @@ serve(async (req) => {
 
     // ============ IDENTITY UPDATES (leads) ============
     const leadUpdates: Record<string, unknown> = {};
-    if (data.name && data.name !== lead.name) leadUpdates.name = data.name;
+    // SE-SUP1-4: nome editado à mão (name_locked) nunca é sobrescrito pela IA.
+    if (shouldApplyName({ current: lead.name, incoming: data.name, locked: lead.name_locked, source: 'ai' })) leadUpdates.name = data.name;
     if (data.email && data.email !== lead.email) leadUpdates.email = data.email;
 
     if (data.intent === 'DISQUALIFIED') {
