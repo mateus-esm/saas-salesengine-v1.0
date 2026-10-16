@@ -30,7 +30,7 @@ a proibição de produção do plano de implementação descreve a fase anterior
 
 ## Validação
 
-- Sete suítes SQL (migrations reais + fixtures + isolamento + permissões) passaram
+- Oito suítes SQL (migrations reais + fixtures + isolamento + permissões) passaram
   em BEGIN/ROLLBACK contra o projeto linkado. Nenhuma fixture foi persistida.
 - 89 testes Deno alterados passaram (incluindo autenticação interna).
 - Typecheck e build de produção passaram.
@@ -72,7 +72,7 @@ coordenar o segredo com a configuração de entrega do provedor para não parar 
 
 ## Resultado em produção
 
-- 12 migrations `sesup1` aplicadas e registradas, com lock_timeout de 5 s.
+- 13 migrations `sesup1` aplicadas e registradas, com lock_timeout de 5 s.
 - 10 funções Edge publicadas; todas ACTIVE, versão aumentada e verify_jwt igual
   ao anterior. Backups de todas as versões anteriores foram salvos localmente.
 - Sondas sem efeitos: analyze-message/solo-wpp-webhook/reports-cron/
@@ -85,6 +85,17 @@ coordenar o segredo com a configuração de entrega do provedor para não parar 
   O script avulso foi limitado a Solo Energia e registros não apagados para revisão.
 - Advisor: `ai_model_catalog_state` sem policies é intencional (service role);
   RPCs SECURITY DEFINER autenticadas têm guardas de equipe testadas.
-  Permanecem os avisos anteriores nas views `v_tenant_entitlements`,
-  `v_admin_notification_matrix`, `v_admin_team_billing` e na proteção de senhas.
+  As views administrativas `v_admin_notification_matrix` e `v_admin_team_billing`
+  continuam com predicado is_super_admin() explícito; a view de entitlements
+  teve o isolamento corrigido (abaixo). A proteção de senha vazada continua desativada.
   Referência: https://supabase.com/docs/guides/database/database-linter?lint=0010_security_definer_view
+
+### Entitlements: isolamento restaurado
+
+A view viva `v_tenant_entitlements` havia perdido `security_invoker`, embora a
+Sprint 8.2 o exigisse. O usuário autenticado podia consultar outras equipes.
+A migration `20261016095058_sesup1_entitlements_tenant_scope.sql` restaura a opção.
+Ensaio contra duas equipes reais comparou o JSON completo de entitlements antes
+e depois: nenhum valor próprio mudou; o usuário vê só sua equipe. Service role
+continua lendo todas. O teste de regressão `sesup1_entitlements.test.sql` passou.
+Migration aplicada e registrada em produção, sem alteração de dados históricos.
