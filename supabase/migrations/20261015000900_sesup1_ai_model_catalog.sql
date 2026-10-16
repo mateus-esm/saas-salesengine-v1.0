@@ -32,6 +32,16 @@ revoke all on public.ai_model_catalog from anon, authenticated;
 grant select on public.ai_model_catalog to authenticated;
 grant all on public.ai_model_catalog to service_role;
 
+-- Última TENTATIVA de buscar no provedor (sucesso ou falha). Numa queda o
+-- synced_at não anda; sem isto cada chamada bateria no provedor de novo.
+create table if not exists public.ai_model_catalog_state (
+  id              boolean primary key default true check (id),
+  last_attempt_at timestamptz
+);
+alter table public.ai_model_catalog_state enable row level security;
+revoke all on public.ai_model_catalog_state from anon, authenticated;
+grant all on public.ai_model_catalog_state to service_role;
+
 -- ---------------------------------------------------------------------------
 -- Alerta ao painel admin: reaproveita notify() e o mesmo endereçamento do
 -- ticket de suporte (audience 'founder' não faz fan-out; endereça-se à equipe

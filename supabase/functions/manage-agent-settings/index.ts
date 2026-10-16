@@ -11,7 +11,8 @@ const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 // Credit pricing (provider price + resale markup) lives in one place.
 import type { ModelInfo } from "../_shared/credit-pricing.ts";
 import {
-  decideRefresh, mergeCatalog, parseProviderModels, type ProviderModel,
+  decideRefresh, fetchProviderModels, localPublicCatalog, mergeCatalog, PROVIDER_TIMEOUT_MS,
+  type ProviderModel,
 } from "../_shared/model-catalog.ts";
 
 const MODEL_CATALOG: ModelInfo[] = [
@@ -101,17 +102,21 @@ async function loadModels(opts: { supabase: any; engineHeaders: Record<string, s
       return m === null || t > m ? t : m;
     }, null);
 
+  const { data: state } = await supabase
+    .from('ai_model_catalog_state').select('last_attempt_at').eq('id', true).maybeSingle();
+  const lastAttempt = state?.last_attempt_at ? Date.parse(state.last_attempt_at) : null;
+
   let list: ProviderModel[] | null = cached.length ? cached : null;
   let source: 'provider' | 'cache' | 'local' = cached.length ? 'cache' : 'local';
   let stale = false;
 
-  if (decideRefresh(cached.length ? lastSync : null, Date.now(), force) === 'refresh') {
+  if (decideRefresh(cached.length ? lastSync : null, lastAttempt, Date.now(), force) === 'refresh') {
+    // Marca a tentativa ANTES: sucesso ou falha, ninguém chama o provedor de novo em ~1 min.
+    await supabase.from('ai_model_catalog_state')
+      .upsert({ id: true, last_attempt_at: new Date().toISOString() }, { onConflict: 'id' });
     try {
-      const res = await fetch(`${AI_ENGINE_BASE}${MODELS_PATH}`, { headers: engineHeaders });
-      if (!res.ok) throw new Error(`models ${res.status}`);
-      const fresh = parseProviderModels(await res.json());
-      // Lista vazia é falha disfarçada: aceitá-la apagaria o cache inteiro.
-      if (fresh.length === 0) throw new Error('models empty');
+      // Lança em HTTP != 2xx, timeout e lista vazia (ver fetchProviderModels).
+      const fresh = await fetchProviderModels(fetch, `${AI_ENGINE_BASE}${MODELS_PATH}`, engineHeaders);
       const now = new Date().toISOString();
       // upsert (e não replace) para preservar alerted_at dos ids que ficam.
       await supabase.from('ai_model_catalog').upsert(
@@ -132,7 +137,9 @@ async function loadModels(opts: { supabase: any; engineHeaders: Record<string, s
   // Modelo em uso hoje pelo agente desta equipe; falhar aqui não derruba a lista.
   const inUse: string[] = [];
   try {
-    const sRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/settings`, { headers: engineHeaders });
+    const sRes = await fetch(`${AI_ENGINE_BASE}/agent/${agentId}/settings`, {
+      headers: engineHeaders, signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
     if (sRes.ok) {
       const s = await sRes.json();
       if (typeof s?.prefferModel === 'string') inUse.push(s.prefferModel);
@@ -147,7 +154,8 @@ async function loadModels(opts: { supabase: any; engineHeaders: Record<string, s
     if (error) console.error('ai_model_alert_unpriced failed:', id, error.message);
   }
 
-  return { models, source, stale };
+  // `catalog`: tabela local inteira, para o painel de uso resolver rótulo/custo de ids históricos.
+  return { models, catalog: localPublicCatalog(MODEL_CATALOG), source, stale };
 }
 
 // The whole bug in one function: which upstream resource an action targets.

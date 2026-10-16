@@ -181,14 +181,39 @@ export function mergeCatalog({ local, provider, inUse }: MergeInput): MergeResul
 export type RefreshDecision = "serve-cache" | "refresh";
 
 /**
- * Refresh interno quando o cache venceu (ou não existe); forçado pelo botão,
- * mas só se o último refresh tiver mais que FORCE_MIN_INTERVAL_MS.
+ * Refresh interno quando o cache venceu (ou não existe); forçado pelo botão.
+ * Em qualquer caso, nenhuma chamada nova ao provedor dentro de
+ * FORCE_MIN_INTERVAL_MS da última TENTATIVA, sucesso ou falha. Sem isso, numa
+ * queda do provedor o synced_at não anda e cada requisição bateria nele de novo.
  */
 export function decideRefresh(
-  syncedAt: number | null, now: number, force: boolean,
+  syncedAt: number | null, lastAttemptAt: number | null, now: number, force: boolean,
 ): RefreshDecision {
+  if (lastAttemptAt !== null && now - lastAttemptAt < FORCE_MIN_INTERVAL_MS) return "serve-cache";
   if (syncedAt === null) return "refresh";
   const age = now - syncedAt;
   if (force) return age >= FORCE_MIN_INTERVAL_MS ? "refresh" : "serve-cache";
   return age >= CATALOG_TTL_MS ? "refresh" : "serve-cache";
+}
+
+export const PROVIDER_TIMEOUT_MS = 5000;
+
+/**
+ * Busca a lista no provedor. Lança em qualquer falha (HTTP != 2xx, timeout,
+ * JSON inválido, lista vazia): quem chama trata tudo como "serve o cache".
+ * Lista vazia conta como falha, porque aceitá-la apagaria o cache inteiro.
+ */
+export async function fetchProviderModels(
+  fetchFn: typeof fetch, url: string, headers: Record<string, string>,
+): Promise<ProviderModel[]> {
+  const res = await fetchFn(url, { headers, signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`models ${res.status}`);
+  const fresh = parseProviderModels(await res.json());
+  if (fresh.length === 0) throw new Error("models empty");
+  return fresh;
+}
+
+/** Catálogo local inteiro em créditos cobrados: o painel de uso resolve rótulo/custo de qualquer id histórico. */
+export function localPublicCatalog(local: ModelInfo[]): CatalogEntry[] {
+  return local.map((m) => fromLocal(m));
 }

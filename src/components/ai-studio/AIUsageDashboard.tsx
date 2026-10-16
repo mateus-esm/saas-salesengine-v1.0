@@ -266,7 +266,9 @@ export function AIUsageDashboard() {
       setMeteringSince(typeof data.meteringSince === 'string' ? data.meteringSince : null);
 
       if (!catalogRes.error && Array.isArray(catalogRes.data?.models)) {
-        setCatalog(catalogRes.data.models);
+        // `catalog` é a tabela local inteira: ids históricos que o provedor
+        // deixou de listar continuam com rótulo e custo.
+        setCatalog(Array.isArray(catalogRes.data.catalog) ? catalogRes.data.catalog : catalogRes.data.models);
       }
     } catch (err) {
       console.error('Usage fetch error:', err);
