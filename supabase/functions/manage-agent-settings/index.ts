@@ -12,7 +12,7 @@ const AI_ENGINE_BASE = 'https://api.gptmaker.ai/v2';
 import type { ModelInfo } from "../_shared/credit-pricing.ts";
 import {
   decideRefresh, fetchProviderModels, localPublicCatalog, mergeCatalog, PROVIDER_TIMEOUT_MS,
-  type ProviderModel,
+  CATALOG_TTL_MS, type ProviderModel,
 } from "../_shared/model-catalog.ts";
 
 const MODEL_CATALOG: ModelInfo[] = [
@@ -108,7 +108,8 @@ async function loadModels(opts: { supabase: any; engineHeaders: Record<string, s
 
   let list: ProviderModel[] | null = cached.length ? cached : null;
   let source: 'provider' | 'cache' | 'local' = cached.length ? 'cache' : 'local';
-  let stale = false;
+  // O throttle de uma tentativa falha não torna o catálogo local/cache fresco.
+  let stale = lastSync === null || Date.now() - lastSync >= CATALOG_TTL_MS;
 
   if (decideRefresh(cached.length ? lastSync : null, lastAttempt, Date.now(), force) === 'refresh') {
     // Marca a tentativa ANTES: sucesso ou falha, ninguém chama o provedor de novo em ~1 min.
@@ -127,6 +128,7 @@ async function loadModels(opts: { supabase: any; engineHeaders: Record<string, s
         .not('id', 'in', `(${fresh.map((m) => `"${m.id}"`).join(',')})`);
       list = fresh;
       source = 'provider';
+      stale = false;
     } catch (err) {
       // Falha do provedor: serve o último cache (ou o catálogo local).
       console.error('models refresh failed, serving cache:', err);

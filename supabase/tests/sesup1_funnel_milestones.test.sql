@@ -209,7 +209,10 @@ begin
   -- 6. relatório diário
   v_m := public.build_report_snapshot(v_a, now() - interval '20 days', now() + interval '1 day');
   assert v_m ? 'funnel_milestones', 'snapshot traz os marcos';
-  assert jsonb_array_length(v_m->'funnel_milestones'->'by_seller') = 1, 'por vendedor no snapshot';
+  -- Eventos anteriores à primeira atribuição ficam no grupo Não atribuído.
+  assert exists (select 1 from jsonb_array_elements(v_m->'funnel_milestones'->'by_seller') s
+                 where s->>'seller_name' = 'Ana' and (s->>'no_show')::int = 1),
+    'snapshot preserva o vendedor do evento e seu no-show';
 end $$;
 
 rollback;

@@ -26,7 +26,7 @@ alter table public.ai_model_catalog enable row level security;
 drop policy if exists "admin_read_ai_model_catalog" on public.ai_model_catalog;
 create policy "admin_read_ai_model_catalog"
   on public.ai_model_catalog for select to authenticated
-  using (public.has_role(auth.uid(), 'owner') or public.has_role(auth.uid(), 'super_admin'));
+  using (public.has_role(auth.uid(), 'super_admin'));
 
 revoke all on public.ai_model_catalog from anon, authenticated;
 grant select on public.ai_model_catalog to authenticated;
@@ -78,7 +78,7 @@ begin
     select distinct p.user_id, p.equipe_id
       from public.profiles p
       join public.user_roles r on r.user_id = p.user_id
-     where r.role in ('owner', 'super_admin') and p.equipe_id is not null
+     where r.role = 'super_admin' and p.equipe_id is not null
   loop
     perform public.notify(
       p_equipe_id => v_dest.equipe_id,

@@ -116,6 +116,7 @@ const Chat = () => {
     const existing = conversations.find((c) => c.lead_id === contactId);
     if (existing) {
       setSelectedConversationId(existing.id);
+      if (window.innerWidth < 1024) setShowInbox(false);
       setSearchParams({}, { replace: true });
       return;
     }
@@ -136,6 +137,7 @@ const Chat = () => {
       if (!cancelled && !error && data?.id) {
         await queryClient.invalidateQueries({ queryKey: ["conversations", equipeId] });
         setSelectedConversationId(data.id as string);
+        if (window.innerWidth < 1024) setShowInbox(false);
       }
       if (!cancelled) setSearchParams({}, { replace: true });
     })();

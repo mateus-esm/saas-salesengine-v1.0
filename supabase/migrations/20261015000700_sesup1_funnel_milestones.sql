@@ -174,8 +174,12 @@ begin
   if v_opp is null then
     raise exception 'opportunity_required' using errcode = 'P0002';
   end if;
-  if not exists (select 1 from public.opportunities o
-                  where o.id = v_opp and o.equipe_id = v_team and o.deleted_at is null) then
+  -- Serializa cliques no card e em eventos diferentes da mesma oportunidade.
+  -- A trava da agenda sozinha não protege a consulta seguida de INSERT.
+  perform 1 from public.opportunities o
+   where o.id = v_opp and o.equipe_id = v_team and o.deleted_at is null
+   for update;
+  if not found then
     raise exception 'opportunity_not_found' using errcode = 'P0002';
   end if;
 

@@ -41,15 +41,15 @@ on conflict (id) do update set equipe_id = excluded.equipe_id, role = excluded.r
 
 -- Um pipeline por cenário (contadores e limites independentes).
 insert into public.pipelines (id, equipe_id, name, loss_reasons, custom_fields_schema)
-select ('5e9c0000-0000-0000-0000-00000000000' || n)::uuid, '5e900000-0000-0000-0000-00000000000a', 'P' || n, '[]'::jsonb,
+select ('5e9c0000-0000-0000-0000-00000000000' || n)::uuid, '5e900000-0000-0000-0000-00000000000a'::uuid, 'P' || n, '[]'::jsonb,
        '[{"field_id":"f1","key":"imovel","label":"Tipo de imóvel","type":"text","is_deleted":false}]'::jsonb
   from generate_series(1, 6) n;
 insert into public.pipeline_stages_v2 (id, equipe_id, pipeline_id, name, position, stage_type)
-select ('5e9d0000-0000-0000-0000-0000000000' || n || '1')::uuid, '5e900000-0000-0000-0000-00000000000a',
+select ('5e9d0000-0000-0000-0000-0000000000' || n || '1')::uuid, '5e900000-0000-0000-0000-00000000000a'::uuid,
        ('5e9c0000-0000-0000-0000-00000000000' || n)::uuid, 'Novo', 0, 'open'
   from generate_series(1, 6) n
 union all
-select ('5e9d0000-0000-0000-0000-0000000000' || n || '2')::uuid, '5e900000-0000-0000-0000-00000000000a',
+select ('5e9d0000-0000-0000-0000-0000000000' || n || '2')::uuid, '5e900000-0000-0000-0000-00000000000a'::uuid,
        ('5e9c0000-0000-0000-0000-00000000000' || n)::uuid, 'Ganho', 1, 'won'
   from generate_series(1, 6) n;
 

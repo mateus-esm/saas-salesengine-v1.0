@@ -160,3 +160,4 @@ begin
 end $$;
 
 rollback;
+select 'PASS' as result;
