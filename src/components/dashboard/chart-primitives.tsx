@@ -75,7 +75,7 @@ interface ChartCardProps {
 export function ChartCard({ title, description, action, children, className }: ChartCardProps) {
   return (
     <Card className={cn("flex flex-col", className)}>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-3">
         <div className="min-w-0">
           <CardTitle className="text-sm font-semibold tracking-tight">{title}</CardTitle>
           {description && (

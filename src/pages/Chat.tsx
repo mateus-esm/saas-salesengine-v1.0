@@ -482,7 +482,7 @@ const Chat = () => {
   const loadingInbox = loadingLeads || loadingConversations;
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex overflow-hidden bg-background dark:bg-zinc-950">
+    <div className="h-[calc(100dvh-4rem)] flex overflow-hidden bg-background dark:bg-zinc-950">
       {!showInbox && (
         <Button
           variant="ghost"
@@ -497,7 +497,7 @@ const Chat = () => {
       {/* Coluna 1: Inbox */}
       <div className={cn(
         "divider-idv-right flex-shrink-0 transition-all duration-300 relative",
-        showInbox ? "w-1/4 min-w-[280px] max-w-[360px]" : "w-0 min-w-0 overflow-hidden"
+        showInbox ? "w-1/4 min-w-[280px] max-w-[360px] max-md:w-full max-md:min-w-0 max-md:max-w-none" : "w-0 min-w-0 overflow-hidden"
       )}>
         {showInbox && (
           <>
@@ -534,11 +534,11 @@ const Chat = () => {
       </div>
 
       {/* Coluna 2: Chat */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={cn("flex-1 flex flex-col min-w-0", showInbox && "max-md:hidden")}>
         {selectedConversationId && selectedSession ? (
           <>
             <div className="flex items-center justify-between divider-idv-bottom">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <ConversationHeader
                   session={selectedSession}
                   teamMembers={teamMembers}
@@ -554,7 +554,7 @@ const Chat = () => {
                   isSyncingHistory={isSyncingHistory}
                 />
               </div>
-              <div className="flex items-center gap-1 mr-2">
+              <div className="flex shrink-0 items-center gap-1 mr-2">
                 {!showInbox && (
                   <Button variant="ghost" size="icon" onClick={() => setShowInbox(true)}>
                     <PanelLeft className="h-5 w-5" />

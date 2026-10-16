@@ -95,7 +95,7 @@ export const AutomationsSection = () => {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
         <div>
           <CardTitle>Automações</CardTitle>
           <CardDescription>Quando algo acontece, o sistema age: mover a etapa, atualizar um campo, atribuir o responsável ou chamar um webhook.</CardDescription>

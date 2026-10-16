@@ -98,8 +98,8 @@ export function ConversationHeader({
   const ch = channelLabel(session.channel);
 
   return (
-    <div className="flex items-center justify-between p-3 divider-idv-bottom bg-white dark:bg-zinc-950">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-2 p-3 divider-idv-bottom bg-white dark:bg-zinc-950">
+      <div className="flex min-w-0 items-center gap-3">
         {/* Back Button (Mobile) */}
         {onBack && (
           <Button 
@@ -115,7 +115,7 @@ export function ConversationHeader({
         {/* Avatar and Info Block */}
         <button 
           onClick={onOpenLeadDetails}
-          className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity focus:outline-none"
+          className="flex min-w-0 items-center gap-3 text-left hover:opacity-80 transition-opacity focus:outline-none"
         >
           <div className="relative">
             <Avatar className="h-10 w-10">
@@ -140,9 +140,9 @@ export function ConversationHeader({
             )}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-medium text-slate-900 dark:text-slate-100">
+              <span className="truncate font-medium text-slate-900 dark:text-slate-100">
                 {session.customerName}
               </span>
               {/* Canal badge */}
@@ -177,7 +177,7 @@ export function ConversationHeader({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {/* Quick Actions Area */}
         <div
           className="hidden md:flex items-center gap-2 mr-2 pr-2 border-r"

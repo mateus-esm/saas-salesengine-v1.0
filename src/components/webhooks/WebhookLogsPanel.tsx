@@ -105,7 +105,7 @@ export const WebhookLogsPanel = ({ logs, isLoading, eventLabel }: Props) => {
                     </TableRow>
                     {openId === log.id && (
                       <TableRow>
-                        <TableCell colSpan={6} className="bg-muted/40 space-y-3">
+                        <TableCell colSpan={6} className="max-w-0 bg-muted/40 space-y-3">
                           <div>
                             <p className="text-xs font-medium mb-1">{log.direction === "inbound" ? "Payload recebido" : "Payload enviado"}</p>
                             <pre className="text-xs overflow-x-auto max-h-60 bg-background p-2 rounded">{JSON.stringify(log.payload, null, 2)}</pre>
@@ -144,7 +144,7 @@ export const WebhookLogsPanel = ({ logs, isLoading, eventLabel }: Props) => {
                     <TableCell className="whitespace-nowrap">{fmt(r.created_at)}</TableCell>
                     <TableCell>{String((r.input as { action?: { type?: string } })?.action?.type ?? "—")}</TableCell>
                     <TableCell>{RUN_BADGE[r.status]}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.error ?? ""}</TableCell>
+                    <TableCell className="min-w-[10rem] text-sm text-muted-foreground">{r.error ?? ""}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
