@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any, TypeVar
 
 from agno.models.openai import OpenAIChat
@@ -84,6 +85,20 @@ def structured_output_kwargs(schema: type[BaseModel]) -> dict[str, Any]:
     return {"output_schema": schema, "use_json_mode": True}
 
 
+_FENCE = re.compile(r"```[a-zA-Z]*\s*\n(.*?)\n?\s*```", re.DOTALL)
+
+
+def _strip_fence(text: str) -> str:
+    """The JSON inside a markdown fence, when the model wrapped its answer in one.
+
+    Models sometimes answer ```json {...} ``` despite "APENAS JSON" in the prompt.
+    That is still model output — before this, it was read as a provider message
+    and the whole pass failed (4 passes, 13–27/09).
+    """
+    match = _FENCE.search(text)
+    return match.group(1).strip() if match else text
+
+
 def parse_model_output(content: Any, schema: type[ModelT]) -> ModelT:
     """Turn an Agno run's ``content`` into ``schema``, or say who actually failed.
 
@@ -99,7 +114,7 @@ def parse_model_output(content: Any, schema: type[ModelT]) -> ModelT:
         return content
 
     if isinstance(content, str):
-        text = content.strip()
+        text = _strip_fence(content.strip())
         try:
             decoded = json.loads(text)
         except ValueError as exc:

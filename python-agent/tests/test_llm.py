@@ -116,3 +116,34 @@ def test_structured_output_can_be_forced_off_for_openai(monkeypatch):
     from app.llm import structured_output_kwargs
 
     assert structured_output_kwargs(_Shape) == {}
+
+
+# ── Sprint 13 · the answer arrives inside a markdown fence ─────────────────────
+# Four passes (13–27/09) failed as "provedor: ```json {...}": valid JSON in a
+# fence was taken for a provider message and the whole pass was lost.
+
+import pytest
+from pydantic import BaseModel
+
+from app.llm import ModelProviderError, parse_model_output
+
+
+class _Out(BaseModel):
+    summary: str = ""
+
+
+def test_parse_accepts_json_inside_a_markdown_fence():
+    text = '```json\n{"summary": "Quer orçamento."}\n```'
+    assert parse_model_output(text, _Out).summary == "Quer orçamento."
+
+
+def test_parse_accepts_a_bare_fence_and_surrounding_prose():
+    assert parse_model_output('```\n{"summary": "a"}\n```', _Out).summary == "a"
+    assert parse_model_output('Aqui está:\n```json\n{"summary": "b"}\n```\nPronto.', _Out).summary == "b"
+
+
+def test_parse_still_blames_the_provider_for_text_without_json():
+    with pytest.raises(ModelProviderError):
+        parse_model_output("invalid or expired token", _Out)
+    with pytest.raises(ModelProviderError):
+        parse_model_output("```\nnada aqui\n```", _Out)

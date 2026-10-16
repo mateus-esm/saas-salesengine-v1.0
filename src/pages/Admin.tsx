@@ -197,7 +197,9 @@ const Admin = () => {
   // ─── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (loadingRole) return;
-    if (role !== "super_admin" && role !== "owner") navigate("/home");
+    // `owner` é o DONO DO TIME (papel do cliente), não admin do sistema:
+    // só o super_admin abre o painel. Confirmado pelo dono em 2026-09-27.
+    if (role !== "super_admin") navigate("/home");
   }, [loadingRole, role, navigate]);
 
   // ─── Fetch all data ──────────────────────────────────────────────────────────
@@ -703,18 +705,8 @@ const Admin = () => {
     );
   }
 
-  // O owner acessa somente tickets; as consultas e abas antigas continuam exclusivas do super_admin.
-  if (role === "owner") {
-    return (
-      <div className="container mx-auto p-4 md:p-6 space-y-6">
-        <h1 className="text-2xl font-bold">Administração do suporte</h1>
-        <Tabs value="tickets">
-          <TabsList><TabsTrigger value="tickets">Tickets</TabsTrigger></TabsList>
-          <TabsContent value="tickets" className="mt-4"><TicketsTab /></TabsContent>
-        </Tabs>
-      </div>
-    );
-  }
+  // Só o administrador geral (super_admin) abre o painel. `owner` é o dono do
+  // time (cliente): usa a tela /suporte para os próprios tickets.
   if (role !== "super_admin") return null;
 
   // ─── Render ──────────────────────────────────────────────────────────────────

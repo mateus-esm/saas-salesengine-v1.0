@@ -1,4 +1,4 @@
-import { Home, MessageCircle, MessageSquareText, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield, Bot, Cpu } from "lucide-react";
+import { Home, MessageCircle, MessageSquareText, LayoutDashboard, HelpCircle, LogOut, ExternalLink, CreditCard, BarChart3, BookOpen, Webhook, Wrench, Star, Shield, Bot, Cpu, Users } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
@@ -34,6 +34,7 @@ export function AppSidebar() {
     { title: "AI Studio", url: "/ai-studio", icon: Cpu, external: false, requiredRole: 'admin', permissionKey: 'ai_studio' },
     { title: "Webhooks", url: "/webhooks", icon: Webhook, external: false, requiredRole: 'admin', permissionKey: 'webhooks' },
     { title: "Outreach", url: "/outreach", icon: MessageSquareText, external: false, requiredRole: 'admin', permissionKey: 'webhooks' },
+    { title: "Equipe", url: "/equipe", icon: Users, external: false, requiredRole: 'owner' },
     { title: "Billing", url: "/billing", icon: CreditCard, external: false, requiredRole: 'admin', permissionKey: 'billing' },
     { title: "Toolkit", url: "/toolkit", icon: Wrench, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'toolkit' },
     { title: "Clube Solo", url: "/clube", icon: Star, external: false, badge: "Em Breve", requiredRole: 'admin', permissionKey: 'clube' },
@@ -107,17 +108,18 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Owner acessa somente suporte; super_admin mantém o painel completo. */}
-        {hasRole("owner") && (
+        {/* Só o administrador geral (super_admin) abre o painel. `owner` é o
+            dono do time (cliente) e usa a tela /suporte para os próprios tickets. */}
+        {isSuperAdmin() && (
           <SidebarGroup>
             <SidebarGroupLabel className={!open ? "sr-only" : ""}>Administração</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <NavLink to={isSuperAdmin() ? "/admin" : "/admin?tab=tickets"} end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
+                    <NavLink to="/admin" end className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors" activeClassName="bg-sidebar-accent text-foreground font-semibold">
                       <Shield className="h-4 w-4 shrink-0" />
-                      {open && <span className="text-sm">{isSuperAdmin() ? "Admin Panel" : "Tickets de suporte"}</span>}
+                      {open && <span className="text-sm">Admin Panel</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

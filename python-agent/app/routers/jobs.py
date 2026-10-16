@@ -43,13 +43,43 @@ def get_repo():  # seam for tests
     return CopilotRepo(get_pg_pool())
 
 
+_jev_clients: dict[tuple[str, str, float], Any] = {}
+
+
+def get_system1(settings: Any):
+    """System One (Jev) around the keeper — None without JEV_API_KEY or with JEV_MODE=off.
+
+    The HTTP client is kept across ticks (keep-alive), one per key/model/timeout.
+    """
+    mode = str(settings.jev_mode or "off").strip().lower()
+    if not settings.jev_api_key or mode not in ("shadow", "on"):
+        return None
+    from app.cognition.system_one import SystemOne
+    from app.copilot.judgments import System1
+
+    key = (settings.jev_api_key, settings.jev_model, float(settings.jev_timeout_s))
+    client = _jev_clients.get(key)
+    if client is None:
+        client = _jev_clients[key] = SystemOne(settings.jev_api_key, model=settings.jev_model, timeout=float(settings.jev_timeout_s))
+    return System1(client, mode=mode, quiet_below=float(settings.jev_quiet_below))
+
+
 def get_think(model_id: str):  # seam for tests
     from app.copilot.keeper import make_think
 
     return make_think(model_id)
 
 
-async def process(jobs: list[dict[str, Any]], *, repo: Any, think: Any, model_id: str, concurrency: int) -> list[dict[str, Any]]:
+async def process(
+    jobs: list[dict[str, Any]],
+    *,
+    repo: Any,
+    think: Any,
+    model_id: str,
+    concurrency: int,
+    s1: Any = None,
+    model_timeout_s: float | None = None,
+) -> list[dict[str, Any]]:
     from app.copilot.keeper import run_job
 
     gate = _gate(concurrency)
@@ -57,7 +87,7 @@ async def process(jobs: list[dict[str, Any]], *, repo: Any, think: Any, model_id
     async def one(job: dict[str, Any]) -> dict[str, Any]:
         async with gate:
             try:
-                return await run_job(job, repo=repo, think=think, model_id=model_id)
+                return await run_job(job, repo=repo, think=think, model_id=model_id, s1=s1, model_timeout_s=model_timeout_s)
             except Exception as exc:  # run_job closes its job; this is the last guard
                 logger.exception("copilot job %s crashed", job.get("id"))
                 return {"status": "crashed", "error": str(exc)}
@@ -84,5 +114,6 @@ async def tick(
         background.add_task(
             process, jobs, repo=repo, think=get_think(model_id), model_id=model_id,
             concurrency=settings.copilot_jobs_concurrency,
+            s1=get_system1(settings), model_timeout_s=settings.keeper_model_timeout_s,
         )
     return {"status": "accepted", "claimed": len(jobs)}

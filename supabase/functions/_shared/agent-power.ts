@@ -135,12 +135,18 @@ export async function syncAgentPower(
     const r = await pauseAgent(db, row.equipe_id, row.agent_id, row.reason);
     if (r.ok) {
       out.paused++;
+      // Bug 3: o aviso "os créditos acabaram" (credits.exhausted, disparado
+      // pelo billing-cron) e o aviso "o agente PAROU" são coisas diferentes.
+      // Este é o segundo: o agente foi de fato desligado no provedor. O dono
+      // precisa saber que aqui ele já parou de responder, não só que o saldo
+      // zerou — sem isso a mensagem de credits.exhausted prometia uma pausa
+      // que podia não ter acontecido ainda.
       await notify(db, row.equipe_id,
-        row.reason === "suspended" ? "contract.suspended" : "credits.exhausted",
+        row.reason === "suspended" ? "contract.suspended" : "credits.agent_paused",
         row.reason === "suspended" ? "Atendimento pausado" : "Seu agente parou de responder",
         row.reason === "suspended"
           ? "A conta está em modo somente leitura. O agente de atendimento foi pausado até a fatura ser paga."
-          : "Seus créditos de atendimento acabaram e o agente foi pausado. O chat com sua equipe continua normal.",
+          : "Os créditos de atendimento acabaram e o agente foi pausado agora. O chat com sua equipe continua normal.",
         "/billing/creditos",
         `agentpause_${row.equipe_id}_${row.reason}`);
     } else out.failed++;

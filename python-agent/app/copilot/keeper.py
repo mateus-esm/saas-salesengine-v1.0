@@ -7,6 +7,11 @@ Onda 5 every door creates the deal on arrival, so there is nothing left to route
 and one call with the whole context decides what changed. The database checks and
 applies (crm_copilot_apply); this module only thinks and measures.
 
+Sprint 13 puts System One (Jev) around the model call — triage before it,
+verification after it (app/copilot/judgments.py): in "on" mode a pass with no
+signal skips the model, and each action's confidence is Jev's calibrated
+P(the conversation supports it) instead of the model's own guess.
+
 Nothing new since the last read → the job closes as "skipped" without calling
 the model (free). A provider failure or an unreadable answer closes it as
 "failed", and the queue tries again with a wait — nothing is charged.
@@ -23,6 +28,7 @@ from typing import Any, Awaitable, Callable
 from pydantic import ValidationError
 
 from app.copilot.actions import KeeperOutput
+from app.copilot.judgments import System1, calibrate
 from app.copilot.repo import CopilotRepo
 from app.llm import ModelProviderError, build_chat_model, parse_model_output, structured_output_kwargs
 
@@ -155,15 +161,37 @@ def _ms(start: float, end: float) -> int:
     return int(round((end - start) * 1000))
 
 
-async def run_job(job: dict[str, Any], *, repo: CopilotRepo, think: Think, model_id: str) -> dict[str, Any]:
-    """Process one claimed job end to end. Never raises: the job is always closed."""
+async def run_job(
+    job: dict[str, Any],
+    *,
+    repo: CopilotRepo,
+    think: Think,
+    model_id: str,
+    s1: System1 | None = None,
+    model_timeout_s: float | None = None,
+) -> dict[str, Any]:
+    """Process one claimed job end to end. Never raises: the job is always closed.
+
+    With System One (Sprint 13) the pass is  triage → [model] → verify → apply:
+    in "on" mode a quiet triage closes the pass without the model (the cursor
+    still moves) and verification sets each action's confidence; in "shadow"
+    both judgments run beside the usual pass and are only logged (s1 in the
+    job result and the run event), at no extra latency.
+    """
     job_id = str(job["id"])
     opp_id = str(job["opportunity_id"])
     run_id = str(job.get("run_id") or job_id)
     equipe_id = str(job["equipe_id"])
     started = perf_counter()
+    s1_log: dict[str, Any] = {"mode": s1.mode, "calibrated": False} if s1 else {}
+    judging: dict[str, asyncio.Task] = {}  # System One calls still in flight
 
     async def close(status: str, error: str | None, result: dict[str, Any]) -> dict[str, Any]:
+        for key, task in judging.items():  # a judgment in flight is logged, never lost
+            if key not in s1_log:
+                s1_log[key] = (await task)[1]
+        if s1_log:
+            result = {**result, "s1": s1_log}
         kind = {"done": "keeper_done", "skipped": "keeper_skipped"}.get(status, "keeper_failed")
         try:
             await asyncio.to_thread(repo.event, equipe_id=equipe_id, run_id=run_id, opportunity_id=opp_id,
@@ -188,26 +216,60 @@ async def run_job(job: dict[str, Any], *, repo: CopilotRepo, think: Think, model
     if not ctx.get("messages"):
         return await close("skipped", None, {"reason": "nada novo desde a última leitura", "timings": timings})
 
+    # System 1 — triage. In shadow it runs beside the model; in "on" it decides first.
+    if s1:
+        judging["triage"] = asyncio.create_task(s1.triage(ctx))
+    if s1 and s1.acts:
+        triage, s1_log["triage"] = await judging["triage"]
+        if triage and triage.quiet(s1.quiet_below):
+            try:
+                await asyncio.to_thread(
+                    repo.apply, opportunity_id=opp_id, run_id=run_id, actions=[], summary=None,
+                    confidence=None, cursor=ctx.get("last_message_at"), model=model_id,
+                )
+            except Exception as exc:
+                return await close("failed", f"aplicar: {exc}"[:500], {"route": "quiet", "timings": timings})
+            timings["apply_ms"] = _ms(loaded, perf_counter())
+            return await close("skipped", None, {"reason": "sem sinal (System 1)", "route": "quiet", "timings": timings})
+        loaded = perf_counter()
+
+    # System 2 — the one model call.
     try:
-        output = await think(build_message(ctx))
+        pending = think(build_message(ctx))
+        output = await (asyncio.wait_for(pending, model_timeout_s) if model_timeout_s else pending)
+    except (TimeoutError, asyncio.TimeoutError):
+        timings["model_ms"] = _ms(loaded, perf_counter())
+        return await close("failed", f"provedor: tempo esgotado ({model_timeout_s:g} s)", {"route": "model", "timings": timings})
     except ModelProviderError as exc:
         timings["model_ms"] = _ms(loaded, perf_counter())
-        return await close("failed", f"provedor: {exc}"[:500], {"timings": timings})
+        return await close("failed", f"provedor: {exc}"[:500], {"route": "model", "timings": timings})
     except ValidationError as exc:
         timings["model_ms"] = _ms(loaded, perf_counter())
-        return await close("failed", f"resposta ilegível: {exc.errors()[:3]}"[:500], {"timings": timings})
+        return await close("failed", f"resposta ilegível: {exc.errors()[:3]}"[:500], {"route": "model", "timings": timings})
     except Exception as exc:
         timings["model_ms"] = _ms(loaded, perf_counter())
-        return await close("failed", f"modelo: {exc}"[:500], {"timings": timings})
+        return await close("failed", f"modelo: {exc}"[:500], {"route": "model", "timings": timings})
     thought = perf_counter()
     timings["model_ms"] = _ms(loaded, thought)
+
+    # System 1 — verification. "on" waits for it (it sets the confidence the
+    # database gates on); shadow runs it beside the apply.
+    actions = output.actions
+    if s1 and actions:
+        judging["verify"] = asyncio.create_task(s1.verify(ctx, actions))
+        if s1.acts:
+            probs, s1_log["verify"] = await judging["verify"]
+            if probs and any(p is not None for p in probs):
+                actions = calibrate(actions, probs)
+                s1_log["calibrated"] = True
+            thought = perf_counter()
 
     try:
         applied = await asyncio.to_thread(
             repo.apply,
             opportunity_id=opp_id,
             run_id=run_id,
-            actions=output.actions,
+            actions=actions,
             summary=output.summary or None,
             confidence=output.confidence,
             cursor=ctx.get("last_message_at"),
@@ -215,12 +277,13 @@ async def run_job(job: dict[str, Any], *, repo: CopilotRepo, think: Think, model
         )
     except Exception as exc:
         timings["apply_ms"] = _ms(thought, perf_counter())
-        return await close("failed", f"aplicar: {exc}"[:500], {"timings": timings})
+        return await close("failed", f"aplicar: {exc}"[:500], {"route": "model", "timings": timings})
     timings["apply_ms"] = _ms(thought, perf_counter())
 
     applied = applied or {}
     result = {
         "mode": applied.get("mode"),
+        "route": "model",
         "applied": len(applied.get("applied") or []),
         "pending": len(applied.get("pending") or []),
         "proposed": len(applied.get("proposed") or []),

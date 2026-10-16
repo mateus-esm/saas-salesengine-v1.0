@@ -38,7 +38,12 @@ const CONTRACT_STATUS: Record<string, { label: string; className: string }> = {
 export function AdminBillingTab() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selected, setSelected] = useState<TeamBillingRow | null>(null);
+  // Só o ID é guardado. Guardar a LINHA inteira congelava o saldo no instante do
+  // clique: depois de aplicar crédito, refresh() revalidava a lista mas o
+  // diálogo continuava mostrando o saldo velho, e o operador aplicava de novo —
+  // dois topups de 1000 no mesmo minuto. O saldo exibido tem de vir sempre da
+  // lista viva, nunca de uma cópia da abertura.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [invoiceFilter, setInvoiceFilter] = useState<"all" | InvoiceStatus>("all");
   const [adhocOpen, setAdhocOpen] = useState(false);
 
@@ -72,6 +77,12 @@ export function AdminBillingTab() {
     if (!search.trim()) return true;
     return t.nome?.toLowerCase().includes(search.toLowerCase());
   });
+
+  // A linha viva do time aberto, relida da lista a cada render. É o que faz o
+  // saldo do diálogo acompanhar o grant em vez de congelar na abertura.
+  const selectedRow = selectedId
+    ? (teams ?? []).find((t) => t.equipe_id === selectedId) ?? null
+    : null;
 
   const mrr = (teams ?? [])
     .filter((t) => ["active", "past_due"].includes(t.contract_status))
@@ -132,7 +143,7 @@ export function AdminBillingTab() {
                 return (
                   <button
                     key={t.equipe_id}
-                    onClick={() => setSelected(t)}
+                    onClick={() => setSelectedId(t.equipe_id)}
                     className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors flex items-center gap-3 flex-wrap"
                   >
                     <div className="min-w-0 flex-1">
@@ -243,9 +254,9 @@ export function AdminBillingTab() {
       </Card>
 
       <TeamBillingDialog
-        team={selected}
-        open={selected !== null}
-        onOpenChange={(o) => !o && setSelected(null)}
+        team={selectedRow}
+        open={selectedId !== null}
+        onOpenChange={(o) => !o && setSelectedId(null)}
       />
 
       <AdhocInvoiceDialog
