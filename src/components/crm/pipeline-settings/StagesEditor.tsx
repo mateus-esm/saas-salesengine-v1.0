@@ -20,10 +20,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Clock, GripVertical, Loader2, MessageSquare, Plus, RefreshCw, Repeat, Trash2, Webhook, X } from "lucide-react";
 
+import { DraftField } from "@/components/crm/pipeline-settings/DraftField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -396,9 +396,13 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
           aria-label="Cor da etapa"
         />
 
-        <Input
+        {/* Nome da etapa: rascunho local + commit no blur. Ligado direto no
+            onChange, cada tecla disparava um UPDATE (updateStage.mutate) e o
+            caractere só aparecia depois do round-trip — daí o lag por caractere. */}
+        <DraftField
           value={stage.name}
-          onChange={(e) => onChange({ name: e.target.value })}
+          onCommit={(name) => onChange({ name })}
+          aria-label="Nome da etapa"
           className="flex-1 h-8 font-medium"
         />
 
@@ -586,10 +590,13 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
         <Label className="text-xs text-muted-foreground">
           O que o agente deve saber sobre esta etapa
         </Label>
-        <Textarea
+        {/* Mesma classe de lag do nome: era um commit por tecla. */}
+        <DraftField
           value={stage.description ?? ""}
-          onChange={(e) => onChange({ description: e.target.value || undefined })}
+          onCommit={(description) => onChange({ description: description || undefined })}
+          multiline
           rows={2}
+          aria-label="Descrição da etapa"
           className="mt-1 text-xs resize-none"
           placeholder="Ex.: Leads que já receberam proposta técnica e estão avaliando o investimento. O agente deve focar em esclarecer dúvidas sobre retorno financeiro."
         />
@@ -652,11 +659,11 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
 
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Webhook de ciclo</Label>
-              <Input
+              <DraftField
                 type="text"
                 value={stage.cycle_webhook_url ?? ""}
-                onChange={(e) =>
-                  onChange({ cycle_webhook_url: e.target.value || null })
+                onCommit={(cycle_webhook_url) =>
+                  onChange({ cycle_webhook_url: cycle_webhook_url || null })
                 }
                 className="h-8"
                 placeholder="https://..."
