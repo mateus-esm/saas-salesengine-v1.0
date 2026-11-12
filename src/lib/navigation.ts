@@ -11,6 +11,7 @@ import {
   Webhook,
   Wrench,
   Home,
+  Shield,
   Table2,
   type LucideIcon,
 } from "lucide-react";
@@ -108,6 +109,7 @@ export function buildNav(ctx: NavContext): NavGroup[] {
         { id: "billing", title: "Billing", url: "/billing", icon: CreditCard, requiredRole: "admin", permissionKey: "billing" },
         { id: "suporte", title: "Suporte", url: "/suporte", icon: HelpCircle, requiredRole: "admin", permissionKey: "suporte" },
         { id: "docs", title: "Central de Ajuda", url: "/docs", icon: BookOpen },
+        ...(ctx.isSuperAdmin ? [{ id: "admin", title: "Admin", url: "/admin", icon: Shield }] : []),
       ],
     },
     {

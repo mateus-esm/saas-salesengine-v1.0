@@ -60,6 +60,12 @@ describe("buildNav", () => {
     expect(tabelas?.children?.[0].title).toBe("Propostas");
   });
 
+  it("super admin sees Admin; admin without super does not", () => {
+    const sa = buildNav(makeCtx({ role: "owner", isSuperAdmin: true })).find((g) => g.label === "Conta")!;
+    expect(sa.items[sa.items.length - 1]).toMatchObject({ id: "admin", title: "Admin", url: "/admin" });
+    expect(allTitles(makeCtx({ role: "admin" }))).not.toContain("Admin");
+  });
+
   it("chat is external when href is http and ids are unique", () => {
     const ctx = makeCtx({ chatHref: "https://chat.example.com", customTables: [{ slug: "a", name: "A" }] });
     const items = flat(buildNav(ctx).flatMap((g) => g.items));
@@ -86,6 +92,13 @@ describe("isNavItemActive", () => {
     expect(isNavItemActive(by("Tabelas"), l)).toBe(true);
     expect(isNavItemActive(by("Propostas"), loc("/crm", "?tab=tabelas"))).toBe(false);
     expect(isNavItemActive(by("Tabelas"), loc("/crm", "?tab=tabelas"))).toBe(true);
+  });
+
+  it("custom table slug with special characters", () => {
+    const slug = "ação&b";
+    const n = buildNav(makeCtx({ customTables: [{ slug, name: "X" }] }));
+    const child = flat(n.flatMap((g) => g.items)).find((i) => i.id === `crm-table-${slug}`)!;
+    expect(isNavItemActive(child, loc("/crm", `?tab=tabelas&custom_table=${encodeURIComponent(slug)}`))).toBe(true);
   });
 
   it("no tab means pipeline", () => {
