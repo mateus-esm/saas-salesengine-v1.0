@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CustomTableColumn } from "@/hooks/useCustomTables";
 
 import {
+  ARTIFACT_STATUS_LABEL,
   artifactKindLabel,
   artifactMilestone,
   artifactStatusesFor,
@@ -72,10 +73,29 @@ describe("recordTitle", () => {
 
 describe("the lifecycle (the database's twin)", () => {
   it("offers each kind its own statuses: a proposal is not signed, a contract is not accepted", () => {
-    expect(artifactStatusesFor("proposal")).toEqual(["draft", "sent", "accepted", "rejected"]);
-    expect(artifactStatusesFor("contract")).toEqual(["draft", "sent", "signed", "rejected"]);
+    expect(artifactStatusesFor("proposal")).toEqual(["draft", "generated", "sent", "accepted", "rejected"]);
+    expect(artifactStatusesFor("contract")).toEqual(["draft", "generated", "sent", "signed", "rejected"]);
     expect(artifactStatusesFor("document")).toContain("signed");
     expect(artifactStatusesFor(null)).toEqual([]);
+  });
+
+  it("statuses include generated right after draft", () => {
+    expect(artifactStatusesFor("proposal")).toEqual(["draft", "generated", "sent", "accepted", "rejected"]);
+    expect(artifactStatusesFor("contract")).toEqual(["draft", "generated", "sent", "signed", "rejected"]);
+    expect(artifactStatusesFor("document")).toEqual(["draft", "generated", "sent", "accepted", "signed", "rejected"]);
+  });
+
+  it("generated is labelled Gerado", () => {
+    expect(ARTIFACT_STATUS_LABEL.generated).toBe("Gerado");
+  });
+
+  it("generated marks no milestone", () => {
+    expect(artifactMilestone("proposal", "generated")).toBeNull();
+    expect(artifactMilestone("contract", "generated")).toBeNull();
+  });
+
+  it("artifactStatusOf keeps generated", () => {
+    expect(artifactStatusOf("generated")).toBe("generated");
   });
 
   it("names the milestone a status proves", () => {
