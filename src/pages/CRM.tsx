@@ -27,25 +27,7 @@ import { AgendaView } from "@/components/crm/AgendaView";
 import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { CampaignsView } from "@/components/crm/campaigns/CampaignsView";
 import { FILTER_PARAM_KEYS } from "@/lib/crmFilterParams";
-
-// Sprint 11 · T68 — the Copilot left the CRM: it is the app's opening (/home).
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "catalogo" | "campanhas" | "tasks" | "tabelas" | "agenda";
-
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "catalogo", "campanhas", "tasks", "tabelas", "agenda"];
-const isTopTab = (v: string | null): v is TopTab =>
-  !!v && TOP_TABS.includes(v as TopTab);
-
-const TAB_LABELS: Record<TopTab, string> = {
-  pipeline: "Pipeline",
-  contacts: "Base de Contatos",
-  companies: "Empresas",
-  properties: "Imóveis",
-  catalogo: "Catálogo",
-  campanhas: "Campanhas",
-  tasks: "Tarefas",
-  tabelas: "Tabelas",
-  agenda: "Agenda",
-};
+import { TAB_LABELS, isTopTab, type TopTab } from "@/lib/crmTabs";
 
 const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
