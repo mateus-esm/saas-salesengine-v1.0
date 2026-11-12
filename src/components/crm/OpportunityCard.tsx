@@ -177,8 +177,7 @@ export const OpportunityCard = ({
         ]
       : []),
   ];
-  const { shown: shownBadges, overflow: badgeOverflow } = splitBadges(allBadges, MAX_BADGES);
-  const hiddenBadges = allBadges.slice(MAX_BADGES);
+  const { shown: shownBadges, hidden: hiddenBadges, overflow: badgeOverflow } = splitBadges(allBadges, MAX_BADGES);
   const showWhatsApp = nativeFlags.whatsapp && !!lead?.phone;
 
   return (
@@ -281,6 +280,7 @@ export const OpportunityCard = ({
               <TooltipTrigger asChild>
                 <span
                   tabIndex={0}
+                  onClick={stop}
                   className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
                   aria-label={`Mais ${badgeOverflow}: ${hiddenBadges.map((h) => h.label).join(", ")}`}
                 >
@@ -329,7 +329,7 @@ export const OpportunityCard = ({
         <div
           className={cn(
             "flex items-center gap-1 border-t border-border/60 pt-1.5 transition-opacity",
-            "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+            "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100",
           )}
           onClick={stop}
           onPointerDown={stop}

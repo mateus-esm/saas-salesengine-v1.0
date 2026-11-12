@@ -169,7 +169,8 @@ export function cardFieldsFor(
 }
 
 /** Keeps the first `max` badges (order preserved) and counts the ones left out. */
-export function splitBadges<T>(badges: T[], max: number): { shown: T[]; overflow: number } {
-  const shown = badges.slice(0, Math.max(0, max));
-  return { shown, overflow: badges.length - shown.length };
+export function splitBadges<T>(badges: T[], max: number): { shown: T[]; hidden: T[]; overflow: number } {
+  const n = Math.max(0, max);
+  const hidden = badges.slice(n);
+  return { shown: badges.slice(0, n), hidden, overflow: hidden.length };
 }

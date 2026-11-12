@@ -165,9 +165,13 @@ describe("splitBadges", () => {
   it("shows at most max and counts the rest", () => {
     const r = splitBadges(["a", "b", "c", "d"], 2);
     expect(r.shown).toEqual(["a", "b"]);
+    expect(r.hidden).toEqual(["c", "d"]);
     expect(r.overflow).toBe(2);
     const one = splitBadges(["a"], 2);
     expect(one.shown).toEqual(["a"]);
     expect(one.overflow).toBe(0);
+    expect(one.hidden).toEqual([]);
+    const none = splitBadges<string>([], 2);
+    expect(none).toEqual({ shown: [], hidden: [], overflow: 0 });
   });
 });
