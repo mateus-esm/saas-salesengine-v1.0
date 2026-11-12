@@ -22,7 +22,7 @@ import { MultiSelectPicker } from "../fields/MultiSelectPicker";
 import { UserAvatar } from "../fields/UserAvatar";
 import { UserPicker } from "../fields/UserPicker";
 import { getHandler } from "./columnTypes";
-import { RelationChip } from "./RelationChip";
+import { RelationChip, RelationChips } from "./RelationChip";
 import { RelationPicker } from "./RelationPicker";
 import type { ColumnDef, GridRow } from "./types";
 
@@ -41,9 +41,9 @@ export interface InlineCellProps {
 const sameValue = (a: unknown, b: unknown) =>
   a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-const CELL = "flex h-8 w-full items-center px-3 text-sm";
+const CELL = "flex h-10 w-full min-w-0 items-center px-3 text-sm";
 const INPUT =
-  "h-8 w-full rounded-none border-0 bg-background px-3 text-sm outline-none ring-2 ring-inset ring-primary";
+  "h-10 w-full rounded-none border-0 bg-background px-3 text-sm outline-none ring-2 ring-inset ring-primary";
 
 export function InlineCell(props: InlineCellProps) {
   if (props.column.kind === "relation") return <RelationCell {...props} />;
@@ -440,19 +440,23 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
 
   return (
     <div
-      className="flex h-8 w-full items-center gap-1 overflow-hidden px-1 text-sm"
+      className="flex h-10 w-full min-w-0 items-center gap-1 overflow-hidden px-2 text-sm"
       onDoubleClick={() => canEdit && setEditing(true)}
     >
       {!fromRow && loading ? (
         <span className="text-xs text-muted-foreground">Carregando...</span>
       ) : links.length > 0 ? (
-        links.map((chip) => (
-          <RelationChip
-            key={chip.toId}
-            label={chip.label}
-            onRemove={editing ? () => void onCommit({ toId: chip.toId, action: "remove" }) : undefined}
-          />
-        ))
+        editing ? (
+          links.map((chip) => (
+            <RelationChip
+              key={chip.toId}
+              label={chip.label}
+              onRemove={() => void onCommit({ toId: chip.toId, action: "remove" })}
+            />
+          ))
+        ) : (
+          <RelationChips chips={links} />
+        )
       ) : (
         !editing && <span className="text-xs text-muted-foreground">—</span>
       )}

@@ -5,6 +5,30 @@
 // rule: a native select column (stage, status) shows the option's label, not the
 // id it stores.
 
+import {
+  Building2,
+  Calendar,
+  CheckSquare,
+  CircleDot,
+  Contact,
+  DollarSign,
+  GitBranch,
+  Hash,
+  HelpCircle,
+  Home,
+  Layers,
+  Link,
+  Link2,
+  MapPin,
+  Paperclip,
+  Phone,
+  Sigma,
+  Tags,
+  Type,
+  User,
+  type LucideIcon,
+} from "lucide-react";
+
 import { getFieldType, type FieldContext } from "@/lib/fields/registry";
 
 import type { ColumnDef, ColumnKind } from "./types";
@@ -41,4 +65,33 @@ export function getHandler(kind: ColumnKind): ColumnTypeHandler {
       (kind === "select" ? optionLabel(value, col) : null) ?? spec.format(value, contextOf(col)),
     parse: (raw, col) => spec.parse(raw, contextOf(col)),
   };
+}
+
+// Sprint 15 · T7 — the header shows the column's type as an icon. Every kind a
+// ColumnDef can have (the registry's field types, relation and the v2 slots) has
+// one; a kind added later without an icon falls back to a generic one.
+const COLUMN_ICONS: Record<ColumnKind, LucideIcon> = {
+  text: Type,
+  file: Paperclip,
+  number: Hash,
+  currency: DollarSign,
+  date: Calendar,
+  boolean: CheckSquare,
+  select: CircleDot,
+  multi_select: Tags,
+  url: Link,
+  phone: Phone,
+  address: MapPin,
+  property_ref: Home,
+  company_ref: Building2,
+  contact_ref: Contact,
+  user: User,
+  relation: Link2,
+  formula: Sigma,
+  rollup: Layers,
+  conditional: GitBranch,
+};
+
+export function columnIcon(type: string): LucideIcon {
+  return (COLUMN_ICONS as Record<string, LucideIcon | undefined>)[type] ?? HelpCircle;
 }
