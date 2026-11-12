@@ -9,7 +9,7 @@ describe("contrast", () => {
     expect(contrastRatio("0 0% 100%", "0 0% 100%")).toBe(1);
   });
   it("Solo orange gets dark text", () => {
-    expect(pickForeground("28 100% 50%")).toBe("240 10% 3.9%");
+    expect(pickForeground("28 100% 50%")).toBe("0 0% 0%");
   });
   it("dark blue gets white text", () => {
     expect(pickForeground("221 83% 40%")).toBe("0 0% 100%");
@@ -20,14 +20,12 @@ describe("contrast", () => {
         for (let l = 0; l <= 100; l += 5) {
           const bg = `${h} ${s}% ${l}%`;
           const fg = pickForeground(bg);
-          const other = fg === "0 0% 100%" ? "240 10% 3.9%" : "0 0% 100%";
+          const other = fg === "0 0% 100%" ? "0 0% 0%" : "0 0% 100%";
           expect(contrastRatio(bg, fg)).toBeGreaterThanOrEqual(contrastRatio(bg, other));
         }
   });
-  it("documents the HSL space: a mid-luminance band exists where neither foreground reaches 4.5", () => {
-    // White and near-black tie at relative luminance ~0.18, where the best of the
-    // two is ~4.46:1. So 4.5 is not reachable for every tenant color; pickForeground
-    // still returns the better one, and the floor stays above 4.4 (never below).
+  it("every HSL color reaches 4.5:1 with white or pure black", () => {
+    // White and pure black tie at luminance ~0.18, where both give ~4.58:1.
     let worst = Infinity;
     for (let h = 0; h < 360; h += 5)
       for (let s = 0; s <= 100; s += 10)
@@ -35,7 +33,6 @@ describe("contrast", () => {
           const bg = `${h} ${s}% ${l}%`;
           worst = Math.min(worst, contrastRatio(bg, pickForeground(bg)));
         }
-    expect(worst).toBeLessThan(4.5);
-    expect(worst).toBeGreaterThanOrEqual(4.4);
+    expect(worst).toBeGreaterThanOrEqual(4.5);
   });
 });

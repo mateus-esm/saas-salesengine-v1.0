@@ -28,6 +28,12 @@ for (const [name, t] of Object.entries(themes)) {
     it("card-foreground on card >= 4.5", () => {
       expect(contrastRatio(t["card-foreground"], t.card)).toBeGreaterThanOrEqual(4.5);
     });
+    it("accent-foreground on accent >= 4.5", () => {
+      expect(contrastRatio(t["accent-foreground"], t.accent)).toBeGreaterThanOrEqual(4.5);
+    });
+    it("primary-foreground on primary >= 4.5", () => {
+      expect(contrastRatio(t["primary-foreground"], t.primary)).toBeGreaterThanOrEqual(4.5);
+    });
     it("input on card >= 3", () => {
       expect(contrastRatio(t.input, t.card)).toBeGreaterThanOrEqual(3);
     });

@@ -24,7 +24,7 @@
 
     /* Orange accent - Solo Ventures brand (functional, not decorative) */
     --primary: 28 100% 50%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
 
     --secondary: 240 5% 93%;
     --secondary-foreground: 240 5.9% 10%;
@@ -33,7 +33,7 @@
     --muted-foreground: 240 5% 34%;
 
     --accent: 38 100% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 0 0% 0%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
@@ -90,7 +90,7 @@
 
     /* Orange accent maintained */
     --primary: 28 100% 50%;
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
 
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
@@ -99,7 +99,7 @@
     --muted-foreground: 240 5% 64.9%;
 
     --accent: 38 100% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 0 0% 0%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;

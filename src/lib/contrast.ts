@@ -30,9 +30,9 @@ export function contrastRatio(a: string, b: string): number {
 }
 
 export const LIGHT_FOREGROUND = "0 0% 100%";
-export const DARK_FOREGROUND = "240 10% 3.9%";
+export const DARK_FOREGROUND = "0 0% 0%";
 
-export function pickForeground(bg: string): "0 0% 100%" | "240 10% 3.9%" {
+export function pickForeground(bg: string): "0 0% 100%" | "0 0% 0%" {
   return contrastRatio(bg, LIGHT_FOREGROUND) >= contrastRatio(bg, DARK_FOREGROUND)
     ? LIGHT_FOREGROUND
     : DARK_FOREGROUND;
