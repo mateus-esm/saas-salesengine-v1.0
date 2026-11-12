@@ -71,7 +71,7 @@ const CRM = () => {
   if (searchParams.get("tab") === "copilot") return <Navigate to="/home" replace />;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Sprint 15 · T5 — as abas viraram itens da barra lateral; aqui fica só o
           título da aba ativa (o celular não tem trilha) e os controles da página.
           O `overflow-x-auto` continua para os controles não quebrarem de linha. */}
@@ -85,7 +85,7 @@ const CRM = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {tab === "contacts" ? (
           <DatabaseView />
         ) : tab === "companies" ? (

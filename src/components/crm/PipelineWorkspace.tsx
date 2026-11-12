@@ -68,7 +68,7 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Sprint 12 · SE-PIPELINE-001 — no celular a barra rola para o lado.
           Com `flex-wrap`, os controles quebravam para uma segunda linha e, no
           caminho, encolhiam: os `shrink-0` abaixo mantêm cada grupo no tamanho
@@ -112,7 +112,7 @@ export const PipelineWorkspace = ({ pipelineId }: PipelineWorkspaceProps) => {
       {/* F4: approval queue — always visible (loading / error / empty / pending) */}
       <CopilotApprovalsPanel pipelineId={pipelineId} />
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {view === "kanban" && <OpportunityKanban pipelineId={pipelineId} />}
         {view === "leads" && <OpportunityTable pipelineId={pipelineId} />}
         {view === "agent" && pipeline && (

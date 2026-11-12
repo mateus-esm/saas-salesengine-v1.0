@@ -1,7 +1,7 @@
 // Sprint 15 · T7 — the grid has a fixed structure: one header for every state,
 // fixed column widths, a sticky header and first column, and a row count.
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
@@ -57,18 +57,21 @@ describe("SpreadsheetGrid", () => {
   it("table uses fixed layout with a colgroup", () => {
     const { container } = renderGrid({ onAddColumn: vi.fn() });
     const table = container.querySelector("table")!;
-    expect(classes(table)).toEqual(expect.arrayContaining(["table-fixed"]));
+    expect(classes(table)).toEqual(expect.arrayContaining(["table-fixed", "min-w-full"]));
     const cols = table.querySelectorAll("colgroup > col");
-    // checkbox + 3 columns + add column
-    expect(cols).toHaveLength(columns.length + 2);
+    // checkbox + 3 columns + add column + filler
+    expect(cols).toHaveLength(columns.length + 3);
     expect((cols[1] as HTMLElement).style.width).toBe("260px");
     expect((cols[2] as HTMLElement).style.width).toBe("180px");
     expect((cols[3] as HTMLElement).style.width).toBe("220px");
+    // The filler has no width: it takes what is left up to the right edge.
+    expect((cols[cols.length - 1] as HTMLElement).style.width).toBe("");
   });
 
   it("colgroup counts the score column too", () => {
     const { container } = renderGrid({ showLeadScore: true });
-    expect(container.querySelectorAll("colgroup > col")).toHaveLength(columns.length + 2);
+    // checkbox + score + 3 columns + filler
+    expect(container.querySelectorAll("colgroup > col")).toHaveLength(columns.length + 3);
   });
 
   it("checkbox and primary cells are sticky", () => {
@@ -140,5 +143,64 @@ describe("SpreadsheetGrid", () => {
     expect(loading).toEqual(data);
     expect(empty).toEqual(data);
     expect(data).toEqual(expect.arrayContaining(["Nome", "Telefone", "E-mail"]));
+  });
+
+  describe("paging", () => {
+    type Observed = { callback: IntersectionObserverCallback; options?: IntersectionObserverInit };
+    let observed: Observed[] = [];
+
+    beforeEach(() => {
+      observed = [];
+      vi.stubGlobal(
+        "IntersectionObserver",
+        class {
+          constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+            observed.push({ callback, options });
+          }
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+          takeRecords() {
+            return [];
+          }
+        },
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    const fire = (o: Observed) =>
+      o.callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+
+    it("a grid that scrolls observes the sentinel inside itself and pages on scroll", () => {
+      // The grid's height is bounded: its content is taller than its box.
+      vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(2000);
+      vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(500);
+      const onEndReached = vi.fn();
+      const { container } = renderGrid({ hasMore: true, onEndReached });
+      const root = container.firstElementChild;
+      const last = observed[observed.length - 1];
+      expect(last.options?.root).toBe(root);
+      expect(last.options?.rootMargin).toBe("400px");
+      fire(last);
+      expect(onEndReached).toHaveBeenCalledTimes(1);
+    });
+
+    it("a grid that grows with its rows observes against the viewport", () => {
+      const onEndReached = vi.fn();
+      renderGrid({ hasMore: true, onEndReached });
+      const last = observed[observed.length - 1];
+      expect(last.options?.root ?? null).toBeNull();
+      fire(last);
+      expect(onEndReached).toHaveBeenCalledTimes(1);
+    });
+
+    it("no more pages, no observer", () => {
+      renderGrid({ hasMore: false });
+      expect(observed).toHaveLength(0);
+    });
   });
 });

@@ -278,6 +278,8 @@ export function GridHeader({
             </DropdownMenu>
           </th>
         )}
+        {/* Filler: the width left over to the right edge. */}
+        <th className={TH} aria-hidden="true" />
       </tr>
     </thead>
   );

@@ -225,7 +225,8 @@ function DesktopGrid({
     renderColumns.reduce((sum, col) => sum + widthOf(col), 0) +
     (addColumn ? ACTION_W : 0) +
     (showColumnsMenu ? ACTION_W : 0);
-  const colSpan = renderColumns.length + 1 + (showLeadScore ? 1 : 0) + (addColumn ? 1 : 0) + (showColumnsMenu ? 1 : 0);
+  // +1 for the checkbox, +1 for the filler.
+  const colSpan = renderColumns.length + 2 + (showLeadScore ? 1 : 0) + (addColumn ? 1 : 0) + (showColumnsMenu ? 1 : 0);
 
   const state: GridState = loading ? "loading" : rows.length === 0 ? "empty" : "data";
   const isAllSelected = rows.length > 0 && selectedIds.size === rows.length;
@@ -238,10 +239,13 @@ function DesktopGrid({
     return { className: cn(TD, sticky.className, STICKY_TD, tint, extra), style: sticky.style };
   };
 
+  // The filler column takes the width left over to the right edge, so the
+  // fixed columns keep their widths and the row runs to the edge.
   const trailingCells = (
     <>
       {addColumn && <td className={TD} />}
       {showColumnsMenu && <td className={TD} />}
+      <td className={TD} aria-hidden="true" />
     </>
   );
 
@@ -316,7 +320,7 @@ function DesktopGrid({
 
   return (
     <div ref={rootRef} className="relative h-full min-h-0 overflow-auto rounded-lg border border-border bg-card">
-      <table className="table-fixed border-separate border-spacing-0" style={{ width: tableWidth }}>
+      <table className="min-w-full table-fixed border-separate border-spacing-0" style={{ width: tableWidth }}>
         <colgroup>
           <col style={{ width: CHECKBOX_W }} />
           {showLeadScore && <col style={{ width: SCORE_W }} />}
@@ -325,6 +329,7 @@ function DesktopGrid({
           ))}
           {addColumn && <col style={{ width: ACTION_W }} />}
           {showColumnsMenu && <col style={{ width: ACTION_W }} />}
+          <col />
         </colgroup>
         <GridHeader
           state={state}

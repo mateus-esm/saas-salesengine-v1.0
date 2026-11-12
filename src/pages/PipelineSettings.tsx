@@ -179,7 +179,7 @@ const PipelineSettings = () => {
       </div>
 
       {/* Body — two-pane layout */}
-      <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-[320px_1fr]">
+      <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden grid grid-cols-1 md:grid-cols-[320px_1fr]">
         {/* Left pane: list */}
         <aside className="border-r border-border bg-card/30 flex flex-col">
           <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "archived")} className="flex-1 flex flex-col">

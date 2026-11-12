@@ -484,7 +484,7 @@ const Chat = () => {
   const loadingInbox = loadingLeads || loadingConversations;
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] flex overflow-hidden bg-background dark:bg-zinc-950">
+    <div className="h-full min-h-0 flex overflow-hidden bg-background dark:bg-zinc-950">
       {!showInbox && (
         <Button
           variant="ghost"
