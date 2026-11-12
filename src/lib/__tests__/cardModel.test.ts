@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCardModel } from "../cardModel";
+import { buildCardModel, splitBadges } from "../cardModel";
 import type { BoardCard } from "@/types/board";
 import type { CustomFieldSchema, PipelineStageV2 } from "@/types/pipelines";
 import type { NativeCardFlags } from "@/components/crm/OpportunityCard";
@@ -158,5 +158,16 @@ describe("buildCardModel", () => {
     const model = buildCardModel(baseCard, undefined, defaultFlags, fields, today);
 
     expect(model.fields).toHaveLength(0);
+  });
+});
+
+describe("splitBadges", () => {
+  it("shows at most max and counts the rest", () => {
+    const r = splitBadges(["a", "b", "c", "d"], 2);
+    expect(r.shown).toEqual(["a", "b"]);
+    expect(r.overflow).toBe(2);
+    const one = splitBadges(["a"], 2);
+    expect(one.shown).toEqual(["a"]);
+    expect(one.overflow).toBe(0);
   });
 });

@@ -167,3 +167,9 @@ export function cardFieldsFor(
     .filter((f) => !f.is_deleted && ids.includes(f.field_id))
     .sort((a, b) => a.position - b.position);
 }
+
+/** Keeps the first `max` badges (order preserved) and counts the ones left out. */
+export function splitBadges<T>(badges: T[], max: number): { shown: T[]; overflow: number } {
+  const shown = badges.slice(0, Math.max(0, max));
+  return { shown, overflow: badges.length - shown.length };
+}

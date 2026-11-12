@@ -8,12 +8,13 @@ import { ArrowRightLeft, Clock, MessageCircle, MessageSquare, MessageSquarePlus,
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useLogTouchpoint, type CreateTouchpointData } from "@/hooks/useTouchpoints";
 import { useCopilotApprovals } from "@/hooks/useCopilotApprovals";
-import { buildCardModel, type CardBadgeKind } from "@/lib/cardModel";
+import { buildCardModel, splitBadges, type CardBadgeKind } from "@/lib/cardModel";
 import { formatBrPhone } from "@/lib/displayName";
 import type { BoardCard } from "@/types/board";
 import type { CustomFieldSchema, PipelineStageV2 } from "@/types/pipelines";
@@ -60,6 +61,14 @@ const BADGE_STYLE: Record<CardBadgeKind, string> = {
 };
 
 const MAX_TAGS = 3;
+const MAX_BADGES = 2;
+
+interface CardBadgeView {
+  key: string;
+  label: string;
+  title: string;
+  className: string;
+}
 
 interface OpportunityCardProps {
   /** Sprint 11 · T24 — the board card carries everything the card draws. */
@@ -143,6 +152,33 @@ export const OpportunityCard = ({
     : { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   const hiddenTags = Math.max(0, model.tags.length - MAX_TAGS);
+  const allBadges: CardBadgeView[] = [
+    ...model.badges.map((b) => ({ key: b.kind, label: b.label, title: b.label, className: BADGE_STYLE[b.kind] })),
+    ...(!isDragOverlay && intentDecision
+      ? [
+          {
+            key: "intent",
+            label: "Intenção detectada",
+            title: intentKeyword
+              ? `O lead mencionou "${intentKeyword}". Sincronize o Copilot.`
+              : "Intenção comercial detectada pelo Copilot.",
+            className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+          },
+        ]
+      : []),
+    ...(!isDragOverlay && copilotWaiting
+      ? [
+          {
+            key: "copilot",
+            label: "Sugestão do Copilot",
+            title: "O Copilot tem uma sugestão esperando aprovação neste negócio.",
+            className: "border-primary/30 bg-primary/10 text-primary",
+          },
+        ]
+      : []),
+  ];
+  const { shown: shownBadges, overflow: badgeOverflow } = splitBadges(allBadges, MAX_BADGES);
+  const hiddenBadges = allBadges.slice(MAX_BADGES);
   const showWhatsApp = nativeFlags.whatsapp && !!lead?.phone;
 
   return (
@@ -153,9 +189,9 @@ export const OpportunityCard = ({
       {...listeners}
       onClick={onClick}
       className={cn(
-        "group select-none space-y-1.5 overflow-hidden rounded-md border border-border bg-card p-2.5 transition-colors",
+        "group select-none space-y-2 overflow-hidden rounded-lg border border-border bg-card p-3.5 shadow-sm transition-shadow",
         onMoveRequest ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
-        "hover:border-primary/50 hover:shadow-sm",
+        "hover:border-primary/50 hover:shadow-md",
         model.status === "lost" && "opacity-75",
         isDragOverlay && "rotate-1 scale-[1.02] shadow-lg",
       )}
@@ -164,7 +200,7 @@ export const OpportunityCard = ({
       <div className="flex items-start justify-between gap-2">
         <span
           className={cn(
-            "min-w-0 truncate text-sm font-medium leading-5",
+            "min-w-0 text-[15px] font-semibold leading-snug line-clamp-2",
             onOpenContact && model.leadId && "cursor-pointer hover:text-primary",
           )}
           title={model.title}
@@ -185,31 +221,33 @@ export const OpportunityCard = ({
               breakdown={{ icp: card.icp_score, velocity: card.velocity }}
             />
           )}
-          <UserAvatar userId={model.ownerId} name={model.ownerName} size="xs" />
+          <UserAvatar userId={model.ownerId} name={model.ownerName} size="sm" />
         </div>
       </div>
 
-      {/* Line 2 — value · time in stage · touchpoints · next contact */}
-      {(model.valueText || model.timeInStageText || nativeFlags.touchpoints || (nativeFlags.nextContact && lead)) && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-          {model.valueText && (
-            <span className="font-semibold text-green-600 dark:text-green-400">{model.valueText}</span>
-          )}
+      {/* Line 2 — the value */}
+      {model.valueText && (
+        <div className="text-base font-semibold tabular-nums text-foreground">{model.valueText}</div>
+      )}
+
+      {/* Meta — time in stage · touchpoints · next contact */}
+      {(model.timeInStageText || nativeFlags.touchpoints || (nativeFlags.nextContact && lead)) && (
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted-foreground">
           {model.timeInStageText && (
             <span
-              className={cn("inline-flex items-center gap-0.5", model.slaBreached && "font-medium text-destructive")}
+              className={cn("inline-flex items-center gap-1", model.slaBreached && "font-medium text-destructive")}
               title={model.slaBreached ? `Acima do SLA da etapa (${stage?.max_idle_hours}h)` : "Tempo na etapa"}
             >
-              <Clock className="h-3 w-3 shrink-0" />
+              <Clock className="h-3.5 w-3.5 shrink-0" />
               {model.timeInStageText}
             </span>
           )}
           {nativeFlags.touchpoints && (
             <span
-              className={cn("inline-flex items-center gap-0.5", model.interactionsBreached && "font-medium text-amber-600")}
+              className={cn("inline-flex items-center gap-1", model.interactionsBreached && "font-medium text-amber-600")}
               title={`${model.touchpointCount} interações`}
             >
-              <MessageSquare className="h-3 w-3 shrink-0" />
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
               {model.touchpointCount}
             </span>
           )}
@@ -226,37 +264,37 @@ export const OpportunityCard = ({
         </div>
       )}
 
-      {/* Badges — outcome, overdue, SLA, interaction cap; then the Copilot's intent */}
-      {(model.badges.length > 0 || (!isDragOverlay && (intentDecision || copilotWaiting))) && (
-        <div className="flex flex-wrap gap-1">
-          {model.badges.map((b) => (
+      {/* Badges — outcome, overdue, SLA, interaction cap, Copilot; two at most, "+N" lists the rest */}
+      {allBadges.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          {shownBadges.map((b) => (
             <span
-              key={b.kind}
-              className={cn("max-w-full truncate rounded border px-1.5 py-0.5 text-[10px] font-medium", BADGE_STYLE[b.kind])}
-              title={b.label}
+              key={b.key}
+              className={cn("max-w-full truncate rounded border px-1.5 py-0.5 text-xs font-medium", b.className)}
+              title={b.title}
             >
               {b.label}
             </span>
           ))}
-          {!isDragOverlay && intentDecision && (
-            <span
-              className="truncate rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
-              title={
-                intentKeyword
-                  ? `O lead mencionou "${intentKeyword}". Sincronize o Copilot.`
-                  : "Intenção comercial detectada pelo Copilot."
-              }
-            >
-              Intenção detectada
-            </span>
-          )}
-          {!isDragOverlay && copilotWaiting && (
-            <span
-              className="truncate rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
-              title="O Copilot tem uma sugestão esperando aprovação neste negócio."
-            >
-              Sugestão do Copilot
-            </span>
+          {badgeOverflow > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                  aria-label={`Mais ${badgeOverflow}: ${hiddenBadges.map((h) => h.label).join(", ")}`}
+                >
+                  +{badgeOverflow}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <ul className="space-y-0.5 text-xs">
+                  {hiddenBadges.map((h) => (
+                    <li key={h.key}>{h.label}</li>
+                  ))}
+                </ul>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       )}
@@ -265,7 +303,7 @@ export const OpportunityCard = ({
       {model.fields.length > 0 && (
         <div className="space-y-0.5 border-t border-border/60 pt-1">
           {model.fields.map((f) => (
-            <div key={f.field_id} className="flex items-baseline justify-between gap-2 text-[11px]">
+            <div key={f.field_id} className="flex items-baseline justify-between gap-2 text-xs">
               <span className="truncate uppercase tracking-wide text-muted-foreground">{f.label}</span>
               <span className="truncate text-foreground/90">{f.value}</span>
             </div>
@@ -278,11 +316,11 @@ export const OpportunityCard = ({
             <RelationChip key={c.id} label={c.name} />
           ))}
           {model.tags.slice(0, MAX_TAGS).map((t) => (
-            <span key={t} className="max-w-[8rem] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <span key={t} className="max-w-[8rem] truncate rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               {t}
             </span>
           ))}
-          {hiddenTags > 0 && <span className="text-[10px] text-muted-foreground">+{hiddenTags}</span>}
+          {hiddenTags > 0 && <span className="text-xs text-muted-foreground">+{hiddenTags}</span>}
         </div>
       )}
 
@@ -291,7 +329,7 @@ export const OpportunityCard = ({
         <div
           className={cn(
             "flex items-center gap-1 border-t border-border/60 pt-1.5 transition-opacity",
-            "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-within:opacity-100",
+            "md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
           )}
           onClick={stop}
           onPointerDown={stop}

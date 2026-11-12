@@ -155,7 +155,7 @@ export const OpportunityKanbanColumn = ({
           </div>
         </div>
         {total && (
-          <p className="text-xs text-muted-foreground mt-1.5">
+          <p className="text-xs text-muted-foreground mt-1.5 tabular-nums">
             Total: <span className="font-medium text-green-600 dark:text-green-400">{total}</span>
           </p>
         )}
