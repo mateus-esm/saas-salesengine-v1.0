@@ -26,11 +26,11 @@
     --primary: 28 100% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 4.8% 95.9%;
+    --secondary: 240 5% 93%;
     --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 240 5% 93%;
+    --muted-foreground: 240 5% 34%;
 
     --accent: 38 100% 55%;
     --accent-foreground: 0 0% 100%;
@@ -39,9 +39,9 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Precision borders - subtle, high-finesse */
-    --border: 220 13% 91%;           /* Slate-200 equivalent */
-    --input: 220 13% 91%;
-    --ring: 28 100% 50%;
+    --border: 220 13% 85%;           /* Slate-300 equivalent, visible on white (>=1.35:1) */
+    --input: 220 9% 58%;             /* >=3:1 on card (WCAG 1.4.11) */
+    --ring: 28 100% 45%;             /* >=3:1 on card */
 
     /* Tighter radius for professional look */
     --radius: 0.5rem;
@@ -104,8 +104,8 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
+    --border: 240 4% 22%;
+    --input: 240 4% 42%;
     --ring: 28 100% 50%;
     
     --soft-gray: 240 3.7% 15.9%;
