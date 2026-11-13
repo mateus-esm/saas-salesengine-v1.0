@@ -9,6 +9,8 @@ import { useCancelFollowup, useFollowups } from "@/hooks/useFollowups";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import {
   FOLLOWUP_TZ,
+  followupErrorDetail,
+  followupMessageQueued,
   followupMessageResultLabel,
   followupReturnResultLabel,
   followupStatusLabel,
@@ -81,6 +83,7 @@ export function FollowupList({
         const returnResult = followupReturnResultLabel(f);
         const returnStage = f.return_stage_id ? stageName?.(f.return_stage_id) ?? null : null;
         const owner = nameOf(f.owner_id);
+        const queued = followupMessageQueued(f);
         return (
           <li key={f.id} className="space-y-1 rounded-md border border-border bg-card px-3 py-2 text-xs">
             <div className="flex items-center justify-between gap-2">
@@ -92,6 +95,18 @@ export function FollowupList({
                 <span className={cn("rounded border px-1.5 py-0.5 font-medium", STATUS_STYLE[f.status])}>
                   {followupStatusLabel(f.status)}
                 </span>
+                {queued && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    disabled={cancel.isPending}
+                    onClick={() => cancel.mutate(f.id)}
+                  >
+                    Cancelar envio
+                  </Button>
+                )}
                 {f.status === "scheduled" && (
                   <Button
                     type="button"
@@ -126,9 +141,12 @@ export function FollowupList({
               <p className="text-muted-foreground">Responsável avisado</p>
             )}
             {f.status !== "scheduled" &&
-              [f.result?.error, f.result?.message_error, f.result?.return_error].filter(Boolean).map((t, i) => (
-                <p key={i} className="text-muted-foreground">{t}</p>
-              ))}
+              [f.result?.error, f.result?.message_error, f.result?.return_error]
+                .map(followupErrorDetail)
+                .filter((d): d is NonNullable<typeof d> => d !== null)
+                .map((d, i) => (
+                  <p key={i} className="text-muted-foreground" title={d.title}>{d.text}</p>
+                ))}
             {f.status !== "scheduled" && (messageResult || returnResult || f.status === "failed") && (
               <p className="text-muted-foreground">
                 {[messageResult, returnResult, f.status === "failed" ? "Não foi possível executar" : null]

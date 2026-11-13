@@ -3,6 +3,8 @@
 // A tabela crm_followups e as RPCs crm_schedule_followup / crm_cancel_followup
 // ainda não estão nos tipos gerados do Supabase; estes tipos são o contrato.
 
+import { describeProblem, templateProblems } from "@/lib/message-variables";
+
 export const FOLLOWUP_TZ = "America/Sao_Paulo";
 
 export type FollowupStatus = "scheduled" | "done" | "cancelled" | "failed";
@@ -32,6 +34,7 @@ export interface Followup {
     error?: string;
     return_error?: string;
   } | null;
+  outreach_job_id?: string | null;
   created_at: string;
   executed_at: string | null;
 }
@@ -119,17 +122,49 @@ export function followupStatusLabel(status: FollowupStatus): string {
   return { scheduled: "Agendado", done: "Feito", cancelled: "Cancelado", failed: "Falhou" }[status];
 }
 
+const SKIP_REASONS: Record<string, string> = {
+  opted_out: "contato pediu para não receber",
+  missing_phone: "contato sem telefone",
+  lead_deleted: "contato apagado",
+  opportunity_deleted: "negócio apagado",
+  followup_cancelled: "follow-up cancelado",
+  followup_failed: "follow-up falhou",
+};
+
+/** Código de motivo → pt-BR; texto cru de erro (SQL etc.) vira o genérico. */
+export function skipReasonLabel(code: string | null | undefined): string {
+  return (code && SKIP_REASONS[code]) || "não enviado";
+}
+
 /** O que aconteceu com a mensagem de um follow-up já executado. */
 export function followupMessageResultLabel(f: Pick<Followup, "send_message" | "result">): string | null {
   if (!f.send_message) return null;
   switch (f.result?.message) {
     case "sent": return "Mensagem enviada";
     case "failed": return "Mensagem não enviada (falhou)";
-    case "skipped": return "Mensagem não enviada (contato pediu para não receber)";
-    case "cancelled": return "Mensagem cancelada";
+    case "skipped":
+    case "cancelled": {
+      const code = f.result?.message_error;
+      if (f.result?.message === "cancelled") {
+        return code ? `Mensagem cancelada (${skipReasonLabel(code)})` : "Mensagem cancelada";
+      }
+      return `Mensagem não enviada (${skipReasonLabel(code)})`;
+    }
     case "unknown": return "Mensagem com envio incerto";
     default: return null;
   }
+}
+
+/** A mensagem já executada ainda espera na fila (dá para cancelar o envio). */
+export function followupMessageQueued(f: Pick<Followup, "status" | "send_message" | "result"> & { outreach_job_id?: string | null }): boolean {
+  return f.status === "done" && f.send_message && !!f.outreach_job_id && !f.result?.message;
+}
+
+/** Texto de erro de um follow-up: códigos conhecidos em pt-BR; o texto cru só no title. */
+export function followupErrorDetail(raw: string | null | undefined): { text: string; title?: string } | null {
+  if (!raw) return null;
+  if (SKIP_REASONS[raw]) return { text: SKIP_REASONS[raw][0].toUpperCase() + SKIP_REASONS[raw].slice(1) };
+  return { text: "Algo deu errado ao executar.", title: raw };
 }
 
 export function followupReturnResultLabel(f: Pick<Followup, "result">): string | null {
@@ -147,6 +182,10 @@ export function validateFollowupForm(v: FollowupFormValue, mode: "manual" | "rec
   if (!v.date || !v.time) return "Escolha data e hora.";
   if (v.sendMessage && !hasLine) return "Configure uma linha de WhatsApp em Outreach para enviar mensagens.";
   if (v.sendMessage && !v.messageText.trim()) return "Escreva a mensagem.";
+  if (v.sendMessage) {
+    const [problem] = templateProblems(v.messageText);
+    if (problem) return describeProblem(problem);
+  }
   return null;
 }
 

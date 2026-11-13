@@ -100,14 +100,36 @@ describe("FollowupList", () => {
     ];
     render(<FollowupList opportunityId="o1" />);
     expect(screen.queryByText("Responsável avisado")).toBeNull(); // só quando done
-    expect(screen.getByText("erro geral")).toBeTruthy();
-    expect(screen.getByText("sem linha")).toBeTruthy();
-    expect(screen.getByText("etapa sumiu")).toBeTruthy();
+    expect(screen.queryByText("erro geral")).toBeNull();
+    expect(screen.getAllByText("Algo deu errado ao executar.")).toHaveLength(3);
+    expect(screen.getByTitle("erro geral")).toBeTruthy();
+    expect(screen.getByTitle("sem linha")).toBeTruthy();
+    expect(screen.getByTitle("etapa sumiu")).toBeTruthy();
   });
 
   it("done com notified mostra 'Responsável avisado'", () => {
     state.data = [mk({ status: "done", result: { notified: true } })];
     render(<FollowupList opportunityId="o1" />);
     expect(screen.getByText("Responsável avisado")).toBeTruthy();
+  });
+});
+
+describe("FollowupList: cancelar envio", () => {
+  it("feito com mensagem ainda na fila mostra Cancelar envio", () => {
+    state.data = [mk({ status: "done", send_message: true, message_text: "oi", outreach_job_id: "j1", result: { notified: true } })];
+    render(<FollowupList opportunityId="o1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar envio" }));
+    expect(cancel).toHaveBeenCalledWith("f1");
+  });
+  it("sem job ou já enviada, não mostra", () => {
+    state.data = [mk({ status: "done", send_message: true, outreach_job_id: "j1", result: { message: "sent" } })];
+    render(<FollowupList opportunityId="o1" />);
+    expect(screen.queryByRole("button", { name: "Cancelar envio" })).toBeNull();
+  });
+  it("erro cru não aparece; fica no title", () => {
+    state.data = [mk({ status: "failed", result: { error: 'relation "x" does not exist' } })];
+    render(<FollowupList opportunityId="o1" />);
+    expect(screen.queryByText(/relation/)).toBeNull();
+    expect(screen.getByTitle('relation "x" does not exist').textContent).toBe("Algo deu errado ao executar.");
   });
 });

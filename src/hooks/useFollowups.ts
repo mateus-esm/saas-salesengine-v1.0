@@ -92,6 +92,15 @@ export function useCancelFollowup() {
   });
 }
 
+/** Mesma regra da RPC, por provedor: Solo exige a instância; os demais, o canal. */
+export function outreachLineExists(
+  s: { provider?: string | null; channel_id?: string | null; solo_instance_id?: string | null } | null | undefined,
+): boolean {
+  if (!s) return false;
+  if (s.provider === "solo") return !!s.solo_instance_id;
+  return (s.channel_id ?? "").trim() !== "";
+}
+
 export interface OutreachLine {
   hasLine: boolean;
   /** Nome da instância Solo (só Solo; outros provedores: null); null se não der para saber. */
@@ -121,10 +130,9 @@ export function useOutreachLine(): OutreachLine {
         .maybeSingle();
       if (error) throw error;
       const soloId: string | null = data?.solo_instance_id ?? null;
-      const channelId: string = (data?.channel_id ?? "").trim();
-      const hasLine = !!soloId || channelId !== "";
+      const hasLine = outreachLineExists(data);
       if (!hasLine) return { hasLine: false, label: null };
-      if (soloId) {
+      if (data?.provider === "solo" && soloId) {
         const { data: inst } = await sb
           .from("wpp_instances")
           .select("display_name, instance_name")

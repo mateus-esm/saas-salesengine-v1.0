@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { MessageTemplateField } from "@/components/outreach/MessageTemplateField";
 import {
   Select,
   SelectContent,
@@ -808,12 +809,12 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
                 <Label htmlFor={`recycle-template-${stage.id}`} className="text-xs text-muted-foreground">
                   Modelo de mensagem
                 </Label>
-                <Textarea
+                <MessageTemplateField
                   id={`recycle-template-${stage.id}`}
                   value={stage.recycle_message_template ?? ""}
-                  onChange={(e) => onChange({ recycle_message_template: e.target.value || null })}
+                  onChange={(v) => onChange({ recycle_message_template: v || null })}
+                  tenantName="Sua empresa"
                   rows={3}
-                  className="resize-none text-xs"
                   placeholder="Oi {{lead.first_name}}, tudo bem? Voltando a falar sobre…"
                 />
               </div>

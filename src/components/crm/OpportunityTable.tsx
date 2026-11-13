@@ -283,7 +283,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             saved.then(() => resolve(), reject);
             return saved;
           },
-          onCancel: () => reject(new Error("Movimentação cancelada: o motivo da perda é obrigatório.")),
+          onCancel: () => reject(new Error("Movimento cancelado.")),
         });
         if (plan === "noop") resolve();
       }),

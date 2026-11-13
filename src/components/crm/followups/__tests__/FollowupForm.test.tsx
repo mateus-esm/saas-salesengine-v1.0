@@ -123,3 +123,12 @@ describe("FollowupForm", () => {
     expect(screen.queryByRole("switch")).toBeNull();
   });
 });
+
+describe("FollowupForm: variável desconhecida", () => {
+  it("avisa sob a mensagem", () => {
+    render(
+      <FollowupForm value={{ ...base, sendMessage: true, messageText: "Oi {{nome}}" }} onChange={() => {}} mode="manual" hasLine />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain("{{nome}} não existe");
+  });
+});

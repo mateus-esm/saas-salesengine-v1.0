@@ -11,8 +11,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { MESSAGE_VARIABLES } from "@/lib/message-variables";
+import { MessageTemplateField } from "@/components/outreach/MessageTemplateField";
 import type { FollowupFormValue } from "@/lib/followups";
 import { UserPicker } from "../fields/UserPicker";
 
@@ -226,23 +225,14 @@ export function FollowupForm({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="followup-message">Mensagem</Label>
-                <Textarea
+                <MessageTemplateField
                   id="followup-message"
                   rows={4}
                   value={value.messageText}
-                  onChange={(e) => set({ messageText: e.target.value })}
+                  onChange={(messageText) => set({ messageText })}
+                  tenantName="Sua empresa"
                   placeholder="Oi {{lead.first_name}}, tudo bem?"
-                  disabled={disabled}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Variáveis:{" "}
-                  {MESSAGE_VARIABLES.map((v, i) => (
-                    <span key={v.key}>
-                      {i > 0 && " "}
-                      <code title={v.label} className="rounded bg-muted px-1 py-0.5">{`{{${v.key}}}`}</code>
-                    </span>
-                  ))}
-                </p>
               </div>
             </div>
           )}
