@@ -64,6 +64,7 @@ import { UserPicker } from "./fields/UserPicker";
 import { DealFilterBar } from "./filters/DealFilterBar";
 import { countDealFilters } from "./filters/model";
 import { OpportunityDetailModal } from "./OpportunityDetailModal";
+import { GridLoadError } from "./grid/GridLoadError";
 import { SpreadsheetGrid } from "./grid/SpreadsheetGrid";
 import type { MassAction } from "./grid/MassActionBar";
 import type { CellMutation, ColumnDef, GridRow } from "./grid/types";
@@ -464,8 +465,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         />
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
-        {query.isError ? (
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+        {query.isError && rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
             Não foi possível carregar a tabela.
             <Button variant="outline" size="sm" onClick={() => query.refetch()}>
@@ -473,6 +474,12 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
             </Button>
           </div>
         ) : (
+          <>
+          {query.isError && (
+            <GridLoadError
+              onRetry={() => void (query.hasNextPage ? query.fetchNextPage() : query.refetch())}
+            />
+          )}
           <SpreadsheetGrid
             rows={gridRows}
             columns={columns}
@@ -495,12 +502,14 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
               const r = rowById.get(id);
               if (r) setSelectedOpp(r);
             }}
-            hasMore={!!query.hasNextPage}
+            // A failed page must not retry by itself while the sentinel is visible.
+            hasMore={!!query.hasNextPage && !query.isError}
             loadingMore={query.isFetchingNextPage}
             onEndReached={() => {
               if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
             }}
           />
+          </>
         )}
       </div>
 

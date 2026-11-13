@@ -1,33 +1,35 @@
 import { Outlet } from "react-router-dom";
-import { useTenant } from "@/contexts/TenantContext";
 import { useTenantTheme } from "@/hooks/useTenantTheme";
-import { TopNavbar } from "@/components/TopNavbar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AppShellSidebar } from "@/components/shell/AppShellSidebar";
+import { AppHeader } from "@/components/shell/AppHeader";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 
 /**
  * Sprint 5.2 T12 — persistent authenticated shell (zero-reload architecture).
+ * Sprint 15 T5 — barra lateral no lugar da barra superior e do rodapé.
  *
- * Mounted ONCE as a layout route so the navbar, footer and WhatsApp button never
- * remount on navigation — only <Outlet/> swaps the page. Switching screens
- * becomes an instant layout swap instead of a full-tree reload/flash.
+ * Mounted ONCE as a layout route so the sidebar, header and WhatsApp button never
+ * remount on navigation — only <Outlet/> swaps the page.
+ *
+ * Sprint 15 T7 — a casca tem a altura da tela: a página rola dentro do conteúdo (o SidebarInset já é o <main>),
+ * não na janela. Assim uma tela com `h-full` (a grade do CRM) tem altura de
+ * verdade, e o cabeçalho e o rodapé da grade ficam presos.
  */
 export const AuthenticatedLayout = () => {
-  const { tenant } = useTenant();
   useTenantTheme();
 
   return (
-    <div className="min-h-dvh flex flex-col w-full bg-background">
-      <TopNavbar />
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <Outlet />
-      </main>
-      <footer className="border-t border-border bg-card shrink-0">
-        <div className="container mx-auto px-4 py-3 text-center text-sm text-muted-foreground font-medium">
-          © 2025 Solo Ventures. Todos os direitos reservados. | {tenant.name} é uma plataforma proprietária.
+    <SidebarProvider>
+      <AppShellSidebar />
+      <SidebarInset className="h-svh min-h-0 min-w-0 bg-background">
+        <AppHeader />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <Outlet />
         </div>
-      </footer>
+      </SidebarInset>
       <WhatsAppButton />
-    </div>
+    </SidebarProvider>
   );
 };
 

@@ -10,7 +10,7 @@ import { formatLookup } from "./customTables";
 import { getFieldType, type FieldContext } from "./fields/registry";
 
 export type ArtifactKind = "proposal" | "contract" | "document";
-export type ArtifactStatus = "draft" | "sent" | "accepted" | "signed" | "rejected";
+export type ArtifactStatus = "draft" | "generated" | "sent" | "accepted" | "signed" | "rejected";
 
 export const ARTIFACT_KINDS: { value: ArtifactKind; label: string; plural: string }[] = [
   { value: "proposal", label: "Proposta", plural: "Propostas" },
@@ -20,6 +20,7 @@ export const ARTIFACT_KINDS: { value: ArtifactKind; label: string; plural: strin
 
 export const ARTIFACT_STATUS_LABEL: Record<ArtifactStatus, string> = {
   draft: "Rascunho",
+  generated: "Gerado",
   sent: "Enviado",
   accepted: "Aceito",
   signed: "Assinado",
@@ -28,6 +29,7 @@ export const ARTIFACT_STATUS_LABEL: Record<ArtifactStatus, string> = {
 
 export const ARTIFACT_STATUS_STYLE: Record<ArtifactStatus, string> = {
   draft: "bg-muted text-muted-foreground",
+  generated: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
   sent: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
   accepted: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
   signed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
@@ -47,11 +49,11 @@ export function artifactKindLabel(kind: ArtifactKind | null | undefined, plural 
 export function artifactStatusesFor(kind: ArtifactKind | null | undefined): ArtifactStatus[] {
   switch (kind) {
     case "proposal":
-      return ["draft", "sent", "accepted", "rejected"];
+      return ["draft", "generated", "sent", "accepted", "rejected"];
     case "contract":
-      return ["draft", "sent", "signed", "rejected"];
+      return ["draft", "generated", "sent", "signed", "rejected"];
     case "document":
-      return ["draft", "sent", "accepted", "signed", "rejected"];
+      return ["draft", "generated", "sent", "accepted", "signed", "rejected"];
     default:
       return [];
   }

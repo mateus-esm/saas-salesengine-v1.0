@@ -8,21 +8,21 @@
 // Success is silent (the cell shows the new value); a failed save shows on the
 // cell itself, and the value goes back.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useRelationResolver } from "@/hooks/useRelationResolver";
 import { toDateInputValue } from "@/lib/fields/dateOnly";
-import { getFieldType, isFieldType, type InlineEditor } from "@/lib/fields/registry";
+import { getFieldType, isFieldType, parseBrNumber, type InlineEditor } from "@/lib/fields/registry";
 import { cn } from "@/lib/utils";
 
 import { MultiSelectPicker } from "../fields/MultiSelectPicker";
 import { UserAvatar } from "../fields/UserAvatar";
 import { UserPicker } from "../fields/UserPicker";
 import { getHandler } from "./columnTypes";
-import { RelationChip } from "./RelationChip";
+import { RelationChip, RelationChips } from "./RelationChip";
 import { RelationPicker } from "./RelationPicker";
 import type { ColumnDef, GridRow } from "./types";
 
@@ -41,9 +41,39 @@ export interface InlineCellProps {
 const sameValue = (a: unknown, b: unknown) =>
   a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-const CELL = "flex h-8 w-full items-center px-3 text-sm";
+const asNumber = (v: unknown): number | null =>
+  typeof v === "number" ? v : typeof v === "string" ? parseBrNumber(v) : null;
+
+/**
+ * Sprint 15 · T9 — the editor's value says the same as the stored one: a DATE
+ * column stores "2026-03-14" and the editor hands back local midnight as ISO; a
+ * number stored as text comes back as a number. Leaving such a cell untouched
+ * must not write.
+ */
+function unchanged(kind: string, next: unknown, value: unknown): boolean {
+  if (sameValue(next, value)) return true;
+  if (kind === "date") {
+    const day = toDateInputValue(next);
+    return day !== "" && day === toDateInputValue(value);
+  }
+  if (kind === "number" || kind === "currency") {
+    const n = asNumber(next);
+    return n !== null && n === asNumber(value);
+  }
+  return false;
+}
+
+/**
+ * What an editor hands back when the text cannot become a value (a number that
+ * is not a number). Nothing is saved; the cell shows the message.
+ */
+class InvalidInput {
+  constructor(readonly message: string) {}
+}
+
+const CELL = "flex h-10 w-full min-w-0 items-center px-3 text-sm";
 const INPUT =
-  "h-8 w-full rounded-none border-0 bg-background px-3 text-sm outline-none ring-2 ring-inset ring-primary";
+  "h-10 w-full rounded-none border-0 bg-background px-3 text-sm outline-none ring-2 ring-inset ring-primary";
 
 export function InlineCell(props: InlineCellProps) {
   if (props.column.kind === "relation") return <RelationCell {...props} />;
@@ -68,7 +98,7 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
   const commit = useCallback(
     async (next: unknown) => {
       setEditing(false);
-      if (sameValue(next, value)) return;
+      if (unchanged(column.kind, next, value)) return;
       setSaving(true);
       setError(null);
       try {
@@ -79,7 +109,7 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
         setSaving(false);
       }
     },
-    [onCommit, value],
+    [onCommit, value, column.kind],
   );
 
   if (column.render) {
@@ -108,7 +138,18 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
         column={column}
         value={value}
         display={display}
-        onDone={(next) => (next === undefined ? setEditing(false) : void commit(next))}
+        onDone={(next) => {
+          if (next === undefined) {
+            setError(null);
+            return setEditing(false);
+          }
+          if (next instanceof InvalidInput) {
+            setEditing(false);
+            setError(next.message);
+            return;
+          }
+          void commit(next);
+        }}
       />
     );
   }
@@ -237,6 +278,15 @@ function TextEditor({ editor, column, value, onDone }: EditorProps) {
         : String(value);
   const [text, setText] = useState(initial);
   const handler = getHandler(column.kind);
+  // Blank clears the field; text that is not a number is refused, not saved as empty.
+  const submit = () => {
+    const parsed = handler.parse(text, column);
+    if (numeric && parsed === null && text.trim() !== "") {
+      finish(new InvalidInput(`Número inválido: "${text.trim()}". Use, por exemplo, 1.234,56.`));
+    } else {
+      finish(parsed);
+    }
+  };
 
   return (
     <input
@@ -246,11 +296,11 @@ function TextEditor({ editor, column, value, onDone }: EditorProps) {
       inputMode={numeric ? "decimal" : editor === "phone" ? "tel" : undefined}
       value={text}
       onChange={(e) => setText(e.target.value)}
-      onBlur={() => finish(handler.parse(text, column))}
+      onBlur={submit}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          finish(handler.parse(text, column));
+          submit();
         } else if (e.key === "Escape") {
           e.preventDefault();
           finish(undefined);
@@ -424,7 +474,28 @@ function chipsFromRow(value: unknown): Chip[] {
 function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: InlineCellProps) {
   const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const cellRef = useRef<HTMLDivElement | null>(null);
   const fromRow = !!column.relation?.resolvedFromRow;
+
+  // Sprint 15 · T9 — edit mode ends on Escape or a click outside the cell (the
+  // picker, when open, is left with it). It used to end only on a pick: after a
+  // removal the cell stayed in edit mode for good.
+  useEffect(() => {
+    if (!editing) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      // The picker lives in a portal: a click in it is not "outside".
+      if (target?.closest?.("[data-radix-popper-content-wrapper]")) return;
+      if (cellRef.current && !cellRef.current.contains(target as Node)) {
+        setPickerOpen(false);
+        setEditing(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [editing]);
 
   // Only relation columns that do not bring their chips in the row still query.
   const context =
@@ -433,26 +504,56 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
   const links = fromRow ? chipsFromRow(value) : resolved;
   const canEdit = column.editable !== false;
 
+  // Sprint 15 · T9 — a failed link or unlink shows on the cell, like a field
+  // cell; it used to be an unhandled rejection the user never saw.
+  const save = async (change: unknown) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await onCommit(change);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const pick = (toId: string, label: string) => {
-    void onCommit({ toId, label });
+    // Already linked: linking again would duplicate the link (or fail on it).
+    if (!links.some((l) => l.toId === toId)) void save({ toId, label });
     setEditing(false);
   };
 
   return (
     <div
-      className="flex h-8 w-full items-center gap-1 overflow-hidden px-1 text-sm"
+      className={cn(
+        "flex h-10 w-full min-w-0 items-center gap-1 overflow-hidden px-2 text-sm",
+        error && "ring-1 ring-inset ring-destructive",
+      )}
+      ref={cellRef}
+      title={error ?? undefined}
       onDoubleClick={() => canEdit && setEditing(true)}
+      onKeyDown={(e) => {
+        if (editing && e.key === "Escape") {
+          e.preventDefault();
+          setEditing(false);
+        }
+      }}
     >
       {!fromRow && loading ? (
         <span className="text-xs text-muted-foreground">Carregando...</span>
       ) : links.length > 0 ? (
-        links.map((chip) => (
-          <RelationChip
-            key={chip.toId}
-            label={chip.label}
-            onRemove={editing ? () => void onCommit({ toId: chip.toId, action: "remove" }) : undefined}
-          />
-        ))
+        editing ? (
+          links.map((chip) => (
+            <RelationChip
+              key={chip.toId}
+              label={chip.label}
+              onRemove={() => void save({ toId: chip.toId, action: "remove" })}
+            />
+          ))
+        ) : (
+          <RelationChips chips={links} />
+        )
       ) : (
         !editing && <span className="text-xs text-muted-foreground">—</span>
       )}
@@ -473,6 +574,10 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
             Vincular...
           </button>
         </>
+      )}
+      {saving && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />}
+      {error && (
+        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" role="img" aria-label={error} />
       )}
     </div>
   );

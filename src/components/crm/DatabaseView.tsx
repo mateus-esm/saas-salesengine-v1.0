@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ContactColumnsToolbar } from "@/components/crm/ContactColumnsToolbar";
+import { GridLoadError } from "@/components/crm/grid/GridLoadError";
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
 import type { MassAction } from "@/components/crm/grid/MassActionBar";
 import type { CellMutation, ColumnDef, GridRow } from "@/components/crm/grid/types";
@@ -29,6 +30,7 @@ import {
 } from "@/hooks/useContactsTable";
 import { useLead } from "@/hooks/useLead";
 import { useLeadMutations } from "@/hooks/useLeads";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useContactUrlFilters } from "@/hooks/useUrlFilters";
 import { isTechnicalId } from "@/lib/displayName";
@@ -85,6 +87,8 @@ export const DatabaseView = () => {
   const navigate = useNavigate();
   const { activePipelines } = usePipelines();
   const { fields: contactFields, isLoading: isLoadingContactFields, createField } = useContactFields();
+  // A "Usuário" contact field shows the member's name (without it: "Usuário removido").
+  const { nameOf } = useMemberDirectory();
 
   const { filters, setFilters, sort, setSort } = useContactUrlFilters();
   const query = useContactsTable(filters, sort);
@@ -191,9 +195,11 @@ export const DatabaseView = () => {
       { key: "observations", label: "Observações", kind: "text", source: "native" },
       { key: "created_at", label: "Criado em", kind: "date", source: "native", editable: false },
     ];
-    const enrichment = visibleContactFields.map((f) => columnFromField(f, "personal_custom_data", "key"));
+    const enrichment = visibleContactFields.map((f) =>
+      columnFromField(f, "personal_custom_data", "key", { nameOf }),
+    );
     return [...native, ...enrichment];
-  }, [openDeal, visibleContactFields]);
+  }, [openDeal, visibleContactFields, nameOf]);
 
   // ---- Rows -----------------------------------------------------------------
   const gridRows: GridRow[] = useMemo(
@@ -367,8 +373,8 @@ export const DatabaseView = () => {
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-auto p-4">
-        {query.isError ? (
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+        {query.isError && rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
             Não foi possível carregar os contatos.
             <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
@@ -376,6 +382,12 @@ export const DatabaseView = () => {
             </Button>
           </div>
         ) : (
+          <>
+          {query.isError && (
+            <GridLoadError
+              onRetry={() => void (query.hasNextPage ? query.fetchNextPage() : query.refetch())}
+            />
+          )}
           <SpreadsheetGrid
             rows={gridRows}
             columns={columns}
@@ -392,12 +404,14 @@ export const DatabaseView = () => {
             onRowOpen={(id) => setOpenLeadId(id)}
             renderMobileRow={renderMobileRow}
             mobileEmptyLabel="Nenhum contato com esses filtros."
-            hasMore={!!query.hasNextPage}
+            // A failed page must not retry by itself while the sentinel is visible.
+            hasMore={!!query.hasNextPage && !query.isError}
             loadingMore={query.isFetchingNextPage}
             onEndReached={() => {
               if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
             }}
           />
+          </>
         )}
       </div>
 

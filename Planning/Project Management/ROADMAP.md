@@ -1,451 +1,397 @@
-# 🧭 ROADMAP v1 — Visão do Product Manager
+# 🧭 ROADMAP v2 — Rev como máquina de receita
 
-> **Documento vivo.** Esta é a visão consolidada de produto/projeto para o ship da v1.
-> As visões anteriores (founder + engenheiros) estão preservadas no **Apêndice A** ao final.
-
----
-
-## 1. TL;DR — A decisão estratégica central
-
-**O plano anterior coloca "1 cliente pagante em produção" como critério de saída da Fase 5. Isso está invertido. Cliente real em produção é o meio do plano, não o fim.**
-
-Ship da v1 não é "todas as features completas". Ship da v1 é: **3 clientes pagando, usando o produto sem suporte manual diário, e renovando no mês seguinte.** Tudo no roadmap deve ser julgado por uma pergunta: *isso aproxima ou atrasa o primeiro cliente pagante?*
-
-A consequência prática: cortamos ~40% do escopo proposto para pós-v1, invertemos Billing ⇄ AI Studio na ordem, e inserimos um marco explícito de "Primeiro Cliente" no meio da sequência — porque as decisões das fases finais (dashboard, notificações, automação) devem ser guiadas por uso real, não por especulação nossa.
+> **Reescrito em 12/11/2026.** Substitui o roadmap de 04/07/2026 (escrito na Sprint 7.0; a versão
+> anterior está no histórico do git deste arquivo).
+> **Base:** código em `main` @ `54b1087`, `Sprints_PM_Handoff.md`, `todo.md`, sprints 7 → 13 e
+> Suporte 1, `Architecture/motores_revops.md`, benchmarks Attio e Jestor, os 17 tickets da Solo Energia.
+> **Como ler:** §1–3 dizem onde estamos e para onde vamos; §4 é o diagnóstico; §5–6 são as sprints;
+> §7 são as decisões que só o founder toma.
 
 ---
 
-## 2. A tese do produto (o que o cliente está comprando)
+## 1. Resumo em uma página
 
-O cliente **não** compra um CRM. CRM é commodity — Pipedrive, RD, HubSpot fazem isso melhor e mais barato do que nós conseguiremos na v1.
-
-O cliente compra: **"um agente de IA que atende e vende no meu WhatsApp, com um cockpit que me mostra o que está acontecendo no meu funil."**
-
-Isso define a hierarquia de valor:
-
-| Camada | O que é | Status hoje | Papel na venda |
-|---|---|---|---|
-| **1. O agente** (AI Studio + canal WPP) | A promessa central. É o que justifica o ticket | 🔴 Embrionário / inputs quebrados | **É o produto** |
-| **2. O cockpit** (Pipeline, Chat, Copilot, Agenda) | Onde o cliente vê o agente trabalhando | 🟢 Sólido (10+ sprints) | Prova de valor / retenção |
-| **3. A operação** (Billing, Admin, Onboarding) | O que nos permite cobrar e operar | 🟡 Parcial + bug crítico | Habilitador |
-| **4. O ecossistema** (Toolkit, Clube Solo, Automações) | Crescimento sobre base sólida | ⚪ Não existe | **Pós-v1** |
-
-**Insight de priorização:** a camada 2 está pronta e a camada 1 está quebrada. Ou seja: temos o "espelho" mas não temos o "motor". Todo sprint gasto polindo a camada 2 antes de completar a camada 1 é sprint gasto no lugar errado. **AI Studio vem primeiro, não Billing.**
-
----
-
-## 3. Onde discordo do plano anterior (e por quê)
-
-### 3.1 Billing completo antes do AI Studio — invertido
-O argumento "sem billing não há negócio" é verdadeiro no limite, mas superdimensionado para os primeiros clientes. Para cobrar 1–5 clientes design-partner não precisamos de UI de planos, histórico de faturas, tiers e feature gating — precisamos de **um link de pagamento Asaas e o webhook de confirmação**. O que é bloqueador de verdade no billing é pequeno e cirúrgico (ver Sprint 7.0). Billing *completo* (self-service, planos, gating) só paga dividendo quando houver volume — e volume não é o gargalo da v1.
-
-### 3.2 "Fase completa antes de avançar" — substituir por "fatia mínima que destrava o cliente"
-Completude é o princípio certo para *features* (nada de 10 coisas meio-prontas), mas errado para *fases*. Se esperarmos AI Studio 100% (incluindo Whatsmeow + Salvy) antes de qualquer cliente, empurramos a primeira receita e o primeiro aprendizado real por meses. A fatia mínima do AI Studio que destrava venda é: **agente configurável + treinamento funcionando + canal WPP via GPT Maker**. Whatsmeow e Salvy não estão nessa fatia.
-
-### 3.3 Whatsmeow (WPP próprio) — fora da v1
-Razões, em ordem de peso:
-1. **Risco de plataforma:** API não oficial = risco de ban dos números dos clientes. Um cliente que perde o número no primeiro mês é churn + dano de reputação irreversível para um produto novo.
-2. **Custo de infraestrutura:** exige um microserviço Go novo (broker), Docker, ciclo de vida de instâncias, monitoramento — uma superfície operacional inteira nova, para um time que precisa focar em completar o que existe.
-3. **Redundância na v1:** o GPT Maker já entrega canal WhatsApp. Whatsmeow é uma otimização de margem/controle, não um desbloqueio de valor.
-
-**Decisão:** pós-v1. Mesma lógica para **Salvy** (compra de números): é conveniência, não desbloqueio. Quando entrar, entra como *facilitação* (cliente compra, nós orquestramos), nunca revenda na v1 — revenda traz implicação fiscal e de suporte que não queremos carregar agora.
-
-### 3.4 Toolkit Shop e Clube Solo — são v2, sem ambiguidade
-Marketplace e programa de afiliados só funcionam sobre uma base de clientes que ama o produto. Com 0 clientes, são features de crescimento sem nada para crescer. Manter na visão, tirar do roadmap de execução.
-
-### 3.5 O que o plano anterior acerta (e mantemos)
-- O diagnóstico do **webhook Asaas** (assinatura ativa antes do pagamento) é o achado técnico mais importante do documento — vira item da primeira sprint.
-- O pipeline de pré-processamento de treinamento (site/vídeo/PDF → TEXT) é a solução correta para os inputs quebrados.
-- A convenção de nomeação de blocos (`# [Título: ...]`) é pragmática e mantém sync bidirecional.
-- Rotação de chaves como transversal urgente.
-- Fila de webhooks com retry via database triggers — arquitetura certa, timing Fase de escala.
+1. **O roadmap antigo foi cumprido em escopo e não em resultado.** Tudo o que ele planejou está no
+   ar, mais o que ele tinha empurrado para depois da v1 (Solo API, automações, formulários, roleta,
+   suporte, central de ajuda). A linha de chegada dele — 3 clientes pagando e renovando sem suporte
+   diário — continua aberta: hoje **só a Solo Energia paga**, a Casa Flow usou e parou, a WI
+   Advogados vai começar.
+2. **O produto ficou largo antes de ficar fundo.** Em quatro meses foram ~200 migrations e ~47 edge
+   functions. Quase toda área existe; poucas estão fechadas a ponto de um cliente operar sozinho.
+   A próxima fase não é de áreas novas: é de **fechar ciclos**.
+3. **A tese muda de "agente + cockpit" para "máquina de receita agêntica, nativa de WhatsApp".**
+   O Attio vende exatamente isso para empresas de e-mail e calendário. O Rev tem uma vantagem que o
+   Attio não tem: a conversa de venda **acontece dentro do produto**, e o agente que responde é
+   nosso. O que falta é o que o Attio já tem: contexto único, agentes que agem e são medidos,
+   automação numa tela só, e o sistema se montando sozinho.
+4. **Oito sprints, nesta ordem:** UI do CRM (em curso, a pedido do founder em 12/11) → chão firme → Copilot que decide → automações numa tela só →
+   captação e reativação → modelo relacional → Builder (o sistema se monta) → cérebro próprio do
+   atendimento. A fundação de design (tokens, casca com barra lateral, grade única) entrou na Sprint 15; a trilha continua a partir da Sprint 17.
+5. **Regra de pronto, para toda sprint:** só conta o que foi visto funcionando no app, por uma
+   pessoa, num tenant real (Solo Energia primeiro, WI Advogados como segundo).
 
 ---
 
-## 4. O caminho crítico — 4 marcos, não 5 fases
+## 2. Onde estamos (12/11/2026)
 
-```
-Marco 0 ── CONFIÁVEL ──── "Não temos vergonha nem risco"     (~1 sprint)
-Marco 1 ── VENDÁVEL ───── "O agente funciona de ponta a ponta" (~2-3 sprints)
-Marco 2 ── COBRÁVEL ───── "Cliente real pagando e onboardado"  (~1-2 sprints)
-Marco 3 ── RETÍVEL ────── "Cliente vê valor e renova"          (~2 sprints, guiado por feedback)
-─────────────────────────────────────────────────────────────
-           = v1 SHIPPED. Depois: ESCALÁVEL (automação/suporte) já com receita.
-```
+### 2.1 O que existe, por motor
 
-### Marco 0 — CONFIÁVEL (Sprint 7.0, "Trust & Close-out")
-Curto e não-negociável. Limpa risco e fecha pontas soltas antes de abrir frente nova.
+Os oito motores de `motores_revops.md` continuam sendo o mapa. Estado de cada um:
 
-- **Rotação de todas as chaves expostas** (commit `15a4f80` + chats). Isso é bloqueador de produção, não "tech debt". Dias, não semanas.
-- **Webhook Asaas (`asaas-webhook`):** `PAYMENT_RECEIVED` → ativa assinatura + credita pacote; `PAYMENT_OVERDUE`/`SUBSCRIPTION_DELETED` → `PAST_DUE`/soft block. Mapear `externalReference` para créditos avulsos. Validação por token de header. *(É pequeno e corrige um bug de integridade de receita — não espera a "fase de billing".)*
-- **Fast-follows pendentes do 6.10:** E2E live da relation column, minors do Review-1, flag do vitest.
-- **Saída:** chaves rotacionadas; pagamento confirmado é o que ativa assinatura; backlog do 6.x zerado ou explicitamente movido.
+| Motor | No ar | Nível |
+| :-- | :-- | :-- |
+| 1 Modelo | registro de 15 tipos de campo, `field_id` em pipeline e tabelas, relação N:1 e lookup, tabelas personalizadas ligadas ao negócio | 🟡 falta rollup, N:M, fórmula; campos de contato ainda por `key` |
+| 2 Processo | etapas com tipo e marco, naturezas (Duração, Entradas, Oferta, Processo), modelos, Track Shaper, motor único de mover etapa com motivo de perda, roleta | 🟢 |
+| 3 Eventos | `funnel_events` com dono do momento, histórico de etapa e de dono, toques, livro de receita | 🟡 seis tabelas separadas; não há linha do tempo única por registro |
+| 4 Automação | regras do Agente de CRM, `crm_automations` (evento → ação), sequências de outreach, agendador (reciclo/recorrência), webhooks de etapa, botões de artefato | 🔴 cinco mecanismos, cada um com sua tela e seu log |
+| 5 Receita | catálogo, itens, livro-razão, recorrência, ROI por campanha | 🟢 falta previsão ponderada e comissão |
+| 6 Artefatos | propostas e contratos presos ao negócio, arquivo privado, ciclo de vida → marco, formulário público, esteira Jestor → Rev | 🟢 |
+| 7 Entradas/Saídas | toques com UTM e click id, entradas com carimbo e rodízio, formulários de ingestão, webhooks com log e reenvio | 🟡 nenhuma integração nativa (Meta, Google), sem API pública, sem MCP |
+| 8 Consulta/Métricas | filtro único compilado no servidor, tabelas paginadas, placar, dashboard em 5 páginas, relatório por pipeline | 🟡 sem visões salvas, sem agrupar, sem "todos os filtrados" |
 
-### Marco 1 — VENDÁVEL (Sprints 7.1–7.3, "AI Studio Core")
-A promessa central funcionando de ponta a ponta, com **GPT Maker como provider único da v1** (decisão fechada — multi-provider é abstração prematura; o custo de trocar depois é real mas menor que o custo de atrasar agora).
+Portas e operação:
 
-- **7.1 — Sync + Knowledge Base:** estudo sério da API do GPT Maker (uma vez, documentado); sync bidirecional das configurações do agente; blocos de treinamento nomeados (convenção de título no texto); pipeline de pré-processamento site/vídeo/arquivo → TEXT.
-- **7.2 — Skills & Channels:** registro/edição de intenções sincronizado; pull das capacidades do provider; workflow completo de configuração de canal dentro da seção.
-- **7.3 — Hardening do fluxo completo:** um usuário não-técnico configura agente (knowledge + skills + canal WPP) sozinho, sem ticket. Estados de erro, feedback de sync, edge cases.
-- **Saída (teste real):** *nós mesmos* criamos um tenant limpo e montamos um agente vendedor completo usando só a UI, em menos de 1 hora. Se não conseguimos, não está vendável.
+| Área | No ar | Nível |
+| :-- | :-- | :-- |
+| Atendimento (Studio AI) | paridade com o provedor: configurações, canais, treinamento, regras de transferência, ações de inatividade, catálogo de modelos | 🟡 depende de um provedor sem API para horário, moderação, agenda e lista de modelos |
+| Canais | Solo API (WhatsApp por QR), 7 tipos de canal do provedor, janela de 24h tratada | 🟡 E2E com aparelho real nunca fechado |
+| Chat | responsável × atendente, ingestão sem conversa fatiada, deep link | 🟢 25 grupos de conversa duplicada no histórico |
+| Copilot | fila com espera, verbos com desfazer, chat sobre os dados, Jev (System 1) em modo sombra | 🔴 ver §4.2 |
+| Outreach | motor de sequências CRM → WhatsApp, idempotente e cancelável | 🟡 motor sólido, tela mínima, sem medição de resultado |
+| Cobrança | Asaas, duas carteiras (Atendimento/Copiloto), faturas, go-live, cartão salvo | 🟢 quase sem uso real |
+| Onboarding | proposta → aceite → provisionar → go-live, discovery por link | 🟡 a montagem do ambiente é SQL à mão por cliente |
+| Admin, Equipe, Notificações, Suporte, Docs | painel do dono, políticas de notificação, tickets, central de ajuda v1 | 🟢 docs de admin e de dev não existem |
+| Toolkit, Clube Solo | só a rota | ⚪ |
 
-### Marco 2 — COBRÁVEL (Sprint 8, "First Customer")
-O objetivo do sprint não é código — é **cliente**. O código é o mínimo que o cliente exige.
+### 2.2 O que o uso real disse
 
-- **Billing mínimo viável:** página com plano atual + histórico de cobranças + status; compra de créditos avulsos fechando o loop com o webhook do 7.0. **Plano único com créditos** na v1 (decisão fechada — tiers são otimização para um funil que ainda não existe; instância/número extra entram como line-items quando existirem).
-- **Onboarding mínimo:** fluxo guiado de 4 passos (Nicho → WhatsApp → Time → Pipeline) com opção de pular. Sem tour elaborado — checklist funcional.
-- **Admin mínimo para operar:** ver tenants, status de assinatura, alterar plano/créditos sem abrir o banco. (Admin 360 com dashboards de MRR/churn fica para quando houver M de MRR.)
-- **Meta de negócio do marco:** **1–3 clientes design-partner pagando** (preço de early adopter, contato direto conosco, feedback semanal). Vendidos manualmente — self-service completo não é pré-requisito para os primeiros 10 clientes.
-
-### Marco 3 — RETÍVEL (Sprints 9–10, "Prove Value")
-Só agora, com uso real, investimos em percepção de valor — porque agora sabemos *o que* os clientes olham.
-
-- **Dashboard de vendas v1:** página dedicada (não widgets), 5–7 KPIs top-down: conversão por estágio, velocity, atividade por canal/responsável. Escopo final definido pelo que os design-partners pedirem.
-- **Notificações v1:** in-app primeiro; WhatsApp/e-mail só para eventos de billing (fatura, vencimento). Workflow completo de notificações é pós-v1.
-- **Copilot — latência real:** profiling do python-agent, caching, escolha de modelo (o item wall-clock deferido do 6.10).
-- **Passe de UI/UX guiado por sessão com clientes**, não por auditoria interna: loading/empty/error states nas páginas que os clientes de fato usam.
-- **Saída = definição de v1 shipped:** 3+ clientes pagando, ativos ≥4 semanas, ≥1 renovação de ciclo, zero intervenção manual de banco para operar o dia a dia.
-
-### Pós-ship — ESCALÁVEL (a partir do Sprint 11, já com receita informando prioridade)
-Ordem provável, a validar com dor real de suporte: webhooks completos (fila + retry + logs UI) → suporte com AI (FAQ + tickets → WPP do admin) → regras de automação (**3–5 templates prontos** tipo "lead parado >5 dias → notificar"; visual builder no-code é v2) → PWA/mobile → Whatsmeow → Salvy → Toolkit → Clube Solo.
+A Solo Energia abriu 17 tickets entre 27/09 e 13/10. Nenhum pedia área nova. Pediam que o que
+existe se ligasse: responsável do chat com o do CRM, motivo de perda na hora de perder, webhook que
+aparece na tela de webhooks, relatório que chega igual todo dia, celular que funciona. É o retrato
+do produto: **as peças existem e as emendas falham**.
 
 ---
 
-## 5. Decisões estratégicas — fechadas agora (mudar depois custa caro)
+## 3. A tese: o que o Rev precisa ser
 
-| # | Decisão | Escolha v1 | Racional |
-|---|---|---|---|
-| 1 | Provider de IA | **GPT Maker único** | Multi-provider é abstração prematura sem clientes |
-| 2 | Precificação | **Plano único + créditos** (avulsos p/ excedente) | Tiers otimizam um funil que não existe; simplifica billing, gating e mensagem de venda |
-| 3 | Ciclo | **Mensal apenas**; sem trial self-service — pilotos negociados manualmente | Anual/trial são otimizações de conversão para depois do product-market fit |
-| 4 | Inadimplência | **Soft block** (dados legíveis, agentes desligados) + carência 7 dias | Hard block queima relação cedo demais; agente desligado já dói o suficiente |
-| 5 | WPP próprio (Whatsmeow) | **Pós-v1** | Risco de ban + microserviço Go novo + redundante com GPT Maker |
-| 6 | Salvy | **Pós-v1; facilitação, nunca revenda** | Conveniência, não desbloqueio; revenda = passivo fiscal |
-| 7 | AI Studio no plano | **Incluso** | É o produto. Vender o produto como add-on do próprio produto não faz sentido |
-| 8 | Dashboard | **Página dedicada** | Widgets configuráveis são v2 |
-| 9 | Notificações | **In-app + billing por WPP/email** | Workflow completo multi-canal é pós-v1 |
-| 10 | Automação | **Templates prontos, sem visual builder** | Builder no-code é o item mais caro da lista para o menor N de clientes |
-| 11 | Suporte AI | **Pós-ship**, reusando estrutura do AI Studio | Com <10 clientes, suporte manual é feature (aprendizado), não bug |
+**O Rev é a máquina de receita de uma empresa brasileira que vende por conversa.** Ela capta,
+responde, qualifica, move, cobra o próximo passo e traz de volta quem esfriou — com agentes fazendo
+o trabalho e o dono aprovando o que importa.
 
----
+### 3.1 O que o Attio ensina, e onde estamos em cada ponto
 
-## 6. Princípios de execução
+O Attio se reposicionou como "CRM para receita agêntica". A página dele organiza o produto em
+cinco movimentos e três fundações. Traduzido para o nosso cliente:
 
-1. **Cliente real é o marco central, não o critério final.** Tudo antes do Marco 2 existe para viabilizá-lo; tudo depois existe para retê-lo.
-2. **Fatia mínima que destrava, completude dentro da fatia.** Nada meio-pronto — mas a fatia é definida pelo que o cliente precisa, não pelo escopo total da área.
-3. **Manual antes de automático.** Venda manual, onboarding acompanhado, suporte no WhatsApp pessoal. Automatizar atrito que ainda não sentimos é desperdício.
-4. **Feedback de design-partner > opinião interna.** Do Marco 3 em diante, o backlog é ordenado pelo que os 3 primeiros clientes pedem.
-5. **~15% de cada sprint para dívida/bugs** (mantido do plano anterior — está certo).
-6. **Toda decisão da Seção 5 é final até o ship.** Reabrir decisão fechada exige evidência de cliente, não preferência nossa.
+| Movimento do Attio | O que é lá | O equivalente no Rev | Hoje |
+| :-- | :-- | :-- | :-- |
+| Build pipeline | agente pesquisa contas e escreve o primeiro e-mail | captar por anúncio e formulário; **reativar a base morta** por WhatsApp (a Solo tem 916 negócios em Reciclo/Desqualificado) | 🟡 motor de sequências existe; sem segmento, sem resultado |
+| Convert leads | lead novo é enriquecido, pontuado, roteado e inscrito numa sequência antes de esfriar | o agente responde no WhatsApp em segundos, qualifica, pontua, a roleta entrega ao vendedor certo | 🟡 atendimento e roleta existem; o score não tem critério |
+| Run sales motions | pipeline do jeito do cliente; agente prepara a reunião e acusa negócio parado | Kanban + Copilot que lê a conversa, preenche, move e cobra o próximo passo | 🔴 o Copilot falha 1 em 4 e ninguém aprova o que ele sugere |
+| Forecast revenue | pergunta em linguagem natural vira consulta | chat "Entenda sua máquina de receita" + placar + relatório diário no WhatsApp | 🟡 existe; lento, sem previsão ponderada |
+| Retain and expand | sinais de conta esfriando; a jogada vem pronta para aprovar | recorrência abre o negócio de retorno; pós-venda | 🟡 recorrência existe; ninguém usa |
 
----
+| Fundação do Attio | O que é lá | No Rev | Hoje |
+| :-- | :-- | :-- | :-- |
+| Universal Context | e-mail, ligação e agenda se registram sozinhos | **a conversa de WhatsApp já mora aqui** — é a nossa vantagem | 🟡 áudio vira "[áudio]"; sem agenda Google; eventos espalhados |
+| Workflows + agentes | um construtor: gatilho → agente → condição → ação, com histórico de cada execução | Motor 4 | 🔴 cinco mecanismos separados |
+| Self-building | conecta a caixa de entrada e o CRM se monta | Track Shaper + Modo Builder | 🔴 onboarding é SQL à mão |
+| SDK · API · MCP | tudo que a tela faz, a API faz | os verbos de negócio já são RPCs | ⚪ nenhuma porta pública |
 
-## 7. Riscos principais e mitigação
+### 3.2 Onde ganhamos e onde não competimos
 
-| Risco | Impacto | Mitigação |
-|---|---|---|
-| API do GPT Maker mais limitada que o esperado (sync, tipos de treino) | Alto — mina o Marco 1 | Spike de 2–3 dias no início do 7.1 mapeando a API real antes de comprometer escopo; o pipeline "tudo vira TEXT" já contorna a limitação conhecida |
-| Lock-in GPT Maker (decisão #1) | Médio, prazo longo | Manter camada fina `manage-agent-*` como fronteira única com o provider (já é o padrão das edge functions) |
-| Chaves expostas exploradas antes da rotação | Crítico | Marco 0, primeira ação, esta semana |
-| Não encontrarmos 3 design-partners | Alto — invalida cadência | Começar a prospectar **durante o Marco 1** (rede do founder), não depois dele |
-| Perfeccionismo no Marco 3 adiando o ship | Médio | Definição de shipped é numérica (3 clientes, 4 semanas, 1 renovação) — não estética |
+- **Ganhamos:** WhatsApp como canal nativo (com número próprio pela Solo API), agente que atende de
+  verdade, português e realidade do Brasil (CPF/CNPJ, Asaas, PIX), montagem feita por nós (Builder
+  a R$300/h já é produto), preço de PME.
+- **Não competimos agora:** enriquecimento de contas B2B, sincronização de e-mail, marketplace de
+  apps. O nosso "sinal" é a conversa, não a notícia de rodada de investimento.
 
----
+### 3.3 A medida de sucesso
 
----
+Uma máquina de receita se mede pelo que produz, por tenant e por semana:
 
-# 📎 Apêndice A — Conteúdo anterior deste documento
+| Medida | Por que essa | Meta para o primeiro tenant de fora |
+| :-- | :-- | :-- |
+| Tempo até a primeira resposta ao lead | é o que o cliente sente primeiro | mediana < 1 min |
+| % de negócios abertos com próximo passo datado | diz se a linha está sendo trabalhada | ≥ 80% |
+| % das sugestões do Copilot resolvidas em 24h (aceitas, recusadas ou aplicadas sozinhas) | diz se o Copilot é usado ou ignorado | ≥ 70% |
+| Receita ganha que passou por uma ação de agente ou automação | é a máquina, em dinheiro | crescer mês a mês |
+| Dias de uso por vendedor na semana | retenção antes da renovação | ≥ 4 de 5 |
 
-> **[APPENDIX — versão anterior do roadmap, preservada na íntegra para referência.]**
-> Visão original do founder (ver também `Planning/todo.md`) + roadmap estratégico dos engenheiros + recomendações técnicas (AGY). A visão do PM acima **substitui** este conteúdo como plano de execução; as recomendações técnicas do AGY continuam válidas e foram absorvidas nos marcos.
-
-# 🚀 Roadmap Estratégico: Solo Sales Engine v1
-
-> **Visão:** Sales OS — um Sistema Operacional de Vendas, não um CRM tradicional.
-> Ambiente de trabalho ativo que organiza a operação de vendas de alta performance no Brasil.
+E a do negócio continua a do roadmap antigo, porque nunca foi atingida: **3 tenants de fora pagando
+e renovando, sem intervenção no banco.**
 
 ---
 
-## 📍 Onde Estamos Hoje
+## 4. Diagnóstico — o que está mal construído
 
-| Marco | Status |
-|---|---|
-| 10+ sprints entregues (Nov 2025–Jul 2026) | ✅ |
-| CRM v1 (Pipeline, Kanban, Base de Contatos, Custom Tables) | ✅ |
-| Solo Copilot v1 (Análise de mensagens, Telemetria, Scoreboard) | ✅ |
-| Chat V1 (Integração WhatsApp, Histórico, Sincronia) | ✅ |
-| Agenda (Dia/Semana/Mês) | ✅ |
-| Autenticação, RBAC, Multitenant | ✅ |
-| AI Studio (Estrutura inicial: páginas Channels/Knowledge/Skills/Settings) | 🟡 Embrionário |
-| Billing (Integração Asaas inicial) | 🟡 Parcial |
-| Admin Panel | 🟡 Básico |
-| Webhooks | 🟡 Parcial |
+Em ordem de quanto custa deixar como está.
 
-**Tipo de mudança:** Saímos de "construir fundação" para "shipar produto real". O foco muda de *features* para *completude*.
+### 4.1 Verdades duplicadas
+Cada uma já produziu um defeito silencioso em produção:
 
----
+- **Quem é admin:** `is_super_admin()` lê `profiles.role`, a tela lê `user_roles`. Um cliente já leu
+  a proposta de todos os outros por isso.
+- **Saldo de crédito:** `agent_credits_balance` (Sprint 6.1) ainda alimenta o selo do Copiloto, em
+  paralelo ao `credit_ledger`. `equipes.creditos_avulsos` tem seis leitores vivos.
+- **Etapa do lead:** `leads.stage_id` é legado e ainda existe; o Kanban lê `opportunities`.
+- **Copilot:** o caminho antigo (Torre/Chão, `/api/v1/sync`, painel de aprovações antigo) convive
+  com o novo. O erro 422 "invalid or expired token" ao sincronizar e ao criar pipeline vem dessa
+  convivência.
+- **Cadência:** `cadence-check` (sem autenticação) ainda está publicado ao lado do motor de outreach.
 
-## 🗺️ Mapa Estratégico — 5 Fases para o Ship v1
+### 4.2 O Copilot ainda não se paga
+Dados de 13/09 a 27/09 (`sprint_13_copilot_jev_v1.md`):
 
-Cada fase representa um tema estratégico. As sprints são o tático dentro de cada fase.
+- 1 em cada 4 passadas falha; tempo do modelo p50 15,6 s e **p90 520 s**.
+- 24% das passadas bem-sucedidas terminam sem nenhuma ação.
+- ~700 decisões esperando aprovação e **nenhuma aprovada por uma pessoa**. A fila de aprovação é
+  um cemitério: abaixo do limiar de confiança, hoje, significa perdido.
+- A confiança que decide isso é a que o próprio modelo declara, e ela não mede nada.
+- O Jev foi integrado em modo sombra para resolver exatamente isso; o relatório H1–H4 que decide
+  se ele liga ainda não foi lido.
+- O Copilot não ouve áudio. Em venda por WhatsApp no Brasil, isso é não ouvir metade da conversa.
 
-```
-Fase 1 ─── Fundação Comercial ─── "Pode cobrar"
-Fase 2 ─── AI Studio ──────────── "Pode vender"
-Fase 3 ─── Experiência ───────── "Pode reter"
-Fase 4 ─── Automação ─────────── "Pode escalar"
-Fase 5 ─── Ecossistema ───────── "Pode crescer"
-```
+### 4.3 Automação em cinco lugares
+Regras do Agente de CRM, `crm_automations`, sequências de outreach, agendador de reciclo e
+recorrência, webhooks de etapa, botões de artefato — mais as ações de inatividade que moram no
+provedor. Cada um tem tela, log e vocabulário próprios. O cliente pediu isso em dois tickets (#3 e
+#5). O `motores_revops.md` já previa "uma tela Automações" na v1.2.
 
----
+### 4.4 A promessa central depende de um provedor que não controlamos
+O atendimento roda no GPT Maker. Ele não tem API para horário de atendimento, moderação, agenda
+nem lista de modelos; o webhook de entrada dele é público e sem assinatura; em 30/09 devolveu erro
+interno em todos os testes da Casa Flow; e alguém alterou o treinamento da Casa Flow sem deixar
+rastro. Dois estudos sobre cérebro próprio (Agno) estão abertos em PR desde setembro.
 
-### 🏗️ Fase 1: Fundação Comercial
-**Missão:** Transformar o projeto em um negócio real — cobrar, gerenciar clientes, e operar sem abrir o banco.
+### 4.5 Nada é verificado por uma pessoa
+Quase todo handoff termina com "verificação no navegador pendente". Há testes de banco em rollback
+contra a produção (bons), mas nenhum teste que abra o app, não há ambiente de ensaio, o deploy é
+manual e as migrations entram à mão. Em 05/10 a produção ficou lenta por falta de CPU e só se
+descobriu olhando os relatórios do Supabase.
 
-**Por que primeiro:** Nada disso é glamouroso, mas sem billing funcional e admin panel você não consegue operar o negócio. É a fundação que viabiliza tudo o resto.
+### 4.6 Segurança com itens abertos há meses
+- Chaves expostas no git (`15a4f80`) e em conversas — a rotação está na lista desde junho; a chave
+  de produção do Asaas e o `AGENT_INTERNAL_TOKEN` passaram por chat.
+- `chat-attachments` é público e qualquer usuário logado apaga anexo de qualquer equipe.
+- `agent-training-docs` é de leitura pública; `agent-assets` não separa por equipe.
+- `gpt-maker-webhook` aceita evento sem segredo.
+- Proteção contra senha vazada desligada; três views administrativas `SECURITY DEFINER`.
 
-#### Entregáveis Estratégicos
+### 4.7 O sistema não se monta sozinho
+Cada cliente novo é um SQL escrito à mão mais o agent-creator (Rema e WI em 28/09). É o que impede
+de ter dez clientes sem dez vezes o tempo do founder.
 
-| Área | Descrição | Complexidade |
-|---|---|---|
-| **Billing Completo** | Histórico de faturas, integração Asaas completa (assinaturas + créditos), precificação por agente/número/instância, notificações de vencimento/pagamento, UI de planos | Alta |
-| **Admin Panel 360** | Visão completa do sistema: usuários, tenants, configurações, permissões sem DB, dashboards operacionais | Alta |
-| **Segurança** | Rotação das chaves expostas no git history (Supabase, OpenAI, Anthropic, etc.) | Média |
-| **Fast-follows pendentes** | E2E relation column, wall-clock agent latency, per-owner predictability depth, minors do Review-1 | Baixa |
-
-#### Decisões Estratégicas a Resolver
-
-1. **Modelo de precificação v1:** plano único (tudo incluso) vs. tiers (Basic/Pro/Enterprise)? Por agente? Por número WPP? AI Studio incluso ou add-on?
-2. **Ciclo de faturamento:** mensal apenas ou anual com desconto? Trial grátis?
-3. **Asaas integration scope:** usar Asaas como subadquirente (cartão + boleto) apenas, ou também para split de pagamento e notas fiscais?
-4. **Inadimplência:** soft block (algumas features desligadas) vs. hard block (tudo suspenso)? Período de carência?
-
-#### Critério de Saída
-
-- Um cliente real consegue se cadastrar, escolher um plano, pagar (cartão/boleto), e usar o produto sem intervenção manual
-- Admin consegue ver quem pagou, quem não pagou, e alterar plano de qualquer tenant sem abrir o banco
-- Nota fiscal emitida automaticamente ou sob demanda
-- Chaves expostas no git history estão todas rotacionadas
-- Métricas de negócio visíveis no Admin Panel (MRR, churn, clientes ativos)
-
-#### Dependências
-
-- ⬅️ **Desbloqueia** Fase 2 (AI Studio): feature gating por plano precisa existir
-- ⬅️ **Desbloqueia** Fase 4 (Automação): rate limiting de webhooks por plano
-- ➡️ **Depende de:** nada — esta fase é a primeira por design. O billing do Asaas já tem integração inicial, mas precisa ser completada.
+### 4.8 Sem sistema de design
+A interface foi construída onda a onda, por agentes diferentes, cada um resolvendo a sua tela. O
+celular foi remendado três vezes. O pacote principal tem 2,66 MB.
 
 ---
 
-### 🤖 Fase 2: AI Studio
-**Missão:** Completar a promessa central do produto — o cliente configura seu próprio agente de IA sem precisar de suporte técnico.
+## 5. As próximas sprints
 
-**Por que agora:** AI Studio é o principal diferencial competitivo vs. CRM tradicional. É o que justifica o ticket. O esqueleto já existe (páginas, permissões), precisa ser preenchido.
+Cada sprint diz o motor que avança, o que entrega e como se sabe que acabou. A ordem é a
+recomendada; §7 lista o que pode mudá-la.
 
-#### Entregáveis Estratégicos
+### Sprint 15 — UI do CRM (em curso desde 12/11)
+**Por quê agora:** decisão do founder em 12/11 — o CRM precisa ser agradável e confiável de usar antes
+de fechar o chão firme. Plano: `Planning/Sprints/sprint_15_crm_ui_plan.md`.
 
-| Área | Descrição | Complexidade |
-|---|---|---|
-| **GPT Maker Sync Bidirecional** | Toda alteração no AI Studio reflete em tempo real no GPT Maker. Fim do "configura aqui e depois lá" | Alta |
-| **Knowledge Base Completa** | Blocos de treinamento nomeados, fix dos inputs (site/video/file), acoplamento real com a API do GPT Maker | Alta |
-| **Skills & Intenções** | UI de registro/edição de intenções, triggers, e actions. Sincronizado com o provider | Média |
-| **Channels Management** | Pull automático das possibilidades do provider, workflow completo de configuração na seção | Média |
-| **WPP Próprio (Solo Ventures)** | Conexão via Whatsmeow (QR code), gestão de instâncias, billing por instância | Alta |
-| **Números via Salvy** | Compra/facilitação de números diretamente pela plataforma, monthly billing agregado | Média |
+- Status **Gerado** nas propostas: gerar não marca mais "Proposta enviada"; só Enviar marca.
+- Modo claro e escuro com contraste AA verificado por teste; texto sobre a cor do tenant sempre legível.
+- Casca com barra lateral por grupos (as seções do CRM e as tabelas personalizadas viram itens) e
+  altura limitada, o que destrava cabeçalho, primeira coluna e rodapé presos nas tabelas.
+- Card do negócio com hierarquia; uma grade só para Contatos, Negócios, Empresas, Imóveis e tabelas
+  personalizadas; 10 defeitos das tabelas corrigidos, 9 listados em aberto.
+- Desenho das primitivas de automação (`Planning/Architecture/automacao_primitivas_v1.md`), base da
+  Sprint 18.
 
-#### Decisões Estratégicas a Resolver
+**Acabou quando:** o fluxo da proposta (gerar → Gerado, enviar → Enviado) e as telas acima foram vistos
+funcionando na Solo Energia, em 1440 e 390, claro e escuro.
 
-1. **GPT Maker como provider único na v1?** Ou já arquitetar multi-provider desde o início? Trade-off: tempo de implementação vs. lock-in.
-2. **WPP próprio (Whatsmeow):** substituto do canal GPT Maker WPP ou complementar? Se substituto, qual o plano de migração para clientes existentes?
-3. **Salvy:** marketplace (facilitamos a compra, cliente compra direto) vs. revenda (compramos no atacado, revendemos com margem)? Implicações fiscais diferentes.
-4. **AI Studio no plano ou add-on?** Se incluso, o preço do plano sobe. Se add-on, complexidade de billing aumenta.
+### Sprint 16 — Chão firme
+**Por quê primeiro:** tudo o que vem depois multiplica o que estiver errado aqui. É a única sprint
+sem nada novo na tela.
 
-#### Critério de Saída
+- **Uma verdade só:** `is_super_admin()` passa a ler `user_roles` (com trava contra super admin em
+  equipe de cliente); selo do Copiloto lê o ledger e `agent_credits_balance` sai; os seis leitores
+  de `creditos_avulsos` saem e as colunas caem; leitores de `leads.stage_id` saem.
+- **Copilot:** remover Torre/Chão/`/api/v1/sync`/painel antigo; corrigir o 422 de token.
+- **Cadência:** aposentar `cadence-check`.
+- **Segurança:** rotação de todas as chaves da lista do `todo.md`; fechar `chat-attachments`;
+  separar `agent-assets` por equipe; segredo no `gpt-maker-webhook`; proteção de senha vazada;
+  crons antigos lendo segredo do Vault.
+- **Verificação:** um projeto de ensaio no Supabase; dez fluxos de ouro testados no navegador a
+  cada PR (login, criar negócio, mover com motivo de perda, responder no chat, formulário público,
+  proposta, automação, relatório, cobrança, equipe); página de saúde com filas, crons e erros.
+- **Pendências de dados da Suporte 1:** responder os 17 tickets; decidir o preenchimento dos 528
+  motivos de perda; unir os 25 grupos de conversa duplicada; persistência do motivo de perda na
+  configuração do pipeline.
 
-- Cliente configura um agente de IA completo (knowledge base + skills + canal) sem abrir ticket de suporte
-- Sincronia bidirecional com GPT Maker operacional: criar/editar/deletar no AI Studio reflete no provider em <30s
-- Knowledge base com blocos nomeados, treinamento por site/vídeo/arquivo funcional sem erros
-- Canal WPP próprio (Whatsmeow) funcional: QR code, conexão, gestão de instâncias
-- Compra de número via Salvy operacional (marketplace ou revenda)
-- Billing por instância WPP + número funcionando e atrelado ao plano
+**Acabou quando:** nenhuma tabela ou função da lista de §4.1 tem dois donos; a lista de chaves do
+`todo.md` está riscada; um PR que quebra um fluxo de ouro não entra.
 
-#### Dependências
+### Sprint 17 — Copilot que decide (+ fundação de design)
+**Motores:** 4 Automação, 8 Consulta. **Porta:** Copilot.
 
-- ➡️ **Depende de** Fase 1: feature gating + billing por instância/número
-- ⬅️ **Desbloqueia** Fase 3: Copilot e Dashboard usam dados do AI Studio
-- ⬅️ **Desbloqueia** Fase 4: Suporte com AI depende do AI Studio configurado
+- **Ler o relatório do Jev** e aplicar a regra escrita antes dos dados: liga ou ajusta o limiar.
+- **Confiabilidade:** falhas < 5%, p90 < 60 s; resposta com cerca ` ```json ` deixa de contar
+  como erro; alarme quando a credencial do modelo cai.
+- **Fim do cemitério de aprovações:** sugestão vence em 48h; o que o Jev sustenta com folga aplica
+  sozinho (com desfazer); o resto chega **no WhatsApp do vendedor**, resumido, com aprovar/recusar
+  num toque.
+- **Áudio:** transcrever o áudio do lead antes de o Copilot ler. É o primeiro pedaço de contexto
+  único.
+- **Score com critério:** o tenant declara o perfil ideal (campos e pesos, proposto pelo Copilot a
+  partir dos ganhos); o score sai disso e do comportamento na conversa, e mostra o porquê.
+- **Negócio parado e em risco:** sem próximo passo, sem resposta há N dias, data de fechamento
+  vencida — vira lista e vira gatilho de automação (Sprint 18).
+- **Preço do chat do Copilot**, com os tempos já gravados.
+- **Fundação de design (trilha, ver §6):** tokens, casca do app e a Home redesenhada como a casa
+  do Copilot — "o que fazer agora".
 
----
+**Acabou quando:** as metas de §3.3 para o Copilot são medidas num relatório semanal e batem na
+Solo Energia por duas semanas seguidas.
 
-### 🎯 Fase 3: Experiência & Inteligência
-**Missão:** Elevar a qualidade percebida — o app precisa ser rápido, bonito, e inteligente.
+### Sprint 18 — Automações numa tela só
+**Motor:** 4 Automação (v1.2 do `motores_revops.md`). **Referência:** os workflows do Attio.
 
-**Por que agora:** Com o core funcional (Fase 2), o foco vira retenção. Dashboard e Copilot refinado são o que fazem o cliente ficar.
+- **Um modelo:** gatilho (evento · tempo · webhook · botão · sinal do Copilot) → condição (a
+  linguagem de filtro que já existe) → **várias ações em sequência**, com espera entre elas.
+- **Ações = verbos de negócio que já existem**, mais: enviar mensagem no WhatsApp, inscrever em
+  sequência, criar tarefa, notificar, chamar IA (resumir, classificar, redigir), chamar webhook.
+- **Uma tela "Automações"** que lista também o que hoje mora fora: regras do agente, reciclo,
+  recorrência, webhooks de etapa, botões de artefato. Sequência de outreach passa a ser um tipo de
+  automação.
+- **Histórico de execução** por automação e por negócio, com entrada, saída e erro — o que o Attio
+  lançou em setembro e o que os tickets #3 e #5 pedem.
+- **Biblioteca de modelos prontos:** resposta em 1 minuto e rodízio · recuperar no-show · seguir
+  proposta sem resposta · lead parado 5 dias · lembrete de reunião · boas-vindas ao ganho.
 
-#### Entregáveis Estratégicos
+**Acabou quando:** não existe automação que só apareça fora dessa tela, e a Solo Energia roda pelo
+menos três modelos sem ajuda.
 
-| Área | Descrição | Complexidade |
-|---|---|---|
-| **Dashboard de Vendas** | Visão completa do processo: por pipeline, agente, canal, tempo, responsável. KPIs top-down com granularidade | Alta |
-| **Solo Copilot Evoluído** | Latência real (wall-clock), features mais úteis, resposta em cache, per-owner predictability avançado | Média |
-| **UI/UX General Review** | Consistência visual, micro-interações, estados vazios, loading states, feedback de erro | Média |
-| **Notificações Workflow** | Notificações in-app + push para eventos: lead novo, stage change, fatura vencendo, ticket aberto | Alta |
-| **Refinamento Mobile/PWA** | Responsivo para uso mobile, PWA funcional para consulta rápida | Média |
+### Sprint 19 — Captação e reativação
+**Motor:** 7 Entradas/Saídas. **Movimento:** build pipeline.
 
-#### Decisões Estratégicas a Resolver
+- **Fundação de integrações:** credenciais no Vault por tenant, catálogo de conectores, fila de
+  saída com nova tentativa (a que já entrega webhooks).
+- **Meta:** Lead Ads e clique-para-WhatsApp entrando com campanha e anúncio; investimento puxado
+  sozinho; Conversions API devolvendo ganho. Fecha o ROI que hoje depende de lançamento manual.
+- **Públicos:** um filtro salvo vira público de uma sequência.
+- **Reativação da base:** sequência sobre Reciclo e Perdido, com mensagem redigida por IA a partir
+  do histórico do negócio, freio por instância para não queimar o número, opt-out respeitado.
+- **Resultado por sequência:** enviados → respostas → negócios reabertos → receita.
+- **Google Agenda** (ticket #4), agora por integração própria e não pelo provedor.
 
-1. **Dashboard é uma página dedicada ou widgets integráveis?** Página dedicada é mais simples; widgets permitem montar visões diferentes por perfil.
-2. **Copilot predictions:** usar o python-agent próprio ou API externa de classificação? O python-agent já existe mas tem latência alta.
-3. **Notificações:** in-app apenas ou também WhatsApp/email? Se WhatsApp, usar o mesmo canal do chat ou um separado? Implicações de custo e arquitetura.
-4. **Mobile-first vs. PWA-first:** o app atual é web. Um PWA bem feito cobre 80% dos casos de uso mobile sem precisar de React Native.
+**Acabou quando:** uma campanha de reativação na base da Solo Energia mostra quantos negócios
+reabriu e quanto de receita trouxe, e um lead de anúncio da Meta entra com campanha sem n8n.
 
-#### Critério de Saída
+### Sprint 20 — Modelo relacional e visões
+**Motores:** 1 Modelo, 3 Eventos, 8 Consulta (v1.2).
 
-- Dashboard funcional com KPIs top-down: MRR, pipeline velocity, conversão por estágio, atividade por agente
-- Copilot com latência real <2s (não apenas perceived latency)
-- Consistência visual verificada em todas as páginas (loading → dados → empty → error)
-- Notificações push + in-app operacionais para eventos críticos de vendas e billing
-- App funcional e utilizável em mobile para consulta rápida (PWA ou responsivo)
+- **Um contrato de campo em todo lugar:** campos de contato passam para `field_id`; filtro por
+  campo de contato.
+- **Relações completas:** rollup (somar, contar, último), N:M, fórmula, CPF/CNPJ e percentual.
+- **Visões salvas**, agrupar, "selecionar todos os filtrados", ação em lote sobre a visão.
+- **Linha do tempo única por registro:** mensagem, etapa, tarefa, artefato, receita, ação de
+  automação e de agente num lugar só, lendo das seis tabelas de evento.
+- **Varredura de bugs das tabelas** (pedido do founder em 13/09).
+- **Importador de planilha com mapeamento de colunas**, usando `migrate_solo_energia.py` como lista
+  de requisitos.
 
-#### Dependências
+**Acabou quando:** dá para reproduzir no Rev, sem código, as tabelas que a Solo Energia mantinha no
+Jestor, com totais por negócio e por cliente.
 
-- ➡️ **Depende de** Fase 1: notificações de billing (fatura vencendo, pagamento confirmado)
-- ➡️ **Depende de** Fase 2: Copilot predictions usam dados do AI Studio; dashboard consome dados do CRM + AI Studio
-- ⬅️ **Desbloqueia** Fase 4: notificações são pré-requisito para suporte com AI notificar admin
+### Sprint 21 — Builder: o sistema se monta
+**Motor:** todos, por changesets (`future_sprint__mcp_v1.md`). **Movimento:** self-building.
 
----
+- **Changesets:** descrever · planejar · aplicar · desfazer, para pipeline, etapas, campos, metas,
+  taxonomia, webhooks, tabelas, automações e blocos do Studio AI. Com diff na tela.
+- **MCP interno** usado por nós no onboarding: o discovery do cliente vira um changeset revisado,
+  não um SQL.
+- **Copilot em Modo Builder** dentro do app, cobrando da carteira do Copiloto.
+- **Portal do onboarding:** o cliente vê em que etapa está e o que falta dele; checklist por etapa
+  bloqueia o go-live.
+- **Docs de admin e de dev** (resto da Sprint 12), gerados em boa parte dos próprios contratos.
 
-### 🔄 Fase 4: Automação & Escala
-**Missão:** Reduzir atrito operacional e suporte manual — o sistema se sustenta.
+**Acabou quando:** um tenant novo sai do discovery ao go-live sem SQL escrito à mão, em menos de
+um dia de trabalho nosso.
 
-**Por que agora:** Para escalar sem aumentar o time de suporte proporcionalmente. Clientes pequenos e médios esperam self-service.
+### Sprint 22 — Cérebro próprio do atendimento
+**Porta:** WhatsApp/Studio AI. Depende da decisão D1 (§7).
 
-#### Entregáveis Estratégicos
+- Agente próprio (Agno, no `python-agent`) atendendo pelos canais da Solo API, com os mesmos
+  verbos e o mesmo contexto do Copilot: treinamento com nome de bloco, horário de atendimento,
+  transferência, agendamento na nossa Agenda, tudo o que o provedor não expõe.
+- Piloto na Solo Energia, lado a lado com o provedor atual, comparando resposta, qualificação e
+  custo por conversa.
+- O provedor continua nos canais oficiais da Meta enquanto a comparação não decide.
 
-| Área | Descrição | Complexidade |
-|---|---|---|
-| **Webhooks Poderosos** | Sistema de webhooks completo: eventos configuráveis, retry, logs, debugging UI | Média |
-| **Suporte com AI** | FAQ inteligente, tickets diretamente da plataforma (notificar admin via WPP + painel) | Média |
-| **Tutorial & Onboarding** | Tour guiado de 4 passos (Nicho → WhatsApp → Time → Campanha), docs integrados, tooltips | Média |
-| **Regras de Automação** | Trigger → Condition → Action visual builder (ex: "se lead parou > 5 dias → notificar"). Já existe rascunho no `rule-engine.ts` | Alta |
+**Acabou quando:** há um número — conversão e custo por conversa, cérebro próprio contra provedor —
+e uma decisão escrita sobre migrar ou não.
 
-#### Decisões Estratégicas a Resolver
-
-1. **Regras de automação:** visual builder (no-code arrasta-solta) vs. config JSON/YAML avançado? O visual builder é mais caro de construir, mas é o que clientes não-técnicos compram.
-2. **Suporte com AI:** usar o mesmo Copilot do cliente (reusa o agent configurado) ou um agente de suporte separado (mais controle, mais custo)?
-3. **Webhooks:** eventos pré-definidos ou permite expressões customizadas (JSON path) para o cliente escolher o payload? Eventos pré-definidos são mais seguros.
-4. **Onboarding:** tour guiado na primeira vez vs. dashboard vazia com CTAs progressivas? O tour guiado funciona para conversão, mas quebra se o cliente sai do fluxo.
-
-#### Critério de Saída
-
-- Webhooks configuráveis por evento, com retry automático, log de entregas, e UI de debugging
-- Suporte com AI responde FAQs automaticamente e abre ticket humano quando não sabe
-- Ticket notifica admin via WPP + painel admin em <30s
-- Onboarding funcional: novo cliente passa pelos 4 passos e chega ao dashboard com dados reais
-- Regras de automação operacionais: trigger (evento/tempo) → condition (filtro) → action (notificar/mover/atualizar)
-- Engine de regras testada com ao menos 3 regras em produção de cliente real
-
-#### Dependências
-
-- ➡️ **Depende de** Fase 1: rate limiting de webhooks por plano (billing)
-- ➡️ **Depende de** Fase 2: suporte com AI reusa a estrutura do AI Studio
-- ➡️ **Depende de** Fase 3: notificações são pré-requisito para suporte notificar admin
-- ⬅️ **Desbloqueia** Fase 5: automação robusta permite self-service que escala sem time grande
-
----
-
-### 🚀 Fase 5: Growth & Ecossistema
-**Missão:** Criar canais de crescimento orgânico e receita recorrente além da assinatura base.
-
-**Por que depois:** Essas features geram crescimento, mas só funcionam se o produto base estiver sólido. Toolkit vende para quem já é cliente; Clube Solo atrai novos.
-
-#### Entregáveis Estratégicos
-
-| Área | Descrição | Complexidade |
-|---|---|---|
-| **Toolkit Shop** | Loja de skills, plugins, automações workflows, projetos personalizados e serviços | Alta |
-| **Clube Solo** | Programa de indicação/afiliados, blog de negócios/growth/vendas, comunidade (WPP group) | Média |
-| **Onboarding Experience** | Experiência refinada de primeiro uso — não apenas tutorial, mas sensação de "setup completo em minutos" | Média |
-
-#### Decisões Estratégicas a Resolver
-
-1. **Toolkit Shop:** marketplace interno (só nossos itens, curadoria manual) vs. aberto (terceiros publicam, revenue share)? Aberto escala mais, mas requer moderação e suporte.
-2. **Clube Solo — recompensa:** créditos na plataforma (reinveste) vs. descontos na assinatura (menos MRR) vs. dinheiro (complexidade fiscal)? Créditos é o mais simples.
-3. **Comunidade:** grupo WPP orgânico (baixo esforço, difícil moderar) vs. plataforma tipo Circle/Discourse (mais controle, mais custo)?
-4. **Precificação do Toolkit:** itens avulsos (cada skill se paga) vs. assinatura "Toolkit Pass" (receita previsível)? Ambos?
-
-#### Critério de Saída
-
-- Toolkit Shop funcional com ao menos 5 skills/plugins disponíveis para compra/instalação
-- Clube Solo operacional: link de indicação único por usuário, tracking de conversões, recompensa automática em créditos
-- Blog integrado ao app com conteúdo de vendas/growth publicado semanalmente
-- Onboarding refinado: novo usuário configura pipeline + equipe + WhatsApp em <5 minutos
-- Ao menos 1 cliente pagante em produção validando as decisões de produto (idealmente 3+)
-- MRR crescendo via indicações (não apenas aquisição paga)
-
-#### Dependências
-
-- ➡️ **Depende de** Fase 1: billing para recompensas do Clube Solo
-- ➡️ **Depende de** Fase 2: Toolkit Shop vende skills construídas no AI Studio
-- ➡️ **Depende de** Fase 4: onboarding refinado constrói sobre o tutorial da Fase 4; comunidade usa suporte com AI como triagem inicial
+### Depois (direção, não compromisso)
+API pública v1 com chaves e MCP externo · previsão ponderada, comissão e meta por produto ·
+pós-venda como linha aberta no ganho · canal de e-mail · PWA · assinatura nativa de contrato ·
+Toolkit (modelos de linha e de automação como produto) · Clube Solo · i18n.
 
 ---
 
-## 📐 Princípios para a Priorização
+## 6. Trilha de design (fundação na Sprint 15, contínua a partir da Sprint 17)
 
-1. **Monetização primeiro** → Nada de features gratuitas antes de poder cobrar. Billing na Fase 1.
-2. **Completeza sobre quantidade** → Cada fase deve ser "shipada" completamente antes de avançar. Nada de 10 features meio-prontas.
-3. **Dependências técnicas guiam** → Notificações (Fase 3) são pré-requisito para Suporte (Fase 4). Webhooks (Fase 4) dependem de Billing (Fase 1) para rate limiting.
-4. **Validação com clientes reais** → Antes da Fase 5, devemos ter ao menos 1 cliente pagante em produção para validar as decisões de produto.
-5. **YAGNI** → Se uma feature não é essencial para o ship da v1, vai para "pós-v1". O roadmap já é ambicioso.
+Não é uma sprint de polimento no fim. É uma regra de entrada para cada tela nova.
 
----
-
-## 🔮 Pós-v1 (Visão)
-
-- Multi-BSP (não só GPT Maker)
-- Mobile apps nativos (React Native)
-- Marketplace público de skills (terceiros)
-- API pública para integrações terceiras
-- Analytics preditivo (previsão de receita, churn scoring)
-- AI interno de suporte evolui para CSM autônomo
+1. **Sprint 15 — fundação (entregue):** tokens claro/escuro com contraste AA testado, casca com barra
+   lateral por grupos, card do negócio e uma grade só para todas as tabelas. **Sprint 17 — o resto:**
+   12 componentes de base auditados, busca global e a Home.
+2. **Sprints 18–20 — cada superfície nova nasce no sistema:** Automações, Sequências, Visões e a
+   linha do tempo. Antes do código, um protótipo navegável aprovado pelo founder.
+3. **Toda tela entregue tem os quatro estados** (carregando, vazio, erro, dado) e funciona em
+   390×844.
+4. **Navegação por trabalho, não por módulo:** Hoje (Copilot) · Conversas · Negócios · Captação ·
+   Automações · Resultados · Configurar. Hoje são 14 entradas de menu.
+5. **Desempenho como parte do design:** dividir o pacote de 2,66 MB por rota; primeira tela útil
+   em menos de 2 s no celular.
 
 ---
 
-## ⚡ Como Usar Este Roadmap
+## 7. Decisões do founder
 
-1. **Cada fase vira 1-N sprints.** O número de sprints por fase depende da complexidade e do ritmo.
-2. **O roadmap é vivo.** Revise a cada 2 sprints para ajustar prioridades com base no feedback real.
-3. **Fases podem sobrepor.** Se uma equipe trabalha em Billing e outra em AI Studio, as fases 1 e 2 podem correr em paralelo.
-4. **Dívida técnica emerge.** Cada sprint deve ter ~15% de capacidade para manutenção e bugs.
-5. **Decisões Estratégicas** devem ser resolvidas **antes** da primeira sprint de cada fase — documente a decisão e siga. Se mudar depois, o custo é alto.
+| # | Decisão | Recomendação | Trava |
+| :-- | :-- | :-- | :-- |
+| D1 | Cérebro do atendimento: seguir só com o provedor ou construir o próprio | Pilotar o próprio nos canais da Solo API (Sprint 22); manter o provedor nos canais oficiais | Sprint 22 |
+| D2 | Quem pode alterar configuração pelo Builder (do estudo do MCP) | admin e gestor | Sprint 21 |
+| D4 | Cobrança do Builder na hora de aplicar (do estudo do MCP) | crédito do Copiloto por changeset aplicado | Sprint 21 |
+| D6 | Ambiente de ensaio pago no Supabase | sim — custa menos que um incidente | Sprint 16 |
+| D7 | Preencher os 528 motivos de perda históricos | só Solo Energia, revisado pelo gestor | Sprint 16 |
+| D8 | Zerar o estado de cobrança dos tenants parados (níveis 1 e 2 do "Full Reset") | nível 1 agora; nível 2 antes da WI entrar em cobrança | Sprint 16 |
+| D9 | Em qual nicho o segundo e o terceiro cliente de fora entram | onde a conversa por WhatsApp é a venda inteira; entender primeiro por que a Casa Flow parou | Sprints 19 e 21 |
 
 ---
 
-## 🤖 Recomendações Técnicas e Arquiteturais (AGY)
+## 8. Princípios de execução
 
-Após uma análise detalhada do codebase (incluindo o motor de regras, fluxos de billing do Asaas, páginas do AI Studio, logs e o histórico de sprints), consolidados as seguintes recomendações para garantir a completude técnica da **v1.0**:
+1. **Fechar antes de abrir.** Uma área nova só entra quando a anterior passou no "acabou quando".
+2. **Um motor, um contrato.** Toda tarefa diz qual motor avança e responde as seis perguntas de
+   `motores_revops.md` §6. Se a resposta é "a tela resolve sozinha", o desenho está errado.
+3. **Agente age por verbo, com desfazer e com medida.** Nenhum agente escreve em tabela; toda ação
+   automática tem registro, dono e um jeito de voltar.
+4. **Pronto é visto no app.** Verificação no navegador, num tenant real, é parte da tarefa, não
+   pendência do handoff.
+5. **Apagar é entrega.** Caminho antigo removido conta tanto quanto caminho novo criado.
+6. **Uso real ordena o backlog.** Ticket de cliente passa na frente de ideia nossa; a WI Advogados
+   é o teste de tudo o que dissermos que está pronto para um segundo tenant.
 
-### 1. Billing & Gestão de Acesso (Fase 1)
-*   **Implementação de Webhook do Asaas (Urgente):** A função `asaas-subscribe` ativa imediatamente a assinatura no banco de dados antes da confirmação do pagamento. É crítico criar uma Edge Function (`asaas-webhook`) para ouvir os eventos do gateway:
-    *   `PAYMENT_RECEIVED`: Ativa a assinatura do tenant (`equipes.subscription_status = 'ACTIVE'`) e credita o pacote mensal de créditos do plano.
-    *   `PAYMENT_OVERDUE` / `SUBSCRIPTION_DELETED`: Atualiza o status para `PAST_DUE` ou `SUSPENDED`, aplicando um bloqueio suave (soft block: dados legíveis, agentes desativados) ou severo (hard block).
-    *   **Segurança:** Validar os IPs de origem do Asaas ou injetar um header token (`x-webhook-token`) na configuração da conta do Asaas e validá-lo no Deno.
-*   **Recargas de Créditos Avulsos:** A função `asaas-buy-credits` apenas cria a cobrança no Asaas. O webhook acima deve mapear a `externalReference` (ex: `credits_equipeId_timestamp`) e adicionar os créditos avulsos correspondentes em `equipes.creditos_avulsos` no momento do pagamento recebido.
+---
 
-### 2. AI Studio: Treinamento & Metadados (Fase 2)
-*   **Compatibilidade de API do GPT Maker:** O endpoint `POST /v2/agent/{id}/trainings` do GPT Maker aceita apenas `"type": "TEXT"`. Enviar `"WEBSITE"`, `"VIDEO"` ou `"DOCUMENT"` diretamente causa falha técnica. Recomenda-se criar um *Pipeline de Pré-processamento* na Edge Function `manage-agent-training`:
-    *   **Websites:** Fazer o fetch do HTML no servidor, extrair o texto limpo (ex: usando `deno-dom` ou um parser simples) e enviar como `TEXT`.
-    *   **Documentos (PDFs):** Converter arquivos de mídia do Supabase bucket em texto limpo usando bibliotecas utilitárias de leitura de PDF e subir como `TEXT`.
-    *   **Vídeos:** Obter a transcrição de áudio/legendas do link do YouTube e enviar como `TEXT`.
-*   **Identificação de Blocos (Nomeação):** Como o GPT Maker não armazena títulos/nomes para blocos de texto estruturado, podemos usar uma convenção de marcação nos blocos salvos (ex: prependando `# [Título: Minha Regra de Reembolso]\n` no início do texto). A Edge Function e o frontend podem fazer o parse desse cabeçalho para exibir títulos amigáveis no `TrainingBlockEditor.tsx` sem perder a sincronia bidirecional.
+## 9. Riscos
 
-### 3. Integração Salvy & Conexão Direta WPP (Fase 2)
-*   **Whatsmeow Broker Service:** Para oferecer a conexão via Whatsmeow (Whatsmeow é escrito em Go), deve-se criar um microserviço Go leve rodando em Docker (ex: no Dokploy/VPS). Esse serviço gerencia o ciclo de vida dos clientes Whatsmeow, gera o QR code em Base64 para exibição na página `/ai-studio/channels`, e envia as mensagens e eventos recebidos de volta para o Supabase (`sync-chat-history` ou `crm-webhook`).
-*   **Compra de Número (Salvy):** Criar uma Edge Function `salvy-integration` para consultar DDDs disponíveis e provisionar DIDs (números de telefone). Atrelar o ID do número comprado na Salvy ao plano de faturamento da equipe no Supabase, adicionando a taxa fixa mensal ao Asaas.
-
-### 4. Engine de Webhooks de Saída (Fase 4)
-*   **Desacoplamento por Fila de Eventos (Database Triggers):** Atualmente, os webhooks de saída são disparados diretamente na Edge Function `crm-webhook` apenas na criação do lead. Para abranger qualquer alteração no pipeline (ex: mudança de estágio no Kanban ou tag adicionada), configure triggers de banco de dados (`AFTER INSERT OR UPDATE ON opportunities / leads`) que inserem tarefas em uma tabela `webhook_queue`.
-*   **Processamento Assíncrono:** Uma Edge Function executará em background consumindo esta fila, realizando disparos com retry exponencial e logando as tentativas na tabela `webhook_logs`. Isso garante resiliência e visibilidade sem travar o client do usuário.
-
-### 5. Segurança & Handoff (Transversal)
-*   **Rotação de Chaves Seguras:** Execute um script para rotacionar as chaves expostas no commit `15a4f80` (Supabase Service-Role, OpenAI, Anthropic, JWT Secret) e remova-as dos arquivos rastreados pelo Git, utilizando estritamente variáveis de ambiente do Dokploy e Supabase Edge Secrets.
+| Risco | Efeito | Resposta |
+| :-- | :-- | :-- |
+| Continuar abrindo área nova antes de fechar | mais largura, mesma profundidade, mesmo um cliente | regra 1 de §8; Sprint 16 sem tela nova |
+| Copilot seguir ignorado pela equipe | a peça que mais nos diferencia vira custo | medir resolução em 24h (§3.3); levar a aprovação ao WhatsApp |
+| Número de WhatsApp banido em campanha de reativação | cliente perde o canal | freio por instância, opt-out, aquecimento; começar pela base da Solo |
+| Provedor do atendimento cair ou mudar | a promessa central para | segredo e monitor no webhook (Sprint 16); cérebro próprio em piloto (Sprint 22) |
+| Founder como único verificador e único operador | cada sprint espera por uma pessoa | fluxos de ouro automáticos (Sprint 16); Builder (Sprint 21) |
+| Incidente de segurança antes da rotação | dado de cliente e cobrança expostos | primeira semana da Sprint 16 |

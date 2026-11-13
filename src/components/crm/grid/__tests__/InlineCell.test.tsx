@@ -17,6 +17,19 @@ vi.mock("@/hooks/useRelationResolver", () => ({
   useRelationResolver: (...args: unknown[]) => resolverSpy(...args),
 }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// The picker queries the target table; here it offers two fixed records.
+vi.mock("../RelationPicker", () => ({
+  RelationPicker: ({ open, onPick }: { open: boolean; onPick: (id: string, label: string) => void }) =>
+    open ? (
+      <div>
+        <button type="button" onClick={() => onPick("c-1", "Empresa X")}>Escolher Empresa X</button>
+        <button type="button" onClick={() => onPick("c-2", "Empresa Y")}>Escolher Empresa Y</button>
+      </div>
+    ) : null,
+}));
+
 import { InlineCell } from "../InlineCell";
 import type { ColumnDef, GridRow } from "../types";
 
@@ -113,6 +126,43 @@ describe("InlineCell", () => {
     expect(onCommit).toHaveBeenCalledWith(1234.56);
   });
 
+  // Sprint 15 · T9 — text that is not a number used to be saved as null: the
+  // value was erased without a word.
+  it("a number that cannot be read is not saved and the cell says so", () => {
+    const onCommit = renderCell(col({ kind: "currency", label: "Ticket" }), 1500);
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    const input = screen.getByLabelText("Ticket");
+    fireEvent.change(input, { target: { value: "mil e quinhentos" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByTestId("cell-f-1").textContent).toBe("R$ 1.500,00");
+    expect(screen.getByRole("img", { name: /Número inválido/ })).toBeTruthy();
+  });
+
+  it("the invalid-number error goes away when a new edit starts and on Escape", () => {
+    renderCell(col({ kind: "currency", label: "Ticket" }), 1500);
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    fireEvent.change(screen.getByLabelText("Ticket"), { target: { value: "mil" } });
+    fireEvent.keyDown(screen.getByLabelText("Ticket"), { key: "Enter" });
+    expect(screen.getByRole("img", { name: /Número inválido/ })).toBeTruthy();
+
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    expect(screen.queryByRole("img", { name: /Número inválido/ })).toBeNull();
+    fireEvent.keyDown(screen.getByLabelText("Ticket"), { key: "Escape" });
+    expect(screen.queryByRole("img", { name: /Número inválido/ })).toBeNull();
+    expect(screen.getByTestId("cell-f-1").title).toBe("R$ 1.500,00");
+  });
+
+  it("clearing a number on purpose still saves empty", () => {
+    const onCommit = renderCell(col({ kind: "number", label: "Qtd" }), 3);
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    const input = screen.getByLabelText("Qtd");
+    fireEvent.change(input, { target: { value: "  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenCalledWith(null);
+  });
+
   it("a failed save shows on the cell and the value stays what it was", async () => {
     const onCommit = vi.fn(async () => {
       throw new Error("sem permissão");
@@ -132,6 +182,32 @@ describe("InlineCell", () => {
     fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
     fireEvent.keyDown(screen.getByLabelText("Obs"), { key: "Enter" });
     expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  // Sprint 15 · T9 — opening a cell and leaving it must not write. A DATE column
+  // comes back as "2026-03-14" and the editor hands back local midnight as ISO;
+  // a number stored as text comes back as a number. Same day, same number.
+  it("an unchanged date stored as a bare day does not call the server", () => {
+    const onCommit = renderCell(col({ kind: "date", label: "Próximo contato" }), "2026-03-14");
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    fireEvent.keyDown(screen.getByLabelText("Próximo contato"), { key: "Enter" });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("an unchanged number stored as text does not call the server", () => {
+    const onCommit = renderCell(col({ kind: "number", label: "Qtd" }), "1500");
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    fireEvent.blur(screen.getByLabelText("Qtd"));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("a changed date still saves", () => {
+    const onCommit = renderCell(col({ kind: "date", label: "Visita" }), "2026-03-14");
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    const input = screen.getByLabelText("Visita");
+    fireEvent.change(input, { target: { value: "2026-03-15" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenCalledWith(new Date(2026, 2, 15).toISOString());
   });
 
   it("a user field shows the member's name", () => {
@@ -168,5 +244,90 @@ describe("InlineCell", () => {
     await waitFor(() => expect(resolverSpy).toHaveBeenCalled());
     // Called with an empty context, which keeps its query disabled.
     expect(resolverSpy.mock.calls[0][2]).toEqual({ fromTable: "", equipeId: "" });
+  });
+
+  // Sprint 15 · T9 — relation cells.
+  const relationColumn = col({
+    kind: "relation",
+    key: "company",
+    label: "Empresa",
+    relation: { table: "companies", displayField: "name", resolvedFromRow: true },
+  });
+  const renderRelation = (onCommit: (v: unknown) => Promise<void> | void) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <InlineCell
+          row={row}
+          column={relationColumn}
+          value={[{ id: "c-1", name: "Empresa X" }]}
+          onCommit={onCommit}
+          equipeId="e-1"
+          fromTable="opportunities"
+        />
+        <button type="button">fora</button>
+      </QueryClientProvider>,
+    );
+
+  it("a relation that fails to unlink says so on the cell", async () => {
+    const onCommit = vi.fn(async () => {
+      throw new Error("sem permissão");
+    });
+    renderRelation(onCommit);
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Remover Empresa X" }));
+    expect(onCommit).toHaveBeenCalledWith({ toId: "c-1", action: "remove" });
+    expect(await screen.findByRole("img", { name: "sem permissão" })).toBeTruthy();
+  });
+
+  it("picking a record that is already linked does not link it again", () => {
+    const onCommit = vi.fn(async () => {});
+    renderRelation(onCommit);
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Escolher Empresa X" }));
+    expect(onCommit).not.toHaveBeenCalled();
+
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Escolher Empresa Y" }));
+    expect(onCommit).toHaveBeenCalledWith({ toId: "c-2", label: "Empresa Y" });
+  });
+
+  it("a relation cell leaves edit mode on Escape and on a click outside", () => {
+    renderRelation(vi.fn(async () => {}));
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Vincular..." }), { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Remover Empresa X" }));
+    // Still editing after a removal: the user may remove more.
+    expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("button", { name: "fora" }));
+    expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+  });
+
+  it("a click outside leaves edit mode even after the picker was opened", () => {
+    renderRelation(vi.fn(async () => {}));
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    expect(screen.getByRole("button", { name: "Escolher Empresa X" })).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("button", { name: "fora" }));
+    expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+  });
+
+  it("a click inside the picker's popper does not leave edit mode", () => {
+    renderRelation(vi.fn(async () => {}));
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    const popper = document.createElement("div");
+    popper.setAttribute("data-radix-popper-content-wrapper", "");
+    const inner = document.createElement("span");
+    popper.appendChild(inner);
+    document.body.appendChild(popper);
+    fireEvent.mouseDown(inner);
+    expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
+    popper.remove();
   });
 });

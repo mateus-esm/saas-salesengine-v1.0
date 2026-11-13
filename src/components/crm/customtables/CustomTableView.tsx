@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GridLoadError } from "@/components/crm/grid/GridLoadError";
 import { GridToolbar } from "@/components/crm/grid/GridToolbar";
 import type { MassAction } from "@/components/crm/grid/MassActionBar";
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
@@ -114,8 +115,19 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
     return () => clearTimeout(t);
   }, [search]);
 
-  const { records, total, isLoading, hasMore, loadingMore, loadMore, createRecord, updateRecord, deleteRecords } =
-    useCustomTableRecords(table.id, serverSearch, sort);
+  const {
+    records,
+    total,
+    isLoading,
+    error,
+    refetch,
+    hasMore,
+    loadingMore,
+    loadMore,
+    createRecord,
+    updateRecord,
+    deleteRecords,
+  } = useCustomTableRecords(table.id, serverSearch, sort);
   // Sprint 11 · T43 — the status goes through the verb: it can move the deal.
   const setArtifactStatus = useSetArtifactStatus();
   const artifactKind = table.artifact_kind;
@@ -346,9 +358,12 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
             <ArrowLeft className="mr-1 h-4 w-4" /> Voltar
           </Button>
           <h2 className="truncate text-lg font-semibold">{table.name}</h2>
-          <span className="text-sm text-muted-foreground">
-            {shownTotal.toLocaleString("pt-BR")} {shownTotal === 1 ? "registro" : "registros"}
-          </span>
+          {/* A failed load has no count: "0 registros" would say the table is empty. */}
+          {!error && (
+            <span className="text-sm text-muted-foreground">
+              {shownTotal.toLocaleString("pt-BR")} {shownTotal === 1 ? "registro" : "registros"}
+            </span>
+          )}
         </div>
 
         <GridToolbar
@@ -374,29 +389,42 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
         </GridToolbar>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
-        <SpreadsheetGrid
-          rows={rows}
-          columns={columns}
-          onCellCommit={handleCellCommit}
-          massActions={massActions}
-          loading={isLoading}
-          equipeId={equipeId}
-          fromTable={table.slug}
-          surfaceKey={`custom_table_${table.id}`}
-          allowColumnReorder
-          allowColumnResize
-          allowColumnHide
-          onSort={handleSort}
-          sortKey={sort?.field_id}
-          sortDir={sort?.dir ?? null}
-          onRowOpen={(id) => setOpenRecord(recordById.get(id) ?? null)}
-          renderMobileRow={renderMobileRow}
-          mobileEmptyLabel={serverSearch ? "Nenhum registro com essa busca." : "Nenhum registro ainda."}
-          hasMore={hasMore}
-          loadingMore={loadingMore}
-          onEndReached={loadMore}
-        />
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
+        {error && rows.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
+            Não foi possível carregar os registros.
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
+          </div>
+        ) : (
+          <>
+          {error && <GridLoadError onRetry={() => void refetch()} />}
+          <SpreadsheetGrid
+            rows={rows}
+            columns={columns}
+            onCellCommit={handleCellCommit}
+            massActions={massActions}
+            loading={isLoading}
+            equipeId={equipeId}
+            fromTable={table.slug}
+            surfaceKey={`custom_table_${table.id}`}
+            allowColumnReorder
+            allowColumnResize
+            allowColumnHide
+            onSort={handleSort}
+            sortKey={sort?.field_id}
+            sortDir={sort?.dir ?? null}
+            onRowOpen={(id) => setOpenRecord(recordById.get(id) ?? null)}
+            renderMobileRow={renderMobileRow}
+            mobileEmptyLabel={serverSearch ? "Nenhum registro com essa busca." : "Nenhum registro ainda."}
+            // A failed page must not retry by itself while the sentinel is visible.
+            hasMore={hasMore && !error}
+            loadingMore={loadingMore}
+            onEndReached={loadMore}
+          />
+          </>
+        )}
       </div>
 
       <CustomRecordDrawer

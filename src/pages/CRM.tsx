@@ -1,16 +1,8 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { Building2, Calendar, Home, LayoutGrid, ListChecks, Megaphone, Package, Plus, Table2, Users } from "lucide-react";
+import { LayoutGrid, Plus } from "lucide-react";
 
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 
 import { AIAgentToggle } from "@/components/AIAgentToggle";
 import { DatabaseView } from "@/components/crm/DatabaseView";
@@ -26,26 +18,7 @@ import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActi
 import { AgendaView } from "@/components/crm/AgendaView";
 import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { CampaignsView } from "@/components/crm/campaigns/CampaignsView";
-import { FILTER_PARAM_KEYS } from "@/lib/crmFilterParams";
-
-// Sprint 11 · T68 — the Copilot left the CRM: it is the app's opening (/home).
-type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "catalogo" | "campanhas" | "tasks" | "tabelas" | "agenda";
-
-const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "catalogo", "campanhas", "tasks", "tabelas", "agenda"];
-const isTopTab = (v: string | null): v is TopTab =>
-  !!v && TOP_TABS.includes(v as TopTab);
-
-const TAB_LABELS: Record<TopTab, string> = {
-  pipeline: "Pipeline",
-  contacts: "Base de Contatos",
-  companies: "Empresas",
-  properties: "Imóveis",
-  catalogo: "Catálogo",
-  campanhas: "Campanhas",
-  tasks: "Tarefas",
-  tabelas: "Tabelas",
-  agenda: "Agenda",
-};
+import { TAB_LABELS, isTopTab, type TopTab } from "@/lib/crmTabs";
 
 const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -57,37 +30,6 @@ const CRM = () => {
     return isTopTab(raw) ? raw : "pipeline";
   }, [searchParams]);
 
-  const setTab = useCallback(
-    (next: string) => {
-      if (!isTopTab(next)) return;
-      const params = new URLSearchParams(searchParams);
-      params.set("tab", next);
-      // Switching away from Pipeline drops pipeline-scoped state so the URL
-      // is honest about what's on screen. Switching away from Companies drops
-      // the `company` deep-link param for the same reason.
-      if (next !== "pipeline") {
-        params.delete("view");
-        params.delete("opp");
-      }
-      if (next !== "companies") {
-        params.delete("company");
-      }
-      if (next !== "properties") {
-        params.delete("property");
-      }
-      if (next !== "tabelas") {
-        params.delete("custom_table");
-      }
-      // Sprint 11 · Onda 2 — each screen has its own filters in the URL (deals on
-      // the pipeline, contacts on the contact base); a tab switch starts clean.
-      if (next !== tab) {
-        for (const key of FILTER_PARAM_KEYS) params.delete(key);
-      }
-      setSearchParams(params, { replace: false });
-    },
-    [searchParams, setSearchParams, tab],
-  );
-
   const customTableSlug = searchParams.get("custom_table");
   const selectedCustomTable = customTableSlug
     ? customTables.find((t) => t.slug === customTableSlug) ?? null
@@ -97,77 +39,21 @@ const CRM = () => {
   if (searchParams.get("tab") === "copilot") return <Navigate to="/home" replace />;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Sprint 15 · T5 — as abas viraram itens da barra lateral; aqui fica só o
+          título da aba ativa só no celular (no desktop a trilha do cabeçalho já o mostra; fica para leitores de tela) e os controles da página.
+          O `overflow-x-auto` continua para os controles não quebrarem de linha. */}
       <div className="border-b border-border bg-card px-2 sm:px-4 py-2">
-        <Breadcrumb className="mb-2 hidden sm:block">
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbPage className="text-sm font-medium">CRM</BreadcrumbPage>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage className="text-sm text-muted-foreground">
-                {TAB_LABELS[tab]}
-              </BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-        {/* Sprint 12 · SE-CRM-001 — no celular a barra rola para o lado.
-            Com `flex-wrap`, as nove abas e os dois controles quebravam para uma
-            segunda linha e, no caminho, encolhiam: o `[&>*]:shrink-0` mantém
-            cada grupo no tamanho natural (a linha fica mais larga que a tela) e
-            o `overflow-x-auto` na própria barra transforma esse excesso em
-            rolagem horizontal — com `overscroll-x-contain` para o gesto não
-            encadear e arrastar a página.
-            No desktop não há excesso: nada rola e o `justify-between` continua
-            distribuindo as abas, o "Ativar tabelas" e o Copilot como antes. */}
         <div className="flex items-center justify-between gap-3 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
-          <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="pipeline" className="flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              Pipeline
-            </TabsTrigger>
-            <TabsTrigger value="contacts" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Base de Contatos
-            </TabsTrigger>
-            <TabsTrigger value="companies" className="flex items-center gap-2">
-              <Building2 className="h-4 w-4" />
-              Empresas
-            </TabsTrigger>
-            <TabsTrigger value="properties" className="flex items-center gap-2">
-              <Home className="h-4 w-4" />
-              Imóveis
-            </TabsTrigger>
-            <TabsTrigger value="catalogo" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Catálogo
-            </TabsTrigger>
-            <TabsTrigger value="campanhas" className="flex items-center gap-2">
-              <Megaphone className="h-4 w-4" />
-              Campanhas
-            </TabsTrigger>
-            <TabsTrigger value="tasks" className="flex items-center gap-2">
-              <ListChecks className="h-4 w-4" />
-              Tarefas
-            </TabsTrigger>
-            <TabsTrigger value="tabelas" className="flex items-center gap-2">
-              <Table2 className="h-4 w-4" />
-              Tabelas
-            </TabsTrigger>
-            <TabsTrigger value="agenda" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Agenda
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <FeatureActivationGrid />
-        <AIAgentToggle />
+          <h1 className="text-base font-semibold sm:sr-only">{TAB_LABELS[tab]}</h1>
+          <div className="flex items-center gap-3">
+            <FeatureActivationGrid />
+            <AIAgentToggle />
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {tab === "contacts" ? (
           <DatabaseView />
         ) : tab === "companies" ? (

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTenant } from '@/contexts/TenantContext';
+import { pickForeground } from '@/lib/contrast';
 
 export function useTenantTheme() {
   const { tenant } = useTenant();
@@ -13,18 +14,21 @@ export function useTenantTheme() {
     // Calculate lighter/darker variants for hover states
     const [h, s, l] = tenant.primaryColor.split(' ').map(v => parseFloat(v));
     
-    // Primary foreground (white or black based on lightness)
-    const foreground = l > 50 ? '0 0% 0%' : '0 0% 100%';
-    root.style.setProperty('--primary-foreground', foreground);
+    // Primary foreground: whichever of white / near-black reads better
+    root.style.setProperty('--primary-foreground', pickForeground(tenant.primaryColor));
     
     // Accent color (slightly lighter version of primary)
-    root.style.setProperty('--accent', `${h} ${s}% ${Math.min(l + 10, 95)}%`);
+    const accent = `${h} ${s}% ${Math.min(l + 10, 95)}%`;
+    root.style.setProperty('--accent', accent);
+    root.style.setProperty('--accent-foreground', pickForeground(accent));
+
     
     return () => {
       // Cleanup - restore defaults when component unmounts
       root.style.removeProperty('--primary');
       root.style.removeProperty('--primary-foreground');
       root.style.removeProperty('--accent');
+      root.style.removeProperty('--accent-foreground');
     };
   }, [tenant]);
 
