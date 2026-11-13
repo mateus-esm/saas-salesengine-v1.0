@@ -139,7 +139,10 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
         value={value}
         display={display}
         onDone={(next) => {
-          if (next === undefined) return setEditing(false);
+          if (next === undefined) {
+            setError(null);
+            return setEditing(false);
+          }
           if (next instanceof InvalidInput) {
             setEditing(false);
             setError(next.message);
@@ -477,16 +480,22 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
   const fromRow = !!column.relation?.resolvedFromRow;
 
   // Sprint 15 · T9 — edit mode ends on Escape or a click outside the cell (the
-  // picker, when open, closes first). It used to end only on a pick: after a
+  // picker, when open, is left with it). It used to end only on a pick: after a
   // removal the cell stayed in edit mode for good.
   useEffect(() => {
-    if (!editing || pickerOpen) return;
+    if (!editing) return;
     const onMouseDown = (e: MouseEvent) => {
-      if (cellRef.current && !cellRef.current.contains(e.target as Node)) setEditing(false);
+      const target = e.target as Element | null;
+      // The picker lives in a portal: a click in it is not "outside".
+      if (target?.closest?.("[data-radix-popper-content-wrapper]")) return;
+      if (cellRef.current && !cellRef.current.contains(target as Node)) {
+        setPickerOpen(false);
+        setEditing(false);
+      }
     };
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [editing, pickerOpen]);
+  }, [editing]);
 
   // Only relation columns that do not bring their chips in the row still query.
   const context =

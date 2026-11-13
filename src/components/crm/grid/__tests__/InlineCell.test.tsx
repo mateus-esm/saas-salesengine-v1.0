@@ -140,6 +140,20 @@ describe("InlineCell", () => {
     expect(screen.getByRole("img", { name: /Número inválido/ })).toBeTruthy();
   });
 
+  it("the invalid-number error goes away when a new edit starts and on Escape", () => {
+    renderCell(col({ kind: "currency", label: "Ticket" }), 1500);
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    fireEvent.change(screen.getByLabelText("Ticket"), { target: { value: "mil" } });
+    fireEvent.keyDown(screen.getByLabelText("Ticket"), { key: "Enter" });
+    expect(screen.getByRole("img", { name: /Número inválido/ })).toBeTruthy();
+
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    expect(screen.queryByRole("img", { name: /Número inválido/ })).toBeNull();
+    fireEvent.keyDown(screen.getByLabelText("Ticket"), { key: "Escape" });
+    expect(screen.queryByRole("img", { name: /Número inválido/ })).toBeNull();
+    expect(screen.getByTestId("cell-f-1").title).toBe("R$ 1.500,00");
+  });
+
   it("clearing a number on purpose still saves empty", () => {
     const onCommit = renderCell(col({ kind: "number", label: "Qtd" }), 3);
     fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
@@ -292,5 +306,28 @@ describe("InlineCell", () => {
     expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
     fireEvent.mouseDown(screen.getByRole("button", { name: "fora" }));
     expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+  });
+
+  it("a click outside leaves edit mode even after the picker was opened", () => {
+    renderRelation(vi.fn(async () => {}));
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    expect(screen.getByRole("button", { name: "Escolher Empresa X" })).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("button", { name: "fora" }));
+    expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+  });
+
+  it("a click inside the picker's popper does not leave edit mode", () => {
+    renderRelation(vi.fn(async () => {}));
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    const popper = document.createElement("div");
+    popper.setAttribute("data-radix-popper-content-wrapper", "");
+    const inner = document.createElement("span");
+    popper.appendChild(inner);
+    document.body.appendChild(popper);
+    fireEvent.mouseDown(inner);
+    expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
+    popper.remove();
   });
 });
