@@ -1,5 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { resolveReorder, translateVisibleToAbsolute } from "../useColumnLayout";
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, it, expect } from "vitest";
+
+import type { ColumnDef } from "@/components/crm/grid/types";
+import { resolveReorder, translateVisibleToAbsolute, useColumnLayout } from "../useColumnLayout";
 
 /**
  * Tests for the `resolveReorder` pure helper that backs `reorderColumn` in
@@ -132,5 +135,38 @@ describe("resolveReorder with translated indices (hidden column before drop posi
     expect(absTo).toBe(3);
     const result = resolveReorder(fullOrder, fullOrder, absFrom, absTo);
     expect(result).toEqual(["a", "b", "d", "c"]);
+  });
+});
+
+// Sprint 15 · T9 — the hook itself, with what localStorage really holds.
+describe("useColumnLayout — reorder with a persisted layout", () => {
+  const cols = (keys: string[]): ColumnDef[] =>
+    keys.map((key) => ({ key, label: key.toUpperCase(), kind: "text", source: "native" }));
+  const keysOf = (result: { current: ReturnType<typeof useColumnLayout> }) =>
+    result.current.visibleColumns.map((c) => c.key);
+
+  beforeEach(() => localStorage.clear());
+
+  it("a column moves after a reload that saved no order yet (order: [])", () => {
+    // Every visit saves the layout; with no drag yet the order is saved as [].
+    localStorage.setItem("grid_layout_t9", JSON.stringify({ widths: {}, order: [], hidden: [] }));
+    const { result } = renderHook(() => useColumnLayout(cols(["a", "b", "c"]), "t9"));
+    act(() => result.current.reorderColumn(0, 2));
+    expect(keysOf(result)).toEqual(["b", "c", "a"]);
+  });
+
+  it("a deleted column left in the saved order does not shift the drag", () => {
+    localStorage.setItem("grid_layout_t9", JSON.stringify({ widths: {}, order: ["gone", "a", "b", "c"], hidden: [] }));
+    const { result } = renderHook(() => useColumnLayout(cols(["a", "b", "c"]), "t9"));
+    act(() => result.current.reorderColumn(0, 1));
+    expect(keysOf(result)).toEqual(["b", "a", "c"]);
+  });
+
+  it("a column created after the order was saved can be dragged", () => {
+    localStorage.setItem("grid_layout_t9", JSON.stringify({ widths: {}, order: ["a", "b"], hidden: [] }));
+    const { result } = renderHook(() => useColumnLayout(cols(["a", "b", "c"]), "t9"));
+    expect(keysOf(result)).toEqual(["a", "b", "c"]);
+    act(() => result.current.reorderColumn(2, 0));
+    expect(keysOf(result)).toEqual(["c", "a", "b"]);
   });
 });

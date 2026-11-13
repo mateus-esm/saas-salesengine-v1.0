@@ -72,6 +72,20 @@ export function translateVisibleToAbsolute(
   return Math.max(0, fullOrder.length - 1);
 }
 
+/**
+ * Sprint 15 · T9 — the order the user sees, hidden columns included: the saved
+ * order without the keys of deleted columns, then the columns it does not know
+ * yet (created after it was saved). A saved `[]` (every visit saves the layout,
+ * and an untouched order is saved empty) is just the columns' own order.
+ * Exported for unit tests.
+ */
+export function effectiveOrder(saved: string[] | null, columnKeys: string[]): string[] {
+  const valid = new Set(columnKeys);
+  const kept = (saved ?? []).filter((k) => valid.has(k));
+  const seen = new Set(kept);
+  return [...kept, ...columnKeys.filter((k) => !seen.has(k))];
+}
+
 export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
   const persisted = useMemo(() => loadLayout(storageKey), [storageKey]);
 
@@ -144,11 +158,12 @@ export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
     setOrder((prev) => {
       const colKeys = columnsRef.current.map((c) => c.key);
       // Translate visible-list indices to absolute indices in the full order
-      // (which includes hidden columns) before splicing.
-      const fullOrder = prev ?? colKeys;
+      // (which includes hidden columns) before splicing. The full order is the
+      // one on screen — not the saved one, which may be [] or hold stale keys.
+      const fullOrder = effectiveOrder(prev, colKeys);
       const absFrom = translateVisibleToAbsolute(fullOrder, hiddenRef.current, fromIndex);
       const absTo = translateVisibleToAbsolute(fullOrder, hiddenRef.current, toIndex);
-      return resolveReorder(prev, colKeys, absFrom, absTo);
+      return resolveReorder(fullOrder, colKeys, absFrom, absTo);
     });
   }, []);
 
