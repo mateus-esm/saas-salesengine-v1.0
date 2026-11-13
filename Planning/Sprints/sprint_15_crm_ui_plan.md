@@ -237,11 +237,31 @@ Today the grid repeats the header in three states (loading, empty, data, `Spread
 
 The note says the tables "break", without saying where. This task starts from a list, not from guesses.
 
-- [ ] **Step 1:** Do a browser pass on Solo after Tasks 7–8 over Contatos, Pipeline (table), Propostas, Empresas, Imóveis and one more custom table: filter, sort, inline-edit every field type, relations, paging to the end, mass actions, 390 px. **Ask the founder** for the cases they've seen break and add them. Write the list here, one line each: screen · step · expected · observed.
-- [ ] **Step 2:** For each item, a failing test in the owning component (`InlineCell.test.tsx`, `SpreadsheetGrid.test.tsx` or the view's own test), then the fix, then one commit per item: `fix(sprint15/T9): <what>`.
+- [x] **Step 1:** (replaced by a code-level audit — see the list) Do a browser pass on Solo after Tasks 7–8 over Contatos, Pipeline (table), Propostas, Empresas, Imóveis and one more custom table: filter, sort, inline-edit every field type, relations, paging to the end, mass actions, 390 px. **Ask the founder** for the cases they've seen break and add them. Write the list here, one line each: screen · step · expected · observed.
+- [x] **Step 2:** For each item, a failing test in the owning component (`InlineCell.test.tsx`, `SpreadsheetGrid.test.tsx` or the view's own test), then the fix, then one commit per item: `fix(sprint15/T9): <what>`.
 - [ ] **Step 3:** Repeat the browser pass and tick the list.
 
-**Defect list:** _(fill in at Step 1)_
+**Defect list:** _(Step 1 replaced by a code-level audit of the grid and its five callers — controller ruling; the browser re-pass of Step 3 stays with the controller. Format: screen/component · step · expected · observed · status.)_
+
+1. Todas as grades (useColumnLayout) · arrastar uma coluna depois de recarregar a página · a coluna muda de lugar · nada muda (a ordem salva vazia `[]`), ou move a coluna errada (chave de coluna apagada na ordem salva / coluna criada depois) · corrigido (a76cfa6)
+2. Todas as grades (useColumnLayout) · abrir uma tela com layout salvo · coluna sem largura própria usa 180px, a principal 260px · toda coluna sem largura com 150px · corrigido (89b2807)
+3. Todas as grades (useGridSelection) · selecionar linhas, depois filtrar/buscar · linhas que saíram deixam a seleção · continuavam selecionadas: barra contava registros invisíveis e "Excluir" agia sobre eles · corrigido (2caa67e)
+4. Número/Moeda (InlineCell) · digitar texto que não é número e Enter/sair · nada é salvo e a célula avisa · o valor era apagado (gravava null) sem aviso · corrigido (5c10788)
+5. Data/Número (InlineCell) · abrir a célula e sair sem mudar · nada é gravado · gravava: DATE volta "2026-03-14" e o editor devolve ISO; número guardado como texto volta número · corrigido (56ee338)
+6. Relação (InlineCell) · vincular/desvincular e o servidor recusar · erro na célula · rejeição não tratada, célula como se tivesse salvo · corrigido (a5c35cf)
+7. Pipeline tabela · coluna Empresa · escolher empresa já vinculada · nada acontece · insert batia na UNIQUE de opportunity_links e falhava em silêncio · corrigido (c923408)
+8. Relação (InlineCell) · duplo clique, remover um vínculo · Esc ou clique fora sai da edição · célula presa em edição para sempre (× e "Vincular..." até escolher algo) · corrigido (4f38933)
+9. Contatos · campo de contato do tipo Usuário · nome do membro · "Usuário removido" em toda linha (coluna sem o diretório da equipe) · corrigido (432d50d)
+10. Empresas e Imóveis · marcar uma linha · sem seleção onde não há ação em massa · barra "1 selecionado" sem ação nenhuma, só o X · corrigido (e427ca2)
+11. Pipeline tabela · desvincular uma empresa e vincular a mesma de novo · volta a ficar vinculada · a UNIQUE (opportunity_id, linked_type, linked_id, relation) não é parcial em deleted_at: o insert falha (agora com erro na célula); o modal do negócio tem o mesmo buraco · aberto (servidor)
+12. Pipeline tabela · vincular empresa pela célula · a empresa aparece também no contato (Contatos › Empresa) · a célula grava só opportunity_links; o modal (useOpportunityLinks) também faz o cascade para o contato · aberto
+13. Todas as grades · clicar no cabeçalho de coluna que o servidor não ordena (Status, Empresa, Situação…) · cabeçalho não parece clicável · cursor de clique e nenhum efeito (ColumnDef não diz se ordena) · aberto
+14. Todas as grades · "Selecionar todos" com mais páginas · seleciona tudo que bate no filtro · seleciona só as linhas carregadas (o rodapé mostra "50+ registros") · aberto (servidor)
+15. Todas as grades · Excluir/Mover em massa e Cancelar no diálogo · a seleção continua · a barra limpa a seleção antes do diálogo · aberto
+16. Todas as grades · editar com o teclado (Enter/F2, depois Enter/Esc) · o foco volta à célula · o foco cai no body; seguir pelo teclado exige clicar · aberto
+17. Multi-seleção (InlineCell) · marcar opções e apertar Esc · cancela · grava as marcações (Esc fecha o popover = Pronto) · aberto
+18. Pipeline tabela · coluna Etapa com etapa apagada/de outro pipeline · nome da etapa ou "—" · mostra o uuid cru · aberto
+19. Pipeline tabela · ordenar por "Atualizada" e editar enquanto pagina · nenhuma linha repetida/sumida · paginação por offset desloca quando a ordem muda entre páginas · aberto (servidor)
 
 ---
 
