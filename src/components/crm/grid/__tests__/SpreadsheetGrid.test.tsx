@@ -68,6 +68,17 @@ describe("SpreadsheetGrid", () => {
     expect((cols[cols.length - 1] as HTMLElement).style.width).toBe("");
   });
 
+  // Sprint 15 · T9 — every real screen passes a surfaceKey (saved layout); the
+  // layout used to give every column without a width 150px, over these.
+  it("with a saved layout, columns keep the grid's default widths", () => {
+    localStorage.clear();
+    const { container } = renderGrid({ surfaceKey: "t9_widths" });
+    const cols = container.querySelectorAll("colgroup > col");
+    expect((cols[1] as HTMLElement).style.width).toBe("260px");
+    expect((cols[2] as HTMLElement).style.width).toBe("180px");
+    expect((cols[3] as HTMLElement).style.width).toBe("220px");
+  });
+
   it("colgroup counts the score column too", () => {
     const { container } = renderGrid({ showLeadScore: true });
     // checkbox + score + 3 columns + filler

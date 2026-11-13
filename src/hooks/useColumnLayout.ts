@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@/components/crm/grid/types";
 
-const DEFAULT_WIDTH = 150;
-
 interface PersistedLayout {
   widths: Record<string, number>;
   order: string[];
@@ -132,7 +130,8 @@ export function useColumnLayout(columns: ColumnDef[], storageKey: string) {
       .filter((c): c is ColumnDef => !!c)
       .map((c) => ({
         ...c,
-        width: widths[c.key] ?? c.width ?? DEFAULT_WIDTH,
+        // No width of its own: the grid's default (gridLayout.ts) applies.
+        width: widths[c.key] ?? c.width,
       }));
   }, [columns, order, hidden, widths, validKeys]);
 
