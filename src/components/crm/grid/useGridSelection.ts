@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 // Sprint 15 · T9 — the selection is of rows on screen: an id that left the rows
 // (a filter, a search, a delete elsewhere) is no longer selected, so a mass
@@ -15,6 +15,15 @@ export function useGridSelection(allIds: string[]) {
     const kept = [...picked].filter((id) => present.has(id));
     return kept.length === picked.size ? picked : new Set(kept);
   }, [picked, present]);
+
+  // Ids that left the rows leave `picked` for good: clearing a filter must not
+  // bring back a selection the user no longer sees.
+  useEffect(() => {
+    setPicked((prev) => {
+      const kept = [...prev].filter((id) => present.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [present]);
 
   const toggle = useCallback(
     (id: string) => {
