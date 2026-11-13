@@ -109,6 +109,8 @@ export interface Pipeline {
   revenue_config: Record<string, unknown>;
   /** Sprint 9: the reasons a deal can be lost for (LossReasonOption[]); chosen in the loss dialog. */
   loss_reasons?: unknown[];
+  /** Sprint 15b — the reasons offered when a deal enters a Reciclo stage (string[]). */
+  recycle_reasons?: unknown[];
   /** Sprint 11 · T35 — the line's natures (Oferta, Processo); read with lib/natures normalizeNatures. */
   natures?: unknown;
   is_archived: boolean;
@@ -145,6 +147,12 @@ export interface PipelineStageV2 {
   cycle_target_stage_id: string | null;
   /** Sprint 6.8 W6 — optional webhook URL to POST on cycle return. */
   cycle_webhook_url: string | null;
+  /** Sprint 15b — default "avisar o responsável" of the Reciclo dialog. */
+  recycle_notify_owner: boolean;
+  /** Sprint 15b — default "enviar mensagem ao cliente" of the Reciclo dialog. */
+  recycle_send_message: boolean;
+  /** Sprint 15b — default message of the Reciclo dialog. */
+  recycle_message_template: string | null;
   created_at: string;
   deleted_at: string | null;
 }
@@ -204,6 +212,8 @@ export interface UpdatePipelineData {
   custom_fields_schema?: CustomFieldSchema[];
   card_field_ids?: string[];
   revenue_config?: Record<string, unknown>;
+  /** Sprint 15b — motivos oferecidos ao mover para um Reciclo. */
+  recycle_reasons?: string[];
   is_archived?: boolean;
 }
 
@@ -237,6 +247,10 @@ export interface UpdateStageV2Data {
   description?: string;
   /** Sprint 9 — significado da etapa no funil. */
   funnel_event?: string | null;
+  /** Sprint 15b — padrões do diálogo do Reciclo. */
+  recycle_notify_owner?: boolean;
+  recycle_send_message?: boolean;
+  recycle_message_template?: string | null;
 }
 
 export interface CreateOpportunityData {

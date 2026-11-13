@@ -47,7 +47,8 @@ export interface ScheduleFollowupInput {
   returnStageId?: string | null;
 }
 
-export function useScheduleFollowup() {
+/** `quiet`: o chamador mostra os próprios avisos (ex.: Reciclo, que já moveu o negócio). */
+export function useScheduleFollowup(options: { quiet?: boolean } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: ScheduleFollowupInput): Promise<Followup> => {
@@ -67,9 +68,11 @@ export function useScheduleFollowup() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: followupKeys.all });
-      toast.success("Follow-up agendado");
+      if (!options.quiet) toast.success("Follow-up agendado");
     },
-    onError: (error: unknown) => toast.error(followupErrorMessage(error)),
+    onError: (error: unknown) => {
+      if (!options.quiet) toast.error(followupErrorMessage(error));
+    },
   });
 }
 

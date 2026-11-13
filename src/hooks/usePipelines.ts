@@ -27,6 +27,7 @@ interface PipelineRow {
   card_field_ids: string[] | null;
   revenue_config: Record<string, unknown> | null;
   loss_reasons?: unknown;
+  recycle_reasons?: unknown;
   natures?: unknown;
   is_archived: boolean;
   created_at: string;
@@ -50,6 +51,7 @@ export const normalizePipeline = (row: PipelineRow): Pipeline => ({
   card_field_ids: Array.isArray(row.card_field_ids) ? row.card_field_ids : [],
   revenue_config: row.revenue_config ?? {},
   loss_reasons: Array.isArray(row.loss_reasons) ? row.loss_reasons : [],
+  recycle_reasons: Array.isArray(row.recycle_reasons) ? row.recycle_reasons : [],
   natures: row.natures && typeof row.natures === "object" ? row.natures : {},
   icp_weights: (row as any).icp_weights ?? [],
   is_archived: !!row.is_archived,

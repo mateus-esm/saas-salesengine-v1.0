@@ -232,3 +232,18 @@ describe("summarizeBulkMove", () => {
     expect(s.message).toBe("0 de 2 movidos; 2 falharam (x)");
   });
 });
+
+describe("planStageMove — Reciclo (Sprint 15b · T4)", () => {
+  const stages = [
+    { id: "s-open", stage_type: "open" },
+    { id: "s-ciclo", stage_type: "ciclo" },
+    { id: "s-lost", stage_type: "lost" },
+  ];
+  it("asks for the recycle rule when the target is a ciclo stage, with or without loss reasons", () => {
+    expect(planStageMove(stages, { loss_reasons: [{ label: "Preço" }] }, "s-open", "s-ciclo")).toBe("ask-recycle");
+    expect(planStageMove(stages, null, "s-open", "s-ciclo")).toBe("ask-recycle");
+  });
+  it("same stage is still a noop", () => {
+    expect(planStageMove(stages, null, "s-ciclo", "s-ciclo")).toBe("noop");
+  });
+});

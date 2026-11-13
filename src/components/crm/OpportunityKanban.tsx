@@ -202,8 +202,11 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
       fromStageId: card.stage_id,
       toStageId: targetStageId,
       leadName: card.lead?.name,
+      opportunityIds: [card.id],
+      ownerId: card.owner_id ?? null,
+      // mutateAsync: a Reciclo move schedules its follow-up only after the server committed the move.
       run: (lostReason) =>
-        moveCard.mutate({
+        moveCard.mutateAsync({
           card,
           toStageId: targetStageId,
           toStatus: statusForStage(orderedStages, targetStageId, card.status),

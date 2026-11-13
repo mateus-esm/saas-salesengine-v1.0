@@ -276,10 +276,12 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           fromStageId,
           toStageId,
           leadName,
-          run: (lostReason) =>
-            updateMany
-              .mutateAsync({ ids: [id], patch: { stage_id: toStageId }, lostReason })
-              .then(() => resolve(), reject),
+          opportunityIds: [id],
+          run: (lostReason) => {
+            const saved = updateMany.mutateAsync({ ids: [id], patch: { stage_id: toStageId }, lostReason });
+            saved.then(() => resolve(), reject);
+            return saved;
+          },
           onCancel: () => reject(new Error("Movimentação cancelada: o motivo da perda é obrigatório.")),
         });
         if (plan === "noop") resolve();
@@ -580,11 +582,11 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
                   fromStageId: "",
                   toStageId,
                   count: ids.length,
+                  opportunityIds: ids,
                   run: (lostReason) =>
-                    updateMany.mutate(
-                      { ids, patch: { stage_id: toStageId }, lostReason },
-                      { onSuccess: (n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`) },
-                    ),
+                    updateMany
+                      .mutateAsync({ ids, patch: { stage_id: toStageId }, lostReason })
+                      .then((n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`)),
                 });
               }}
             >

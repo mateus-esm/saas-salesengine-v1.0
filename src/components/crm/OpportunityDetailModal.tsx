@@ -186,7 +186,7 @@ export const OpportunityDetailModal = ({
     // Sprint Suporte 1 · #12 — a new lost stage asks for the reason first; the
     // reason is saved in this same update, and cancelling keeps the modal open.
     const save = (lostReason: string | null) => {
-      updateOpportunity.mutate({
+      const saved = updateOpportunity.mutateAsync({
         id: opportunity.id,
         stage_id: stageId,
         status,
@@ -195,14 +195,18 @@ export const OpportunityDetailModal = ({
         custom_data: customData,
       });
       onClose();
+      return saved;
     };
     const plan = requestMove({
       fromStageId: opportunity.stage_id,
       toStageId: stageId,
       leadName: lead?.name,
+      opportunityIds: [opportunity.id],
+      ownerId: opportunity.owner_id ?? null,
       run: save,
     });
-    if (plan === "noop") save(null);
+    // The mutation reports its own failure (toast); only the rejection is swallowed here.
+    if (plan === "noop") save(null).catch(() => {});
   };
 
   const handleStageChange = (id: string) => {
