@@ -18,7 +18,8 @@ import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActi
 import { AgendaView } from "@/components/crm/AgendaView";
 import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { CampaignsView } from "@/components/crm/campaigns/CampaignsView";
-import { TAB_LABELS, isTopTab, type TopTab } from "@/lib/crmTabs";
+import { CrmSectionNav } from "@/components/crm/CrmSectionNav";
+import { isTopTab, type TopTab } from "@/lib/crmTabs";
 
 const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,13 +41,12 @@ const CRM = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Sprint 15 · T5 — as abas viraram itens da barra lateral; aqui fica só o
-          título da aba ativa só no celular (no desktop a trilha do cabeçalho já o mostra; fica para leitores de tela) e os controles da página.
-          O `overflow-x-auto` continua para os controles não quebrarem de linha. */}
+      {/* Sprint 15b · T5 — o CRM navega as próprias seções (o link ativo nomeia a seção);
+          abaixo ficam os controles da página. */}
+      <CrmSectionNav />
       <div className="border-b border-border bg-card px-2 sm:px-4 py-2">
         <div className="flex items-center justify-between gap-3 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
-          <h1 className="text-base font-semibold sm:sr-only">{TAB_LABELS[tab]}</h1>
-          <div className="flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-3">
             <FeatureActivationGrid />
             <AIAgentToggle />
           </div>

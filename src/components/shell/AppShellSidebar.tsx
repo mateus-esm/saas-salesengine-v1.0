@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronRight, ExternalLink, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TenantLogo } from "@/components/TenantLogo";
-import { isNavItemActive, type NavItem } from "@/lib/navigation";
+import { isNavItemActive, type NavGroup, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { useNavGroups } from "./useNavGroups";
+import { readGroupState, saveGroupState, useSidebarMode, type SidebarMode } from "./sidebarPrefs";
 
 type Loc = { pathname: string; search: string };
 
@@ -121,12 +122,74 @@ function NavEntry({ item, loc }: { item: NavItem; loc: Loc }) {
   );
 }
 
+function NavGroupSection({ group, loc }: { group: NavGroup; loc: Loc }) {
+  const hasActive = group.items.some(
+    (i) => isNavItemActive(i, loc) || !!i.children?.some((c) => isNavItemActive(c, loc)),
+  );
+  const collapsible = !!group.label;
+  const [open, setOpen] = useState(() => !collapsible || hasActive || readGroupState()[group.id] !== false);
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  const menu = (
+    <SidebarMenu>
+      {group.items.map((item) => (
+        <NavEntry key={item.id} item={item} loc={loc} />
+      ))}
+    </SidebarMenu>
+  );
+
+  if (!collapsible) return <SidebarGroup>{menu}</SidebarGroup>;
+
+  return (
+    <SidebarGroup>
+      <Collapsible
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          saveGroupState(group.id, v);
+        }}
+      >
+        <SidebarGroupLabel asChild className="text-xs text-muted-foreground">
+          <CollapsibleTrigger aria-expanded={open} className="w-full cursor-pointer justify-between">
+            <span>{group.label}</span>
+            <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden />
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>{menu}</CollapsibleContent>
+      </Collapsible>
+    </SidebarGroup>
+  );
+}
+
+function ModeButton({ mode, onToggle }: { mode: SidebarMode; onToggle: () => void }) {
+  const { isMobile } = useSidebar();
+  if (isMobile) return null;
+  const Icon = mode === "icon" ? PanelLeftOpen : PanelLeftClose;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={mode === "icon"}
+      className="flex h-8 items-center gap-2 rounded-md px-2 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center"
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      <span className="group-data-[collapsible=icon]:hidden">
+        {mode === "icon" ? "Desativar modo ícones" : "Ativar modo ícones"}
+      </span>
+    </button>
+  );
+}
+
 export function AppShellSidebar() {
   const loc = useLocation();
   const groups = useNavGroups();
+  const { isMobile } = useSidebar();
+  const [mode, setMode] = useSidebarMode();
 
   return (
-    <Sidebar collapsible="icon" aria-label="Navegação principal">
+    <Sidebar collapsible={isMobile ? "offcanvas" : mode} aria-label="Navegação principal">
       <SidebarHeader className="h-14 justify-center border-b border-sidebar-border px-3">
         <Link to="/home" aria-label="Ir para a página inicial" className="flex items-center overflow-hidden">
           <TenantLogo className="h-8 group-data-[collapsible=icon]:hidden" />
@@ -134,20 +197,12 @@ export function AppShellSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {groups.map((group) => (
-          <SidebarGroup key={group.id}>
-            {group.label && (
-              <SidebarGroupLabel className="text-xs text-muted-foreground">{group.label}</SidebarGroupLabel>
-            )}
-            <SidebarMenu>
-              {group.items.map((item) => (
-                <NavEntry key={item.id} item={item} loc={loc} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+          <NavGroupSection key={group.id} group={group} loc={loc} />
         ))}
       </SidebarContent>
-      <SidebarFooter className="group-data-[collapsible=icon]:hidden">
-        <p className="px-2 text-xs text-muted-foreground">
+      <SidebarFooter>
+        <ModeButton mode={mode} onToggle={() => setMode(mode === "icon" ? "offcanvas" : "icon")} />
+        <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           © {new Date().getFullYear()} Solo Ventures. Todos os direitos reservados.
         </p>
       </SidebarFooter>
