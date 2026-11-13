@@ -36,7 +36,7 @@ function renderGrid(over: Partial<SpreadsheetGridProps> = {}) {
         rows={rows}
         columns={columns}
         onCellCommit={vi.fn(async () => {})}
-        massActions={[]}
+        massActions={[{ id: "del", label: "Excluir", icon: null, run: vi.fn(async () => {}) }]}
         {...over}
       />
     </TooltipProvider>,
@@ -228,6 +228,22 @@ describe("SpreadsheetGrid", () => {
     expect(screen.getByText("2 selecionados")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Excluir/ }));
     await waitFor(() => expect(run).toHaveBeenCalledWith(["r-2", "r-3"]));
+  });
+
+  // Sprint 15 · T9 — Empresas and Imóveis have no mass action: a checkbox there
+  // selected rows into a bar with nothing to do but close it.
+  it("with no mass action there is no selection column", () => {
+    const { container } = renderGrid({ massActions: [] });
+    expect(screen.queryByRole("checkbox", { name: "Selecionar todos" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /Selecionar linha/ })).toBeNull();
+    // 3 columns + filler
+    expect(container.querySelectorAll("colgroup > col")).toHaveLength(columns.length + 1);
+    const cells = within(screen.getAllByRole("row")[1]).getAllByRole("cell");
+    expect(classes(cells[0])).toEqual(expect.arrayContaining(["sticky", "left-0"]));
+    expect(cells[0].style.left).toBe("0px");
+    const th = screen.getAllByRole("columnheader")[0];
+    expect(th.textContent).toContain("Nome");
+    expect(th.style.left).toBe("0px");
   });
 
   describe("paging", () => {

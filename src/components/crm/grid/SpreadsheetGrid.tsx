@@ -214,23 +214,29 @@ function DesktopGrid({
 
   // ---- Widths and sticky columns -----------------------------------------
   const widthOf = (col: ColumnDef) => liveWidths[col.key] ?? col.width ?? (col.primary ? PRIMARY_W : DEFAULT_W);
+  // Sprint 15 · T9 — no mass action, no selection column: selecting would only
+  // open a bar with nothing to do.
+  const selectable = massActions.length > 0;
+  const checkboxW = selectable ? CHECKBOX_W : 0;
   // The primary column sticks only while it is the first one (the user may move it).
   const primaryFirst = !!renderColumns[0]?.primary;
-  const stickyCheckbox: StickySlot = { left: 0, last: !showLeadScore && !primaryFirst };
+  const stickyCheckbox: StickySlot | undefined = selectable
+    ? { left: 0, last: !showLeadScore && !primaryFirst }
+    : undefined;
   const stickyScore: StickySlot | undefined = showLeadScore
-    ? { left: CHECKBOX_W, last: !primaryFirst }
+    ? { left: checkboxW, last: !primaryFirst }
     : undefined;
   const stickyPrimary: StickySlot | undefined = primaryFirst
-    ? { left: CHECKBOX_W + (showLeadScore ? SCORE_W : 0), last: true }
+    ? { left: checkboxW + (showLeadScore ? SCORE_W : 0), last: true }
     : undefined;
   const tableWidth =
-    CHECKBOX_W +
+    checkboxW +
     (showLeadScore ? SCORE_W : 0) +
     renderColumns.reduce((sum, col) => sum + widthOf(col), 0) +
     (addColumn ? ACTION_W : 0) +
     (showColumnsMenu ? ACTION_W : 0);
   // +1 for the checkbox, +1 for the filler.
-  const colSpan = renderColumns.length + 2 + (showLeadScore ? 1 : 0) + (addColumn ? 1 : 0) + (showColumnsMenu ? 1 : 0);
+  const colSpan = renderColumns.length + (selectable ? 2 : 1) + (showLeadScore ? 1 : 0) + (addColumn ? 1 : 0) + (showColumnsMenu ? 1 : 0);
 
   const isAllSelected = rows.length > 0 && selectedIds.size === rows.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < rows.length;
@@ -262,9 +268,11 @@ function DesktopGrid({
         key={row.id}
         className={cn("group/row h-10 text-sm transition-colors", selected ? "bg-primary/5" : "hover:bg-muted/60")}
       >
-        <td className={checkboxTd.className} style={checkboxTd.style}>
-          <Checkbox checked={selected} onCheckedChange={() => toggle(row.id)} aria-label={`Selecionar linha ${row.id}`} />
-        </td>
+        {selectable && (
+          <td className={checkboxTd.className} style={checkboxTd.style}>
+            <Checkbox checked={selected} onCheckedChange={() => toggle(row.id)} aria-label={`Selecionar linha ${row.id}`} />
+          </td>
+        )}
         {showLeadScore && (
           <td className={scoreTd.className} style={scoreTd.style}>
             <LeadScoreBadge
@@ -300,9 +308,11 @@ function DesktopGrid({
     const scoreTd = stickyTd(stickyScore, "", "px-1");
     return (
       <tr key={i} className="h-10">
-        <td className={checkboxTd.className} style={checkboxTd.style}>
-          <Skeleton className="h-4 w-4" />
-        </td>
+        {selectable && (
+          <td className={checkboxTd.className} style={checkboxTd.style}>
+            <Skeleton className="h-4 w-4" />
+          </td>
+        )}
         {showLeadScore && (
           <td className={scoreTd.className} style={scoreTd.style}>
             <Skeleton className="mx-auto h-4 w-4 rounded-full" />
@@ -325,7 +335,7 @@ function DesktopGrid({
     <div ref={rootRef} className="relative h-full min-h-0 overflow-auto rounded-lg border border-border bg-card">
       <table className="min-w-full table-fixed border-separate border-spacing-0" style={{ width: tableWidth }}>
         <colgroup>
-          <col style={{ width: CHECKBOX_W }} />
+          {selectable && <col style={{ width: CHECKBOX_W }} />}
           {showLeadScore && <col style={{ width: SCORE_W }} />}
           {renderColumns.map((col) => (
             <col key={col.key} style={{ width: widthOf(col) }} />
@@ -383,7 +393,7 @@ function DesktopGrid({
         {state === "loading" ? null : countLabel(rows.length, hasMore)}
       </div>
 
-      <MassActionBar count={count} selectedIds={selectedIds} actions={massActions} onClear={clear} />
+      {selectable && <MassActionBar count={count} selectedIds={selectedIds} actions={massActions} onClear={clear} />}
     </div>
   );
 }

@@ -34,7 +34,8 @@ export interface GridHeaderProps {
   columns: ColumnDef[];
   /** Every column, hidden ones included (the visibility menu). */
   allColumns: ColumnDef[];
-  stickyCheckbox: StickySlot;
+  /** Absent when the grid has no mass action (no selection column). */
+  stickyCheckbox?: StickySlot;
   stickyScore?: StickySlot;
   /** Set when the first rendered column is the primary one. */
   stickyPrimary?: StickySlot;
@@ -140,19 +141,21 @@ export function GridHeader({
   const interactive = state === "data";
   const reorder = interactive && allowColumnReorder;
   const [dragCol, setDragCol] = useState<{ key: string; index: number } | null>(null);
-  const checkbox = stickyLeft(stickyCheckbox);
+  const checkbox = stickyCheckbox ? stickyLeft(stickyCheckbox) : null;
 
   return (
     <thead>
       <tr>
-        <th className={cn(TH, checkbox.className, TH_STICKY, "px-3")} style={checkbox.style}>
-          <Checkbox
-            checked={allSelected || (someSelected ? "indeterminate" : false)}
-            onCheckedChange={() => onToggleAll()}
-            disabled={!interactive}
-            aria-label="Selecionar todos"
-          />
-        </th>
+        {checkbox && (
+          <th className={cn(TH, checkbox.className, TH_STICKY, "px-3")} style={checkbox.style}>
+            <Checkbox
+              checked={allSelected || (someSelected ? "indeterminate" : false)}
+              onCheckedChange={() => onToggleAll()}
+              disabled={!interactive}
+              aria-label="Selecionar todos"
+            />
+          </th>
+        )}
         {showLeadScore && (
           <LeadScoreHeader
             slot={stickyScore}
