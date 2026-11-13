@@ -1,52 +1,40 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ExternalLink,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { Plus, RefreshCw, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { useCompanies } from "@/hooks/useCompanies";
-import { ColumnVisibilityDropdown } from "@/components/crm/ColumnVisibilityDropdown";
+import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
+import type { CellMutation, ColumnDef, GridRow } from "@/components/crm/grid/types";
 import { AddCompanyModal } from "./AddCompanyModal";
 import { CompanyDetailModal } from "./CompanyDetailModal";
 
-// Sprint 5.3 T10 — toggleable columns (name + row actions always shown).
-const COMPANY_COLUMNS: { id: string; label: string }[] = [
-  { id: "industry", label: "Setor" },
-  { id: "cnpj", label: "CNPJ" },
-  { id: "size_bracket", label: "Tamanho" },
-  { id: "contacts", label: "Contatos" },
-  { id: "properties", label: "Propriedades" },
-  { id: "website", label: "Website" },
+// Sprint 15 · T8 — no column is editable here: this screen never saved a cell
+// (edits happen in the detail modal), so the grid is read-only.
+const COMPANY_COLUMNS: ColumnDef[] = [
+  { key: "name", label: "Nome", kind: "text", source: "native", editable: false, primary: true, width: 220 },
+  { key: "industry", label: "Setor", kind: "text", source: "native", editable: false },
+  { key: "cnpj", label: "CNPJ", kind: "text", source: "native", editable: false },
+  { key: "size_bracket", label: "Tamanho", kind: "text", source: "native", editable: false, width: 120 },
+  { key: "contacts", label: "Contatos", kind: "number", source: "native", editable: false, width: 110 },
+  { key: "properties", label: "Propriedades", kind: "number", source: "native", editable: false, width: 130 },
+  { key: "website", label: "Website", kind: "url", source: "native", editable: false },
 ];
+
+const noCommit = async (_m: CellMutation) => {};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
 /**
  * Sprint 4 EPIC 4 — Companies database view. Lives under `/crm?tab=companies`.
- * Intentionally lighter than the Base de Contatos table: we surface the key
- * identity fields and the two relational counters (contacts / properties) so
- * operators can see data density at a glance before drilling in.
+ * Sprint 15 · T8 — rendered by the shared CRM grid.
  */
 export const CompaniesDatabaseView = () => {
   const { profile } = useAuth();
@@ -54,10 +42,8 @@ export const CompaniesDatabaseView = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState("");
-  const { companies, isLoading, refetch } = useCompanies(search);
+  const { companies, isLoading, error, refetch } = useCompanies(search);
   const [showCreate, setShowCreate] = useState(false);
-  const [hidden, setHidden] = useState<Record<string, boolean>>({});
-  const isVisible = (id: string) => !hidden[id];
 
   const openId = searchParams.get("company");
   const openDetail = (id: string | null) => {
@@ -113,13 +99,37 @@ export const CompaniesDatabaseView = () => {
     },
   });
 
-  if (isLoading) {
+  const gridRows: GridRow[] = useMemo(
+    () =>
+      companies.map((c) => ({
+        id: c.id,
+        equipe_id: c.equipe_id,
+        name: c.name ?? "",
+        industry: c.industry ?? "",
+        cnpj: c.cnpj ?? "",
+        size_bracket: c.size_bracket ?? "",
+        contacts: contactCounts[c.id] ?? 0,
+        properties: propertyCounts[c.id] ?? 0,
+        website: c.website ?? "",
+      })),
+    [companies, contactCounts, propertyCounts],
+  );
+
+  // On a phone each company is a line: name; sector · size; contact counter.
+  const renderMobileRow = useCallback((row: GridRow) => {
+    const facts = [row.industry, row.size_bracket].filter(Boolean).join(" · ");
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{(row.name as string) || "—"}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{facts || "Sem setor"}</p>
+        </div>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {row.contacts as number} {row.contacts === 1 ? "contato" : "contatos"}
+        </span>
       </div>
     );
-  }
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -129,16 +139,10 @@ export const CompaniesDatabaseView = () => {
             <span className="text-primary">Empresas</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {companies.length} empresas • Clique em uma linha para editar
+            {companies.length} {companies.length === 1 ? "empresa" : "empresas"} • Clique no nome para abrir
           </p>
         </div>
         <div className="flex gap-2">
-          <ColumnVisibilityDropdown
-            columns={COMPANY_COLUMNS.map((c) => ({ ...c, visible: isVisible(c.id) }))}
-            onToggle={(id, visible) =>
-              setHidden((prev) => ({ ...prev, [id]: !visible }))
-            }
-          />
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Atualizar
@@ -162,89 +166,31 @@ export const CompaniesDatabaseView = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="w-8"></TableHead>
-                <TableHead>Nome</TableHead>
-                {isVisible("industry") && <TableHead>Setor</TableHead>}
-                {isVisible("cnpj") && <TableHead>CNPJ</TableHead>}
-                {isVisible("size_bracket") && <TableHead>Tamanho</TableHead>}
-                {isVisible("contacts") && <TableHead className="text-center">Contatos</TableHead>}
-                {isVisible("properties") && <TableHead className="text-center">Propriedades</TableHead>}
-                {isVisible("website") && <TableHead>Website</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {companies.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
-                    Nenhuma empresa encontrada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                companies.map((c) => (
-                  <TableRow
-                    key={c.id}
-                    className="hover:bg-muted/30 cursor-pointer"
-                    onClick={() => openDetail(c.id)}
-                  >
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openDetail(c.id);
-                        }}
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    {isVisible("industry") && (
-                      <TableCell className="text-sm text-muted-foreground">
-                        {c.industry || "—"}
-                      </TableCell>
-                    )}
-                    {isVisible("cnpj") && (
-                      <TableCell className="text-sm text-muted-foreground">
-                        {c.cnpj || "—"}
-                      </TableCell>
-                    )}
-                    {isVisible("size_bracket") && (
-                      <TableCell className="text-sm text-muted-foreground">
-                        {c.size_bracket || "—"}
-                      </TableCell>
-                    )}
-                    {isVisible("contacts") && (
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">
-                          {contactCounts[c.id] ?? 0}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    {isVisible("properties") && (
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">
-                          {propertyCounts[c.id] ?? 0}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    {isVisible("website") && (
-                      <TableCell className="text-sm text-muted-foreground truncate max-w-[200px]">
-                        {c.website || "—"}
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col p-4">
+        {error && gridRows.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
+            Não foi possível carregar as empresas.
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Tentar de novo
+            </Button>
+          </div>
+        ) : (
+          <SpreadsheetGrid
+            rows={gridRows}
+            columns={COMPANY_COLUMNS}
+            onCellCommit={noCommit}
+            massActions={[]}
+            loading={isLoading}
+            surfaceKey="crm-companies"
+            allowColumnReorder
+            allowColumnResize
+            allowColumnHide
+            onRowOpen={(id) => openDetail(id)}
+            renderMobileRow={renderMobileRow}
+            mobileEmptyLabel="Nenhuma empresa encontrada."
+            hasMore={false}
+          />
+        )}
       </div>
 
       <AddCompanyModal
