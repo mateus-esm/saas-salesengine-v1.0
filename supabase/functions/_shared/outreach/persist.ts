@@ -6,9 +6,11 @@ export async function persistDeliveredMessage(
   supabase: any,
   input: {
     jobId: string;
-    enrollmentId: string;
-    sequenceId: string;
-    stepPosition: number;
+    /** Nulos no job de follow-up agendado. */
+    enrollmentId: string | null;
+    sequenceId: string | null;
+    stepPosition: number | null;
+    followupId?: string | null;
     equipeId: string;
     leadId: string;
     text: string;
@@ -91,6 +93,7 @@ export async function persistDeliveredMessage(
         step_position: input.stepPosition,
         provider: input.line.provider,
         line_key: input.line.key,
+        ...(input.followupId ? { followup_id: input.followupId } : {}),
       },
     });
   if (activityError) throw activityError;

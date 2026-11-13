@@ -42,6 +42,7 @@ serve(async (req) => {
         return (data ?? []) as OutreachJob[];
       },
       loadContext: async (job): Promise<JobContext> => {
+        const isFollowup = !!job.followup_id;
         const [
           leadResult,
           enrollmentResult,
@@ -53,14 +54,19 @@ serve(async (req) => {
             "id",
             job.lead_id,
           ).single(),
-          supabase.from("cadence_enrollments").select("id, sequence_id").eq(
-            "id",
-            job.enrollment_id,
-          ).single(),
-          supabase.from("cadence_steps").select("message_template").eq(
-            "id",
-            job.step_id,
-          ).maybeSingle(),
+          // Follow-up agendado não tem inscrição nem passo: o texto está no job.
+          isFollowup
+            ? Promise.resolve({ data: null, error: null })
+            : supabase.from("cadence_enrollments").select("id, sequence_id").eq(
+              "id",
+              job.enrollment_id,
+            ).single(),
+          isFollowup
+            ? Promise.resolve({ data: null, error: null })
+            : supabase.from("cadence_steps").select("message_template").eq(
+              "id",
+              job.step_id,
+            ).maybeSingle(),
           supabase.from("conversation_opener_settings")
             .select(
               "provider, channel_id, solo_instance_id, send_window_start, send_window_end, timezone, max_sends_per_line_hour",
@@ -82,10 +88,14 @@ serve(async (req) => {
           if (result.error) throw result.error;
         }
         if (!leadResult.data) throw new Error("lead_not_found");
-        if (!enrollmentResult.data) throw new Error("enrollment_not_found");
         if (!teamResult.data) throw new Error("team_not_found");
-        if (!stepResult.data?.message_template) {
-          throw new Error("cadence_step_not_found");
+        if (isFollowup) {
+          if (!job.message_text) throw new Error("followup_message_missing");
+        } else {
+          if (!enrollmentResult.data) throw new Error("enrollment_not_found");
+          if (!stepResult.data?.message_template) {
+            throw new Error("cadence_step_not_found");
+          }
         }
         const rawSettings = (settingsResult.data ?? {}) as Partial<{
           provider: string;
@@ -100,8 +110,10 @@ serve(async (req) => {
           rawSettings.provider === "solo" ? "solo" : "gptmaker";
         return {
           lead: leadResult.data,
-          enrollment: enrollmentResult.data,
-          step: stepResult.data,
+          enrollment: isFollowup ? null : enrollmentResult.data,
+          step: isFollowup
+            ? { message_template: job.message_text as string }
+            : stepResult.data!,
           settings: {
             provider,
             channel_id: rawSettings.channel_id ?? null,
@@ -160,8 +172,9 @@ serve(async (req) => {
         await persistDeliveredMessage(supabase, {
           jobId: job.id,
           enrollmentId: job.enrollment_id,
-          sequenceId: context.enrollment.sequence_id,
+          sequenceId: context.enrollment?.sequence_id ?? null,
           stepPosition: job.step_position,
+          followupId: job.followup_id ?? null,
           equipeId: job.equipe_id,
           leadId: job.lead_id,
           text,
