@@ -253,6 +253,11 @@ export function useCreditLedger(limit = 50) {
         .from("credit_ledger")
         .select("id, entry_type, credits, source, created_at, expires_at, metadata, pool")
         .eq("equipe_id", equipeId!)
+        // Per-action AI consumption (debit) lives in the Copilot transparency
+        // panel (agent_action_ledger). Showing one row per action here pollutes
+        // the statement — the extrato lists only financial movements:
+        // purchases, plan grants, refunds, expiries and manual adjustments.
+        .neq("entry_type", "debit")
         .order("created_at", { ascending: false })
         .limit(limit);
       if (error) throw error;

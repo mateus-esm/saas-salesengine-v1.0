@@ -106,7 +106,10 @@ export default function CreditsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Extrato</CardTitle>
-          <CardDescription>Todo crédito e todo débito, com origem.</CardDescription>
+          <CardDescription>
+            Recargas, créditos do plano, estornos e ajustes. O consumo das ações de IA
+            aparece em Uso &amp; Analytics.
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {!ledger?.length ? (
