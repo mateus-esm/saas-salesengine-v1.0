@@ -32,13 +32,13 @@ const rows: GridRow[] = [
 function renderGrid(over: Partial<SpreadsheetGridProps> = {}) {
   return render(
     <TooltipProvider>
-    <SpreadsheetGrid
-      rows={rows}
-      columns={columns}
-      onCellCommit={vi.fn(async () => {})}
-      massActions={[]}
-      {...over}
-    />
+      <SpreadsheetGrid
+        rows={rows}
+        columns={columns}
+        onCellCommit={vi.fn(async () => {})}
+        massActions={[]}
+        {...over}
+      />
     </TooltipProvider>,
   );
 }
@@ -100,6 +100,51 @@ describe("SpreadsheetGrid", () => {
     expect(classes(cells[0])).toEqual(expect.arrayContaining(["sticky"]));
     expect(classes(cells[1])).not.toContain("sticky");
     expect(classes(cells[2])).not.toContain("sticky");
+  });
+
+  it("the score column sorts but has no resize handle (fixed width)", () => {
+    renderGrid({ showLeadScore: true, onSort: vi.fn(), onResizeColumn: vi.fn() });
+    const score = screen.getAllByRole("columnheader").find((h) => h.textContent?.startsWith("Score"))!;
+    expect(score.querySelector(".cursor-col-resize")).toBeNull();
+    const phone = screen.getAllByRole("columnheader").find((h) => h.textContent?.includes("Telefone"))!;
+    expect(phone.querySelector(".cursor-col-resize")).not.toBeNull();
+  });
+
+  it("the observer attaches again when the sentinel comes back after a reload", () => {
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe = observe;
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      },
+    );
+    const props = { rows, columns, onCellCommit: vi.fn(async () => {}), massActions: [], hasMore: true };
+    const { rerender } = render(
+      <TooltipProvider>
+        <SpreadsheetGrid {...props} />
+      </TooltipProvider>,
+    );
+    const first = observe.mock.calls.length;
+    // A reload: loading on, then the same rows (same length) back.
+    rerender(
+      <TooltipProvider>
+        <SpreadsheetGrid {...props} loading />
+      </TooltipProvider>,
+    );
+    rerender(
+      <TooltipProvider>
+        <SpreadsheetGrid {...props} />
+      </TooltipProvider>,
+    );
+    expect(observe.mock.calls.length).toBeGreaterThan(first);
+    const lastTarget = observe.mock.calls[observe.mock.calls.length - 1][0] as Element;
+    expect(lastTarget.isConnected).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it("header shows type icon and sentence-case label", () => {

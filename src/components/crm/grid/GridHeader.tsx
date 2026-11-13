@@ -2,7 +2,7 @@
 // empty, data): same cells, same labels, same widths. Sort, resize and reorder
 // only act once there are rows; selecting all needs rows too.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Columns2, GripVertical, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,6 @@ export interface GridHeaderProps {
   sortKey?: string;
   sortDir?: "asc" | "desc" | null;
   onSort?: (key: string, dir: "asc" | "desc" | null) => void;
-  onResizeLeadScore?: (key: string, width: number) => void;
   resizeEnabled: boolean;
   onStartResize: (key: string, startX: number, startWidth: number) => void;
   widthOf: (col: ColumnDef) => number;
@@ -85,36 +84,20 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
   );
 }
 
+/** The score column has a fixed width (SCORE_W): it sorts, but does not resize. */
 function LeadScoreHeader({
   slot,
   interactive,
   sortKey,
   sortDir,
   onSort,
-  onResize,
 }: {
   slot?: StickySlot;
   interactive: boolean;
   sortKey?: string;
   sortDir?: "asc" | "desc" | null;
   onSort?: (key: string, dir: "asc" | "desc" | null) => void;
-  onResize?: (key: string, w: number) => void;
 }) {
-  const [resizing, setResizing] = useState<{ startX: number; startWidth: number } | null>(null);
-  const onResizeRef = useRef(onResize);
-  onResizeRef.current = onResize;
-
-  useEffect(() => {
-    if (!resizing) return;
-    const handleMouseUp = (e: MouseEvent) => {
-      const diff = e.clientX - resizing.startX;
-      onResizeRef.current?.(LEAD_SCORE_COL_KEY, Math.max(60, resizing.startWidth + diff));
-      setResizing(null);
-    };
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => document.removeEventListener("mouseup", handleMouseUp);
-  }, [resizing]);
-
   const sticky = slot ? stickyLeft(slot) : null;
   const sortable = interactive && !!onSort;
   return (
@@ -125,7 +108,6 @@ function LeadScoreHeader({
       >
         Score{sortIndicator(LEAD_SCORE_COL_KEY, sortKey, sortDir)}
       </span>
-      {interactive && <ResizeHandle onMouseDown={(e) => setResizing({ startX: e.clientX, startWidth: 64 })} />}
     </th>
   );
 }
@@ -144,7 +126,6 @@ export function GridHeader({
   sortKey,
   sortDir,
   onSort,
-  onResizeLeadScore,
   resizeEnabled,
   onStartResize,
   widthOf,
@@ -179,7 +160,6 @@ export function GridHeader({
             sortKey={sortKey}
             sortDir={sortDir}
             onSort={onSort}
-            onResize={onResizeLeadScore}
           />
         )}
         {columns.map((col, index) => {

@@ -19,7 +19,13 @@ export interface StickySlot {
   last: boolean;
 }
 
-/** The left offset as a class when Tailwind has it, and always as a style. */
+/**
+ * The left offset of a sticky cell. The inline `left` is the one that counts:
+ * the offsets depend on which columns are on (score) and on their widths. The
+ * `left-0` / `left-10` classes only name the plain case (checkbox at 0, primary
+ * at 40) so it can be read and asserted as a class; they always agree with the
+ * inline value.
+ */
 export function stickyLeft(slot: StickySlot): { className: string; style: CSSProperties } {
   return {
     className: cn(

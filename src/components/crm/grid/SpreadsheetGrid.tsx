@@ -136,6 +136,8 @@ function DesktopGrid({
     [onCellCommit],
   );
 
+  const state: GridState = loading ? "loading" : rows.length === 0 ? "empty" : "data";
+
   // ---- Infinite scroll ----------------------------------------------------
   // The grid root is the scroll container. While it actually scrolls, it is the
   // observer root, so the 400px margin preloads before the end of the grid; when
@@ -159,7 +161,9 @@ function DesktopGrid({
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore, rows.length]);
+    // `state`: the sentinel row unmounts in the loading and empty states and is a
+    // new element when it comes back, so the observer has to attach again.
+  }, [hasMore, loadingMore, rows.length, state]);
 
   // ---- Resize: drag tracking ---------------------------------------------
   const [resizing, setResizing] = useState<{ key: string; startX: number; startWidth: number } | null>(null);
@@ -228,7 +232,6 @@ function DesktopGrid({
   // +1 for the checkbox, +1 for the filler.
   const colSpan = renderColumns.length + 2 + (showLeadScore ? 1 : 0) + (addColumn ? 1 : 0) + (showColumnsMenu ? 1 : 0);
 
-  const state: GridState = loading ? "loading" : rows.length === 0 ? "empty" : "data";
   const isAllSelected = rows.length > 0 && selectedIds.size === rows.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < rows.length;
 
@@ -345,7 +348,6 @@ function DesktopGrid({
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={onSort}
-          onResizeLeadScore={onResizeColumn}
           resizeEnabled={resizeEnabled}
           onStartResize={(key, startX, startWidth) => setResizing({ key, startX, startWidth })}
           widthOf={widthOf}
