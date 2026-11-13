@@ -15,6 +15,10 @@
 --   7. timers skip deals with a scheduled recycle followup (e o "Manter no Reciclo" executado)
 --   8. claim pega o job de follow-up e o finish grava result.message
 --   9. o check de forma de outreach_jobs recusa job sem inscrição e sem follow-up
+--  10. (fix) linha conferida pelo provider; volta para ganho/perdido recusada;
+--      aviso vai para profiles.user_id; volta que falha não perde o aviso;
+--      webhook cycle_pass na volta do recycle; claim cancela job de negócio
+--      apagado e de follow-up failed
 
 begin;
 
@@ -30,6 +34,15 @@ insert into public.profiles (id, user_id, email, equipe_id, nome_completo, role)
   ('515bb000-0000-0000-0000-000000000001', '515bb000-0000-0000-0000-000000000001', 'a@s15b-followups.test', '515ba000-0000-0000-0000-000000000001', 'Vendedora A', 'user')
 on conflict (id) do update set equipe_id = excluded.equipe_id, role = excluded.role;
 
+-- Responsável cujo profile.id é diferente do auth user id (o aviso vai para o user_id).
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at) values
+  ('515bb000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'b@s15b-followups.test', 'x', now(), now()),
+  ('515bb000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'c@s15b-followups.test', 'x', now(), now());
+delete from public.profiles where id = '515bb000-0000-0000-0000-000000000003';
+insert into public.profiles (id, user_id, email, equipe_id, nome_completo, role) values
+  ('515bb000-0000-0000-0000-000000000002', '515bb000-0000-0000-0000-000000000003', 'b@s15b-followups.test', '515ba000-0000-0000-0000-000000000001', 'Vendedor B', 'user')
+on conflict (id) do update set user_id = excluded.user_id, equipe_id = excluded.equipe_id, role = excluded.role;
+
 -- P1: Novo (open) · Reciclo (ciclo, 15 dias → Novo) · Proposta (open). P2: outra linha.
 insert into public.pipelines (id, equipe_id, name) values
   ('515bc000-0000-0000-0000-000000000001', '515ba000-0000-0000-0000-000000000001', 'Follow-up P1'),
@@ -39,8 +52,11 @@ insert into public.pipeline_stages_v2 (id, equipe_id, pipeline_id, name, positio
   ('515bd000-0000-0000-0000-000000000001', '515ba000-0000-0000-0000-000000000001', '515bc000-0000-0000-0000-000000000001', 'Novo',     0, 'open'),
   ('515bd000-0000-0000-0000-000000000002', '515ba000-0000-0000-0000-000000000001', '515bc000-0000-0000-0000-000000000001', 'Reciclo',  1, 'ciclo'),
   ('515bd000-0000-0000-0000-000000000003', '515ba000-0000-0000-0000-000000000001', '515bc000-0000-0000-0000-000000000001', 'Proposta', 2, 'open'),
+  ('515bd000-0000-0000-0000-000000000004', '515ba000-0000-0000-0000-000000000001', '515bc000-0000-0000-0000-000000000001', 'Retorno',  3, 'open'),
+  ('515bd000-0000-0000-0000-000000000005', '515ba000-0000-0000-0000-000000000001', '515bc000-0000-0000-0000-000000000001', 'Ganho',    4, 'won'),
   ('515bd000-0000-0000-0000-000000000021', '515ba000-0000-0000-0000-000000000001', '515bc000-0000-0000-0000-000000000002', 'Outra',    0, 'open');
-update public.pipeline_stages_v2 set cycle_days = 15, cycle_target_stage_id = '515bd000-0000-0000-0000-000000000001'
+update public.pipeline_stages_v2 set cycle_days = 15, cycle_target_stage_id = '515bd000-0000-0000-0000-000000000001',
+       cycle_webhook_url = 'https://example.invalid/s15b-cycle-pass'
  where id = '515bd000-0000-0000-0000-000000000002';
 
 insert into public.leads (id, equipe_id, name) values
@@ -49,7 +65,10 @@ insert into public.leads (id, equipe_id, name) values
   ('515be000-0000-0000-0000-000000000003', '515ba000-0000-0000-0000-000000000001', 'Lead Tres'),
   ('515be000-0000-0000-0000-000000000004', '515ba000-0000-0000-0000-000000000001', 'Lead Quatro'),
   ('515be000-0000-0000-0000-000000000005', '515ba000-0000-0000-0000-000000000001', 'Lead Cinco'),
-  ('515be000-0000-0000-0000-000000000006', '515ba000-0000-0000-0000-000000000001', 'Lead Seis');
+  ('515be000-0000-0000-0000-000000000006', '515ba000-0000-0000-0000-000000000001', 'Lead Seis'),
+  ('515be000-0000-0000-0000-000000000007', '515ba000-0000-0000-0000-000000000001', 'Lead Sete'),
+  ('515be000-0000-0000-0000-000000000008', '515ba000-0000-0000-0000-000000000001', 'Lead Oito'),
+  ('515be000-0000-0000-0000-000000000009', '515ba000-0000-0000-0000-000000000001', 'Lead Nove');
 
 -- O1 manual em Novo · O2/O3/O4/O5 no Reciclo · O6 manual (claim/finish).
 insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id, owner_id) values
@@ -58,14 +77,20 @@ insert into public.opportunities (id, equipe_id, lead_id, pipeline_id, stage_id,
   ('515bf000-0000-0000-0000-000000000003', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000003', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000002', '515bb000-0000-0000-0000-000000000001'),
   ('515bf000-0000-0000-0000-000000000004', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000004', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000002', '515bb000-0000-0000-0000-000000000001'),
   ('515bf000-0000-0000-0000-000000000005', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000005', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000002', '515bb000-0000-0000-0000-000000000001'),
-  ('515bf000-0000-0000-0000-000000000006', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000006', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000001', '515bb000-0000-0000-0000-000000000001');
+  ('515bf000-0000-0000-0000-000000000006', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000006', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000001', '515bb000-0000-0000-0000-000000000001'),
+  -- O7 no Reciclo (a volta vai falhar) · O8/O9 manuais com mensagem (claim 4c).
+  ('515bf000-0000-0000-0000-000000000007', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000007', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000002', '515bb000-0000-0000-0000-000000000001'),
+  ('515bf000-0000-0000-0000-000000000008', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000008', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000001', '515bb000-0000-0000-0000-000000000001'),
+  ('515bf000-0000-0000-0000-000000000009', '515ba000-0000-0000-0000-000000000001', '515be000-0000-0000-0000-000000000009', '515bc000-0000-0000-0000-000000000001', '515bd000-0000-0000-0000-000000000001', '515bb000-0000-0000-0000-000000000001');
 
 insert into public.wpp_instances (id, equipe_id, instance_name, display_name, status) values
   ('515b0000-0000-0000-0000-0000000000a1', '515ba000-0000-0000-0000-000000000001', 's15b-inst', 'Comercial', 'connected');
 
--- Linha de outreach ainda SEM linha (nem Solo nem channel_id).
-insert into public.conversation_opener_settings (equipe_id) values ('515ba000-0000-0000-0000-000000000001')
-on conflict (equipe_id) do update set solo_instance_id = null, channel_id = null;
+-- Sem linha utilizável: provider gptmaker sem channel_id. A instância Solo está
+-- preenchida, mas não é a linha do provider configurado → no_outreach_line.
+insert into public.conversation_opener_settings (equipe_id, provider, solo_instance_id, channel_id)
+values ('515ba000-0000-0000-0000-000000000001', 'gptmaker', '515b0000-0000-0000-0000-0000000000a1', null)
+on conflict (equipe_id) do update set provider = 'gptmaker', solo_instance_id = excluded.solo_instance_id, channel_id = null;
 
 -- ============================================================================
 -- 1. Validações (como a vendedora da equipe).
@@ -104,6 +129,15 @@ begin
     raise exception 'T1-1 FAIL: etapa de outro pipeline foi aceita';
   exception when sqlstate '22023' then
     assert sqlerrm like 'invalid_return_stage%', 'T1-1 FAIL: esperava invalid_return_stage, veio ' || sqlerrm;
+  end;
+
+  -- (fix) volta automática para ganho/perdido é recusada
+  begin
+    perform public.crm_schedule_followup('515bf000-0000-0000-0000-000000000001', now() + interval '1 day',
+      'manual', null, null, true, false, null, '515bd000-0000-0000-0000-000000000005');
+    raise exception 'T1-10 FAIL: volta para etapa ganha foi aceita';
+  exception when sqlstate '22023' then
+    assert sqlerrm like 'invalid_return_stage%', 'T1-10 FAIL: esperava invalid_return_stage (won), veio ' || sqlerrm;
   end;
 end $$;
 
@@ -146,8 +180,9 @@ begin
   -- 4. recycle novo cancela o anterior
   v := public.crm_schedule_followup('515bf000-0000-0000-0000-000000000002', now() + interval '2 days',
          'recycle', null, 'Sem orçamento', true, true, 'Voltando a falar', '515bd000-0000-0000-0000-000000000001');
+  -- O novo tem responsável explícito (profile cujo id difere do auth user id).
   v2 := public.crm_schedule_followup('515bf000-0000-0000-0000-000000000002', now() + interval '3 days',
-         'recycle', null, 'Sem orçamento', true, false, null, '515bd000-0000-0000-0000-000000000001');
+         'recycle', '515bb000-0000-0000-0000-000000000002', 'Sem orçamento', true, false, null, '515bd000-0000-0000-0000-000000000001');
   assert v2->>'status' = 'scheduled' and v2->>'outreach_job_id' is null,
     'T1-4 FAIL: o novo recycle deveria estar scheduled sem job, veio ' || v2::text;
 
@@ -159,6 +194,14 @@ begin
   -- O6: manual com mensagem, para o claim/finish.
   perform public.crm_schedule_followup('515bf000-0000-0000-0000-000000000006', now() + interval '1 hour',
     'manual', null, null, false, true, 'Mensagem agendada', null);
+  -- O7: recycle com volta para Retorno (a etapa some antes da data: a volta falha).
+  perform public.crm_schedule_followup('515bf000-0000-0000-0000-000000000007', now() + interval '1 day',
+    'recycle', null, 'Retomar', true, false, null, '515bd000-0000-0000-0000-000000000004');
+  -- O8/O9: manuais com mensagem (negócio apagado / follow-up failed antes do envio).
+  perform public.crm_schedule_followup('515bf000-0000-0000-0000-000000000008', now() + interval '1 hour',
+    'manual', null, null, false, true, 'Oito', null);
+  perform public.crm_schedule_followup('515bf000-0000-0000-0000-000000000009', now() + interval '1 hour',
+    'manual', null, null, false, true, 'Nove', null);
 end $$;
 
 reset role;
@@ -202,14 +245,18 @@ end $$;
 update public.opportunities set stage_id = '515bd000-0000-0000-0000-000000000003'
  where id = '515bf000-0000-0000-0000-000000000003';
 update public.crm_followups set due_at = now() - interval '1 minute'
- where opportunity_id in ('515bf000-0000-0000-0000-000000000002', '515bf000-0000-0000-0000-000000000003')
+ where opportunity_id in ('515bf000-0000-0000-0000-000000000002', '515bf000-0000-0000-0000-000000000003',
+                          '515bf000-0000-0000-0000-000000000007')
    and status = 'scheduled';
+-- A etapa de volta de O7 é apagada antes da data.
+update public.pipeline_stages_v2 set deleted_at = now() where id = '515bd000-0000-0000-0000-000000000004';
 
 do $$
 declare r jsonb; v_fu public.crm_followups;
 begin
   r := public.crm_run_followups();
-  assert (r->>'done')::int >= 2, 'T1-5 FAIL: deveria executar ao menos 2, veio ' || r::text;
+  assert (r->>'done')::int >= 3 and (r->>'failed')::int = 0,
+    'T1-5 FAIL: deveria executar ao menos 3 sem falha, veio ' || r::text;
 
   -- 5. O2: avisou e voltou para Novo
   select * into v_fu from public.crm_followups
@@ -227,11 +274,14 @@ begin
                   where n.equipe_id = '515ba000-0000-0000-0000-000000000001'
                     and n.type = 'crm_followup_due'
                     and n.dedup_key = 'followup:' || v_fu.id::text
-                    and n.user_id = '515bb000-0000-0000-0000-000000000001'
+                    -- o responsável é o profile ...0002; o aviso vai para o auth user ...0003
+                    and n.user_id = '515bb000-0000-0000-0000-000000000003'
                     and n.title = 'Follow-up: Lead Dois'
                     and n.body = 'Sem orçamento'
                     and n.action_url = '/crm?tab=pipeline&opp=515bf000-0000-0000-0000-000000000002'),
-    'T1-5 FAIL: o aviso ao dono do negócio não saiu como esperado';
+    'T1-5 FAIL: o aviso ao responsável não saiu como esperado (user_id = profiles.user_id)';
+  assert v_fu.result->>'webhook_request_id' is not null,
+    'T1-10 FAIL: a volta do recycle deveria disparar o webhook cycle_pass, veio ' || v_fu.result::text;
 
   -- 6. return skipped when deal left the stage
   select * into v_fu from public.crm_followups where opportunity_id = '515bf000-0000-0000-0000-000000000003';
@@ -240,13 +290,25 @@ begin
   assert (select stage_id from public.opportunities where id = '515bf000-0000-0000-0000-000000000003')
          = '515bd000-0000-0000-0000-000000000003',
     'T1-6 FAIL: O3 foi arrastado de volta';
+  assert exists (select 1 from public.notifications where dedup_key = 'followup:' || v_fu.id::text
+                    and user_id = '515bb000-0000-0000-0000-000000000001'),
+    'T1-6 FAIL: o aviso continua mesmo quando a volta é pulada (para o dono do negócio)';
+
+  -- (fix) volta que falha: aviso mantido, follow-up done, negócio no lugar
+  select * into v_fu from public.crm_followups where opportunity_id = '515bf000-0000-0000-0000-000000000007';
+  assert v_fu.status = 'done' and v_fu.result->>'return' = 'failed'
+     and v_fu.result->>'return_error' like 'invalid_stage%',
+    'T1-10 FAIL: O7 deveria estar done/return=failed, veio ' || v_fu.status || ' ' || v_fu.result::text;
   assert exists (select 1 from public.notifications where dedup_key = 'followup:' || v_fu.id::text),
-    'T1-6 FAIL: o aviso continua mesmo quando a volta é pulada';
+    'T1-10 FAIL: a volta que falhou levou o aviso junto';
+  assert (select stage_id from public.opportunities where id = '515bf000-0000-0000-0000-000000000007')
+         = '515bd000-0000-0000-0000-000000000002',
+    'T1-10 FAIL: O7 não deveria ter saído do Reciclo';
 
   -- Rodar de novo não repete nada.
   r := public.crm_run_followups();
   assert (select count(*) from public.notifications
-           where equipe_id = '515ba000-0000-0000-0000-000000000001' and type = 'crm_followup_due') = 2,
+           where equipe_id = '515ba000-0000-0000-0000-000000000001' and type = 'crm_followup_due') = 3,
     'T1-5 FAIL: rodar de novo duplicou aviso';
 end $$;
 
@@ -291,6 +353,13 @@ end $$;
 update public.outreach_jobs j set run_after = '2000-01-01T00:00:00Z'
   from public.crm_followups f
  where f.id = j.followup_id and f.opportunity_id = '515bf000-0000-0000-0000-000000000006';
+-- 4c: O8 apagado, O9 com follow-up failed; os dois jobs vencidos não podem sair.
+update public.outreach_jobs j set run_after = now() - interval '1 minute'
+  from public.crm_followups f
+ where f.id = j.followup_id
+   and f.opportunity_id in ('515bf000-0000-0000-0000-000000000008', '515bf000-0000-0000-0000-000000000009');
+update public.opportunities set deleted_at = now() where id = '515bf000-0000-0000-0000-000000000008';
+update public.crm_followups set status = 'failed' where opportunity_id = '515bf000-0000-0000-0000-000000000009';
 
 do $$
 declare v_job_id uuid; v_claimed uuid[]; v_status text;
@@ -300,6 +369,17 @@ begin
   select array_agg(c.id) into v_claimed from public.crm_outreach_claim(1) c;
   assert v_job_id = any (v_claimed), 'T1-8 FAIL: o claim deveria pegar o job de follow-up';
   assert (select status from public.outreach_jobs where id = v_job_id) = 'running', 'T1-8 FAIL: job deveria estar running';
+
+  -- (fix) 4c
+  assert (select j.status || '/' || j.skip_reason from public.outreach_jobs j join public.crm_followups f on f.id = j.followup_id
+           where f.opportunity_id = '515bf000-0000-0000-0000-000000000008') = 'cancelled/opportunity_deleted',
+    'T1-10 FAIL: job de negócio apagado deveria ser cancelado (opportunity_deleted)';
+  assert (select result->>'message' from public.crm_followups
+           where opportunity_id = '515bf000-0000-0000-0000-000000000008') = 'cancelled',
+    'T1-10 FAIL: result.message do negócio apagado deveria ser cancelled';
+  assert (select j.status || '/' || j.skip_reason from public.outreach_jobs j join public.crm_followups f on f.id = j.followup_id
+           where f.opportunity_id = '515bf000-0000-0000-0000-000000000009') = 'cancelled/followup_failed',
+    'T1-10 FAIL: job de follow-up failed deveria ser cancelado';
 
   v_status := public.crm_outreach_finish(v_job_id, 'sent', null,
                 jsonb_build_object('provider', 'solo', 'rendered_message', 'Mensagem agendada'), false);

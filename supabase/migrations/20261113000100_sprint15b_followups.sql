@@ -179,13 +179,6 @@ begin
    where j.status = 'queued' and j.run_after <= v_now
      and e.id = j.enrollment_id and e.status <> 'active';
 
-  -- 2c. Follow-up cancelado (garantia: crm_cancel_followup já cancela o job).
-  update public.outreach_jobs j
-     set status = 'cancelled', skip_reason = 'followup_cancelled', finished_at = v_now
-    from public.crm_followups f
-   where j.status = 'queued' and j.run_after <= v_now
-     and f.id = j.followup_id and f.status = 'cancelled';
-
   -- 3. O lead respondeu (garantia: o gatilho de messages pode ter falhado).
   --    Só sequência: o follow-up foi pedido por uma pessoa e sai mesmo assim.
   select array_agg(distinct e.id) into v_ids
@@ -243,6 +236,25 @@ begin
   )
   update public.crm_followups f
      set result = f.result || jsonb_build_object('message', 'skipped', 'message_at', v_now, 'message_error', 'lead_deleted')
+    from s where f.id = s.followup_id;
+
+  -- 4c. Job de follow-up cujo negócio foi apagado, ou cujo follow-up foi
+  --     cancelado/falhou: não sai (garantia; crm_cancel_followup já cancela).
+  with s as (
+    update public.outreach_jobs j
+       set status = 'cancelled',
+           skip_reason = case when o.deleted_at is not null then 'opportunity_deleted'
+                              else 'followup_' || f.status end,
+           finished_at = v_now
+      from public.crm_followups f
+      join public.opportunities o on o.id = f.opportunity_id
+     where j.status = 'queued' and j.run_after <= v_now
+       and f.id = j.followup_id
+       and (o.deleted_at is not null or f.status in ('cancelled', 'failed'))
+    returning j.followup_id, j.skip_reason
+  )
+  update public.crm_followups f
+     set result = f.result || jsonb_build_object('message', 'cancelled', 'message_at', v_now, 'message_error', s.skip_reason)
     from s where f.id = s.followup_id;
 
   -- 5. O resto: reivindica sem dois workers pegarem o mesmo.
@@ -491,14 +503,18 @@ begin
     end if;
     if not exists (select 1 from public.conversation_opener_settings c
                     where c.equipe_id = v_equipe
-                      and (c.solo_instance_id is not null or nullif(btrim(coalesce(c.channel_id, '')), '') is not null)) then
+                      -- A linha que o worker vai usar é a do provider configurado.
+                      and ((c.provider = 'solo' and c.solo_instance_id is not null)
+                           or (c.provider <> 'solo' and btrim(coalesce(c.channel_id, '')) <> ''))) then
       raise exception 'no_outreach_line' using errcode = '22023';
     end if;
   end if;
   if p_return_stage_id is not null
      and not exists (select 1 from public.pipeline_stages_v2 s
                       where s.id = p_return_stage_id and s.pipeline_id = v_opp.pipeline_id
-                        and s.equipe_id = v_equipe and s.deleted_at is null) then
+                        and s.equipe_id = v_equipe and s.deleted_at is null
+                        -- Volta automática nunca fecha o negócio.
+                        and s.stage_type not in ('won', 'lost')) then
     raise exception 'invalid_return_stage' using errcode = '22023';
   end if;
 
@@ -603,6 +619,8 @@ declare
   v_done   integer := 0;
   v_failed integer := 0;
   v_moves  integer := 0;
+  v_hook   text;
+  v_req    bigint;
 begin
   perform set_config('crm.actor_type', 'automation', true);
 
@@ -619,7 +637,8 @@ begin
 
       select o.id, o.stage_id, o.owner_id, o.pipeline_id, o.lead_id, o.deleted_at
         into v_opp
-        from public.opportunities o where o.id = f.opportunity_id;
+        from public.opportunities o where o.id = f.opportunity_id
+         for update;
 
       if v_opp.deleted_at is not null then
         update public.outreach_jobs
@@ -635,7 +654,12 @@ begin
       -- Aviso ao responsável.
       if f.notify_owner then
         select l.name into v_lead from public.leads l where l.id = f.lead_id;
-        v_user := coalesce(f.owner_id, v_opp.owner_id);
+        -- owner_id é o id do profile; a notificação é endereçada ao usuário
+        -- do auth (profiles.user_id), como os outros remetentes. Sem dono =
+        -- null = admins da equipe.
+        v_user := null;
+        select p.user_id into v_user from public.profiles p
+         where p.id = coalesce(f.owner_id, v_opp.owner_id);
         v_notif := null;
         insert into public.notifications (equipe_id, user_id, type, severity, title, body, action_url, data, dedup_key)
         values (f.equipe_id, v_user, 'crm_followup_due', 'info',
@@ -651,21 +675,46 @@ begin
                                                    'notification_id', v_notif);
       end if;
 
-      -- A volta: só se o negócio ainda está onde estava ao agendar.
+      -- A volta: só se o negócio ainda está onde estava ao agendar. Falhar a
+      -- volta não desfaz o aviso: fica registrado e o follow-up conclui.
       if f.return_stage_id is not null then
         if v_opp.stage_id is not distinct from f.from_stage_id and f.from_stage_id is not null then
-          v_moved := public._crm_move_opportunity(f.equipe_id, f.opportunity_id, f.return_stage_id, null);
-          if v_moved then
-            v_moves := v_moves + 1;
-            if f.kind = 'recycle' then
-              insert into public.funnel_events
-                (equipe_id, opportunity_id, lead_id, pipeline_id, stage_id, event, occurred_at, source, actor, actor_type)
-              values
-                (f.equipe_id, f.opportunity_id, f.lead_id, v_opp.pipeline_id, f.return_stage_id, 'recycled',
-                 clock_timestamp(), 'timer', null, 'automation');
+          begin
+            v_moved := public._crm_move_opportunity(f.equipe_id, f.opportunity_id, f.return_stage_id, null);
+            if v_moved then
+              v_moves := v_moves + 1;
+              if f.kind = 'recycle' then
+                insert into public.funnel_events
+                  (equipe_id, opportunity_id, lead_id, pipeline_id, stage_id, event, occurred_at, source, actor, actor_type)
+                values
+                  (f.equipe_id, f.opportunity_id, f.lead_id, v_opp.pipeline_id, f.return_stage_id, 'recycled',
+                   clock_timestamp(), 'timer', null, 'automation');
+              end if;
+            end if;
+            v_result := v_result || jsonb_build_object('return', case when v_moved then 'moved' else 'already_there' end);
+          exception when others then
+            v_moved := false;
+            v_result := v_result || jsonb_build_object('return', 'failed', 'return_error', left(sqlerrm, 500));
+          end;
+
+          -- O mesmo webhook cycle_pass do crm_run_timers (fora do bloco da volta:
+          -- falhar o webhook não desfaz o movimento).
+          if v_moved and f.kind = 'recycle' then
+            select s.cycle_webhook_url into v_hook from public.pipeline_stages_v2 s where s.id = f.from_stage_id;
+            if v_hook is not null and v_hook <> '' then
+              begin
+                v_req := net.http_post(
+                  url     := v_hook,
+                  headers := jsonb_build_object('Content-Type', 'application/json'),
+                  body    := jsonb_build_object('event', 'cycle_pass', 'equipe_id', f.equipe_id, 'opportunity_id', f.opportunity_id,
+                                                'from_stage_id', f.from_stage_id, 'to_stage_id', f.return_stage_id)
+                );
+                v_result := v_result || jsonb_build_object('webhook_request_id', v_req);
+              exception when others then
+                v_result := v_result || jsonb_build_object('webhook_error', left(sqlerrm, 500));
+              end;
             end if;
           end if;
-          v_result := v_result || jsonb_build_object('return', case when v_moved then 'moved' else 'already_there' end);
         else
           v_result := v_result || jsonb_build_object('return', 'skipped_left_stage');
         end if;
@@ -690,7 +739,7 @@ end;
 $$;
 
 comment on function public.crm_run_followups(integer) is
-  'Sprint 15b: runs due follow-ups — notifies the owner (notifications, dedup followup:<id>) and moves the deal back to return_stage_id through _crm_move_opportunity only if it is still in from_stage_id (else result.return = skipped_left_stage). One failure does not stop the batch (status failed, result.error). pg_cron crm-run-followups, every 5 min.';
+  'Sprint 15b: runs due follow-ups — notifies the owner (notifications, dedup followup:<id>) and moves the deal back to return_stage_id through _crm_move_opportunity only if it is still in from_stage_id (else result.return = skipped_left_stage); a failed move keeps the notice (result.return = failed, return_error) and fires the cycle_pass webhook on a recycle return. One failure does not stop the batch (status failed, result.error). pg_cron crm-run-followups, every 5 min.';
 
 -- ============================================================================
 -- 7. crm_run_timers — o reciclo por cycle_days respeita a regra por negócio
