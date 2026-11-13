@@ -53,7 +53,7 @@ Decisões de forma:
   `goto` nem "voltar ao passo 2": um laço dentro da definição é impossível por construção. O
   laço que sobra é o de fora (uma ação dispara outro gatilho) e é tratado em §6.2.
 - **Limites da v1:** até 30 passos no total, aninhamento de ramo ≤ 3, espera ≤ 90 dias, uma
-  execução ativa por (automação, sujeito) de cada vez.
+  execução ativa por (automação, sujeito) de cada vez — a regra de concorrência está em §5.3.
 - **Sujeito:** toda execução é sobre um registro — `deal`, `contact` ou `artifact`. O gatilho
   decide o tipo; os passos herdam o sujeito e, a partir dele, alcançam o resto (o negócio do
   artefato, o contato do negócio).
@@ -95,11 +95,21 @@ Todo payload que chega aos passos tem o envelope:
 | `artifact_status_changed` (**Status do artefato mudou**) | artifact | `table_ids[]`, `kind` (`proposal`\|`contract`\|`document`), `from[]`, `to[]` ∈ `draft`, `generated`, `sent`, `accepted`, `signed`, `rejected` | `{ table_id, kind, record_id, opportunity_id, from, to, milestone }` | `_crm_apply_artifact_status` (único escritor de `artifact_status`) |
 | `message_received` (**Mensagem recebida**) | contact (+ deal aberto, se houver) | `channel_ids[]`, `content_types[]` (`text`,`image`,`audio`,`document`,`video`), `text_contains`, `first_message` (bool) | `{ message_id, conversation_id, channel, content_type, text (até 2.000 caracteres), is_first }` | `messages` (só `inbound`) |
 | `form_submitted` (**Formulário enviado**) | contact \| artifact | `form_ids[]` | `{ form_id, form_kind: "intake" \| "artifact", values (por key), lead_id, opportunity_id?, record_id? }` | `_crm_intake_submit` e o envio do formulário público do artefato (`public-form`) |
-| `date_relative` (**Data relativa**) | deal | `field`: `"cf:<field_id>"` (tipo data) \| `"next_contact_at"` \| `"meeting_at"` \| `"stage_entered_at"`; `offset_days` (negativo = antes); `at_time` (`"09:00"`, fuso do tenant) | `{ field, date, offset_days }` | agendador (varredura) |
+| `date_relative` (**Data relativa**) — exemplo abaixo | deal | `field`: `"cf:<field_id>"` (tipo data) \| `"next_contact_at"` \| `"meeting_at"` \| `"stage_entered_at"`; `offset_days` (negativo = antes); `at_time` (`"09:00"`, fuso do tenant) | `{ field, date, offset_days }` | agendador (varredura) |
 | `inactivity` (**Inatividade**) | deal | `kind`: `no_reply_from_contact` \| `no_contact_from_team` \| `no_stage_change`; `minutes` (≥ 1); `stage_ids[]`; `created_within?` (só negócios criados há menos de X) | `{ kind, since, minutes }` | agendador (varredura) |
 | `webhook_received` (**Webhook recebido**) | deal | `webhook_id` (obrigatório) | `{ webhook_id, body (o JSON recebido), lead_id, opportunity_id }` | `crm-webhook` |
 | `button_clicked` (**Botão clicado**) | deal \| artifact | `button`: `{ label, placement: "deal" \| "artifact_table", table_id? }` | `{ button_id, clicked_by }` | `crm_automation_click` (novo) e as ações de tabela de artefato (`crm_run_artifact_action`) |
 | `copilot_signal` (**Sinal do Copilot**) | deal | `signals[]`: `deal_stalled`, `deal_at_risk`, `score_changed`, `intent_detected`; `min_confidence` | `{ signal, reasons[], score?, intent?, evidence_message_ids[] }` | Copilot (Sprint 16: "negócio parado e em risco… vira gatilho de automação") |
+
+Exemplo — "um dia antes da reunião, às 9h":
+
+```json
+{ "type": "date_relative", "subject": "deal",
+  "where": { "field": "meeting_at", "offset_days": -1, "at_time": "09:00" } }
+```
+
+Com `"field": "cf:<field_id>"` vale qualquer campo do tipo data do pipeline; `offset_days: 0` é o
+próprio dia. Data que já passou na hora de publicar não dispara retroativamente.
 
 Notas do catálogo:
 
@@ -223,10 +233,16 @@ Padrão `stop`. Cada verbo é um RPC; a coluna "Verbo no banco" diz qual — ou 
 | `notify` (**Notificar**) | `to` (`"deal_owner"` \| `"admins"` \| `user_id`), `title`, `body` | `{ notification_id }` | `notify(equipe, type, title, body, url, data, dedup_key, user_id)` (`20260824000400_sprint84_notification_routing.sql`) | irreversível (marcado) |
 | `ai_step` (**Chamar IA**) | `task`: `summarize` \| `classify` \| `draft` \| `extract`; `instruction`; `labels[]` (classify); `fields[]` (extract); `context[]` | `summarize/draft`: `{ text }` · `classify`: `{ label, confidence }` · `extract`: `{ values: { <field_id>: … } }` | job para o `python-agent` (mesmo padrão de `copilot_jobs`), cobrança por `charge_credits` | sem efeito a desfazer (não muda dado) |
 
-Também entram, por já serem verbos do Copilot com inverso (`_copilot_apply_one` /
-`crm_copilot_undo`, `20260914000200_sprint11_w6_copilot_apply.sql`) e porque as regras do Agente de
-CRM os usam: `add_note` (**Adicionar nota**) e `add_tag` (**Adicionar etiqueta**). Recomendação:
-extrair o núcleo de cada `when` de `_copilot_apply_one` para um verbo nomeado que os dois chamam.
+Também entram três verbos que as regras do Agente de CRM e o agendador já usam. `add_note` e
+`add_tag` são verbos do Copilot com inverso (`_copilot_apply_one` / `crm_copilot_undo`,
+`20260914000200_sprint11_w6_copilot_apply.sql`); `create_deal` é o que a recorrência faz dentro de
+`crm_run_timers`. Todos usam a chave de passo `automation:<run_id>:<step_id>` (§5.3).
+
+| `verb` (rótulo) | `params` | `output` | Verbo no banco | Desfazer | Idempotência |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| `add_note` (**Adicionar nota**) | `text` (template, até 2.000 caracteres) | `{ note_id }` | **novo RPC** `crm_add_note`, extraído do `when 'note'` de `_copilot_apply_one` (que passa a chamá-lo) | apaga a nota, se não foi editada depois | coluna `source_key` única na tabela de notas recebe a chave de passo; repetir devolve a mesma `note_id` |
+| `add_tag` (**Adicionar etiqueta**) | `tag`; etiqueta que a equipe ainda não usa só com `allow_new: true` | `{ changed, tag }` | **novo RPC** `crm_add_tag`, extraído do `when 'add_tag'` de `_copilot_apply_one` | remove a etiqueta, se ela entrou por este passo (`changed = true`) | natural: etiqueta que já está lá → `changed: false`, nada muda |
+| `create_deal` (**Criar negócio**) | `pipeline_id`, `stage_id?` (padrão: primeira etapa aberta), `owner` (`"same_as_subject"` \| `"round_robin"` \| `user_id`), `value?`, `items?` (ids do catálogo), `link_to_subject` (bool → `renewal_of_id`) | `{ opportunity_id, created }` | `crm_create_opportunities(lead_ids, pipeline, stage)` existe, mas é em lote, sem itens nem origem; **novo RPC** `crm_create_deal` com núcleo `_crm_create_deal`, que `crm_run_timers` (recorrência) também passa a chamar | apaga (soft delete) o negócio, se ainda está na etapa de entrada e sem atividade | `renewal_key` = chave de passo, no índice único que a recorrência já usa (`renewal_of_id, renewal_key`); repetir devolve o mesmo negócio (`created: false`) |
 
 **Regras das ações:**
 
@@ -248,7 +264,7 @@ extrair o núcleo de cada `when` de `_copilot_apply_one` para um verbo nomeado q
 | Forma | JSON | Termina quando | Saída |
 | :-- | :-- | :-- | :-- |
 | Duração | `{ "id", "type": "wait", "duration": "P2D", "business_hours": true }` | `resume_at` chega. Com `business_hours`, o fim cai dentro da janela de disparo do tenant (`conversation_opener_settings.send_window_*`, fuso `timezone`). | `{ resumed_at }` |
-| Até condição | `{ "id", "type": "wait", "until": <filtro> \| { "event": "<gatilho>", "where": … }, "timeout": "P3D", "on_timeout": [passos] }` | a condição vale (reavaliada a cada evento do sujeito e a cada 15 min) **ou** o prazo vence. `timeout` é obrigatório. | `{ outcome: "matched" \| "timed_out", at }` |
+| Até condição | `{ "id", "type": "wait", "until": <filtro> \| { "event": "<gatilho>", "where": … }, "timeout": "P3D", "on_timeout": [passos] }` | a condição vale (reavaliada a cada evento do sujeito — §5.3 — e, para `until` por filtro, no **mesmo tick** do despachante de O10) **ou** o prazo vence. `timeout` é obrigatório. | `{ outcome: "matched" \| "timed_out", at }` |
 
 Se a condição vale, a execução segue no passo seguinte à espera; se o prazo vence, roda
 `on_timeout` e **termina** (não segue). Quem quer "seguir nos dois casos" usa `branch` depois,
@@ -289,7 +305,7 @@ precisa; a unificação das seis tabelas de evento continua na Sprint 19. Reten�
 | Coluna | O que guarda |
 | :-- | :-- |
 | `run_id`, `step_id`, `step_type`, `verb` | qual passo, de qual execução |
-| `attempt` | 1, 2… (só `call_webhook` e `ai_step` repetem; §5.2) |
+| `attempts`, `last_error` | quantas vezes o passo foi tentado (só `call_webhook` e `ai_step` repetem; §5.2) e o erro da última tentativa que falhou. **Uma linha por passo**: nova tentativa atualiza a mesma linha |
 | `status` | `running` \| `ok` \| `error` \| `skipped` \| `waiting` \| `cancelled` \| `unknown` |
 | `input` | os `params` **já resolvidos** (templates renderizados), mais o que a condição avaliou |
 | `output` | o `output` do verbo (§4.3) — o que `{{steps.<id>.output}}` lê |
@@ -298,7 +314,7 @@ precisa; a unificação das seis tabelas de evento continua na Sprint 19. Reten�
 | `undone_at`, `undone_by` | desfeito por quem |
 | `external_ref` | `outreach_job_id`, `webhook_log_id`, `ai_job_id`, `ledger_id`, `artifact_action_run_id` |
 | `credits_charged` | só `ai_step` |
-| `idempotency_key` | único (§5.3) |
+| `idempotency_key` | `automation:<run_id>:<step_id>`, único (§5.3) — o mesmo em todas as tentativas |
 | `resume_at` | só espera |
 | `started_at`, `finished_at`, `duration_ms` | duração — o que o Attio chama de "agent log" |
 
@@ -339,11 +355,27 @@ Regras gerais:
 | Execução | `(automation_id, event_id)` | índice único em `automation_runs` — o mesmo evento não abre duas execuções (substitui o `event_key` com `txid_current()` de hoje) |
 | Execução de tempo | `date_relative:<automation>:<subject>:<field>:<data>` · `inactivity:<automation>:<subject>:<kind>:<início do silêncio>` | mesmo índice (`event_key`) — uma vez por data, uma vez por episódio |
 | Reentrada | `settings.reentry` | `once_per_subject`: índice parcial `(automation_id, subject_id)` em execuções não-`error`; uma execução ativa por (automação, sujeito) sempre |
-| Passo | `automation:<run_id>:<step_id>` | índice único em `automation_step_runs.idempotency_key`; **a mesma chave vai para o sistema de baixo**: `enrollment_key` do outreach, `p_dedup_key` do `notify`, `p_idempotency_key` do `charge_credits`, `event_id` no payload do webhook, chave única nova em `tasks` |
+| Passo | `automation:<run_id>:<step_id>` | índice único em `automation_step_runs.idempotency_key` (uma linha por passo; nova tentativa reaproveita a linha e a chave e soma `attempts`); **a mesma chave vai para o sistema de baixo**: `enrollment_key` do outreach, `p_dedup_key` do `notify`, `p_idempotency_key` do `charge_credits`, `event_id` no payload do webhook, chave única nova em `tasks` |
 
-Assim, um tick que caiu no meio e roda de novo encontra o passo já feito e só lê o `output`.
+Assim, um tick que caiu no meio e roda de novo encontra o passo já feito e só lê o `output`; uma
+nova tentativa de `ai_step` ou `call_webhook` manda a mesma chave para baixo e não cobra nem
+entrega em dobro.
 Execução que terminou em `error` **libera** a chave de execução (pode ser tentada de novo, como hoje:
 "só execuções que não falharam seguram a chave").
+
+**Concorrência — evento que chega com uma execução aberta.** "Aberta" = `queued`, `running` ou
+`waiting` para a mesma (automação, sujeito). O despachante segue esta ordem, sob trava consultiva
+em `hash(automation_id, subject_id)`:
+
+1. A execução aberta está em `waiting` com `until` que **casa** com o evento (o `event` e o
+   `where` da espera, ou o filtro que passa a valer): o evento **retoma** essa execução
+   (`outcome: "matched"`); nenhuma execução nova nasce.
+2. Senão, com `reentry: per_event`: nasce uma execução `queued` com `status_reason = 'after_active'`,
+   que só começa quando a aberta termina (fila por sujeito, na ordem dos eventos).
+3. Senão (`once_per_subject` ou `cooldown_days`): o evento vira uma execução `skipped` com
+   `status_reason = 'run_active'` — visível no log, sem passos.
+
+Os mesmos eventos alimentam o `cancel_on` (§4.1): cancelar é avaliado antes de retomar.
 
 ---
 
@@ -378,11 +410,16 @@ Na v1, a causalidade viaja com o evento:
 
 1. Ao executar um passo, o executor liga `crm.automation_run_id` e `crm.automation_depth`
    (`set_config(..., true)`). Todo emissor de `automation_events` copia os dois em
-   `causation_run_id` e `depth = depth do run + 1`.
+   `causation_run_id` e `depth = depth do run + 1`. **A profundidade de uma execução é a do evento
+   que a abriu** (evento de pessoa, de tempo ou de webhook = 0).
 2. **Profundidade máxima 3.** Evento com `depth > 3` não abre execução; o despachante grava uma
    execução `skipped` com `status_reason = 'loop_depth'` (visível, como o `cascade` de hoje).
 3. **Nunca a si mesma.** Se a automação já aparece na cadeia de `parent_run_id` para o **mesmo
-   sujeito**, a execução nasce `skipped/loop_self`. A→B→A no mesmo negócio para no segundo A.
+   negócio**, a execução nasce `skipped/loop_self`. A comparação é pelo negócio resolvido, não pelo
+   tipo de sujeito: todo sujeito que tem negócio resolve para o `opportunity_id` (artefato → o
+   negócio dele; contato → o negócio aberto, quando há um); sujeito só de contato compara pelo
+   `lead_id`. Assim A (sobre o artefato) → B (sobre o negócio) → A (sobre o mesmo artefato) para no
+   segundo A.
 4. **Disjuntor.** Mais de 200 execuções de uma automação em 10 minutos, ou mais de 20 para o mesmo
    sujeito em 24 h: a automação vai para `paused` (`circuit_breaker`) e o admin é notificado
    (`notify`). Volta só por uma pessoa.
