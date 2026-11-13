@@ -156,17 +156,20 @@ export function needsLossReason(
 
 /**
  * What a move needs before it can be saved: nothing to do (`noop`: same stage or
- * unknown target), go straight (`direct`), or ask for the loss reason first (`ask`).
+ * unknown target), go straight (`direct`), ask for the loss reason first (`ask`), or
+ * ask for the Reciclo reason and return rule (`ask-recycle`, Sprint 15b).
  */
 export function planStageMove(
   stages: { id: string; stage_type?: string }[],
   pipeline: { loss_reasons?: unknown } | null | undefined,
   fromStageId: string,
   toStageId: string,
-): "noop" | "direct" | "ask" {
+): "noop" | "direct" | "ask" | "ask-recycle" {
   if (fromStageId === toStageId) return "noop";
   const target = stages.find((s) => s.id === toStageId);
   if (!target) return "noop";
+  // Sprint 15b · T4 — a Reciclo (ciclo) target asks for the reason and the return rule.
+  if (target.stage_type === "ciclo") return "ask-recycle";
   return needsLossReason(target, pipeline) ? "ask" : "direct";
 }
 

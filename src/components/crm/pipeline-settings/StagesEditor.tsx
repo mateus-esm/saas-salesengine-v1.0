@@ -23,7 +23,9 @@ import { Clock, GripVertical, Loader2, MessageSquare, Plus, RefreshCw, Repeat, T
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { MessageTemplateField } from "@/components/outreach/MessageTemplateField";
 import {
   Select,
   SelectContent,
@@ -38,6 +40,7 @@ import {
 } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { usePipelines } from "@/hooks/usePipelines";
+import { recycleReasonsOf } from "@/lib/recycle";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
 import { FUNNEL_EVENT_LABELS, MAPPABLE_FUNNEL_EVENTS } from "@/types/dashboard";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
@@ -106,6 +109,26 @@ export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
   const [reasons, setReasons] = useState<LossReason[]>(initialReasons);
   const [newReason, setNewReason] = useState("");
   useEffect(() => setReasons(initialReasons), [initialReasons]);
+
+  // -- motivos do Reciclo (Sprint 15b) ----------------------------------------
+  // Mesmo caminho de gravação dos motivos de perda: updatePipeline.
+  const initialRecycleReasons = useMemo<string[]>(() => recycleReasonsOf(pipeline), [pipeline]);
+  const [recycleReasons, setRecycleReasons] = useState<string[]>(initialRecycleReasons);
+  const [newRecycleReason, setNewRecycleReason] = useState("");
+  useEffect(() => setRecycleReasons(initialRecycleReasons), [initialRecycleReasons]);
+
+  const recycleReasonsDirty = JSON.stringify(recycleReasons) !== JSON.stringify(initialRecycleReasons);
+
+  const addRecycleReason = () => {
+    const label = newRecycleReason.trim();
+    if (!label) return;
+    if (recycleReasons.some((r) => r.toLowerCase() === label.toLowerCase())) {
+      toast.error("Esse motivo já está na lista");
+      return;
+    }
+    setRecycleReasons((r) => [...r, label]);
+    setNewRecycleReason("");
+  };
 
   const reasonsDirty =
     JSON.stringify(reasons.map((r) => r.label)) !==
@@ -331,6 +354,90 @@ export const StagesEditor = ({ pipelineId }: StagesEditorProps) => {
           </div>
         )}
       </div>
+
+      {/* Motivos do Reciclo */}
+      <div className="space-y-2 border-t border-border pt-3">
+        <div>
+          <Label className="text-xs font-medium">Motivos do Reciclo</Label>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Oferecidos quando um negócio entra numa etapa do tipo Ciclo. A equipe também pode
+            escrever outro motivo na hora.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {recycleReasons.map((r) => (
+            <span
+              key={r}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs"
+            >
+              {r}
+              <button
+                type="button"
+                onClick={() => setRecycleReasons((list) => list.filter((x) => x !== r))}
+                className="text-muted-foreground hover:text-destructive"
+                aria-label={"Remover " + r}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {recycleReasons.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Nenhum motivo configurado &mdash; a equipe poderá digitar texto livre.
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Input
+            value={newRecycleReason}
+            onChange={(e) => setNewRecycleReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addRecycleReason();
+              }
+            }}
+            placeholder="Adicionar motivo (ex.: Sem verba agora)"
+            className="h-8 text-xs"
+            maxLength={40}
+            aria-label="Novo motivo do Reciclo"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 gap-1 text-xs"
+            onClick={addRecycleReason}
+          >
+            <Plus className="h-3 w-3" /> Adicionar
+          </Button>
+        </div>
+
+        {recycleReasonsDirty && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() =>
+                updatePipeline.mutate({ id: pipelineId, recycle_reasons: recycleReasons } as never, {
+                  onSuccess: () => toast.success("Motivos do Reciclo salvos"),
+                })
+              }
+            >
+              Salvar motivos do Reciclo
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-muted-foreground"
+              onClick={() => setRecycleReasons(initialRecycleReasons)}
+            >
+              Descartar
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -355,6 +462,9 @@ interface SortableStageRowProps {
         | "cycle_days"
         | "cycle_target_stage_id"
         | "cycle_webhook_url"
+        | "recycle_notify_owner"
+        | "recycle_send_message"
+        | "recycle_message_template"
       >
     >,
   ) => void;
@@ -666,6 +776,49 @@ const SortableStageRow = ({ stage, pipelineStages, onChange, onDelete }: Sortabl
                 URL chamada ao devolver o lead à etapa de destino.
               </p>
             </div>
+          </div>
+
+          {/* Sprint 15b — padrões do diálogo do Reciclo; cada negócio pode mudar na hora. */}
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <p className="text-xs text-muted-foreground">
+              Padrões ao mover um negócio para cá. Dias de ciclo e etapa de destino acima também
+              entram; na hora de mover, cada negócio pode ter uma regra própria.
+            </p>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={`recycle-notify-${stage.id}`} className="text-xs font-normal">
+                Avisar o responsável
+              </Label>
+              <Switch
+                id={`recycle-notify-${stage.id}`}
+                checked={stage.recycle_notify_owner}
+                onCheckedChange={(v) => onChange({ recycle_notify_owner: v })}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={`recycle-send-${stage.id}`} className="text-xs font-normal">
+                Enviar mensagem ao cliente
+              </Label>
+              <Switch
+                id={`recycle-send-${stage.id}`}
+                checked={stage.recycle_send_message}
+                onCheckedChange={(v) => onChange({ recycle_send_message: v })}
+              />
+            </div>
+            {stage.recycle_send_message && (
+              <div className="space-y-1">
+                <Label htmlFor={`recycle-template-${stage.id}`} className="text-xs text-muted-foreground">
+                  Modelo de mensagem
+                </Label>
+                <MessageTemplateField
+                  id={`recycle-template-${stage.id}`}
+                  value={stage.recycle_message_template ?? ""}
+                  onChange={(v) => onChange({ recycle_message_template: v || null })}
+                  tenantName="Sua empresa"
+                  rows={3}
+                  placeholder="Oi {{lead.first_name}}, tudo bem? Voltando a falar sobre…"
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

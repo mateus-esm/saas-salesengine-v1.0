@@ -117,7 +117,7 @@ export const LeadOpportunitiesSection = ({
               pipeline={pipelineById.get(opp.pipeline_id)}
               defaultExpanded={defaultExpanded}
               onUpdate={(patch) =>
-                updateOpportunity.mutate({ id: opp.id, ...patch })
+                updateOpportunity.mutateAsync({ id: opp.id, ...patch })
               }
               isSaving={updateOpportunity.isPending}
             />
@@ -181,7 +181,7 @@ interface OpportunityRowProps {
     custom_data?: Record<string, unknown>;
     closed_at?: string | null;
     lost_reason?: string | null;
-  }) => void;
+  }) => Promise<unknown>;
 }
 
 const OpportunityRow = ({
@@ -246,9 +246,12 @@ const OpportunityRow = ({
     const plan = requestMove({
       fromStageId: opportunity.stage_id,
       toStageId: stageId,
+      opportunityIds: [opportunity.id],
+      ownerId: opportunity.owner_id ?? null,
       run: save,
     });
-    if (plan === "noop") save(null);
+    // The mutation reports its own failure (toast); only the rejection is swallowed here.
+    if (plan === "noop") save(null).catch(() => {});
   };
 
   const handleStageChange = (id: string) => {

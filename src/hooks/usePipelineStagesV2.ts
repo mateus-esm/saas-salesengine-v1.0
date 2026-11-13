@@ -58,6 +58,9 @@ const normalize = (row: StageRow): PipelineStageV2 => ({
   cycle_days: (row as any).cycle_days ?? null,
   cycle_target_stage_id: (row as any).cycle_target_stage_id ?? null,
   cycle_webhook_url: (row as any).cycle_webhook_url ?? null,
+  recycle_notify_owner: (row as any).recycle_notify_owner ?? true,
+  recycle_send_message: (row as any).recycle_send_message ?? false,
+  recycle_message_template: (row as any).recycle_message_template ?? null,
 });
 
 /**

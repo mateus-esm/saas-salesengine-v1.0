@@ -6,9 +6,11 @@ export async function persistDeliveredMessage(
   supabase: any,
   input: {
     jobId: string;
-    enrollmentId: string;
-    sequenceId: string;
-    stepPosition: number;
+    /** Nulos no job de follow-up agendado. */
+    enrollmentId: string | null;
+    sequenceId: string | null;
+    stepPosition: number | null;
+    followupId?: string | null;
     equipeId: string;
     leadId: string;
     text: string;
@@ -19,7 +21,7 @@ export async function persistDeliveredMessage(
   const now = new Date().toISOString();
   const { data: existing, error: existingError } = await supabase
     .from("conversations")
-    .select("id, status, opened_at")
+    .select("id, status, opened_at, opened_via")
     .eq("lead_id", input.leadId)
     .eq("channel", "whatsapp")
     .neq("status", "deleted")
@@ -29,10 +31,9 @@ export async function persistDeliveredMessage(
     .maybeSingle();
   if (existingError) throw existingError;
 
-  const patch: Record<string, unknown> = {
-    opened_via: "cadence",
-    last_message_at: now,
-  };
+  const patch: Record<string, unknown> = { last_message_at: now };
+  // Follow-up agendado não reescreve como a conversa foi aberta; cadência mantém o comportamento.
+  if (!input.followupId || !existing?.opened_via) patch.opened_via = "cadence";
   if (!existing?.opened_at) patch.opened_at = now;
   if (input.line.provider === "gptmaker") {
     patch.provider_channel_id = input.line.lineId;
@@ -83,7 +84,9 @@ export async function persistDeliveredMessage(
     .insert({
       lead_id: input.leadId,
       tipo: "cadence_message_sent",
-      descricao: "Mensagem de cadência enviada pelo Rev",
+      descricao: input.followupId
+        ? "Follow-up agendado enviado pelo Rev"
+        : "Mensagem de cadência enviada pelo Rev",
       metadata: {
         job_id: input.jobId,
         enrollment_id: input.enrollmentId,
@@ -91,6 +94,7 @@ export async function persistDeliveredMessage(
         step_position: input.stepPosition,
         provider: input.line.provider,
         line_key: input.line.key,
+        ...(input.followupId ? { followup_id: input.followupId } : {}),
       },
     });
   if (activityError) throw activityError;

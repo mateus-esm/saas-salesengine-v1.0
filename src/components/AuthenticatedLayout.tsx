@@ -3,6 +3,7 @@ import { useTenantTheme } from "@/hooks/useTenantTheme";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppShellSidebar } from "@/components/shell/AppShellSidebar";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { readSidebarOpenCookie } from "@/components/shell/sidebarPrefs";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 
 /**
@@ -20,7 +21,7 @@ export const AuthenticatedLayout = () => {
   useTenantTheme();
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
       <AppShellSidebar />
       <SidebarInset className="h-svh min-h-0 min-w-0 bg-background">
         <AppHeader />

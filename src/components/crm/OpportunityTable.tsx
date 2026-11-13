@@ -276,15 +276,18 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           fromStageId,
           toStageId,
           leadName,
-          run: (lostReason) =>
-            updateMany
-              .mutateAsync({ ids: [id], patch: { stage_id: toStageId }, lostReason })
-              .then(() => resolve(), reject),
-          onCancel: () => reject(new Error("Movimentação cancelada: o motivo da perda é obrigatório.")),
+          opportunityIds: [id],
+          ownerId: rowById.get(id)?.owner_id ?? null,
+          run: (lostReason) => {
+            const saved = updateMany.mutateAsync({ ids: [id], patch: { stage_id: toStageId }, lostReason });
+            saved.then(() => resolve(), reject);
+            return saved;
+          },
+          onCancel: () => reject(new Error("Movimento cancelado.")),
         });
         if (plan === "noop") resolve();
       }),
-    [requestMove, updateMany],
+    [requestMove, updateMany, rowById],
   );
 
   // Sprint 11 · T26 — on a phone each deal is a line: name; stage · value ·
@@ -580,11 +583,13 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
                   fromStageId: "",
                   toStageId,
                   count: ids.length,
+                  opportunityIds: ids,
+                  // ownerId stays null on purpose: in a bulk move the Reciclo dialog's default
+                  // ("Dono do negócio") applies per deal on the server.
                   run: (lostReason) =>
-                    updateMany.mutate(
-                      { ids, patch: { stage_id: toStageId }, lostReason },
-                      { onSuccess: (n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`) },
-                    ),
+                    updateMany
+                      .mutateAsync({ ids, patch: { stage_id: toStageId }, lostReason })
+                      .then((n) => toast.success(`${n} ${n === 1 ? "negócio movido" : "negócios movidos"}`)),
                 });
               }}
             >

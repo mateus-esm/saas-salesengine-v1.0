@@ -250,3 +250,196 @@ Deno.test("falha ao checar atendimento adia o job em vez de enviar", async () =>
   assertEquals(setup.defers[0][2], "in_service_check_failed");
   assertEquals(setup.finishes.length, 0);
 });
+
+// ── Sprint 15b — job de follow-up agendado ──────────────────────────────────
+
+const followupJob = (id: string): OutreachJob => ({
+  id,
+  equipe_id: "team",
+  enrollment_id: null,
+  step_id: null,
+  step_position: null,
+  lead_id: "lead",
+  followup_id: "F1",
+  message_text: "Oi {{lead.first_name}}, voltando aqui",
+});
+const followupContext: JobContext = {
+  ...context,
+  enrollment: null,
+  step: { message_template: "Oi {{lead.first_name}}, voltando aqui" },
+};
+
+Deno.test("follow-up: envia o message_text renderizado, sem inscrição e sem guarda de atendimento", async () => {
+  const delivered: string[] = [];
+  let checks = 0;
+  let cancels = 0;
+  const setup = dependencies(
+    [followupJob("J1")],
+    fakeProvider(async (_line, msg) => {
+      delivered.push(msg.text);
+      return sent;
+    }),
+  );
+  setup.deps.loadContext = async () => followupContext;
+  setup.deps.inService = async () => {
+    checks++;
+    return { inService: true, lastCustomerMessageAt: "2026-09-25T14:50:00Z" };
+  };
+  setup.deps.cancelEnrollment = async () => {
+    cancels++;
+  };
+  const result = await processOutreachBatch(setup.deps);
+  assertEquals(result, { claimed: 1, processed: 1, errors: 0 });
+  assertEquals(delivered, ["Oi Maria, voltando aqui"]);
+  assertEquals(checks, 0);
+  assertEquals(cancels, 0);
+  assertEquals(setup.getPersists(), 1);
+  assertEquals(setup.finishes[0][1], "sent");
+});
+
+Deno.test("follow-up: fora da janela adia; telefone ausente pula", async () => {
+  let deliveries = 0;
+  const provider = fakeProvider(async () => {
+    deliveries++;
+    return sent;
+  });
+  const late = dependencies([followupJob("J1")], provider);
+  late.deps.loadContext = async () => followupContext;
+  late.deps.now = () => new Date("2026-09-25T09:00:00Z");
+  await processOutreachBatch(late.deps);
+  assertEquals(late.defers.length, 1);
+  assertEquals(late.defers[0][2], "outside_send_window");
+
+  const noPhone = dependencies([followupJob("J2")], provider);
+  noPhone.deps.loadContext = async () => ({
+    ...followupContext,
+    lead: { ...followupContext.lead, phone: null },
+  });
+  await processOutreachBatch(noPhone.deps);
+  assertEquals(noPhone.finishes[0].slice(1, 3), ["skipped", "missing_phone"]);
+  assertEquals(deliveries, 0);
+});
+
+Deno.test("persistência aceita sequência/inscrição/passo nulos e registra o follow-up", async () => {
+  const messages: Record<string, unknown>[] = [];
+  const activities: Record<string, unknown>[] = [];
+  const supabase = {
+    from: (table: string) => {
+      if (table === "conversations") {
+        const read = {
+          select: () => read,
+          eq: () => read,
+          neq: () => read,
+          order: () => read,
+          limit: () => read,
+          maybeSingle: async () => ({ data: null, error: null }),
+          insert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: "C1" }, error: null }),
+            }),
+          }),
+        };
+        return read;
+      }
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          if (table === "messages") messages.push(row);
+          if (table === "lead_activities") activities.push(row);
+          return { error: null };
+        },
+      };
+    },
+  };
+  const id = await persistDeliveredMessage(supabase, {
+    jobId: "J1",
+    enrollmentId: null,
+    sequenceId: null,
+    stepPosition: null,
+    followupId: "F1",
+    equipeId: "T1",
+    leadId: "L1",
+    text: "oi",
+    line,
+    delivery: sent,
+  });
+  assertEquals(id, "C1");
+  assertEquals(messages[0].content, "oi");
+  const meta = activities[0].metadata as Record<string, unknown>;
+  assertEquals(meta.followup_id, "F1");
+  assertEquals(meta.enrollment_id, null);
+});
+
+Deno.test("follow-up: descrição própria; opened_via só quando a conversa não tem", async () => {
+  const run = async (followupId: string | null, existing: Record<string, unknown> | null) => {
+    const activities: Record<string, unknown>[] = [];
+    const updates: Record<string, unknown>[] = [];
+    const supabase = {
+      from: (table: string) => {
+        if (table === "conversations") {
+          const read: Record<string, unknown> = {
+            select: () => read,
+            eq: () => read,
+            neq: () => read,
+            order: () => read,
+            limit: () => read,
+            maybeSingle: async () => ({ data: existing, error: null }),
+            insert: () => ({ select: () => ({ single: async () => ({ data: { id: "C1" }, error: null }) }) }),
+            update: (row: Record<string, unknown>) => {
+              updates.push(row);
+              const chain: Record<string, unknown> = {
+                eq: () => chain,
+                select: () => chain,
+                maybeSingle: async () => ({ data: { id: "C1" }, error: null }),
+                single: async () => ({ data: { id: "C1" }, error: null }),
+              };
+              return chain;
+            },
+          };
+          return read;
+        }
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            if (table === "lead_activities") activities.push(row);
+            return { error: null };
+          },
+        };
+      },
+    };
+    await persistDeliveredMessage(supabase, {
+      jobId: "J1",
+      enrollmentId: followupId ? null : "E1",
+      sequenceId: followupId ? null : "S1",
+      stepPosition: followupId ? null : 0,
+      followupId,
+      equipeId: "T1",
+      leadId: "L1",
+      text: "oi",
+      line,
+      delivery: sent,
+    });
+    return { activity: activities[0], updates };
+  };
+  const conv = { id: "C1", status: "active", opened_at: "2026-01-01", opened_via: "inbound" };
+  const fu = await run("F1", conv);
+  assertEquals(fu.activity.descricao, "Follow-up agendado enviado pelo Rev");
+  assertEquals(fu.activity.tipo, "cadence_message_sent");
+  assertEquals("opened_via" in (fu.updates[0] ?? {}), false);
+  const fuNone = await run("F1", { ...conv, opened_via: null });
+  assertEquals(fuNone.updates[0]?.opened_via, "cadence");
+  const seq = await run(null, conv);
+  assertEquals(seq.activity.descricao, "Mensagem de cadência enviada pelo Rev");
+  assertEquals(seq.updates[0]?.opened_via, "cadence");
+});
+
+Deno.test("follow-up: loadContext lançando fecha como failed, sem nova tentativa", async () => {
+  const setup = dependencies([followupJob("J1")], fakeProvider(async () => sent));
+  setup.deps.loadContext = async () => {
+    throw new Error("lead apagado");
+  };
+  const result = await processOutreachBatch(setup.deps);
+  assertEquals(result.errors, 1);
+  assertEquals(setup.finishes[0][0], "J1");
+  assertEquals(setup.finishes[0][1], "failed");
+  assertEquals(setup.finishes[0][2], "lead apagado");
+  assertEquals(setup.finishes[0][4], false);
+});

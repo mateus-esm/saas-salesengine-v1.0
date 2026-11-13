@@ -13,10 +13,13 @@ import { nextAllowedSendTime } from "./schedule.ts";
 export type OutreachJob = {
   id: string;
   equipe_id: string;
-  enrollment_id: string;
+  /** Nulos no job de follow-up agendado (que tem followup_id + message_text). */
+  enrollment_id: string | null;
   step_id: string | null;
-  step_position: number;
+  step_position: number | null;
   lead_id: string;
+  followup_id?: string | null;
+  message_text?: string | null;
 };
 
 export type JobContext = {
@@ -26,7 +29,8 @@ export type JobContext = {
     phone: string | null;
     source: string | null;
   };
-  enrollment: { id: string; sequence_id: string };
+  /** null no job de follow-up: não há inscrição. */
+  enrollment: { id: string; sequence_id: string } | null;
   step: { message_template: string };
   settings: OutreachSettings & {
     send_window_start: string;
@@ -129,7 +133,7 @@ export async function processOutreachBatch(
       // o stop_on_reply já trata) não recebe a abertura, e os follow-ups
       // dessa abertura não fazem sentido: a inscrição é cancelada como
       // 'lead_replied', o motivo que já existe para "o lead escreveu".
-      if (job.step_position === 0 && deps.inService) {
+      if (!job.followup_id && job.step_position === 0 && deps.inService) {
         const service = await deps.inService(job, now);
         if (service.error) {
           await deps.defer(
@@ -141,7 +145,9 @@ export async function processOutreachBatch(
           continue;
         }
         if (service.inService) {
-          await deps.cancelEnrollment?.(job.enrollment_id, "lead_replied");
+          if (job.enrollment_id) {
+            await deps.cancelEnrollment?.(job.enrollment_id, "lead_replied");
+          }
           await deps.finish(
             job.id,
             "skipped",
