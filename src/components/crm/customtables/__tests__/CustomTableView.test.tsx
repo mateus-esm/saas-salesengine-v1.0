@@ -30,11 +30,11 @@ vi.mock("@/hooks/useCustomTables", async (importOriginal) => ({
 
 const mutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
 const refetch = vi.fn();
-let recordsState: { error: Error | null; isLoading: boolean } = { error: null, isLoading: false };
+let recordsState: { error: Error | null; isLoading: boolean; records?: unknown[] } = { error: null, isLoading: false };
 vi.mock("@/hooks/useCustomTableRecords", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/useCustomTableRecords")>()),
   useCustomTableRecords: () => ({
-    records: [],
+    records: recordsState.records ?? [],
     total: null,
     isLoading: recordsState.isLoading,
     error: recordsState.error,
@@ -86,6 +86,23 @@ describe("CustomTableView", () => {
     expect(screen.getByText("Não foi possível carregar os registros.")).toBeTruthy();
     expect(screen.queryByText("0 registros")).toBeNull();
     expect(screen.queryByText("Nenhum registro encontrado.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed load-more keeps the rows and offers a retry", () => {
+    recordsState = {
+      error: new Error("boom"),
+      isLoading: false,
+      records: [
+        { id: "r-1", table_id: "t-1", equipe_id: "e-1", data: {}, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    refetch.mockClear();
+    renderView();
+    expect(screen.getByText("Não foi possível carregar mais registros.")).toBeTruthy();
+    expect(screen.queryByText("Não foi possível carregar os registros.")).toBeNull();
+    expect(screen.getAllByText("1 registro").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
     expect(refetch).toHaveBeenCalledTimes(1);
   });

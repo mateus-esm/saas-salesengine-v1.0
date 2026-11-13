@@ -1,7 +1,7 @@
 // Sprint 15 · T9 — the contact base (Contatos) on the shared grid.
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -60,14 +60,16 @@ const contact: ContactRow = {
   deals: [],
 };
 
+let tableState = { isError: false, rows: [contact] as unknown[] };
+const refetchTable = vi.fn();
 vi.mock("@/hooks/useContactsTable", () => ({
   useContactsTable: () => ({
-    data: { pages: [[contact]], pageParams: [0] },
+    data: { pages: [tableState.rows], pageParams: [0] },
     isLoading: false,
-    isError: false,
+    isError: tableState.isError,
     hasNextPage: false,
     isFetchingNextPage: false,
-    refetch: vi.fn(),
+    refetch: refetchTable,
     fetchNextPage: vi.fn(),
   }),
   useContactsCount: () => ({ data: 1, isLoading: false }),
@@ -100,5 +102,35 @@ describe("DatabaseView", () => {
     const cell = screen.getByTestId("cell-sdr");
     expect(cell.textContent).toContain("Luiz");
     expect(cell.textContent).not.toContain("Usuário removido");
+  });
+
+  function renderView() {
+    localStorage.clear();
+    render(
+      <MemoryRouter>
+        <TooltipProvider>
+          <DatabaseView />
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it("a failed refetch with rows keeps the grid and shows a notice", () => {
+    tableState = { isError: true, rows: [contact] };
+    refetchTable.mockClear();
+    renderView();
+    expect(screen.getByTestId("cell-sdr")).toBeTruthy();
+    expect(screen.getByText("Não foi possível carregar mais registros.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(refetchTable).toHaveBeenCalledTimes(1);
+    tableState = { isError: false, rows: [contact] };
+  });
+
+  it("a failed load without rows shows the error block", () => {
+    tableState = { isError: true, rows: [] };
+    renderView();
+    expect(screen.getByText("Não foi possível carregar os contatos.")).toBeTruthy();
+    expect(screen.queryByText("Não foi possível carregar mais registros.")).toBeNull();
+    tableState = { isError: false, rows: [contact] };
   });
 });

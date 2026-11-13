@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { ContactColumnsToolbar } from "@/components/crm/ContactColumnsToolbar";
+import { GridLoadError } from "@/components/crm/grid/GridLoadError";
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
 import type { MassAction } from "@/components/crm/grid/MassActionBar";
 import type { CellMutation, ColumnDef, GridRow } from "@/components/crm/grid/types";
@@ -373,7 +374,7 @@ export const DatabaseView = () => {
 
       {/* Grid */}
       <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
-        {query.isError ? (
+        {query.isError && rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
             Não foi possível carregar os contatos.
             <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
@@ -381,6 +382,12 @@ export const DatabaseView = () => {
             </Button>
           </div>
         ) : (
+          <>
+          {query.isError && (
+            <GridLoadError
+              onRetry={() => void (query.hasNextPage ? query.fetchNextPage() : query.refetch())}
+            />
+          )}
           <SpreadsheetGrid
             rows={gridRows}
             columns={columns}
@@ -403,6 +410,7 @@ export const DatabaseView = () => {
               if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
             }}
           />
+          </>
         )}
       </div>
 

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GridLoadError } from "@/components/crm/grid/GridLoadError";
 import { GridToolbar } from "@/components/crm/grid/GridToolbar";
 import type { MassAction } from "@/components/crm/grid/MassActionBar";
 import { SpreadsheetGrid } from "@/components/crm/grid/SpreadsheetGrid";
@@ -389,7 +390,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
-        {error ? (
+        {error && rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-sm text-destructive">
             Não foi possível carregar os registros.
             <Button variant="outline" size="sm" onClick={() => void refetch()}>
@@ -397,6 +398,8 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
             </Button>
           </div>
         ) : (
+          <>
+          {error && <GridLoadError onRetry={() => void refetch()} />}
           <SpreadsheetGrid
             rows={rows}
             columns={columns}
@@ -419,6 +422,7 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
             loadingMore={loadingMore}
             onEndReached={loadMore}
           />
+          </>
         )}
       </div>
 
