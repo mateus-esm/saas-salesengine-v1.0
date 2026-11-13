@@ -122,11 +122,15 @@ function NavEntry({ item, loc }: { item: NavItem; loc: Loc }) {
   );
 }
 
-function NavGroupSection({ group, loc }: { group: NavGroup; loc: Loc }) {
+function NavGroupSection({ group, loc, mode }: { group: NavGroup; loc: Loc; mode: SidebarMode }) {
+  const { state, isMobile } = useSidebar();
+  // No modo ícones recolhido só os ícones aparecem: o grupo fica aberto à força (sem gravar), senão sumiria.
+  const isIcon = !isMobile && mode === "icon" && state === "collapsed";
   const hasActive = group.items.some(
     (i) => isNavItemActive(i, loc) || !!i.children?.some((c) => isNavItemActive(c, loc)),
   );
   const collapsible = !!group.label;
+  // O grupo com o item ativo abre sozinho, mesmo que o estado salvo seja "recolhido".
   const [open, setOpen] = useState(() => !collapsible || hasActive || readGroupState()[group.id] !== false);
   useEffect(() => {
     if (hasActive) setOpen(true);
@@ -145,7 +149,7 @@ function NavGroupSection({ group, loc }: { group: NavGroup; loc: Loc }) {
   return (
     <SidebarGroup>
       <Collapsible
-        open={open}
+        open={open || isIcon}
         onOpenChange={(v) => {
           setOpen(v);
           saveGroupState(group.id, v);
@@ -197,7 +201,7 @@ export function AppShellSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {groups.map((group) => (
-          <NavGroupSection key={group.id} group={group} loc={loc} />
+          <NavGroupSection key={group.id} group={group} loc={loc} mode={mode} />
         ))}
       </SidebarContent>
       <SidebarFooter>

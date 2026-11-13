@@ -99,7 +99,18 @@ describe("barra lateral recolhível", () => {
 
   it("o primeiro grupo (sem rótulo) não é recolhível", () => {
     renderAt("/home");
-    expect(screen.getByRole("link", { name: "Início" })).toBeTruthy();
-    expect(screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-expanded") && /Início|Dashboard/.test(b.textContent ?? ""))).toHaveLength(0);
+    const first = document.querySelector("[data-sidebar=group]") as HTMLElement;
+    expect(first.textContent).toContain("Início");
+    expect(first.querySelector("[aria-expanded]")).toBeNull();
+  });
+
+  it("no modo ícones um grupo salvo como recolhido continua visível", () => {
+    localStorage.setItem("rev.sidebar.mode", "icon");
+    localStorage.setItem("rev.sidebar.groups", JSON.stringify({ automation: false }));
+    renderAt("/home");
+    expect(screen.queryByRole("link", { name: "Webhooks" })).toBeNull();
+    fireEvent.click(screen.getByLabelText("gatilho"));
+    expect(screen.getByRole("link", { name: "Webhooks" })).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem("rev.sidebar.groups")!).automation).toBe(false);
   });
 });

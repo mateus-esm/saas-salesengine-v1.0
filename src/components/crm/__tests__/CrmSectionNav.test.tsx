@@ -38,4 +38,12 @@ describe("CrmSectionNav", () => {
     const item = await screen.findByRole("menuitem", { name: "Propostas" });
     expect(item.getAttribute("href")).toBe("/crm?tab=tabelas&custom_table=propostas");
   });
+
+  it("marca a tabela personalizada ativa no menu", async () => {
+    renderAt("/crm?tab=tabelas&custom_table=propostas");
+    fireEvent.keyDown(screen.getByRole("button", { name: /Tabelas/ }), { key: "Enter" });
+    const item = await screen.findByRole("menuitem", { name: "Propostas" });
+    expect(item.getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("menuitem", { name: "Todas as tabelas" }).getAttribute("aria-current")).toBeNull();
+  });
 });

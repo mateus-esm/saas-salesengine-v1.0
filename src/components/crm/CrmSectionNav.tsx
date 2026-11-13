@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,7 @@ export function CrmSectionNav() {
   const raw = params.get("tab");
   const active: TopTab = isTopTab(raw) ? raw : "pipeline";
   const { tables } = useCustomTables();
+  const activeTable = active === "tabelas" ? params.get("custom_table") : null;
 
   return (
     <nav aria-label="Seções do CRM" className="border-b border-border bg-card px-2 sm:px-4">
@@ -42,11 +43,18 @@ export function CrmSectionNav() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuItem asChild>
-                      <Link to="/crm?tab=tabelas">Todas as tabelas</Link>
+                      <Link to="/crm?tab=tabelas" aria-current={isActive && !activeTable ? "page" : undefined} className="aria-[current=page]:font-semibold">Todas as tabelas</Link>
                     </DropdownMenuItem>
                     {(tables ?? []).map((t) => (
                       <DropdownMenuItem key={t.slug} asChild>
-                        <Link to={`/crm?tab=tabelas&custom_table=${encodeURIComponent(t.slug)}`}>{t.name}</Link>
+                        <Link
+                          to={`/crm?tab=tabelas&custom_table=${encodeURIComponent(t.slug)}`}
+                          aria-current={activeTable === t.slug ? "page" : undefined}
+                          className="flex w-full items-center justify-between gap-3 aria-[current=page]:font-semibold"
+                        >
+                          {t.name}
+                          {activeTable === t.slug && <Check className="size-3.5" aria-hidden />}
+                        </Link>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
