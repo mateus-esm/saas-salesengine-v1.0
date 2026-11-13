@@ -28,6 +28,9 @@ export interface FollowupFormProps {
   hasLine: boolean;
   /** Nome da linha (instância Solo) para mostrar no canal. */
   lineLabel?: string | null;
+  /** A consulta da linha falhou: o interruptor segue habilitado e a RPC decide. */
+  lineError?: boolean;
+  onRetryLine?: () => void;
   disabled?: boolean;
 }
 
@@ -41,8 +44,12 @@ export function FollowupForm({
   reasons = [],
   hasLine,
   lineLabel,
+  lineError = false,
+  onRetryLine,
   disabled,
 }: FollowupFormProps) {
+  // Consulta falhou = linha desconhecida: não afirma que não há linha.
+  const canSend = hasLine || lineError;
   const set = (patch: Partial<FollowupFormValue>) => onChange({ ...value, ...patch });
   const recycle = mode === "recycle";
   const willReturn = recycle ? value.willReturn !== false : true;
@@ -170,19 +177,30 @@ export function FollowupForm({
               <Label htmlFor="followup-send" className="font-normal">Enviar mensagem ao cliente</Label>
               <Switch
                 id="followup-send"
-                checked={value.sendMessage && hasLine}
+                checked={value.sendMessage && canSend}
                 onCheckedChange={(sendMessage) => set({ sendMessage })}
-                disabled={disabled || !hasLine}
+                disabled={disabled || !canSend}
               />
             </div>
-            {!hasLine && (
-              <p className="text-xs text-muted-foreground">
-                Configure uma linha de WhatsApp em Outreach para enviar mensagens.
+            {lineError ? (
+              <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                Não foi possível verificar a linha de WhatsApp — tente de novo.
+                {onRetryLine && (
+                  <button type="button" className="underline underline-offset-2" onClick={onRetryLine}>
+                    Tentar de novo
+                  </button>
+                )}
               </p>
+            ) : (
+              !hasLine && (
+                <p className="text-xs text-muted-foreground">
+                  Configure uma linha de WhatsApp em Outreach para enviar mensagens.
+                </p>
+              )
             )}
           </div>
 
-          {value.sendMessage && hasLine && (
+          {value.sendMessage && canSend && (
             <div className="space-y-3">
               <div className="space-y-2">
                 <Label id="followup-channel-label">Canal</Label>

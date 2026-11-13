@@ -90,4 +90,24 @@ describe("FollowupList", () => {
     expect(screen.getByText("Mensagem enviada")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Cancelar follow-up" })).toBeNull();
   });
+
+  it("feito: avisa que o responsável foi avisado e mostra os erros registrados", () => {
+    state.data = [
+      mk({
+        status: "failed",
+        result: { notified: true, error: "erro geral", message_error: "sem linha", return_error: "etapa sumiu" },
+      }),
+    ];
+    render(<FollowupList opportunityId="o1" />);
+    expect(screen.queryByText("Responsável avisado")).toBeNull(); // só quando done
+    expect(screen.getByText("erro geral")).toBeTruthy();
+    expect(screen.getByText("sem linha")).toBeTruthy();
+    expect(screen.getByText("etapa sumiu")).toBeTruthy();
+  });
+
+  it("done com notified mostra 'Responsável avisado'", () => {
+    state.data = [mk({ status: "done", result: { notified: true } })];
+    render(<FollowupList opportunityId="o1" />);
+    expect(screen.getByText("Responsável avisado")).toBeTruthy();
+  });
 });

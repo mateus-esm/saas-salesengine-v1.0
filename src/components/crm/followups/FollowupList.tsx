@@ -122,6 +122,13 @@ export function FollowupList({
             {f.status === "scheduled" && returnStage && (
               <p className="text-muted-foreground">Volta para: {returnStage}</p>
             )}
+            {f.status === "done" && f.result?.notified === true && (
+              <p className="text-muted-foreground">Responsável avisado</p>
+            )}
+            {f.status !== "scheduled" &&
+              [f.result?.error, f.result?.message_error, f.result?.return_error].filter(Boolean).map((t, i) => (
+                <p key={i} className="text-muted-foreground">{t}</p>
+              ))}
             {f.status !== "scheduled" && (messageResult || returnResult || f.status === "failed") && (
               <p className="text-muted-foreground">
                 {[messageResult, returnResult, f.status === "failed" ? "Não foi possível executar" : null]

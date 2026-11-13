@@ -97,6 +97,9 @@ export interface OutreachLine {
   /** Nome da instância Solo (só Solo; outros provedores: null); null se não der para saber. */
   label: string | null;
   isLoading: boolean;
+  /** A consulta da linha falhou: não dá para afirmar que não há linha. */
+  isError: boolean;
+  refetch: () => void;
 }
 
 /**
@@ -132,5 +135,11 @@ export function useOutreachLine(): OutreachLine {
       return { hasLine: true, label: null };
     },
   });
-  return { hasLine: query.data?.hasLine ?? false, label: query.data?.label ?? null, isLoading: query.isLoading };
+  return {
+    hasLine: query.data?.hasLine ?? false,
+    label: query.data?.label ?? null,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: () => void query.refetch(),
+  };
 }

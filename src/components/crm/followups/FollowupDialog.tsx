@@ -1,6 +1,6 @@
 // Sprint 15b · T3 — "Agendar follow-up" (manual) de um negócio.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,12 +24,17 @@ export function FollowupDialog({ open, onOpenChange, opportunityId, ownerId, tit
   const schedule = useScheduleFollowup();
   const [value, setValue] = useState<FollowupFormValue>(() => initialFollowupValue(ownerId));
 
+  // Reset only when the dialog opens (false → true), not when ownerId changes while it is open.
+  const ownerRef = useRef(ownerId);
+  ownerRef.current = ownerId;
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) setValue(initialFollowupValue(ownerId));
-  }, [open, ownerId]);
+    if (open && !wasOpen.current) setValue(initialFollowupValue(ownerRef.current));
+    wasOpen.current = open;
+  }, [open]);
 
   const submit = () => {
-    const problem = validateFollowupForm(value, "manual", line.hasLine);
+    const problem = validateFollowupForm(value, "manual", line.hasLine || line.isError);
     if (problem) {
       toast.error(problem);
       return;
@@ -63,6 +68,8 @@ export function FollowupDialog({ open, onOpenChange, opportunityId, ownerId, tit
           mode="manual"
           hasLine={line.hasLine}
           lineLabel={line.label}
+          lineError={line.isError}
+          onRetryLine={line.refetch}
           disabled={schedule.isPending}
         />
         <DialogFooter className="gap-2">

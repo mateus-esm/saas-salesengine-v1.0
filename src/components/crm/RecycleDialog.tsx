@@ -49,13 +49,15 @@ export function RecycleDialog({ open, onCancel, onConfirm, stage, stages, target
   const reasonOk = value.reason.trim() !== "";
 
   const submit = () => {
-    const effective = { ...value, sendMessage: value.sendMessage && line.hasLine };
-    const problem = validateFollowupForm(effective, "recycle", line.hasLine);
+    // Line check failed (isError): the line is unknown, so the RPC decides.
+    const lineOk = line.hasLine || !!line.isError;
+    const effective = { ...value, sendMessage: value.sendMessage && lineOk };
+    const problem = validateFollowupForm(effective, "recycle", lineOk);
     if (problem) {
       toast.error(problem);
       return;
     }
-    onConfirm(effective, line.hasLine);
+    onConfirm(effective, lineOk);
   };
 
   return (
@@ -84,6 +86,8 @@ export function RecycleDialog({ open, onCancel, onConfirm, stage, stages, target
           reasons={reasons}
           hasLine={line.hasLine}
           lineLabel={line.label}
+          lineError={!!line.isError}
+          onRetryLine={line.refetch}
         />
 
         <DialogFooter className="gap-2 sm:gap-2">

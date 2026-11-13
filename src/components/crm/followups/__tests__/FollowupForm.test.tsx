@@ -43,6 +43,16 @@ describe("FollowupForm", () => {
     expect(screen.getByText(/Configure uma linha de WhatsApp em Outreach/)).toBeTruthy();
   });
 
+  it("consulta da linha falhou: não diz que falta linha, mantém o interruptor e oferece tentar de novo", () => {
+    const retry = vi.fn();
+    render(<FollowupForm value={base} onChange={() => {}} mode="manual" hasLine={false} lineError onRetryLine={retry} />);
+    expect(screen.getByText(/Não foi possível verificar a linha de WhatsApp — tente de novo/)).toBeTruthy();
+    expect(screen.queryByText(/Configure uma linha de WhatsApp em Outreach/)).toBeNull();
+    expect(screen.getByRole("switch", { name: /Enviar mensagem ao cliente/ }).hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(retry).toHaveBeenCalled();
+  });
+
   it("com linha: mostra o nome da linha e deixa o e-mail desabilitado", () => {
     render(
       <FollowupForm

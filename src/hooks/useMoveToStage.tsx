@@ -100,7 +100,9 @@ export function useMoveToStage({ stages, pipeline }: Options) {
 
   /** Schedules the Reciclo follow-up of each deal; failures are reported with a retry. */
   const scheduleAll = useCallback(
-    async (ids: string[], input: RecycleScheduleInput): Promise<void> => {
+    async (ids: string[], build: (retry: boolean) => RecycleScheduleInput, retry = false): Promise<void> => {
+      // Built per attempt: on a retry the chosen date may already be in the past.
+      const input = build(retry);
       const failed: string[] = [];
       let lastError: unknown = null;
       for (const opportunityId of ids) {
@@ -120,7 +122,7 @@ export function useMoveToStage({ stages, pipeline }: Options) {
         failed.length > 1
           ? `${failed.length} negócios movidos, mas o follow-up não foi agendado: ${why}`
           : `Negócio movido, mas o follow-up não foi agendado: ${why}`;
-      toast.error(message, { action: { label: "Tentar de novo", onClick: () => void scheduleAll(failed, input) } });
+      toast.error(message, { action: { label: "Tentar de novo", onClick: () => void scheduleAll(failed, build, true) } });
     },
     [schedule],
   );
@@ -145,7 +147,14 @@ export function useMoveToStage({ stages, pipeline }: Options) {
         ids = ids.filter((id) => !failedIds.includes(id));
       }
       if (ids.length === 0) return;
-      await scheduleAll(ids, recycleScheduleInput(value, hasLine));
+      await scheduleAll(ids, (retry) => {
+        const input = recycleScheduleInput(value, hasLine);
+        // Retry after the due time passed: the RPC wants a future date, so keep the rest and use now + 1 min.
+        if (retry && Date.parse(input.dueAt) <= Date.now() + 30_000) {
+          return { ...input, dueAt: new Date(Date.now() + 60_000).toISOString() };
+        }
+        return input;
+      });
     },
     [scheduleAll],
   );

@@ -7,6 +7,9 @@ vi.mock("@/hooks/useFollowups", () => ({
   useOutreachLine: () => ({ hasLine: true, label: null, isLoading: false }),
 }));
 
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toastMock }));
+
 import { useMoveToStage } from "../useMoveToStage";
 
 const stages = [
@@ -143,5 +146,51 @@ describe("useMoveToStage — Reciclo (Sprint 15b · T4)", () => {
     act(() => { result.current.requestMove({ fromStageId: "open", toStageId: "ciclo", opportunityIds: ["o1"], run }); });
     await act(async () => { await result.current.confirmRecycle({ ...form, willReturn: false }, true); });
     expect(schedule).toHaveBeenCalledWith(expect.objectContaining({ notifyOwner: false, sendMessage: false, returnStageId: null }));
+  });
+
+  it("retry after the due time passed sends a future due_at", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-13T12:00:00Z"));
+      toastMock.error.mockReset();
+      schedule.mockRejectedValueOnce(new Error("boom"));
+      const run = vi.fn();
+      const { result } = renderHook(() => useMoveToStage({ stages: recycleStages, pipeline: withReasons }));
+      act(() => { result.current.requestMove({ fromStageId: "open", toStageId: "ciclo", opportunityIds: ["o1"], run }); });
+      // 'Não' (now + 1 min) and a dated rule whose date will have passed by the retry.
+      await act(async () => { await result.current.confirmRecycle({ ...form, willReturn: false }, true); });
+      const firstDue = Date.parse(schedule.mock.calls[0][0].dueAt);
+      expect(firstDue).toBe(Date.parse("2026-11-13T12:01:00Z"));
+      vi.setSystemTime(new Date("2026-11-13T12:10:00Z"));
+      schedule.mockResolvedValue({});
+      const action = toastMock.error.mock.calls[0][1].action;
+      await act(async () => { action.onClick(); });
+      const retryDue = Date.parse(schedule.mock.calls[1][0].dueAt);
+      expect(retryDue).toBeGreaterThan(Date.now());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retry of a dated rule whose date passed uses now + 1 min and keeps the rest", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-12-13T11:59:00Z")); // 08:59 in Brasília, due 09:00
+      toastMock.error.mockReset();
+      schedule.mockReset();
+      schedule.mockRejectedValueOnce(new Error("boom"));
+      const run = vi.fn();
+      const { result } = renderHook(() => useMoveToStage({ stages: recycleStages, pipeline: withReasons }));
+      act(() => { result.current.requestMove({ fromStageId: "open", toStageId: "ciclo", opportunityIds: ["o1"], run }); });
+      await act(async () => { await result.current.confirmRecycle(form, true); });
+      vi.setSystemTime(new Date("2026-12-13T13:00:00Z"));
+      schedule.mockResolvedValue({});
+      await act(async () => { toastMock.error.mock.calls[0][1].action.onClick(); });
+      const retry = schedule.mock.calls[1][0];
+      expect(Date.parse(retry.dueAt)).toBe(Date.parse("2026-12-13T13:01:00Z"));
+      expect(retry).toEqual(expect.objectContaining({ reason: "Sem verba", returnStageId: "open", kind: "recycle" }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

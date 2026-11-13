@@ -277,6 +277,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
           toStageId,
           leadName,
           opportunityIds: [id],
+          ownerId: rowById.get(id)?.owner_id ?? null,
           run: (lostReason) => {
             const saved = updateMany.mutateAsync({ ids: [id], patch: { stage_id: toStageId }, lostReason });
             saved.then(() => resolve(), reject);
@@ -286,7 +287,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         });
         if (plan === "noop") resolve();
       }),
-    [requestMove, updateMany],
+    [requestMove, updateMany, rowById],
   );
 
   // Sprint 11 · T26 — on a phone each deal is a line: name; stage · value ·
@@ -583,6 +584,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
                   toStageId,
                   count: ids.length,
                   opportunityIds: ids,
+                  // ownerId stays null on purpose: in a bulk move the Reciclo dialog's default
+                  // ("Dono do negócio") applies per deal on the server.
                   run: (lostReason) =>
                     updateMany
                       .mutateAsync({ ids, patch: { stage_id: toStageId }, lostReason })

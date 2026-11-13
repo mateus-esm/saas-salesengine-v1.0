@@ -43,6 +43,12 @@ describe("followupErrorMessage", () => {
   });
 });
 
+describe("followupErrorMessage invalid_kind", () => {
+  it("traduz invalid_kind", () => {
+    expect(followupErrorMessage(new Error("invalid_kind"))).toBe("Tipo de follow-up inválido.");
+  });
+});
+
 describe("followupStatusLabel", () => {
   it("rotula cada estado", () => {
     expect(followupStatusLabel("scheduled")).toBe("Agendado");

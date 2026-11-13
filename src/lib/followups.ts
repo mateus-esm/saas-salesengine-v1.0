@@ -30,6 +30,7 @@ export interface Followup {
     return?: "moved" | "already_there" | "skipped_left_stage";
     cancel_reason?: string;
     error?: string;
+    return_error?: string;
   } | null;
   created_at: string;
   executed_at: string | null;
@@ -98,6 +99,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_owner: "Esse responsável não faz parte da equipe.",
   invalid_return_stage: "A etapa de volta não existe mais neste funil. Escolha outra.",
   opportunity_not_found: "Esse negócio não está mais disponível.",
+  invalid_kind: "Tipo de follow-up inválido.",
   followup_not_found: "Esse follow-up não está mais disponível.",
   not_authenticated: "Sua sessão expirou. Entre de novo.",
 };
