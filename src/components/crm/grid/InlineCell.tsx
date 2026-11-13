@@ -471,6 +471,8 @@ function chipsFromRow(value: unknown): Chip[] {
 function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: InlineCellProps) {
   const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fromRow = !!column.relation?.resolvedFromRow;
 
   // Only relation columns that do not bring their chips in the row still query.
@@ -480,14 +482,32 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
   const links = fromRow ? chipsFromRow(value) : resolved;
   const canEdit = column.editable !== false;
 
+  // Sprint 15 · T9 — a failed link or unlink shows on the cell, like a field
+  // cell; it used to be an unhandled rejection the user never saw.
+  const save = async (change: unknown) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await onCommit(change);
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const pick = (toId: string, label: string) => {
-    void onCommit({ toId, label });
+    void save({ toId, label });
     setEditing(false);
   };
 
   return (
     <div
-      className="flex h-10 w-full min-w-0 items-center gap-1 overflow-hidden px-2 text-sm"
+      className={cn(
+        "flex h-10 w-full min-w-0 items-center gap-1 overflow-hidden px-2 text-sm",
+        error && "ring-1 ring-inset ring-destructive",
+      )}
+      title={error ?? undefined}
       onDoubleClick={() => canEdit && setEditing(true)}
     >
       {!fromRow && loading ? (
@@ -498,7 +518,7 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
             <RelationChip
               key={chip.toId}
               label={chip.label}
-              onRemove={() => void onCommit({ toId: chip.toId, action: "remove" })}
+              onRemove={() => void save({ toId: chip.toId, action: "remove" })}
             />
           ))
         ) : (
@@ -524,6 +544,10 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
             Vincular...
           </button>
         </>
+      )}
+      {saving && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />}
+      {error && (
+        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" role="img" aria-label={error} />
       )}
     </div>
   );

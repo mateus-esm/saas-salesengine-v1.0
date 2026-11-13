@@ -17,6 +17,8 @@ vi.mock("@/hooks/useRelationResolver", () => ({
   useRelationResolver: (...args: unknown[]) => resolverSpy(...args),
 }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
 import { InlineCell } from "../InlineCell";
 import type { ColumnDef, GridRow } from "../types";
 
@@ -217,5 +219,38 @@ describe("InlineCell", () => {
     await waitFor(() => expect(resolverSpy).toHaveBeenCalled());
     // Called with an empty context, which keeps its query disabled.
     expect(resolverSpy.mock.calls[0][2]).toEqual({ fromTable: "", equipeId: "" });
+  });
+
+  // Sprint 15 · T9 — relation cells.
+  const relationColumn = col({
+    kind: "relation",
+    key: "company",
+    label: "Empresa",
+    relation: { table: "companies", displayField: "name", resolvedFromRow: true },
+  });
+  const renderRelation = (onCommit: (v: unknown) => Promise<void> | void) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <InlineCell
+          row={row}
+          column={relationColumn}
+          value={[{ id: "c-1", name: "Empresa X" }]}
+          onCommit={onCommit}
+          equipeId="e-1"
+          fromTable="opportunities"
+        />
+        <button type="button">fora</button>
+      </QueryClientProvider>,
+    );
+
+  it("a relation that fails to unlink says so on the cell", async () => {
+    const onCommit = vi.fn(async () => {
+      throw new Error("sem permissão");
+    });
+    renderRelation(onCommit);
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Remover Empresa X" }));
+    expect(onCommit).toHaveBeenCalledWith({ toId: "c-1", action: "remove" });
+    expect(await screen.findByRole("img", { name: "sem permissão" })).toBeTruthy();
   });
 });
