@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useRelationResolver } from "@/hooks/useRelationResolver";
 import { toDateInputValue } from "@/lib/fields/dateOnly";
-import { getFieldType, isFieldType, type InlineEditor } from "@/lib/fields/registry";
+import { getFieldType, isFieldType, parseBrNumber, type InlineEditor } from "@/lib/fields/registry";
 import { cn } from "@/lib/utils";
 
 import { MultiSelectPicker } from "../fields/MultiSelectPicker";
@@ -40,6 +40,28 @@ export interface InlineCellProps {
 
 const sameValue = (a: unknown, b: unknown) =>
   a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+const asNumber = (v: unknown): number | null =>
+  typeof v === "number" ? v : typeof v === "string" ? parseBrNumber(v) : null;
+
+/**
+ * Sprint 15 · T9 — the editor's value says the same as the stored one: a DATE
+ * column stores "2026-03-14" and the editor hands back local midnight as ISO; a
+ * number stored as text comes back as a number. Leaving such a cell untouched
+ * must not write.
+ */
+function unchanged(kind: string, next: unknown, value: unknown): boolean {
+  if (sameValue(next, value)) return true;
+  if (kind === "date") {
+    const day = toDateInputValue(next);
+    return day !== "" && day === toDateInputValue(value);
+  }
+  if (kind === "number" || kind === "currency") {
+    const n = asNumber(next);
+    return n !== null && n === asNumber(value);
+  }
+  return false;
+}
 
 /**
  * What an editor hands back when the text cannot become a value (a number that
@@ -76,7 +98,7 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
   const commit = useCallback(
     async (next: unknown) => {
       setEditing(false);
-      if (sameValue(next, value)) return;
+      if (unchanged(column.kind, next, value)) return;
       setSaving(true);
       setError(null);
       try {
@@ -87,7 +109,7 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
         setSaving(false);
       }
     },
-    [onCommit, value],
+    [onCommit, value, column.kind],
   );
 
   if (column.render) {

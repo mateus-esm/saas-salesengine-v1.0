@@ -157,6 +157,32 @@ describe("InlineCell", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  // Sprint 15 · T9 — opening a cell and leaving it must not write. A DATE column
+  // comes back as "2026-03-14" and the editor hands back local midnight as ISO;
+  // a number stored as text comes back as a number. Same day, same number.
+  it("an unchanged date stored as a bare day does not call the server", () => {
+    const onCommit = renderCell(col({ kind: "date", label: "Próximo contato" }), "2026-03-14");
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    fireEvent.keyDown(screen.getByLabelText("Próximo contato"), { key: "Enter" });
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("an unchanged number stored as text does not call the server", () => {
+    const onCommit = renderCell(col({ kind: "number", label: "Qtd" }), "1500");
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    fireEvent.blur(screen.getByLabelText("Qtd"));
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
+  it("a changed date still saves", () => {
+    const onCommit = renderCell(col({ kind: "date", label: "Visita" }), "2026-03-14");
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    const input = screen.getByLabelText("Visita");
+    fireEvent.change(input, { target: { value: "2026-03-15" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenCalledWith(new Date(2026, 2, 15).toISOString());
+  });
+
   it("a user field shows the member's name", () => {
     renderCell(col({ kind: "user", label: "Pré-vendedor", context: { nameOf: (id) => (id === "u-1" ? "Luiz" : null) } }), "u-1");
     expect(screen.getByTestId("cell-f-1").textContent).toContain("Luiz");
