@@ -2,7 +2,7 @@
 // fixed column widths, a sticky header and first column, and a row count.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/hooks/useMemberDirectory", () => ({
@@ -199,6 +199,35 @@ describe("SpreadsheetGrid", () => {
     expect(loading).toEqual(data);
     expect(empty).toEqual(data);
     expect(data).toEqual(expect.arrayContaining(["Nome", "Telefone", "E-mail"]));
+  });
+
+  // Sprint 15 · T9 — a selection is of rows on screen. After a filter or a search
+  // swaps the rows, rows that left must not stay selected (a mass "Excluir"
+  // would act on rows the user no longer sees).
+  it("rows that leave the grid leave the selection", async () => {
+    const run = vi.fn(async () => {});
+    const massActions = [{ id: "del", label: "Excluir", icon: null, run }];
+    const props = { columns, onCellCommit: vi.fn(async () => {}), massActions };
+    const { rerender } = render(
+      <TooltipProvider>
+        <SpreadsheetGrid {...props} rows={rows} />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Selecionar linha r-1" }));
+    expect(screen.getByText("1 selecionado")).toBeTruthy();
+
+    rerender(
+      <TooltipProvider>
+        <SpreadsheetGrid {...props} rows={[rows[1], rows[2]]} />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByText(/selecionado/)).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Selecionar todos" }).getAttribute("data-state")).toBe("unchecked");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Selecionar todos" }));
+    expect(screen.getByText("2 selecionados")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Excluir/ }));
+    await waitFor(() => expect(run).toHaveBeenCalledWith(["r-2", "r-3"]));
   });
 
   describe("paging", () => {
