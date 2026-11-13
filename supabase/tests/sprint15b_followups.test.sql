@@ -278,7 +278,7 @@ begin
                     and n.user_id = '515bb000-0000-0000-0000-000000000003'
                     and n.title = 'Follow-up: Lead Dois'
                     and n.body = 'Sem orçamento'
-                    and n.action_url = '/crm?tab=pipeline&opp=515bf000-0000-0000-0000-000000000002'),
+                    and n.action_url = '/crm?tab=pipeline&pipeline=' || (select o.pipeline_id::text from public.opportunities o where o.id = '515bf000-0000-0000-0000-000000000002') || '&view=kanban&opp=515bf000-0000-0000-0000-000000000002'),
     'T1-5 FAIL: o aviso ao responsável não saiu como esperado (user_id = profiles.user_id)';
   assert v_fu.result->>'webhook_request_id' is not null,
     'T1-10 FAIL: a volta do recycle deveria disparar o webhook cycle_pass, veio ' || v_fu.result::text;

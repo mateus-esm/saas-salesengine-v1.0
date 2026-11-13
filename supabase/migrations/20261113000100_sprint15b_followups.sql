@@ -665,7 +665,7 @@ begin
         values (f.equipe_id, v_user, 'crm_followup_due', 'info',
                 'Follow-up: ' || coalesce(nullif(btrim(v_lead), ''), 'negócio'),
                 coalesce(f.reason, f.message_text),
-                '/crm?tab=pipeline&opp=' || f.opportunity_id::text,
+                '/crm?tab=pipeline&pipeline=' || v_opp.pipeline_id::text || '&view=kanban&opp=' || f.opportunity_id::text,
                 jsonb_build_object('followup_id', f.id, 'opportunity_id', f.opportunity_id, 'kind', f.kind),
                 'followup:' || f.id::text)
         on conflict (equipe_id, type, dedup_key) where dedup_key is not null do nothing
