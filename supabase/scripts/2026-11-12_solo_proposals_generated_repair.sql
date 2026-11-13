@@ -10,6 +10,8 @@
 -- Atenção: apagar funnel_events muda o passado do dashboard.
 --   * Registro `sent` SEM NENHUMA rodada de ação (provável ajuste manual) é só
 --     relatado na SEÇÃO 1, NÃO é revertido.
+--   * Negócio com `proposal_sent` registrado por pessoa (funnel_events.actor_type =
+--     'team') é EXCLUÍDO da reversão: alguém marcou o envio, a proposta não volta.
 --   * Só se apaga `proposal_sent` de fonte 'artifact' (o que
 --     _crm_apply_artifact_status grava direto), só dos negócios dos registros
 --     revertidos e só se nenhuma OUTRA proposta do negócio foi enviada de verdade.
@@ -31,7 +33,10 @@ select r.equipe_id,
          as sem_nenhuma_rodada_nao_reverte,
        count(*) filter (where exists (select 1 from public.artifact_action_runs a where a.record_id = r.id)
                           and not exists (select 1 from public.artifact_action_runs a
-                                           where a.record_id = r.id and a.action_label ilike '%envi%'))
+                                           where a.record_id = r.id and a.action_label ilike '%envi%')
+                          and not exists (select 1 from public.funnel_events fe
+                                           where fe.opportunity_id = r.opportunity_id
+                                             and fe.event = 'proposal_sent' and fe.actor_type = 'team'))
          as sem_acao_de_envio_reverte
   from public.custom_table_records r
   join public.custom_tables t on t.id = r.table_id and t.artifact_kind = 'proposal'
@@ -52,6 +57,9 @@ with alvo as (
      and exists (select 1 from public.artifact_action_runs a where a.record_id = r.id)
      and not exists (select 1 from public.artifact_action_runs a
                       where a.record_id = r.id and a.action_label ilike '%envi%')
+     and not exists (select 1 from public.funnel_events fe
+                      where fe.opportunity_id = r.opportunity_id
+                        and fe.event = 'proposal_sent' and fe.actor_type = 'team')
 ),
 negocios as (
   select distinct a.equipe_id, a.opportunity_id
@@ -69,6 +77,24 @@ select n.equipe_id, count(f.id) as eventos_proposal_sent_artifact_a_apagar
   left join public.funnel_events f
     on f.opportunity_id = n.opportunity_id and f.event = 'proposal_sent' and f.source = 'artifact'
  group by n.equipe_id;
+
+-- 1d. Candidatos a reverter cuja ÚLTIMA rodada de ação não terminou (status <> 'completed'):
+--     a geração pode ainda estar em curso ou ter falhado. Conferir antes de rodar a SEÇÃO 2.
+select r.equipe_id, count(*) as candidatos_com_ultima_rodada_nao_concluida
+  from public.custom_table_records r
+  join public.custom_tables t on t.id = r.table_id and t.artifact_kind = 'proposal'
+ where r.equipe_id in (select id from public.equipes where nome ilike '%solo energia%')
+   and r.deleted_at is null
+   and r.artifact_status = 'sent'
+   and exists (select 1 from public.artifact_action_runs a where a.record_id = r.id)
+   and not exists (select 1 from public.artifact_action_runs a
+                    where a.record_id = r.id and a.action_label ilike '%envi%')
+   and not exists (select 1 from public.funnel_events fe
+                    where fe.opportunity_id = r.opportunity_id
+                      and fe.event = 'proposal_sent' and fe.actor_type = 'team')
+   and (select a.status from public.artifact_action_runs a
+         where a.record_id = r.id order by a.created_at desc limit 1) <> 'completed'
+ group by r.equipe_id;
 
 -- ============================================================================
 -- SEÇÃO 2 — ESCRITA (termina em ROLLBACK de propósito)
@@ -104,7 +130,10 @@ select r.id, r.opportunity_id
    and r.artifact_status = 'sent'
    and exists (select 1 from public.artifact_action_runs a where a.record_id = r.id)
    and not exists (select 1 from public.artifact_action_runs a
-                    where a.record_id = r.id and a.action_label ilike '%envi%');
+                    where a.record_id = r.id and a.action_label ilike '%envi%')
+   and not exists (select 1 from public.funnel_events fe
+                    where fe.opportunity_id = r.opportunity_id
+                      and fe.event = 'proposal_sent' and fe.actor_type = 'team');
 
 -- Negócios cujo marco sai: nenhuma OUTRA proposta enviada de verdade.
 create temp table _negocios on commit drop as

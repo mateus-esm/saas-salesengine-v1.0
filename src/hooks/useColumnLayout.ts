@@ -75,7 +75,6 @@ export function translateVisibleToAbsolute(
  * order without the keys of deleted columns, then the columns it does not know
  * yet (created after it was saved). A saved `[]` (every visit saves the layout,
  * and an untouched order is saved empty) is just the columns' own order.
- * Exported for unit tests.
  */
 export function effectiveOrder(saved: string[] | null, columnKeys: string[]): string[] {
   const valid = new Set(columnKeys);

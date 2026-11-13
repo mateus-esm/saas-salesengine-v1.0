@@ -235,7 +235,7 @@ function DesktopGrid({
     renderColumns.reduce((sum, col) => sum + widthOf(col), 0) +
     (addColumn ? ACTION_W : 0) +
     (showColumnsMenu ? ACTION_W : 0);
-  // +1 for the checkbox, +1 for the filler.
+  // The filler column always counts; the checkbox column only when rows are selectable.
   const colSpan = renderColumns.length + (selectable ? 2 : 1) + (showLeadScore ? 1 : 0) + (addColumn ? 1 : 0) + (showColumnsMenu ? 1 : 0);
 
   const isAllSelected = rows.length > 0 && selectedIds.size === rows.length;
