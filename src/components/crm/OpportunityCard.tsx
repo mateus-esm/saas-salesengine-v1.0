@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRightLeft, Clock, MessageCircle, MessageSquare, MessageSquarePlus, MessageSquareText } from "lucide-react";
+import { ArrowRightLeft, CalendarClock, Clock, MessageCircle, MessageSquare, MessageSquarePlus, MessageSquareText } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { UserAvatar } from "./fields/UserAvatar";
 import { RelationChip } from "./grid/RelationChip";
 import { LeadScoreBadge } from "./LeadScoreBadge";
 import { NextContactBadge } from "./NextContactBadge";
+import { FollowupDialog } from "./followups/FollowupDialog";
 
 type TouchpointType = CreateTouchpointData["touchpoint_type"];
 
@@ -336,6 +337,7 @@ export const OpportunityCard = ({
         >
           <ChatAction leadId={lead.id} />
           <TouchpointAction leadId={lead.id} />
+          <FollowupAction opportunityId={card.id} ownerId={model.ownerId ?? null} title={model.title} />
           {showWhatsApp && (
             <a
               href={`https://wa.me/${lead.phone!.replace(/\D/g, "").replace(/^(?!55)/, "55$&")}`}
@@ -454,5 +456,23 @@ function TouchpointAction({ leadId }: { leadId: string }) {
         </Button>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function FollowupAction({ opportunityId, ownerId, title }: { opportunityId: string; ownerId: string | null; title: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        title="Agendar follow-up"
+        aria-label="Agendar follow-up"
+      >
+        <CalendarClock className="h-3.5 w-3.5" />
+      </button>
+      <FollowupDialog open={open} onOpenChange={setOpen} opportunityId={opportunityId} ownerId={ownerId} title={title} />
+    </>
   );
 }
