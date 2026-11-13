@@ -2,6 +2,7 @@ import { TicketsTab } from "@/components/admin/support/TicketsTab";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { edgeFunctionError } from "@/lib/edgeFunctionError";
 import { useRole } from "@/hooks/useRole";
 import { ProposalsTab } from "@/components/admin/proposals/ProposalsTab";
 import { OnboardingTab } from "@/components/admin/onboarding/OnboardingTab";
@@ -555,7 +556,7 @@ const Admin = () => {
           },
         }
       );
-      if (error) throw new Error(error.message || "Erro ao criar membro");
+      if (error) throw await edgeFunctionError(error, "Erro ao criar membro");
       if ((data as any)?.error) throw new Error((data as any).error);
 
       // Show the temp password to the admin so they can hand it off.
@@ -625,7 +626,7 @@ const Admin = () => {
           role: newUserRole,
         },
       });
-      if (error) throw new Error(error.message || "Erro ao criar usuário");
+      if (error) throw await edgeFunctionError(error, "Erro ao criar usuário");
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const tempPw = newUserPassword;
@@ -655,19 +656,26 @@ const Admin = () => {
       // Update role
       const existing = userRoles.find((r) => r.user_id === editingProfile.user_id);
       if (existing) {
-        await supabase.from("user_roles").update({ role: editingProfile.role as any }).eq("user_id", editingProfile.user_id);
+        const { error } = await supabase.from("user_roles").update({ role: editingProfile.role as any }).eq("user_id", editingProfile.user_id);
+        if (error) throw error;
       } else {
-        await supabase.from("user_roles").insert({ user_id: editingProfile.user_id, role: editingProfile.role as any });
+        const { error } = await supabase.from("user_roles").insert({ user_id: editingProfile.user_id, role: editingProfile.role as any });
+        if (error) throw error;
       }
       // Update equipe assignment
-      await supabase.from("profiles").update({ equipe_id: editingProfile.equipe_id || null } as any).eq("user_id", editingProfile.user_id);
+      const { error: profileError } = await supabase.from("profiles")
+        .update({ equipe_id: editingProfile.equipe_id || null } as any)
+        .eq("user_id", editingProfile.user_id).select("id").single();
+      if (profileError) throw profileError;
 
       setProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? editingProfile : p));
       setUserDialog(false);
       setEditingProfile(null);
       toast.success("Usuário atualizado!");
-    } catch {
-      toast.error("Erro ao atualizar usuário");
+      await fetchData();
+    } catch (error) {
+      toast.error(error && typeof error === "object" && "message" in error
+        ? String(error.message) : "Erro ao atualizar usuário");
     }
   };
 

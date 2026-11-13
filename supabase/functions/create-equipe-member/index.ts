@@ -142,8 +142,13 @@ serve(async (req) => {
 
     if (createErr || !created?.user) {
       const msg = createErr?.message ?? "Unknown error";
-      const status = /already/i.test(msg) ? 409 : 400;
-      return jsonResponse({ error: msg }, status);
+      if (createErr?.code === "email_exists" || /already.*registered/i.test(msg)) {
+        return jsonResponse({
+          code: "email_exists",
+          error: "Este email já está cadastrado. Em Usuários, edite o usuário existente para vinculá-lo à equipe. Para recuperar o acesso, use Esqueci minha senha na tela de login.",
+        }, 409);
+      }
+      return jsonResponse({ error: msg }, 400);
     }
 
     const newUserId = created.user.id;
