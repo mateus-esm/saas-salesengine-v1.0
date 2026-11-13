@@ -368,3 +368,78 @@ Deno.test("persistência aceita sequência/inscrição/passo nulos e registra o 
   assertEquals(meta.followup_id, "F1");
   assertEquals(meta.enrollment_id, null);
 });
+
+Deno.test("follow-up: descrição própria; opened_via só quando a conversa não tem", async () => {
+  const run = async (followupId: string | null, existing: Record<string, unknown> | null) => {
+    const activities: Record<string, unknown>[] = [];
+    const updates: Record<string, unknown>[] = [];
+    const supabase = {
+      from: (table: string) => {
+        if (table === "conversations") {
+          const read: Record<string, unknown> = {
+            select: () => read,
+            eq: () => read,
+            neq: () => read,
+            order: () => read,
+            limit: () => read,
+            maybeSingle: async () => ({ data: existing, error: null }),
+            insert: () => ({ select: () => ({ single: async () => ({ data: { id: "C1" }, error: null }) }) }),
+            update: (row: Record<string, unknown>) => {
+              updates.push(row);
+              const chain: Record<string, unknown> = {
+                eq: () => chain,
+                select: () => chain,
+                maybeSingle: async () => ({ data: { id: "C1" }, error: null }),
+                single: async () => ({ data: { id: "C1" }, error: null }),
+              };
+              return chain;
+            },
+          };
+          return read;
+        }
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            if (table === "lead_activities") activities.push(row);
+            return { error: null };
+          },
+        };
+      },
+    };
+    await persistDeliveredMessage(supabase, {
+      jobId: "J1",
+      enrollmentId: followupId ? null : "E1",
+      sequenceId: followupId ? null : "S1",
+      stepPosition: followupId ? null : 0,
+      followupId,
+      equipeId: "T1",
+      leadId: "L1",
+      text: "oi",
+      line,
+      delivery: sent,
+    });
+    return { activity: activities[0], updates };
+  };
+  const conv = { id: "C1", status: "active", opened_at: "2026-01-01", opened_via: "inbound" };
+  const fu = await run("F1", conv);
+  assertEquals(fu.activity.descricao, "Follow-up agendado enviado pelo Rev");
+  assertEquals(fu.activity.tipo, "cadence_message_sent");
+  assertEquals("opened_via" in (fu.updates[0] ?? {}), false);
+  const fuNone = await run("F1", { ...conv, opened_via: null });
+  assertEquals(fuNone.updates[0]?.opened_via, "cadence");
+  const seq = await run(null, conv);
+  assertEquals(seq.activity.descricao, "Mensagem de cadência enviada pelo Rev");
+  assertEquals(seq.updates[0]?.opened_via, "cadence");
+});
+
+Deno.test("follow-up: loadContext lançando fecha como failed, sem nova tentativa", async () => {
+  const setup = dependencies([followupJob("J1")], fakeProvider(async () => sent));
+  setup.deps.loadContext = async () => {
+    throw new Error("lead apagado");
+  };
+  const result = await processOutreachBatch(setup.deps);
+  assertEquals(result.errors, 1);
+  assertEquals(setup.finishes[0][0], "J1");
+  assertEquals(setup.finishes[0][1], "failed");
+  assertEquals(setup.finishes[0][2], "lead apagado");
+  assertEquals(setup.finishes[0][4], false);
+});
