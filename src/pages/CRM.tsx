@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { LayoutGrid, Plus } from "lucide-react";
 
@@ -18,7 +18,6 @@ import { FeatureActivationGrid } from "@/components/crm/customtables/FeatureActi
 import { AgendaView } from "@/components/crm/AgendaView";
 import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { CampaignsView } from "@/components/crm/campaigns/CampaignsView";
-import { FILTER_PARAM_KEYS } from "@/lib/crmFilterParams";
 import { TAB_LABELS, isTopTab, type TopTab } from "@/lib/crmTabs";
 
 const CRM = () => {
@@ -31,37 +30,6 @@ const CRM = () => {
     return isTopTab(raw) ? raw : "pipeline";
   }, [searchParams]);
 
-  const setTab = useCallback(
-    (next: string) => {
-      if (!isTopTab(next)) return;
-      const params = new URLSearchParams(searchParams);
-      params.set("tab", next);
-      // Switching away from Pipeline drops pipeline-scoped state so the URL
-      // is honest about what's on screen. Switching away from Companies drops
-      // the `company` deep-link param for the same reason.
-      if (next !== "pipeline") {
-        params.delete("view");
-        params.delete("opp");
-      }
-      if (next !== "companies") {
-        params.delete("company");
-      }
-      if (next !== "properties") {
-        params.delete("property");
-      }
-      if (next !== "tabelas") {
-        params.delete("custom_table");
-      }
-      // Sprint 11 · Onda 2 — each screen has its own filters in the URL (deals on
-      // the pipeline, contacts on the contact base); a tab switch starts clean.
-      if (next !== tab) {
-        for (const key of FILTER_PARAM_KEYS) params.delete(key);
-      }
-      setSearchParams(params, { replace: false });
-    },
-    [searchParams, setSearchParams, tab],
-  );
-
   const customTableSlug = searchParams.get("custom_table");
   const selectedCustomTable = customTableSlug
     ? customTables.find((t) => t.slug === customTableSlug) ?? null
@@ -73,11 +41,11 @@ const CRM = () => {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Sprint 15 · T5 — as abas viraram itens da barra lateral; aqui fica só o
-          título da aba ativa (o celular não tem trilha) e os controles da página.
+          título da aba ativa só no celular (no desktop a trilha do cabeçalho já o mostra; fica para leitores de tela) e os controles da página.
           O `overflow-x-auto` continua para os controles não quebrarem de linha. */}
       <div className="border-b border-border bg-card px-2 sm:px-4 py-2">
         <div className="flex items-center justify-between gap-3 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
-          <h1 className="text-base font-semibold">{TAB_LABELS[tab]}</h1>
+          <h1 className="text-base font-semibold sm:sr-only">{TAB_LABELS[tab]}</h1>
           <div className="flex items-center gap-3">
             <FeatureActivationGrid />
             <AIAgentToggle />

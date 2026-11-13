@@ -135,10 +135,7 @@ export const CompaniesDatabaseView = () => {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b border-border bg-card">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            <span className="text-primary">Empresas</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground">
             {companies.length} {companies.length === 1 ? "empresa" : "empresas"} • Clique no nome para abrir
           </p>
         </div>

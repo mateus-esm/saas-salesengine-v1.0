@@ -12,7 +12,7 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
  * Mounted ONCE as a layout route so the sidebar, header and WhatsApp button never
  * remount on navigation — only <Outlet/> swaps the page.
  *
- * Sprint 15 T7 — a casca tem a altura da tela: a página rola dentro do <main>,
+ * Sprint 15 T7 — a casca tem a altura da tela: a página rola dentro do conteúdo (o SidebarInset já é o <main>),
  * não na janela. Assim uma tela com `h-full` (a grade do CRM) tem altura de
  * verdade, e o cabeçalho e o rodapé da grade ficam presos.
  */
@@ -24,9 +24,9 @@ export const AuthenticatedLayout = () => {
       <AppShellSidebar />
       <SidebarInset className="h-svh min-h-0 min-w-0 bg-background">
         <AppHeader />
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <Outlet />
-        </main>
+        </div>
       </SidebarInset>
       <WhatsAppButton />
     </SidebarProvider>
