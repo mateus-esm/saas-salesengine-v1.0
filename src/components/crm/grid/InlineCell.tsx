@@ -497,7 +497,8 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
   };
 
   const pick = (toId: string, label: string) => {
-    void save({ toId, label });
+    // Already linked: linking again would duplicate the link (or fail on it).
+    if (!links.some((l) => l.toId === toId)) void save({ toId, label });
     setEditing(false);
   };
 

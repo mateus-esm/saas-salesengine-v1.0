@@ -19,6 +19,17 @@ vi.mock("@/hooks/useRelationResolver", () => ({
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+// The picker queries the target table; here it offers two fixed records.
+vi.mock("../RelationPicker", () => ({
+  RelationPicker: ({ open, onPick }: { open: boolean; onPick: (id: string, label: string) => void }) =>
+    open ? (
+      <div>
+        <button type="button" onClick={() => onPick("c-1", "Empresa X")}>Escolher Empresa X</button>
+        <button type="button" onClick={() => onPick("c-2", "Empresa Y")}>Escolher Empresa Y</button>
+      </div>
+    ) : null,
+}));
+
 import { InlineCell } from "../InlineCell";
 import type { ColumnDef, GridRow } from "../types";
 
@@ -252,5 +263,19 @@ describe("InlineCell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remover Empresa X" }));
     expect(onCommit).toHaveBeenCalledWith({ toId: "c-1", action: "remove" });
     expect(await screen.findByRole("img", { name: "sem permissão" })).toBeTruthy();
+  });
+
+  it("picking a record that is already linked does not link it again", () => {
+    const onCommit = vi.fn(async () => {});
+    renderRelation(onCommit);
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Escolher Empresa X" }));
+    expect(onCommit).not.toHaveBeenCalled();
+
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Vincular..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Escolher Empresa Y" }));
+    expect(onCommit).toHaveBeenCalledWith({ toId: "c-2", label: "Empresa Y" });
   });
 });
