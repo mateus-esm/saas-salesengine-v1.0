@@ -113,6 +113,29 @@ describe("InlineCell", () => {
     expect(onCommit).toHaveBeenCalledWith(1234.56);
   });
 
+  // Sprint 15 · T9 — text that is not a number used to be saved as null: the
+  // value was erased without a word.
+  it("a number that cannot be read is not saved and the cell says so", () => {
+    const onCommit = renderCell(col({ kind: "currency", label: "Ticket" }), 1500);
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    const input = screen.getByLabelText("Ticket");
+    fireEvent.change(input, { target: { value: "mil e quinhentos" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByTestId("cell-f-1").textContent).toBe("R$ 1.500,00");
+    expect(screen.getByRole("img", { name: /Número inválido/ })).toBeTruthy();
+  });
+
+  it("clearing a number on purpose still saves empty", () => {
+    const onCommit = renderCell(col({ kind: "number", label: "Qtd" }), 3);
+    fireEvent.doubleClick(screen.getByTestId("cell-f-1"));
+    const input = screen.getByLabelText("Qtd");
+    fireEvent.change(input, { target: { value: "  " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommit).toHaveBeenCalledWith(null);
+  });
+
   it("a failed save shows on the cell and the value stays what it was", async () => {
     const onCommit = vi.fn(async () => {
       throw new Error("sem permissão");

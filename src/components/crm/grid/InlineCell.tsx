@@ -41,6 +41,14 @@ export interface InlineCellProps {
 const sameValue = (a: unknown, b: unknown) =>
   a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
+/**
+ * What an editor hands back when the text cannot become a value (a number that
+ * is not a number). Nothing is saved; the cell shows the message.
+ */
+class InvalidInput {
+  constructor(readonly message: string) {}
+}
+
 const CELL = "flex h-10 w-full min-w-0 items-center px-3 text-sm";
 const INPUT =
   "h-10 w-full rounded-none border-0 bg-background px-3 text-sm outline-none ring-2 ring-inset ring-primary";
@@ -108,7 +116,15 @@ function FieldCell({ row, column, value, onCommit, onOpen }: InlineCellProps) {
         column={column}
         value={value}
         display={display}
-        onDone={(next) => (next === undefined ? setEditing(false) : void commit(next))}
+        onDone={(next) => {
+          if (next === undefined) return setEditing(false);
+          if (next instanceof InvalidInput) {
+            setEditing(false);
+            setError(next.message);
+            return;
+          }
+          void commit(next);
+        }}
       />
     );
   }
@@ -237,6 +253,15 @@ function TextEditor({ editor, column, value, onDone }: EditorProps) {
         : String(value);
   const [text, setText] = useState(initial);
   const handler = getHandler(column.kind);
+  // Blank clears the field; text that is not a number is refused, not saved as empty.
+  const submit = () => {
+    const parsed = handler.parse(text, column);
+    if (numeric && parsed === null && text.trim() !== "") {
+      finish(new InvalidInput(`Número inválido: "${text.trim()}". Use, por exemplo, 1.234,56.`));
+    } else {
+      finish(parsed);
+    }
+  };
 
   return (
     <input
@@ -246,11 +271,11 @@ function TextEditor({ editor, column, value, onDone }: EditorProps) {
       inputMode={numeric ? "decimal" : editor === "phone" ? "tel" : undefined}
       value={text}
       onChange={(e) => setText(e.target.value)}
-      onBlur={() => finish(handler.parse(text, column))}
+      onBlur={submit}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          finish(handler.parse(text, column));
+          submit();
         } else if (e.key === "Escape") {
           e.preventDefault();
           finish(undefined);
