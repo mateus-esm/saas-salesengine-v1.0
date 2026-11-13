@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useContactsTable";
 import { useLead } from "@/hooks/useLead";
 import { useLeadMutations } from "@/hooks/useLeads";
+import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { usePipelines } from "@/hooks/usePipelines";
 import { useContactUrlFilters } from "@/hooks/useUrlFilters";
 import { isTechnicalId } from "@/lib/displayName";
@@ -85,6 +86,8 @@ export const DatabaseView = () => {
   const navigate = useNavigate();
   const { activePipelines } = usePipelines();
   const { fields: contactFields, isLoading: isLoadingContactFields, createField } = useContactFields();
+  // A "Usuário" contact field shows the member's name (without it: "Usuário removido").
+  const { nameOf } = useMemberDirectory();
 
   const { filters, setFilters, sort, setSort } = useContactUrlFilters();
   const query = useContactsTable(filters, sort);
@@ -191,9 +194,11 @@ export const DatabaseView = () => {
       { key: "observations", label: "Observações", kind: "text", source: "native" },
       { key: "created_at", label: "Criado em", kind: "date", source: "native", editable: false },
     ];
-    const enrichment = visibleContactFields.map((f) => columnFromField(f, "personal_custom_data", "key"));
+    const enrichment = visibleContactFields.map((f) =>
+      columnFromField(f, "personal_custom_data", "key", { nameOf }),
+    );
     return [...native, ...enrichment];
-  }, [openDeal, visibleContactFields]);
+  }, [openDeal, visibleContactFields, nameOf]);
 
   // ---- Rows -----------------------------------------------------------------
   const gridRows: GridRow[] = useMemo(
