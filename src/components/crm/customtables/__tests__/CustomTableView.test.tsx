@@ -30,6 +30,7 @@ vi.mock("@/hooks/useCustomTables", async (importOriginal) => ({
 
 const mutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false };
 const refetch = vi.fn();
+const loadMore = vi.fn();
 let recordsState: { error: Error | null; isLoading: boolean; records?: unknown[] } = { error: null, isLoading: false };
 vi.mock("@/hooks/useCustomTableRecords", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/useCustomTableRecords")>()),
@@ -39,9 +40,9 @@ vi.mock("@/hooks/useCustomTableRecords", async (importOriginal) => ({
     isLoading: recordsState.isLoading,
     error: recordsState.error,
     refetch,
-    hasMore: false,
+    hasMore: (recordsState.records?.length ?? 0) > 0,
     loadingMore: false,
-    loadMore: vi.fn(),
+    loadMore,
     createRecord: mutation,
     updateRecord: mutation,
     deleteRecords: mutation,
@@ -105,6 +106,31 @@ describe("CustomTableView", () => {
     expect(screen.getAllByText("1 registro").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed page does not retry by itself when the sentinel is visible", () => {
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+        observe() {
+          this.cb([{ isIntersecting: true }]);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    recordsState = {
+      error: new Error("boom"),
+      isLoading: false,
+      records: [
+        { id: "r-1", table_id: "t-1", equipe_id: "e-1", data: {}, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+      ],
+    };
+    loadMore.mockClear();
+    renderView();
+    expect(loadMore).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("without an error an empty table says so", () => {

@@ -38,10 +38,10 @@ const ROUTE_LABELS: Record<string, string> = {
   "/pipeline": "Pipeline",
   "/notificacoes": "Notificações",
   "/suporte": "Suporte",
-  "/docs": "Documentação",
+  "/docs": "Central de Ajuda",
   "/clube": "Clube",
   "/toolkit": "Toolkit",
-  "/admin": "Administração",
+  "/admin": "Admin",
 };
 
 /** Trilha "grupo › item" do local atual, a partir do mesmo modelo do menu. */

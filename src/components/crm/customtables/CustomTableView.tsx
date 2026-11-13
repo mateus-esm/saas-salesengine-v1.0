@@ -418,7 +418,8 @@ export function CustomTableView({ table, onBack }: CustomTableViewProps) {
             onRowOpen={(id) => setOpenRecord(recordById.get(id) ?? null)}
             renderMobileRow={renderMobileRow}
             mobileEmptyLabel={serverSearch ? "Nenhum registro com essa busca." : "Nenhum registro ainda."}
-            hasMore={hasMore}
+            // A failed page must not retry by itself while the sentinel is visible.
+            hasMore={hasMore && !error}
             loadingMore={loadingMore}
             onEndReached={loadMore}
           />

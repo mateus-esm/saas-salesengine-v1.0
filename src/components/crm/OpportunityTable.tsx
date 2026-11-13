@@ -502,7 +502,8 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
               const r = rowById.get(id);
               if (r) setSelectedOpp(r);
             }}
-            hasMore={!!query.hasNextPage}
+            // A failed page must not retry by itself while the sentinel is visible.
+            hasMore={!!query.hasNextPage && !query.isError}
             loadingMore={query.isFetchingNextPage}
             onEndReached={() => {
               if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();

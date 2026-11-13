@@ -332,7 +332,7 @@ function DesktopGrid({
   };
 
   return (
-    <div ref={rootRef} className="relative h-full min-h-0 overflow-auto rounded-lg border border-border bg-card">
+    <div ref={rootRef} className="relative h-full min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-card">
       <table className="min-w-full table-fixed border-separate border-spacing-0" style={{ width: tableWidth }}>
         <colgroup>
           {selectable && <col style={{ width: CHECKBOX_W }} />}

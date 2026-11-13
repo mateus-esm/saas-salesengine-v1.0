@@ -62,15 +62,16 @@ const contact: ContactRow = {
 
 let tableState = { isError: false, rows: [contact] as unknown[] };
 const refetchTable = vi.fn();
+const fetchNextPageSpy = vi.fn();
 vi.mock("@/hooks/useContactsTable", () => ({
   useContactsTable: () => ({
     data: { pages: [tableState.rows], pageParams: [0] },
     isLoading: false,
     isError: tableState.isError,
-    hasNextPage: false,
+    hasNextPage: true,
     isFetchingNextPage: false,
     refetch: refetchTable,
-    fetchNextPage: vi.fn(),
+    fetchNextPage: fetchNextPageSpy,
   }),
   useContactsCount: () => ({ data: 1, isLoading: false }),
   useContactsRealtime: () => {},
@@ -117,13 +118,40 @@ describe("DatabaseView", () => {
 
   it("a failed refetch with rows keeps the grid and shows a notice", () => {
     tableState = { isError: true, rows: [contact] };
-    refetchTable.mockClear();
+    fetchNextPageSpy.mockClear();
     renderView();
     expect(screen.getByTestId("cell-sdr")).toBeTruthy();
     expect(screen.getByText("Não foi possível carregar mais registros.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
-    expect(refetchTable).toHaveBeenCalledTimes(1);
+    // Another page is pending, so the retry asks for it.
+    expect(fetchNextPageSpy).toHaveBeenCalledTimes(1);
     tableState = { isError: false, rows: [contact] };
+  });
+
+
+  // Every observed sentinel reports itself visible at once.
+  function stubVisibleSentinel() {
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+        observe() {
+          this.cb([{ isIntersecting: true }]);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+  }
+
+  it("a failed page does not retry by itself when the sentinel is visible", () => {
+    stubVisibleSentinel();
+    tableState = { isError: true, rows: [contact] };
+    fetchNextPageSpy.mockClear();
+    renderView();
+    expect(fetchNextPageSpy).not.toHaveBeenCalled();
+    tableState = { isError: false, rows: [contact] };
+    vi.unstubAllGlobals();
   });
 
   it("a failed load without rows shows the error block", () => {

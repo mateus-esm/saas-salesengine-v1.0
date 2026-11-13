@@ -404,7 +404,8 @@ export const DatabaseView = () => {
             onRowOpen={(id) => setOpenLeadId(id)}
             renderMobileRow={renderMobileRow}
             mobileEmptyLabel="Nenhum contato com esses filtros."
-            hasMore={!!query.hasNextPage}
+            // A failed page must not retry by itself while the sentinel is visible.
+            hasMore={!!query.hasNextPage && !query.isError}
             loadingMore={query.isFetchingNextPage}
             onEndReached={() => {
               if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();

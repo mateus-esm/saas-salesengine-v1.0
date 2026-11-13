@@ -43,7 +43,7 @@ vi.mock("@/hooks/useOppTable", () => ({
     data: { pages: [tableState.rows], pageParams: [0] },
     isLoading: false,
     isError: tableState.isError,
-    hasNextPage: false,
+    hasNextPage: true,
     isFetchingNextPage: false,
     refetch,
     fetchNextPage,
@@ -93,12 +93,31 @@ function renderView() {
 describe("OpportunityTable", () => {
   it("a failed refetch with rows keeps the grid and shows a notice", () => {
     tableState = { isError: true, rows: [deal] };
-    refetch.mockClear();
+    fetchNextPage.mockClear();
     renderView();
     expect(screen.getAllByText("Maria Souza").length).toBeGreaterThan(0);
     expect(screen.getByText("Não foi possível carregar mais registros.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
-    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed page does not retry by itself when the sentinel is visible", () => {
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+        observe() {
+          this.cb([{ isIntersecting: true }]);
+        }
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    tableState = { isError: true, rows: [deal] };
+    fetchNextPage.mockClear();
+    renderView();
+    expect(fetchNextPage).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("a failed load without rows shows the error block", () => {
