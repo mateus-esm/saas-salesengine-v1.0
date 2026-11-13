@@ -61,6 +61,13 @@ describe("AppShellSidebar", () => {
     expect(screen.getByText("CRM")).toBeTruthy();
   });
 
+  it("o rodapé usa o ano corrente", () => {
+    renderAt("/home");
+    expect(
+      screen.getByText(`© ${new Date().getFullYear()} Solo Ventures. Todos os direitos reservados.`),
+    ).toBeTruthy();
+  });
+
   it("não renderiza Webhooks quando a permissão está desligada", () => {
     auth.value = {
       ...auth.value,

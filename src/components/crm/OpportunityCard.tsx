@@ -172,7 +172,7 @@ export const OpportunityCard = ({
             key: "copilot",
             label: "Sugestão do Copilot",
             title: "O Copilot tem uma sugestão esperando aprovação neste negócio.",
-            className: "border-primary/30 bg-primary/10 text-primary",
+            className: "border-primary bg-primary/10 text-foreground",
           },
         ]
       : []),

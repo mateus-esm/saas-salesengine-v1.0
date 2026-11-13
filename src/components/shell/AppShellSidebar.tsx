@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TenantLogo } from "@/components/TenantLogo";
-import { useTenant } from "@/contexts/TenantContext";
 import { isNavItemActive, type NavItem } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { useNavGroups } from "./useNavGroups";
@@ -125,7 +124,6 @@ function NavEntry({ item, loc }: { item: NavItem; loc: Loc }) {
 export function AppShellSidebar() {
   const loc = useLocation();
   const groups = useNavGroups();
-  const { tenant } = useTenant();
 
   return (
     <Sidebar collapsible="icon" aria-label="Navegação principal">
@@ -150,7 +148,7 @@ export function AppShellSidebar() {
       </SidebarContent>
       <SidebarFooter className="group-data-[collapsible=icon]:hidden">
         <p className="px-2 text-xs text-muted-foreground">
-          © 2025 Solo Ventures. {tenant.name} é uma plataforma proprietária.
+          © {new Date().getFullYear()} Solo Ventures. Todos os direitos reservados.
         </p>
       </SidebarFooter>
     </Sidebar>

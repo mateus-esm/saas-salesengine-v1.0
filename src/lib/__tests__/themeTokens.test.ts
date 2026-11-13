@@ -34,6 +34,17 @@ for (const [name, t] of Object.entries(themes)) {
     it("primary-foreground on primary >= 4.5", () => {
       expect(contrastRatio(t["primary-foreground"], t.primary)).toBeGreaterThanOrEqual(4.5);
     });
+    it("destructive-foreground on destructive >= 4.5", () => {
+      expect(contrastRatio(t["destructive-foreground"], t.destructive)).toBeGreaterThanOrEqual(4.5);
+    });
+    it("sidebar-primary-foreground on sidebar-primary >= 4.5", () => {
+      expect(
+        contrastRatio(t["sidebar-primary-foreground"], t["sidebar-primary"]),
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+    it("sidebar-border matches border", () => {
+      expect(t["sidebar-border"]).toBe(t.border);
+    });
     it("input on card >= 3", () => {
       expect(contrastRatio(t.input, t.card)).toBeGreaterThanOrEqual(3);
     });
