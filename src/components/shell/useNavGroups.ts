@@ -33,6 +33,17 @@ export function useNavGroups(): NavGroup[] {
   );
 }
 
+/** Rotas que existem mas não estão no menu: a trilha ainda diz onde o usuário está. */
+const ROUTE_LABELS: Record<string, string> = {
+  "/pipeline": "Pipeline",
+  "/notificacoes": "Notificações",
+  "/suporte": "Suporte",
+  "/docs": "Documentação",
+  "/clube": "Clube",
+  "/toolkit": "Toolkit",
+  "/admin": "Administração",
+};
+
 /** Trilha "grupo › item" do local atual, a partir do mesmo modelo do menu. */
 export function breadcrumbFor(groups: NavGroup[], loc: { pathname: string; search: string }): string[] {
   for (const g of groups) {
@@ -43,5 +54,8 @@ export function breadcrumbFor(groups: NavGroup[], loc: { pathname: string; searc
       return child ? [...trail, child.title] : trail;
     }
   }
-  return [];
+  const fallback = Object.entries(ROUTE_LABELS).find(
+    ([path]) => loc.pathname === path || loc.pathname.startsWith(`${path}/`),
+  );
+  return fallback ? [fallback[1]] : [];
 }
