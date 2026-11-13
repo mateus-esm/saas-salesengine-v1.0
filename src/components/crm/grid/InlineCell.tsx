@@ -8,7 +8,7 @@
 // Success is silent (the cell shows the new value); a failed save shows on the
 // cell itself, and the value goes back.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -473,7 +473,20 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cellRef = useRef<HTMLDivElement | null>(null);
   const fromRow = !!column.relation?.resolvedFromRow;
+
+  // Sprint 15 · T9 — edit mode ends on Escape or a click outside the cell (the
+  // picker, when open, closes first). It used to end only on a pick: after a
+  // removal the cell stayed in edit mode for good.
+  useEffect(() => {
+    if (!editing || pickerOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (cellRef.current && !cellRef.current.contains(e.target as Node)) setEditing(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [editing, pickerOpen]);
 
   // Only relation columns that do not bring their chips in the row still query.
   const context =
@@ -508,8 +521,15 @@ function RelationCell({ row, column, value, onCommit, equipeId, fromTable }: Inl
         "flex h-10 w-full min-w-0 items-center gap-1 overflow-hidden px-2 text-sm",
         error && "ring-1 ring-inset ring-destructive",
       )}
+      ref={cellRef}
       title={error ?? undefined}
       onDoubleClick={() => canEdit && setEditing(true)}
+      onKeyDown={(e) => {
+        if (editing && e.key === "Escape") {
+          e.preventDefault();
+          setEditing(false);
+        }
+      }}
     >
       {!fromRow && loading ? (
         <span className="text-xs text-muted-foreground">Carregando...</span>

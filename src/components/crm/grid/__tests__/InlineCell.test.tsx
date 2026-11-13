@@ -278,4 +278,19 @@ describe("InlineCell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Escolher Empresa Y" }));
     expect(onCommit).toHaveBeenCalledWith({ toId: "c-2", label: "Empresa Y" });
   });
+
+  it("a relation cell leaves edit mode on Escape and on a click outside", () => {
+    renderRelation(vi.fn(async () => {}));
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Vincular..." }), { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+
+    fireEvent.doubleClick(screen.getByText("Empresa X"));
+    fireEvent.click(screen.getByRole("button", { name: "Remover Empresa X" }));
+    // Still editing after a removal: the user may remove more.
+    expect(screen.getByRole("button", { name: "Vincular..." })).toBeTruthy();
+    fireEvent.mouseDown(screen.getByRole("button", { name: "fora" }));
+    expect(screen.queryByRole("button", { name: "Vincular..." })).toBeNull();
+  });
 });
