@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolveActiveOpportunity } from "../_shared/opportunities.ts"
 import { entryLine, entryOfKind, messageTouchPayload, recordTouch } from "../_shared/attribution.ts"
-import { resolveLeadIdentity } from "../_shared/lead-identity.ts"
+import { providerContactName, resolveLeadIdentity } from "../_shared/lead-identity.ts"
 import { insertConversationOnce, updateConversationOnce } from "../_shared/conversation-once.ts"
 import { classifyInbound, promotionPatch } from "../_shared/inbound-filter.ts"
 import { shouldApplyName } from "../_shared/lead-name-policy.ts"
@@ -42,7 +42,19 @@ serve(async (req) => {
     // phone from a Meta LID. resolveLeadIdentity() is the decision point: it
     // refuses to persist a technical id as name/phone, while keeping the legacy
     // phone_normalized key so existing rows are still found (no duplicates).
-    const rawSenderName: string = payload.contactName || payload.pushName || ''
+    // SE-LID-002 — the single predicate that says "the team sent this". It is
+    // computed here, above the name decision, because the name decision needs it
+    // too; senderType (step 5) reads the same variable so the two cannot drift.
+    const isAgentMessage = payload.role === 'assistant' || payload.fromMe === true
+    // SE-LID-002 — on an outbound message `pushName` is the team's own account:
+    // it must not name the contact — not on creation (resolveLeadIdentity then
+    // labels the lead "Lead <número>" instead of "Desconhecido"), not in the
+    // inbound filter, and not in the name fill of an existing lead (step 9c).
+    const rawSenderName: string = providerContactName({
+      contactName: payload.contactName,
+      pushName: payload.pushName,
+      outbound: isAgentMessage,
+    })
     const identity = resolveLeadIdentity({
       contactName: rawSenderName,
       contactPhone: senderPhone,
@@ -128,7 +140,7 @@ serve(async (req) => {
     }
 
     let senderType = 'customer'
-    if (payload.role === 'assistant' || payload.fromMe === true) {
+    if (isAgentMessage) {
       senderType = 'agent'
       console.log(`[Webhook] Mensagem do agente/sistema (role: ${payload.role}, fromMe: ${payload.fromMe})`)
     } else {
@@ -195,6 +207,11 @@ serve(async (req) => {
     // FOUND here and reused instead of turning into a second lead for the same
     // contact. New LID leads are stored without a phone key and are found by
     // the gpt_maker_chat_id lookup below.
+    // SE-LID-002 — this lookup is NOT conditioned on senderType: a message the
+    // TEAM sends to a number that is already a lead is found here and reused, so
+    // it never reaches the "Lead <número>" label of step 9 (that label only shows
+    // up for a genuinely new contact). phoneNorm comes from _shared/phone.ts via
+    // resolveLeadIdentity, so inbound and outbound produce the same key.
     let lead: { id: string; gpt_maker_chat_id: string | null; phone: string | null; name?: string | null; name_locked?: boolean | null; lead_type?: string | null; needs_review?: boolean | null } | null = null
 
     if (phoneNorm) {
@@ -243,6 +260,12 @@ serve(async (req) => {
     let leadIsNew = false
     if (!lead) {
       console.log('[Webhook] Lead não encontrado, criando novo...')
+      // SE-LID-002 — deliberately NOT gated on senderType: messages.lead_id is
+      // NOT NULL, so refusing the lead would lose the outbound message. Only the
+      // label was wrong, and that is decided in resolveLeadIdentity().
+      if (senderType === 'agent') {
+        console.log('[Webhook] ... lead criado por mensagem da equipe (outbound) — rótulo:', identity.name)
+      }
 
       const finalName = identity.name
 
