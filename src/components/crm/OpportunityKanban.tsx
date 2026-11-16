@@ -327,7 +327,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
         </div>
       )}
 
-      <div className="flex-1 overflow-x-auto p-2 sm:p-4 bg-muted/30">
+      {/* min-h: este bloco rola (overflow), então o flex pode encolhê-lo a 0 px.
+          Em tela baixa o Placar aberto + filtros comiam toda a altura e os
+          cards sumiam assim que o Placar carregava. Com piso, quem rola é a página. */}
+      <div className="flex-1 min-h-[420px] overflow-x-auto p-2 sm:p-4 bg-muted/30">
         {isMobile ? (
           <div className="flex justify-center h-full min-h-[400px]">
             <div className="w-full max-w-md">
