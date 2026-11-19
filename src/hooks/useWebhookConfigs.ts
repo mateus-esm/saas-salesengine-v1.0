@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { WebhookConfig, FieldMapping, WebhookAction, DEFAULT_LEAD_CREATED_PAYLOAD } from "@/types/webhook";
 
 interface CreateWebhookData {
+  outreach_recipients?: WebhookConfig["outreach_recipients"];
   id?: string;
   name: string;
   url: string;
@@ -19,6 +20,7 @@ interface CreateWebhookData {
 }
 
 interface UpdateWebhookData {
+  outreach_recipients?: WebhookConfig["outreach_recipients"];
   id: string;
   name?: string;
   url?: string;
@@ -71,6 +73,7 @@ export const useWebhookConfigs = () => {
           url: configData.url,
           trigger_event: configData.trigger_event,
           headers: configData.headers || {},
+          ...(configData.outreach_recipients ? { outreach_recipients: configData.outreach_recipients } : {}),
           payload_template: configData.payload_template || DEFAULT_LEAD_CREATED_PAYLOAD,
           active: configData.active ?? true,
           inbound_function: configData.inbound_function ?? null,

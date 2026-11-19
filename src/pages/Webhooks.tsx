@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WebhookConfigModal } from "@/components/webhooks/WebhookConfigModal";
 import { WebhookLogsPanel } from "@/components/webhooks/WebhookLogsPanel";
 import { AutomationsSection } from "@/components/webhooks/AutomationsSection";
+import { WorkflowList } from "@/components/webhooks/WorkflowList";
 import { WebhookOriginBadge, WebhookSamplePayload } from "@/components/webhooks/WebhookSamplePayload";
 import { useButtonWebhooks, useTeamStages } from "@/hooks/useAutomations";
 import { webhookOrigin } from "@/lib/webhookCatalog";
@@ -77,7 +78,7 @@ const Webhooks = () => {
 
   // Separate inbound configs from outbound configs
   const inboundConfigs = configs.filter((c) => c.inbound_function === "receive_lead");
-  const outboundConfigs = configs.filter((c) => !c.inbound_function);
+  const outboundConfigs = configs.filter((c) => !c.inbound_function && !c.trigger_event.startsWith("outreach_event:"));
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -369,6 +370,7 @@ const Webhooks = () => {
 
         {/* Automations */}
         <TabsContent value="automations">
+          <WorkflowList />
           <AutomationsSection onEditWebhook={handleEditConfig} />
         </TabsContent>
 
