@@ -21,6 +21,7 @@ export interface WebhookAction {
 }
 
 export interface WebhookConfig {
+  outreach_recipients?: { team: boolean; lead: boolean; phones: string[] } | null;
   id: string;
   equipe_id: string;
   name: string;

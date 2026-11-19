@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendViaSolo } from "../_shared/solo-sender.ts";
 
 const jsonHeaders = { "Content-Type": "application/json" };
 const uuidPattern =
@@ -64,7 +65,7 @@ if (import.meta.main) {
 
       const { data: config, error: configError } = await supabase
         .from("webhook_configs")
-        .select("url, headers")
+        .select("url, headers, trigger_event, active")
         .eq("id", deliveryLog.webhook_config_id)
         .eq("equipe_id", deliveryLog.equipe_id)
         .is("inbound_function", null)
@@ -73,6 +74,31 @@ if (import.meta.main) {
       if (configError) throw configError;
       if (!config) {
         return await finishWithError("Webhook configuration not found");
+      }
+
+      if (config.trigger_event === `outreach_event:${deliveryLog.webhook_config_id}`) {
+        if (!config.active) return await finishWithError("Evento desativado");
+        const prefix = "rev://whatsapp/";
+        const instanceId = String(config.url).slice(prefix.length);
+        if (!String(config.url).startsWith(prefix) || !uuidPattern.test(instanceId)) {
+          return await finishWithError("Instância inválida");
+        }
+        const { data: instance, error } = await supabase.from("wpp_instances")
+          .select("instance_name,status").eq("id", instanceId)
+          .eq("equipe_id", deliveryLog.equipe_id).maybeSingle();
+        if (error || instance?.status !== "connected") return await finishWithError("Instância indisponível");
+        const { number, text } = deliveryLog.payload ?? {};
+        if (!/^\d{10,15}$/.test(String(number)) || typeof text !== "string" || !text.trim()) {
+          return await finishWithError("Destinatário ou mensagem inválidos");
+        }
+        const delivery = await sendViaSolo({ supabase, equipeId: deliveryLog.equipe_id,
+          instanceName: instance.instance_name, phone: String(number), content: text });
+        if (!delivery.ok) return await finishWithError(delivery.error ?? "Falha no envio");
+        const { error: logError } = await supabase.from("webhook_logs")
+          .update({ response_status: 200, response_body: JSON.stringify({ message_id: delivery.providerMessageId }) })
+          .eq("id", deliveryLog.id);
+        if (logError) throw logError;
+        return jsonResponse({ success: true });
       }
 
       let destination: URL;

@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { MessageTemplateField } from "@/components/outreach/MessageTemplateField";
+import { OutreachEvents } from "@/components/outreach/OutreachEvents";
 import { supabase } from "@/integrations/supabase/client";
 import { templateProblems } from "@/lib/message-variables";
 import {
@@ -227,6 +228,7 @@ export default function OutreachSettings() {
         <p className="mt-1 text-muted-foreground">Configure a regra mínima: lead entrou pela porta escolhida → envie a sequência pelo canal escolhido.</p>
       </div>
 
+      {query.data.solo_instances.length > 0 && <OutreachEvents instances={query.data.solo_instances} />}
       <Card>
         <CardHeader>
           <CardTitle>Canal e freios de envio</CardTitle>
