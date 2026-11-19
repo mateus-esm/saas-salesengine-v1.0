@@ -9,6 +9,8 @@ interface Profile {
   equipe_id: string | null;
   chat_link_base: string | null;
   telefone: string | null;
+  photo?: string | null;
+  contact_email?: string | null;
   cpf: string | null;
   cargo: string | null;
   role?: string | null;
@@ -35,6 +37,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   refreshEquipe: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -198,6 +201,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signIn,
         signOut,
         refreshEquipe,
+        refreshProfile: async () => {
+          if (!user) return;
+          const {data} = await supabase.from("profiles").select("*").eq("user_id",user.id).maybeSingle();
+          if (data && resolvedUserId.current === user.id) setProfile(data as Profile);
+        },
       }}
     >
       {children}
