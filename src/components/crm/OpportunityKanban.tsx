@@ -52,7 +52,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { StagePicker } from "./mobile/StagePicker";
 import { MoveToStageSheet } from "./mobile/MoveToStageSheet";
 import { pickInitialStage } from "@/lib/mobileBoard";
-import { statusForStage } from "@/lib/outcome";
+import { statusForStage, wonStageOf } from "@/lib/outcome";
 
 interface OpportunityKanbanProps {
   pipelineId: string;
@@ -234,6 +234,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
     moveCardToStage(card, targetStageId);
   };
 
+  // "Ganho" na face do card: o mesmo motor de movimento (abre o checklist do fechamento).
+  const wonStage = wonStageOf(orderedStages);
+  const winCard = wonStage ? (card: BoardCard) => moveCardToStage(card, wonStage.id) : undefined;
+
   const handleMobileMove = (card: BoardCard, targetStageId: string) => {
     moveCardToStage(card, targetStageId);
   };
@@ -349,6 +353,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 onOpenContact={(leadId) => setContactLeadId(leadId)}
                 nameOf={nameOf}
                 onMoveCard={setMoveSheetCard}
+                onWinCard={winCard}
                 fill
               />
             </div>
@@ -378,6 +383,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                   nameOf={nameOf}
                   isCollapsed={isCollapsed(stage.id)}
                   onToggleCollapse={() => toggleStage(stage.id)}
+                  onWinCard={winCard}
                 />
               ))}
             </div>

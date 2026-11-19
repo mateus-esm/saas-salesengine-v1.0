@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowRightLeft, CalendarClock, Clock, MessageCircle, MessageSquare, MessageSquarePlus, MessageSquareText } from "lucide-react";
+import { ArrowRightLeft, CalendarClock, Clock, MessageCircle, MessageSquare, MessageSquarePlus, MessageSquareText, Trophy } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,8 @@ interface OpportunityCardProps {
   onOpenContact?: (leadId: string) => void;
   /** Touch screens: moving is "Mover para…", not dragging. */
   onMoveRequest?: () => void;
+  /** "Ganho" on the card face: moves to the won stage (opens the closing checklist). */
+  onWin?: () => void;
   isDragOverlay?: boolean;
   /** Member names for "Usuário" fields and the owner (loaded once by the Kanban). */
   nameOf?: (userId: string) => string | null;
@@ -108,6 +110,7 @@ export const OpportunityCard = ({
   onClick,
   onOpenContact,
   onMoveRequest,
+  onWin,
   isDragOverlay,
   nameOf,
 }: OpportunityCardProps) => {
@@ -351,6 +354,18 @@ export const OpportunityCard = ({
             </a>
           )}
           <span className="ml-auto flex items-center gap-1">
+            {onWin && card.status === "open" && (
+              <button
+                type="button"
+                onClick={onWin}
+                className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400"
+                title="Fechar venda: mover para Ganho"
+                aria-label="Ganho"
+              >
+                <Trophy className="h-3.5 w-3.5" />
+                Ganho
+              </button>
+            )}
             {onMoveRequest && (
               <button
                 type="button"

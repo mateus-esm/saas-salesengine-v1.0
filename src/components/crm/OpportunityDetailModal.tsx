@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote, CalendarClock } from "lucide-react";
+import { Trophy, Trash2, MessageCircle, MessageSquareText, Mail, Sparkles, ChevronDown, Link2, Calendar as CalendarIcon, Plus, Loader2, History, Bot, Contact, CheckSquare, StickyNote, CalendarClock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -56,7 +56,7 @@ import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { useMoveToStage } from "@/hooks/useMoveToStage";
 import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
-import { stageForStatus, statusForStage } from "@/lib/outcome";
+import { stageForStatus, statusForStage, wonStageOf } from "@/lib/outcome";
 import { normalizeNatures } from "@/lib/natures";
 import { BRAND } from "@/config/brand";
 import { UserPicker } from "./fields/UserPicker";
@@ -69,6 +69,8 @@ import { OriginBlock } from "./attribution/OriginBlock";
 import { DealCopilotPanel } from "./copilot/DealCopilotPanel";
 import { SyncButton } from "./copilot/SyncButton";
 import { DealFollowupsSection } from "./followups/DealFollowupsSection";
+import { DealTimelineSection } from "./deal/DealTimeline";
+import type { MoveExtra } from "@/hooks/useMoveToStage";
 
 interface OpportunityDetailModalProps {
   open: boolean;
@@ -175,7 +177,10 @@ export const OpportunityDetailModal = ({
 
   if (!opportunity) return null;
 
-  const handleSave = () => {
+  // O "Ganho" do funil (a primeira etapa de ganho), para o atalho do rodapé.
+  const wonStage = wonStageOf(stages);
+
+  const handleSave = (targetStageId: string = stageId) => {
     const errors = validateCustomData(schema, customData);
     if (errors.length > 0) {
       toast.error(errors[0].message);
@@ -185,13 +190,14 @@ export const OpportunityDetailModal = ({
     // close); the form only keeps stage and outcome in agreement.
     // Sprint Suporte 1 · #12 — a new lost stage asks for the reason first; the
     // reason is saved in this same update, and cancelling keeps the modal open.
-    const save = (lostReason: string | null) => {
+    // Ganho: o checklist já gravou o valor real — o formulário não o sobrescreve.
+    const save = (lostReason: string | null, extra?: MoveExtra) => {
       const saved = updateOpportunity.mutateAsync({
         id: opportunity.id,
-        stage_id: stageId,
-        status,
+        stage_id: targetStageId,
+        status: statusForStage(stages, targetStageId, status),
         ...(lostReason ? { lost_reason: lostReason } : {}),
-        ...(hasItems ? {} : { value: value === "" ? null : Number(value) }),
+        ...(hasItems || extra?.won ? {} : { value: value === "" ? null : Number(value) }),
         custom_data: customData,
       });
       onClose();
@@ -199,7 +205,7 @@ export const OpportunityDetailModal = ({
     };
     const plan = requestMove({
       fromStageId: opportunity.stage_id,
-      toStageId: stageId,
+      toStageId: targetStageId,
       leadName: lead?.name,
       opportunityIds: [opportunity.id],
       ownerId: opportunity.owner_id ?? null,
@@ -380,6 +386,11 @@ export const OpportunityDetailModal = ({
                       <DynamicFieldRenderer schema={schema} value={customData} onChange={setCustomData} />
                     </div>
                   )}
+                </section>
+
+                {/* Linha do tempo — marcos do funil e tudo que aconteceu, com quem e quando */}
+                <section className="border-t border-border/60 pt-4">
+                  <DealTimelineSection opportunityId={opportunity.id} open={open} />
                 </section>
 
                 {/* Notas — the working timeline, front and center */}
@@ -579,9 +590,21 @@ export const OpportunityDetailModal = ({
             <Button variant="outline" size="sm" onClick={onClose} className="h-8">
               Cancelar
             </Button>
+            {wonStage && opportunity.status === "open" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleSave(wonStage.id)}
+                disabled={updateOpportunity.isPending}
+                className="h-8 border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400"
+              >
+                <Trophy className="h-3.5 w-3.5 mr-1.5" />
+                Ganho
+              </Button>
+            )}
             <Button
               size="sm"
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={updateOpportunity.isPending}
               className="h-8 bg-gradient-to-r from-solo-orange to-solo-yellow hover:from-solo-orange/90 hover:to-solo-yellow/90 text-white border-0 shadow-sm"
             >

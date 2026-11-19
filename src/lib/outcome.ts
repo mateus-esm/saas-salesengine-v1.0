@@ -16,6 +16,11 @@ export interface StageLike {
 const firstOfType = (stages: StageLike[], type: string) =>
   [...stages].filter((s) => s.stage_type === type).sort((a, b) => a.position - b.position)[0];
 
+/** The pipeline's Ganho: its first won stage (the target of the card's "Ganho" button). */
+export function wonStageOf<S extends StageLike>(stages: S[]): S | undefined {
+  return firstOfType(stages, "won") as S | undefined;
+}
+
 /** The status a deal takes in this stage (given the status it has now). */
 export function statusForStage(stages: StageLike[], stageId: string, current: Outcome): Outcome {
   const type = stages.find((s) => s.id === stageId)?.stage_type;

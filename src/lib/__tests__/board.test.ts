@@ -202,7 +202,7 @@ describe("needsLossReason / planStageMove (Sprint Suporte 1 · #12)", () => {
 
   it("plans noop / direct / ask", () => {
     expect(planStageMove(stages, withReasons, "s-open", "s-open")).toBe("noop");
-    expect(planStageMove(stages, withReasons, "s-open", "s-won")).toBe("direct");
+    expect(planStageMove(stages, withReasons, "s-open", "s-won")).toBe("ask-won");
     expect(planStageMove(stages, withReasons, "s-open", "s-lost")).toBe("ask");
     expect(planStageMove(stages, { loss_reasons: [] }, "s-open", "s-lost")).toBe("direct");
     expect(planStageMove(stages, withReasons, "s-open", "missing")).toBe("noop");
