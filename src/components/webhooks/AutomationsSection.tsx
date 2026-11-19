@@ -17,6 +17,13 @@ const ACTION_LABELS: Record<AutomationAction["type"], string> = {
   update_field: "Atualizar campo",
   set_responsible: "Atribuir responsável",
   call_webhook: "Chamar webhook",
+  notify_team: "Notificar equipe no Rev",
+};
+
+const OUTREACH_EVENTS = {
+  outreach_sent: "Outreach confirmou o envio",
+  outreach_failed: "O envio pelo Outreach falhou",
+  outreach_unknown: "Outreach ficou sem confirmação de envio",
 };
 
 /** Uma frase para a regra: "Ao entrar na etapa X → Mover para etapa Y". */
@@ -25,13 +32,14 @@ function describe(a: CrmAutomation, stageName: (id?: string) => string, webhookN
     ? `Ao entrar na etapa ${stageName(a.trigger.stage_id)}`
     : a.trigger.event === "webhook_received"
       ? `Ao receber o webhook ${webhookName(a.trigger.webhook_id)}`
-      : "Ao clicar no botão";
+      : a.trigger.event === "button_clicked" ? "Ao clicar no botão" : OUTREACH_EVENTS[a.trigger.event];
   const p = a.action.params;
   const what = {
     move_stage: `${ACTION_LABELS.move_stage} ${stageName(p.stage_id as string)}`,
     update_field: `${ACTION_LABELS.update_field} ${String(p.field ?? "")} = ${p.from_payload ? `payload.${p.from_payload}` : JSON.stringify(p.value)}`,
     set_responsible: `${ACTION_LABELS.set_responsible} ${memberName(p.user_id as string)}`,
     call_webhook: `${ACTION_LABELS.call_webhook} ${webhookName(p.webhook_id as string)}`,
+    notify_team: `${ACTION_LABELS.notify_team} · ${String(p.message ?? "")}`,
   }[a.action.type];
   return `${when} → ${what}`;
 }
@@ -54,6 +62,7 @@ export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: 
   const [fieldValue, setFieldValue] = useState("");
   const [user, setUser] = useState("");
   const [callWebhook, setCallWebhook] = useState("");
+  const [message, setMessage] = useState("");
 
   const stageName = (id?: string) => {
     const s = stages.find((x) => x.id === id);
@@ -72,11 +81,12 @@ export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: 
 
   const trigger: AutomationTrigger | null =
     event === "stage_entered" ? (triggerStage ? { event, stage_id: triggerStage } : null)
-      : triggerWebhook ? { event, webhook_id: triggerWebhook } : null;
+      : event === "webhook_received" ? (triggerWebhook ? { event, webhook_id: triggerWebhook } : null) : { event };
   const action: AutomationAction | null =
     type === "move_stage" ? (targetStage ? { type, params: { stage_id: targetStage, ...(lostReason ? { lost_reason: lostReason } : {}) } } : null)
       : type === "update_field" ? (field.trim() ? { type, params: { field: field.trim(), value: fieldValue } } : null)
         : type === "set_responsible" ? (user ? { type, params: { user_id: user } } : null)
+          : type === "notify_team" ? (message.trim() ? { type, params: { message: message.trim() } } : null)
           : callWebhook ? { type, params: { webhook_id: callWebhook } } : null;
   const target = stages.find((s) => s.id === targetStage);
   const needsReason = type === "move_stage" && lossReasonMissing(target, lostReason);
@@ -86,6 +96,7 @@ export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: 
     if (!trigger || !action) return;
     await create.mutateAsync({ name: name.trim(), trigger, action });
     setAdding(false);
+    setMessage("");
     setName(""); setTriggerStage(""); setTriggerWebhook(""); setTargetStage(""); setField(""); setFieldValue(""); setUser(""); setCallWebhook("");
   };
 
@@ -102,7 +113,7 @@ export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: 
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
         <div>
           <CardTitle>Automações</CardTitle>
-          <CardDescription>Quando algo acontece, o sistema age: mover a etapa, atualizar um campo, atribuir o responsável ou chamar um webhook.</CardDescription>
+          <CardDescription>Conecte eventos do CRM e do Outreach a ações no negócio, avisos para a equipe e webhooks.</CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding((v) => !v)}><Plus className="h-4 w-4 mr-1" />Nova automação</Button>
       </CardHeader>
@@ -118,15 +129,16 @@ export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: 
                   <SelectContent>
                     <SelectItem value="stage_entered">O negócio entrar na etapa</SelectItem>
                     <SelectItem value="webhook_received">Chegar um webhook de entrada</SelectItem>
+                    {Object.entries(OUTREACH_EVENTS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
+              {(event === "stage_entered" || event === "webhook_received") && <div className="space-y-1">
                 <Label>{event === "stage_entered" ? "Etapa" : "Webhook de entrada"}</Label>
                 {event === "stage_entered"
                   ? pick(triggerStage, setTriggerStage, stageOptions, "Escolha a etapa")
                   : pick(triggerWebhook, setTriggerWebhook, inbound.map((c) => ({ id: c.id, label: c.name })), "Escolha o webhook")}
-              </div>
+              </div>}
               <div className="space-y-1">
                 <Label>Então</Label>
                 <Select value={type} onValueChange={(v) => setType(v as AutomationAction["type"])}>
@@ -143,6 +155,7 @@ export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: 
                   <Input value={field} onChange={(e) => setField(e.target.value)} placeholder="key do campo" />
                   <Input value={fieldValue} onChange={(e) => setFieldValue(e.target.value)} placeholder="valor" /></div></>)}
                 {type === "set_responsible" && (<><Label>Responsável</Label>{pick(user, setUser, members.map((m) => ({ id: m.id, label: m.name })), "Escolha a pessoa")}</>)}
+                {type === "notify_team" && (<><Label htmlFor="automation-message">Mensagem para a equipe</Label><Input id="automation-message" value={message} onChange={(e) => setMessage(e.target.value)} /></>)}
                 {type === "call_webhook" && (<><Label>Webhook de saída</Label>{pick(callWebhook, setCallWebhook, linkable.map((c) => ({ id: c.id, label: c.name })), linkable.length ? "Escolha o webhook" : "Nenhum webhook de etapa disponível")}</>)}
               </div>
             </div>

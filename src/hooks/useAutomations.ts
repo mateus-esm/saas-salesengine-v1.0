@@ -8,13 +8,13 @@ import type { StageLink } from "@/lib/webhookCatalog";
 import type { WebhookConfig } from "@/types/webhook";
 
 export interface AutomationTrigger {
-  event: "stage_entered" | "webhook_received" | "button_clicked";
+  event: "stage_entered" | "webhook_received" | "button_clicked" | "outreach_sent" | "outreach_failed" | "outreach_unknown";
   stage_id?: string;
   webhook_id?: string;
   button_id?: string;
 }
 export interface AutomationAction {
-  type: "move_stage" | "update_field" | "set_responsible" | "call_webhook";
+  type: "move_stage" | "update_field" | "set_responsible" | "call_webhook" | "notify_team";
   params: Record<string, unknown>;
 }
 export interface CrmAutomation {
