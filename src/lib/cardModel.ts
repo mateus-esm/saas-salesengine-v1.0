@@ -97,7 +97,7 @@ export function buildCardModel(
 ): CardModel {
   const status: CardModel["status"] = card.status || "open";
   const open = status === "open";
-  const title = formatDisplayName(card.lead?.name, card.lead?.phone, "[Novo Contato - WhatsApp]");
+  const title = card.title?.trim() || formatDisplayName(card.lead?.name, card.lead?.phone, "[Novo Contato - WhatsApp]");
   const ownerId = card.owner_id ?? null;
   const ownerName = card.owner_name ?? (ownerId ? nameOf?.(ownerId) ?? null : null);
   const touchpointCount = card.touchpoint_count ?? 0;

@@ -15,6 +15,8 @@ export interface AllTaskRow {
   status: string;
   assigned_to: string | null;
   lead_id: string;
+  opportunity_id: string | null;
+  opportunityTitle: string | null;
   leadName: string | null;
   created_at: string | null;
 }
@@ -37,7 +39,7 @@ export const useAllTasks = () => {
       const { data, error } = await sb
         .from("tasks")
         .select(
-          "id, title, description, due_date, status, assigned_to, lead_id, created_at, lead:leads!inner(name, equipe_id)",
+          "id, title, description, due_date, status, assigned_to, lead_id, opportunity_id, opportunity:opportunities(title), created_at, lead:leads!inner(name, equipe_id)",
         )
         .eq("lead.equipe_id", equipeId)
         .order("due_date", { ascending: true, nullsFirst: false });
@@ -52,6 +54,8 @@ export const useAllTasks = () => {
         status: (r.status as string | null) ?? "a_fazer",
         assigned_to: (r.assigned_to as string | null) ?? null,
         lead_id: r.lead_id as string,
+        opportunity_id: r.opportunity_id as string | null,
+        opportunityTitle: (r.opportunity as { title?: string } | null)?.title ?? null,
         leadName: ((r.lead as { name?: string } | null)?.name as string | undefined) ?? null,
         created_at: (r.created_at as string | null) ?? null,
       }));

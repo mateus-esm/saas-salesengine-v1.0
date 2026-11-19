@@ -3,6 +3,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon, Loader2, Plus, Search, Trash2, User } from "lucide-react";
 
+import { DealPicker, type DealChoice } from "./DealPicker";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,15 +30,18 @@ interface TaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (data: TaskFormData) => Promise<void>;
-  task?: Task | null;
+  task?: Pick<Task, "id" | "lead_id" | "opportunity_id" | "title" | "description" | "due_date" | "status" | "assigned_to"> | null;
   mode: "create" | "edit";
   /** Sprint 5.3 T4 — show a lead selector when creating from the TasksView (no lead context). */
   showLeadSelector?: boolean;
+  enableDealLink?: boolean;
   selectedLeadId?: string | null;
   onLeadChange?: (leadId: string | null) => void;
 }
 
 export interface TaskFormData {
+  opportunity_id?: string | null;
+  lead_id?: string | null;
   title: string;
   description: string;
   due_date: string | null;
@@ -59,8 +64,10 @@ const toLocalDateString = (date: Date) => {
 };
 
 /** Sprint 5.3 T4 — Reusable create/edit task dialog used across all CRM surfaces. */
-export function TaskDialog({ open, onOpenChange, onSave, task, mode, showLeadSelector, selectedLeadId, onLeadChange }: TaskDialogProps) {
+export function TaskDialog({ open, onOpenChange, onSave, task, mode, enableDealLink, showLeadSelector, selectedLeadId, onLeadChange }: TaskDialogProps) {
   const { teamMembers } = useTeamMembers();
+  const [dealId, setDealId] = useState<string | null>(null);
+  const [dealLeadId, setDealLeadId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("a_fazer");
@@ -71,12 +78,14 @@ export function TaskDialog({ open, onOpenChange, onSave, task, mode, showLeadSel
   // Reset form when dialog opens / task changes
   useEffect(() => {
     if (!open) return;
+    setDealId(task?.opportunity_id ?? null);
+    setDealLeadId(null);
     if (task) {
       setTitle(task.title ?? "");
       setDescription(task.description ?? "");
       setStatus(task.status ?? "a_fazer");
       setAssignedTo(task.assigned_to ?? null);
-      setDueDate(task.due_date ? new Date(task.due_date) : undefined);
+      setDueDate(task.due_date ? new Date(task.due_date.length === 10 ? task.due_date + "T12:00:00" : task.due_date) : undefined);
     } else {
       setTitle("");
       setDescription("");
@@ -91,6 +100,7 @@ export function TaskDialog({ open, onOpenChange, onSave, task, mode, showLeadSel
     setSaving(true);
     try {
       await onSave({
+        ...(enableDealLink && { opportunity_id: dealId, lead_id: dealLeadId ?? selectedLeadId ?? task?.lead_id }),
         title: title.trim(),
         description,
         due_date: dueDate ? toLocalDateString(dueDate) : null,
@@ -98,6 +108,8 @@ export function TaskDialog({ open, onOpenChange, onSave, task, mode, showLeadSel
         assigned_to: assignedTo,
       });
       onOpenChange(false);
+    } catch (err) {
+      toast.error((err as Error).message || "Erro ao salvar tarefa");
     } finally {
       setSaving(false);
     }
@@ -105,7 +117,7 @@ export function TaskDialog({ open, onOpenChange, onSave, task, mode, showLeadSel
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Nova Tarefa" : "Editar Tarefa"}</DialogTitle>
         </DialogHeader>
@@ -210,7 +222,9 @@ export function TaskDialog({ open, onOpenChange, onSave, task, mode, showLeadSel
           )}
 
           {/* Sprint 5.3 T4 — lead selector (shown when creating from TasksView) */}
-          {showLeadSelector && (
+          {enableDealLink && <DealPicker value={dealId} leadId={task?.lead_id ?? selectedLeadId}
+            onChange={(deal: DealChoice | null) => { setDealId(deal?.id ?? null); setDealLeadId(deal?.lead_id ?? null); }} />}
+          {showLeadSelector && !dealId && (
             <LeadSearchSelect
               value={selectedLeadId ?? null}
               onChange={(id) => onLeadChange?.(id)}

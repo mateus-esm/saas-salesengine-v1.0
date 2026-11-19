@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCustomTables } from "@/hooks/useCustomTables";
-import { TAB_ICONS, TAB_LABELS, TOP_TABS, isTopTab, type TopTab } from "@/lib/crmTabs";
+import { BUILTIN_TABLES, type BuiltinTable, TAB_ICONS, TAB_LABELS, TOP_TABS, isTopTab, type TopTab } from "@/lib/crmTabs";
 import { cn } from "@/lib/utils";
 
 const BASE =
@@ -16,7 +16,7 @@ const idle = "border-transparent text-muted-foreground hover:text-foreground";
 const on = "border-primary font-medium text-foreground";
 
 /** Navegação própria do CRM: funciona com a barra lateral escondida. */
-export function CrmSectionNav() {
+export function CrmSectionNav({ enabled = BUILTIN_TABLES }: { enabled?: readonly BuiltinTable[] }) {
   const [params] = useSearchParams();
   const raw = params.get("tab");
   const active: TopTab = isTopTab(raw) ? raw : "pipeline";
@@ -28,7 +28,7 @@ export function CrmSectionNav() {
       <ul className="flex items-center overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TOP_TABS.map((tab) => {
           const Icon = TAB_ICONS[tab];
-          const isActive = tab === active;
+          const isActive = tab === active || (tab === "tabelas" && (active === "companies" || active === "properties"));
           if (tab === "tabelas") {
             return (
               <li key={tab} className="shrink-0">
@@ -43,8 +43,11 @@ export function CrmSectionNav() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                     <DropdownMenuItem asChild>
-                      <Link to="/crm?tab=tabelas" aria-current={isActive && !activeTable ? "page" : undefined} className="aria-[current=page]:font-semibold">Todas as tabelas</Link>
+                      <Link to="/crm?tab=tabelas" aria-current={active === "tabelas" && !activeTable ? "page" : undefined} className="aria-[current=page]:font-semibold">Todas as tabelas</Link>
                     </DropdownMenuItem>
+                    {enabled.map(slug => <DropdownMenuItem key={slug} asChild>
+                      <Link to={"/crm?tab=" + slug} aria-current={active === slug ? "page" : undefined}>{TAB_LABELS[slug]}</Link>
+                    </DropdownMenuItem>)}
                     {(tables ?? []).map((t) => (
                       <DropdownMenuItem key={t.slug} asChild>
                         <Link

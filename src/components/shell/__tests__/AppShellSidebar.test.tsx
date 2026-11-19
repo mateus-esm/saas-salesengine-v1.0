@@ -17,6 +17,7 @@ vi.mock("@/hooks/useRole", () => ({
 vi.mock("@/contexts/TenantContext", () => ({
   useTenant: () => ({ tenant: { name: "Solo" } }),
 }));
+vi.mock("@/hooks/useBuiltinTables", () => ({ useBuiltinTables: () => ({ enabled: ["companies", "properties"] }) }));
 vi.mock("@/hooks/useCustomTables", () => ({
   useCustomTables: () => ({
     tables: [{ slug: "propostas", name: "Propostas" }],

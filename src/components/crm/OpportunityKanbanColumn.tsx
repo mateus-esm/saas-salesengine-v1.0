@@ -28,6 +28,7 @@ interface OpportunityKanbanColumnProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   /** Touch screens: each card offers "Mover para…" (dragging is off). */
+  onChangeOwner?: (card: BoardCard, id: string | null) => void;
   onMoveCard?: (card: BoardCard) => void;
   /** "Ganho" on each open card (absent when the pipeline has no won stage). */
   onWinCard?: (card: BoardCard) => void;
@@ -63,6 +64,7 @@ export const OpportunityKanbanColumn = ({
   nameOf,
   isCollapsed,
   onToggleCollapse,
+  onChangeOwner,
   onMoveCard,
   onWinCard,
   fill,
@@ -196,6 +198,8 @@ export const OpportunityKanbanColumn = ({
                     nativeFlags={nativeFlags}
                     onClick={() => onCardClick(card, cards)}
                     onOpenContact={onOpenContact}
+                    onChangeOwner={onChangeOwner ? (id) => onChangeOwner(card, id) : undefined}
+                    disableDrag={fill}
                     onMoveRequest={onMoveCard ? () => onMoveCard(card) : undefined}
                     onWin={onWinCard && stage.stage_type !== "won" ? () => onWinCard(card) : undefined}
                     nameOf={nameOf}

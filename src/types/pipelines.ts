@@ -158,6 +158,7 @@ export interface PipelineStageV2 {
 }
 
 export interface Opportunity {
+  title?: string | null;
   id: string;
   equipe_id: string;
   lead_id: string;
@@ -254,6 +255,7 @@ export interface UpdateStageV2Data {
 }
 
 export interface CreateOpportunityData {
+  title?: string | null;
   lead_id: string;
   pipeline_id: string;
   stage_id?: string;       // defaults to first stage of pipeline if omitted
@@ -263,6 +265,7 @@ export interface CreateOpportunityData {
 }
 
 export interface UpdateOpportunityData {
+  title?: string | null;
   id: string;
   stage_id?: string;
   value?: number | null;

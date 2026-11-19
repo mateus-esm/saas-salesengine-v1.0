@@ -8,7 +8,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useTasks } from "@/hooks/useTasks";
+import { TaskDialog } from "./TaskDialog";
+import { useTasks, type Task } from "@/hooks/useTasks";
 import { cn } from "@/lib/utils";
 
 import {
@@ -41,6 +42,7 @@ import { DynamicFieldRenderer, validateCustomData } from "./DynamicFieldRenderer
 import { EntityChips } from "./EntityChips";
 import { CompanySection } from "./companies/CompanySection";
 import { PropertySection } from "./properties/PropertySection";
+import { TouchpointAction } from "./OpportunityCard";
 import { TouchpointsList } from "./TouchpointsList";
 import { PaddleShifterNav } from "./PaddleShifterNav";
 import { useSiblingNavigation } from "@/hooks/useSiblingNavigation";
@@ -54,6 +56,7 @@ import type {
 } from "@/types/pipelines";
 import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { useMoveToStage } from "@/hooks/useMoveToStage";
+import { AgendaEventDialog, eventTypes } from "./AgendaEventDialog";
 import { useLeadAgendaEvents } from "@/hooks/useLeadAgendaEvents";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { stageForStatus, statusForStage, wonStageOf } from "@/lib/outcome";
@@ -131,6 +134,7 @@ export const OpportunityDetailModal = ({
   // only appears for niches/teams that have the CRM agent enabled.
   const crmAgentEnabled = equipe?.is_crm_agent_enabled ?? false;
 
+  const [title, setTitle] = useState("");
   const [stageId, setStageId] = useState<string>("");
   const [status, setStatus] = useState<OpportunityStatus>("open");
   const [value, setValue] = useState<string>("");
@@ -138,12 +142,15 @@ export const OpportunityDetailModal = ({
   // Sprint 11 · T30 — with items, the value is their sum (the database keeps it).
   const [hasItems, setHasItems] = useState(false);
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [eventEditor, setEventEditor] = useState<string | null>(null);
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [decisionsOpen, setDecisionsOpen] = useState(false);
 
   useEffect(() => {
     if (!opportunity) return;
+    setEventEditor(null);
     setStageId(opportunity.stage_id);
+    setTitle(opportunity.title ?? "");
     setStatus(opportunity.status);
     setValue(opportunity.value != null ? String(opportunity.value) : "");
     setCustomData(opportunity.custom_data ?? {});
@@ -171,7 +178,7 @@ export const OpportunityDetailModal = ({
   // Copilot decisions (an external API) are asked only with the modal open and
   // their section expanded. Before, every Kanban and Table visit loaded the whole
   // team's agenda and called the Copilot.
-  const agendaQuery = useLeadAgendaEvents(opportunity?.lead_id ?? null, open && agendaOpen);
+  const agendaQuery = useLeadAgendaEvents(opportunity?.lead_id ?? null, open && (agendaOpen || !!eventEditor), opportunity?.id ?? null);
   const cardEvents = agendaQuery.data ?? [];
 
 
@@ -194,6 +201,7 @@ export const OpportunityDetailModal = ({
     const save = (lostReason: string | null, extra?: MoveExtra) => {
       const saved = updateOpportunity.mutateAsync({
         id: opportunity.id,
+        title: title.trim() || null,
         stage_id: targetStageId,
         status: statusForStage(stages, targetStageId, status),
         ...(lostReason ? { lost_reason: lostReason } : {}),
@@ -250,11 +258,14 @@ export const OpportunityDetailModal = ({
       {/* Sprint 11 · T26 — full screen on a phone. */}
       <DialogContent className="max-w-5xl w-[min(96vw,1100px)] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden max-md:left-0 max-md:top-0 max-md:translate-x-0 max-md:translate-y-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:w-full max-md:max-w-none max-md:rounded-none max-md:border-0">
         {lossDialog}
+        {eventEditor && <AgendaEventDialog opportunityId={opportunity.id} types={cardEvents.map(e => e.type)}
+          event={cardEvents.find(e => e.id === eventEditor)}
+          onClose={() => { setEventEditor(null); setAgendaOpen(true); }} />}
         <DialogHeader className="px-5 pt-5 pb-3 space-y-3 border-b border-border/60 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1 min-w-0">
               <DialogTitle className="text-base font-semibold leading-tight">
-                {formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
+                {opportunity.title || formatDisplayName(lead?.name, lead?.phone, "[Novo Contato - WhatsApp]")}
               </DialogTitle>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
                 <span>
@@ -303,6 +314,9 @@ export const OpportunityDetailModal = ({
                   <h4 className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
                     Oportunidade
                   </h4>
+                  <Label htmlFor="deal-title">Nome da oportunidade</Label>
+                  <Input id="deal-title" value={title} onChange={(e) => setTitle(e.target.value)}
+                    placeholder={lead?.name || "Nome do contato"} />
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Etapa</Label>
@@ -356,7 +370,7 @@ export const OpportunityDetailModal = ({
                   {/* SE-SUP1-8 (#10) — a reunião aconteceu? Não move etapa: grava o marco
                       (funnel_events) pelo mesmo caminho manual de sempre. */}
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Registrar reunião</Label>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEventEditor("new")}>Agendar reunião ou visita</Button>
                     <MeetingOutcomeButtons opportunityId={opportunity.id} />
                   </div>
 
@@ -400,7 +414,8 @@ export const OpportunityDetailModal = ({
                     Notas
                   </h4>
                   {lead?.id ? (
-                    <TouchpointsList leadId={lead.id} />
+                    <><TouchpointAction leadId={lead.id} />
+                    <TouchpointsList leadId={lead.id} /></>
                   ) : (
                     <p className="text-xs text-muted-foreground italic py-2">
                       Sem contato vinculado para ver notas.
@@ -455,7 +470,7 @@ export const OpportunityDetailModal = ({
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-2 pb-2">
                     {lead?.id ? (
-                      <TasksTabPane leadId={lead.id} />
+                      <TasksTabPane key={opportunity.id} leadId={lead.id} opportunityId={opportunity.id} />
                     ) : (
                       <p className="text-[11px] text-muted-foreground italic py-2">
                         Sem contato vinculado.
@@ -516,7 +531,7 @@ export const OpportunityDetailModal = ({
                         {cardEvents.map((e) => (
                           <div key={e.id} className="space-y-1 text-xs text-muted-foreground">
                             <div>
-                              <span className="font-medium text-foreground/70">{e.title}</span>
+                              <button type="button" onClick={() => setEventEditor(e.id)} className="font-medium hover:underline">{e.title} · {eventTypes[e.type] ?? e.type}</button>
                               <span className="ml-1">
                                 {new Date(e.starts_at).toLocaleString("pt-BR", {
                                   day: "2-digit",
@@ -531,6 +546,7 @@ export const OpportunityDetailModal = ({
                                 </Badge>
                               )}
                             </div>
+                            {e.notes && <p className="whitespace-pre-wrap">{e.notes}</p>}
                             {/* SE-SUP1-8 (#10): o desfecho desta reunião, ligado a ESTE negócio. */}
                             {canRecordOutcome(e) && (
                               <MeetingOutcomeButtons
@@ -765,8 +781,9 @@ function StageHistoryDisplay({
   );
 }
 
-function TasksTabPane({ leadId }: { leadId: string }) {
-  const { tasks, isLoading, createTask, toggleTask, deleteTask } = useTasks(leadId);
+function TasksTabPane({ leadId, opportunityId }: { leadId: string; opportunityId: string }) {
+  const { tasks, isLoading, createTask, updateTask, toggleTask, deleteTask } = useTasks(leadId, opportunityId);
+  const [editing, setEditing] = useState<Task | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isCreating, setIsCreating] = useState(false);
@@ -838,6 +855,8 @@ function TasksTabPane({ leadId }: { leadId: string }) {
         </div>
       </div>
 
+      {editing && <TaskDialog open mode="edit" task={editing} enableDealLink onOpenChange={(open) => { if (!open) setEditing(null); }}
+        onSave={async ({lead_id: _leadId, ...patch}) => { await updateTask(editing.id, patch); }} />}
       {/* Task List */}
       <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
         {isLoading ? (
@@ -862,15 +881,14 @@ function TasksTabPane({ leadId }: { leadId: string }) {
                   className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
                 />
                 <div className="min-w-0 flex-1">
-                  <label
-                    htmlFor={`task-check-${task.id}`}
+                  <button type="button" onClick={() => setEditing(task)}
                     className={cn(
                       "text-xs font-medium cursor-pointer block truncate text-foreground/90",
                       task.status === "feito" && "line-through text-muted-foreground"
                     )}
                   >
-                    {task.title}
-                  </label>
+                    {task.title}{!task.opportunity_id && <span className="ml-1 text-muted-foreground">· Contato</span>}
+                  </button>
                   {task.due_date && (
                     <span className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 font-mono">
                       <CalendarIcon className="h-2.5 w-2.5 shrink-0" />

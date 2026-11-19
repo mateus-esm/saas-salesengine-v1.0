@@ -88,6 +88,8 @@ const STATUS_OPTIONS: { value: OpportunityStatus; label: string }[] = [
 
 function toServerSort(gridKey: string, dir: "asc" | "desc", schema: CustomFieldSchema[]): CrmSort | null {
   switch (gridKey) {
+    case "_lead_score":
+      return { key: "lead_score", dir };
     case "lead_name":
       return { key: "lead_name", dir };
     case "owner_id":
@@ -112,6 +114,7 @@ function toServerSort(gridKey: string, dir: "asc" | "desc", schema: CustomFieldS
 function toGridSort(sort: CrmSort | null): { key?: string; dir: "asc" | "desc" | null } {
   if (!sort) return { dir: null };
   const map: Record<string, string> = {
+    lead_score: "_lead_score",
     lead_name: "lead_name",
     owner_name: "owner_id",
     value: "value",
@@ -206,7 +209,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
   const columns: ColumnDef[] = useMemo(() => {
     const stageOptions = orderedStages.map((s) => ({ value: s.id, label: s.name }));
     const native: ColumnDef[] = [
-      { key: "lead_name", label: "Lead", kind: "text", source: "native", editable: false, primary: true, width: 220 },
+      { key: "lead_name", label: "Oportunidade", kind: "text", source: "native", editable: false, primary: true, width: 220 },
       { key: "owner_id", label: "Responsável", kind: "user", source: "native", context: { nameOf } },
       {
         key: "company",
@@ -243,7 +246,7 @@ export const OpportunityTable = ({ pipelineId }: OpportunityTableProps) => {
         const row: GridRow = {
           id: r.id,
           equipe_id: r.equipe_id,
-          lead_name: formatDisplayName(r.lead?.name, r.lead?.phone, "[Novo Contato - WhatsApp]"),
+          lead_name: r.title?.trim() || formatDisplayName(r.lead?.name, r.lead?.phone, "[Novo Contato - WhatsApp]"),
           owner_id: r.owner_id,
           company: r.companies,
           property_count: r.property_count,

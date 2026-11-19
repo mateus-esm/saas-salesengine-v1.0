@@ -14,16 +14,19 @@ import {
 // Sprint 11 · T68 — the Copilot left the CRM: it is the app's opening (/home).
 export type TopTab = "pipeline" | "contacts" | "companies" | "properties" | "catalogo" | "campanhas" | "tasks" | "tabelas" | "agenda";
 
-export const TOP_TABS: TopTab[] = ["pipeline", "contacts", "companies", "properties", "catalogo", "campanhas", "tasks", "tabelas", "agenda"];
+export const BUILTIN_TABLES = ["companies", "properties"] as const;
+export type BuiltinTable = typeof BUILTIN_TABLES[number];
+
+export const TOP_TABS: TopTab[] = ["pipeline", "contacts", "catalogo", "campanhas", "tasks", "tabelas", "agenda"];
 
 export const isTopTab = (v: string | null): v is TopTab =>
-  !!v && TOP_TABS.includes(v as TopTab);
+  !!v && Object.prototype.hasOwnProperty.call(TAB_LABELS, v);
 
 export const TAB_LABELS: Record<TopTab, string> = {
   pipeline: "Pipeline",
   contacts: "Base de Contatos",
   companies: "Empresas",
-  properties: "Imóveis",
+  properties: "Propriedades",
   catalogo: "Catálogo",
   campanhas: "Campanhas",
   tasks: "Tarefas",

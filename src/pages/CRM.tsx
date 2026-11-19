@@ -19,11 +19,16 @@ import { AgendaView } from "@/components/crm/AgendaView";
 import { CatalogView } from "@/components/crm/catalog/CatalogView";
 import { CampaignsView } from "@/components/crm/campaigns/CampaignsView";
 import { CrmSectionNav } from "@/components/crm/CrmSectionNav";
-import { isTopTab, type TopTab } from "@/lib/crmTabs";
+import { Switch } from "@/components/ui/switch";
+import { useBuiltinTables } from "@/hooks/useBuiltinTables";
+import { useRole } from "@/hooks/useRole";
+import { BUILTIN_TABLES, TAB_LABELS, isTopTab, type TopTab } from "@/lib/crmTabs";
 
 const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { pipelineId, pipelines, isLoading } = usePipelineSelection();
+  const builtin = useBuiltinTables();
+  const { isAdmin } = useRole();
   const { tables: customTables } = useCustomTables();
 
   const tab: TopTab = useMemo(() => {
@@ -39,15 +44,17 @@ const CRM = () => {
   // Old links to CRM › Copilot land on the app's opening, where the Copilot lives now.
   if (searchParams.get("tab") === "copilot") return <Navigate to="/home" replace />;
 
+  if ((tab === "companies" || tab === "properties") && !builtin.enabled.includes(tab)) return <Navigate to="/crm?tab=tabelas" replace />;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Sprint 15b · T5 — o CRM navega as próprias seções (o link ativo nomeia a seção);
           abaixo ficam os controles da página. */}
-      <CrmSectionNav />
+      <CrmSectionNav enabled={builtin.enabled} />
       <div className="border-b border-border bg-card px-2 sm:px-4 py-2">
         <div className="flex items-center justify-between gap-3 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
           <div className="ml-auto flex items-center gap-3">
-            <FeatureActivationGrid />
+            {tab === "tabelas" && <FeatureActivationGrid />}
             <AIAgentToggle />
           </div>
         </div>
@@ -77,13 +84,19 @@ const CRM = () => {
               }}
             />
           ) : (
+            <><section className="space-y-2 border-b p-4"><h2 className="font-semibold">Tabelas padrão</h2>
+              {BUILTIN_TABLES.map(slug => <div key={slug} className="flex max-w-md items-center justify-between gap-2">
+                {builtin.enabled.includes(slug) ? <Link to={"/crm?tab=" + slug} className="text-sm hover:underline">{TAB_LABELS[slug]}</Link> : <span className="text-sm text-muted-foreground">{TAB_LABELS[slug]}</span>}
+                {isAdmin() && <Switch aria-label={"Ativar " + TAB_LABELS[slug]} checked={builtin.enabled.includes(slug)}
+                  disabled={builtin.update.isPending || builtin.isLoading || builtin.isError} onCheckedChange={enabled => builtin.update.mutate({slug,enabled})} />}
+              </div>)}</section>
             <CustomTableManager
               onSelectTable={(table: CustomTable) => {
                 const params = new URLSearchParams(searchParams);
                 params.set("custom_table", table.slug);
                 setSearchParams(params, { replace: false });
               }}
-            />
+            /></>
           )
         ) : tab === "agenda" ? (
           <AgendaView />

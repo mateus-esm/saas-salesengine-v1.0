@@ -14,6 +14,11 @@ export const NATIVE_CARD_FIELDS = [
   { field_id: "native:whatsapp", label: "WhatsApp do contato", group: "Nativo" },
 ] as const;
 
+export const CARD_ACTIONS = {
+  chat: "Abrir conversa", touchpoint: "Registrar touchpoint", followup: "Agendar follow-up",
+  won: "Ganho", move: "Mover de etapa", sync: "Sync", owner: "Alterar responsável",
+} as const;
+
 export type NativeCardFieldId = (typeof NATIVE_CARD_FIELDS)[number]["field_id"];
 
 interface CardFieldsPickerProps {
@@ -47,6 +52,17 @@ export const CardFieldsPicker = ({ schema, cardFieldIds, onChange }: CardFieldsP
         Selecione quais informações aparecem no rosto do card do Kanban.
       </p>
 
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-medium">Ações na face do card</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {Object.entries(CARD_ACTIONS).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 text-sm">
+              <Checkbox checked={!cardFieldIds.includes("hide:" + key)}
+                onCheckedChange={(v) => toggle("hide:" + key, !v)} />{label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <section className="space-y-2">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
           Nativos

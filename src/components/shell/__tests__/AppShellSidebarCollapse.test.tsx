@@ -13,6 +13,7 @@ vi.mock("@/hooks/useRole", () => ({
   useRole: () => ({ hasRole: () => true, isSuperAdmin: () => false }),
 }));
 vi.mock("@/contexts/TenantContext", () => ({ useTenant: () => ({ tenant: { name: "Solo" } }) }));
+vi.mock("@/hooks/useBuiltinTables", () => ({ useBuiltinTables: () => ({ enabled: ["companies", "properties"] }) }));
 vi.mock("@/hooks/useCustomTables", () => ({
   useCustomTables: () => ({ tables: [{ slug: "propostas", name: "Propostas" }], isLoading: false }),
 }));

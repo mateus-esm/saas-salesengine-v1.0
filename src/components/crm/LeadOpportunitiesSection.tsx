@@ -54,6 +54,7 @@ export const LeadOpportunitiesSection = ({
     useOpportunities({ leadId });
   const { activePipelines } = usePipelines();
   const [adding, setAdding] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
   const [draftPipelineId, setDraftPipelineId] = useState<string>("");
 
   const pipelineById = useMemo(
@@ -65,11 +66,13 @@ export const LeadOpportunitiesSection = ({
     if (!draftPipelineId) return;
     try {
       await createOpportunity.mutateAsync({
+        title: draftTitle.trim() || null,
         lead_id: leadId,
         pipeline_id: draftPipelineId,
       });
       setAdding(false);
       setDraftPipelineId("");
+      setDraftTitle("");
     } catch {
       // toast handled in hook
     }
@@ -132,6 +135,8 @@ export const LeadOpportunitiesSection = ({
           </DialogHeader>
           <div className="space-y-3">
             <div>
+              <Label htmlFor="new-deal-title">Nome da oportunidade</Label>
+              <Input id="new-deal-title" value={draftTitle} onChange={e => setDraftTitle(e.target.value)} placeholder="Usar nome do contato" />
               <Label>Pipeline</Label>
               <Select value={draftPipelineId} onValueChange={setDraftPipelineId}>
                 <SelectTrigger>
@@ -276,7 +281,7 @@ const OpportunityRow = ({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium truncate">
-                {pipeline?.name ?? "Pipeline removida"}
+                {opportunity.title ? opportunity.title + " · " : ""}{pipeline?.name ?? "Pipeline removida"}
               </span>
               {stage && (
                 <Badge
