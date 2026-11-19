@@ -26,6 +26,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { InboundActionEditor } from "@/components/webhooks/InboundActionEditor";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
+import { useTeamStages } from "@/hooks/useAutomations";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   WebhookConfig,
@@ -67,6 +68,9 @@ export const WebhookConfigModal = ({
 }: WebhookConfigModalProps) => {
   const { createConfig, updateConfig } = useWebhookConfigs();
   const isEditing = !!config;
+  const { stages } = useTeamStages();
+  const linkedStages = stages.filter(stage => stage.webhook_triggers?.some(link =>
+    link.event === "on_stage_entered" && link.webhook_id === config?.id));
 
   const {
     register,
@@ -182,7 +186,7 @@ export const WebhookConfigModal = ({
     if (!isInbound) {
       try {
         const parsed = JSON.parse(data.payloadTemplate);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        if (parsed !== "{{payload}}" && (!parsed || typeof parsed !== "object" || Array.isArray(parsed))) {
           throw new Error("O payload deve ser um objeto JSON");
         }
         payloadTemplate = parsed;
@@ -194,10 +198,13 @@ export const WebhookConfigModal = ({
 
     setIsSaving(true);
     try {
+      const id = config?.id ?? crypto.randomUUID();
+      const event = ["stage_entered", "automation"].includes(data.trigger_event)
+        ? `${data.trigger_event}:${id}` : data.trigger_event;
       const baseData = {
         name: data.name,
         url: isInbound ? "" : data.url,
-        trigger_event: isInbound ? "lead_created" : data.trigger_event,
+        trigger_event: isInbound ? "lead_created" : event,
         headers,
         payload_template: payloadTemplate,
         active: data.active,
@@ -214,7 +221,7 @@ export const WebhookConfigModal = ({
           ...baseData,
         });
       } else {
-        await createConfig.mutateAsync(baseData);
+        await createConfig.mutateAsync({ ...baseData, id });
       }
       onClose();
     } catch (error) {
@@ -420,7 +427,13 @@ export const WebhookConfigModal = ({
                   name="trigger_event"
                   rules={{ required: !isInbound }}
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select value={field.value.split(":")[0]} disabled={!!config?.trigger_event.includes(":")} onValueChange={(value) => {
+                      field.onChange(value);
+                      if (!config) setValue("payloadTemplate", JSON.stringify(
+                        value === "stage_entered" ? "{{payload}}" : value === "automation"
+                          ? { record_id: "{{opportunity.id}}", data: "{{payload}}" }
+                          : DEFAULT_LEAD_CREATED_PAYLOAD, null, 2));
+                    }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecionar evento..." />
                       </SelectTrigger>
@@ -430,10 +443,20 @@ export const WebhookConfigModal = ({
                             {event.label}
                           </SelectItem>
                         ))}
+                        <SelectItem value="stage_entered">Negócio entra em uma etapa</SelectItem>
+                        <SelectItem value="automation">Chamado por uma automação</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
                 />
+                {watch("trigger_event").startsWith("stage_entered") && (
+                  <p className="text-sm text-muted-foreground">{linkedStages.length
+                    ? linkedStages.map(stage => [stage.pipeline_name, stage.name].filter(Boolean).join(" → ")).join(", ")
+                    : "Depois de salvar, abra as configurações do pipeline, escolha a etapa e vincule este webhook em Ao entrar na etapa."}</p>
+                )}
+                {watch("trigger_event").startsWith("automation") && (
+                  <p className="text-sm text-muted-foreground">Em Automações, escolha o evento e selecione Chamar webhook como ação.</p>
+                )}
               </div>
             </>
           )}

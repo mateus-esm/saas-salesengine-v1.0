@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { WebhookConfig, FieldMapping, WebhookAction, DEFAULT_LEAD_CREATED_PAYLOAD } from "@/types/webhook";
 
 interface CreateWebhookData {
+  id?: string;
   name: string;
   url: string;
   trigger_event: string;
@@ -64,6 +65,7 @@ export const useWebhookConfigs = () => {
       const { data, error } = await (supabase as any)
         .from("webhook_configs")
         .insert({
+          ...(configData.id ? { id: configData.id } : {}),
           equipe_id: equipeId,
           name: configData.name,
           url: configData.url,

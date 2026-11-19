@@ -369,7 +369,7 @@ const Webhooks = () => {
 
         {/* Automations */}
         <TabsContent value="automations">
-          <AutomationsSection />
+          <AutomationsSection onEditWebhook={handleEditConfig} />
         </TabsContent>
 
         {/* Logs */}

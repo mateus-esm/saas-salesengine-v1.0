@@ -36,7 +36,7 @@ function describe(a: CrmAutomation, stageName: (id?: string) => string, webhookN
   return `${when} → ${what}`;
 }
 
-export const AutomationsSection = () => {
+export const AutomationsSection = ({ onEditWebhook }: { onEditWebhook: (config: import("@/types/webhook").WebhookConfig) => void }) => {
   const { automations, create, toggle, remove } = useAutomations();
   const { stages } = useTeamStages();
   const { configs } = useWebhookConfigs();
@@ -63,6 +63,10 @@ export const AutomationsSection = () => {
   const memberName = (id?: string) => nameOf(id) ?? "(removido)";
 
   const inbound = configs.filter((c) => c.inbound_function === "receive_lead");
+  const stageLinks = stages.flatMap(stage => (stage.webhook_triggers ?? []).flatMap(link => {
+    const hook = configs.find(c => c.id === link.webhook_id && c.trigger_event === `stage_entered:${c.id}`);
+    return link.event === "on_stage_entered" && hook ? [{ stage, hook }] : [];
+  }));
   // Só webhooks de saída feitos para disparo por regra (ver crm_run_automation).
   const linkable = configs.filter((c) => !c.inbound_function && (c.trigger_event.startsWith("stage_entered:") || c.trigger_event.startsWith("automation:")));
 
@@ -148,7 +152,15 @@ export const AutomationsSection = () => {
             </div>
           </div>
         )}
-        {automations.length === 0 && !adding && <p className="text-sm text-muted-foreground">Nenhuma automação criada.</p>}
+        {stageLinks.map(({ stage, hook }) => (
+          <div key={stage.id + hook.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+            <div><p className="font-medium">{hook.name}</p><p className="text-sm text-muted-foreground">
+              {stage.pipeline_name} → {stage.name} → Enviar webhook · {hook.active ? "Ativo" : "Desativado"}
+            </p></div>
+            <Button variant="outline" size="sm" onClick={() => onEditWebhook(hook)}>Editar webhook</Button>
+          </div>
+        ))}
+        {automations.length === 0 && stageLinks.length === 0 && !adding && <p className="text-sm text-muted-foreground">Nenhuma automação criada.</p>}
         {automations.map((a) => (
           <div key={a.id} className="flex items-center justify-between border rounded-md p-3">
             <div className="space-y-1">
