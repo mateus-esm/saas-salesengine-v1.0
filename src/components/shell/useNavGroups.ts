@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/hooks/useRole";
 import { useCustomTables } from "@/hooks/useCustomTables";
 import { buildNav, isNavItemActive, type NavGroup } from "@/lib/navigation";
+import { useBuiltinTables } from "@/hooks/useBuiltinTables";
 import { TOP_TABS } from "@/lib/crmTabs";
 
 /** Monta o menu a partir das mesmas fontes que a barra antiga usava. */
@@ -11,6 +12,7 @@ export function useNavGroups(): NavGroup[] {
   const { hasRole, isSuperAdmin } = useRole();
   const { tables } = useCustomTables();
 
+  const { enabled: builtinTables } = useBuiltinTables();
   const chatHref = profile?.chat_link_base || "/chat";
   const permissions = (equipe?.page_permissions ?? null) as Record<string, boolean> | null;
   const superAdmin = isSuperAdmin();
@@ -26,10 +28,11 @@ export function useNavGroups(): NavGroup[] {
         isSuperAdmin: superAdmin,
         permissions,
         chatHref,
+        builtinTables,
         crmTabs: [...TOP_TABS],
         customTables,
       }),
-    [superAdmin, permissions, chatHref, customTables, hasRole],
+    [builtinTables, superAdmin, permissions, chatHref, customTables, hasRole],
   );
 }
 

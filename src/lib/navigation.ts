@@ -15,7 +15,7 @@ import {
   Table2,
   type LucideIcon,
 } from "lucide-react";
-import { TAB_ICONS, TAB_LABELS, TOP_TABS, isTopTab, type TopTab } from "@/lib/crmTabs";
+import { type BuiltinTable, TAB_ICONS, TAB_LABELS, TOP_TABS, isTopTab, type TopTab } from "@/lib/crmTabs";
 
 type Role = "user" | "admin" | "owner" | "super_admin";
 
@@ -43,6 +43,7 @@ export interface NavContext {
   permissions: Record<string, boolean> | null;
   chatHref: string;
   crmTabs: TopTab[];
+  builtinTables?: BuiltinTable[];
   customTables: { slug: string; name: string }[];
 }
 
@@ -71,6 +72,11 @@ export function buildNav(ctx: NavContext): NavGroup[] {
         url: `/crm?tab=tabelas&custom_table=${encodeURIComponent(t.slug)}`,
         icon: Table2,
       }));
+    }
+    if (tab === "tabelas" && ctx.builtinTables?.length) {
+      item.children = [...(item.children ?? []), ...ctx.builtinTables.map(slug => ({
+        id: "crm-" + slug, title: TAB_LABELS[slug], url: "/crm?tab=" + slug, icon: TAB_ICONS[slug],
+      }))];
     }
     return item;
   });

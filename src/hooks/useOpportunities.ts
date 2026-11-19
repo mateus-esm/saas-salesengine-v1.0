@@ -21,6 +21,7 @@ const TABLE = "opportunities";
 const STAGES_TABLE = "pipeline_stages_v2";
 
 interface OpportunityRow {
+  title?: string | null;
   id: string;
   equipe_id: string;
   lead_id: string;
@@ -42,6 +43,7 @@ interface OpportunityRow {
 
 const normalize = (row: OpportunityRow): Opportunity => ({
   id: row.id,
+  title: row.title,
   equipe_id: row.equipe_id,
   lead_id: row.lead_id,
   pipeline_id: row.pipeline_id,
@@ -160,6 +162,9 @@ export const useOpportunityMutations = () => {
     // Sprint 11 · Onda 2 — the server-side tables show deals too.
     queryClient.invalidateQueries({ queryKey: ["opp_table", equipeId] });
     queryClient.invalidateQueries({ queryKey: ["contacts_table", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["deal-picker", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["agenda_events", equipeId] });
+    queryClient.invalidateQueries({ queryKey: ["deal_timeline"] });
     // Sprint 11 · T31 — a win, reopen or value change moves the revenue.
     queryClient.invalidateQueries({ queryKey: ["deal_revenue"] });
   };
@@ -190,6 +195,7 @@ export const useOpportunityMutations = () => {
         .insert({
           equipe_id: equipeId,
           lead_id: input.lead_id,
+          title: input.title?.trim() || null,
           pipeline_id: input.pipeline_id,
           stage_id: stageId,
           value: input.value ?? null,

@@ -17,7 +17,7 @@ export const outcomeLabel = (o: string | null | undefined): string | null =>
 
 /** O botão de um evento só aparece em reunião ligada a um contato ou negócio. */
 export function canRecordOutcome(ev: { type: string; lead_id: string | null; opportunity_id?: string | null }): boolean {
-  return ev.type === "meeting" && !!(ev.lead_id || ev.opportunity_id);
+  return ev.type !== "block" && !!(ev.lead_id || ev.opportunity_id);
 }
 
 /** Clicar no desfecho já marcado desmarca (null = desfazer, só na agenda). */

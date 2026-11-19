@@ -21,6 +21,8 @@ import type { CustomFieldSchema, PipelineStageV2 } from "@/types/pipelines";
 import { BRAND } from "@/config/brand";
 
 import { SyncButton } from "./copilot/SyncButton";
+import { UserPicker } from "./fields/UserPicker";
+import type { CARD_ACTIONS } from "./pipeline-settings/CardFieldsPicker";
 import { UserAvatar } from "./fields/UserAvatar";
 import { RelationChip } from "./grid/RelationChip";
 import { LeadScoreBadge } from "./LeadScoreBadge";
@@ -43,6 +45,7 @@ export interface NativeCardFlags {
   touchpoints: boolean;
   nextContact: boolean;
   whatsapp: boolean;
+  hiddenActions?: string[];
 }
 
 export const DEFAULT_NATIVE_CARD_FLAGS: NativeCardFlags = {
@@ -81,10 +84,12 @@ interface OpportunityCardProps {
   onClick: () => void;
   onOpenContact?: (leadId: string) => void;
   /** Touch screens: moving is "Mover para…", not dragging. */
+  onChangeOwner?: (id: string | null) => void;
   onMoveRequest?: () => void;
   /** "Ganho" on the card face: moves to the won stage (opens the closing checklist). */
   onWin?: () => void;
   isDragOverlay?: boolean;
+  disableDrag?: boolean;
   /** Member names for "Usuário" fields and the owner (loaded once by the Kanban). */
   nameOf?: (userId: string) => string | null;
 }
@@ -109,16 +114,19 @@ export const OpportunityCard = ({
   nativeFlags = DEFAULT_NATIVE_CARD_FLAGS,
   onClick,
   onOpenContact,
+  onChangeOwner,
   onMoveRequest,
   onWin,
   isDragOverlay,
+  disableDrag,
   nameOf,
 }: OpportunityCardProps) => {
+  const show = (action: keyof typeof CARD_ACTIONS) => !nativeFlags.hiddenActions?.includes("hide:" + action);
   const queryClient = useQueryClient();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { type: "opportunity", opportunity: card },
-    disabled: isDragOverlay || !!onMoveRequest,
+    disabled: isDragOverlay || disableDrag,
   });
 
   const model = useMemo(
@@ -193,7 +201,7 @@ export const OpportunityCard = ({
       onClick={onClick}
       className={cn(
         "group select-none space-y-2 overflow-hidden rounded-lg border border-border bg-card p-3.5 shadow-sm transition-shadow",
-        onMoveRequest ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+        disableDrag ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
         "hover:border-primary/50 hover:shadow-md",
         model.status === "lost" && "opacity-75",
         isDragOverlay && "rotate-1 scale-[1.02] shadow-lg",
@@ -204,11 +212,11 @@ export const OpportunityCard = ({
         <span
           className={cn(
             "min-w-0 text-[15px] font-semibold leading-snug line-clamp-2",
-            onOpenContact && model.leadId && "cursor-pointer hover:text-primary",
+            !card.title && onOpenContact && model.leadId && "cursor-pointer hover:text-primary",
           )}
           title={model.title}
           onClick={(e) => {
-            if (onOpenContact && model.leadId) {
+            if (!card.title && onOpenContact && model.leadId) {
               e.stopPropagation();
               onOpenContact(model.leadId);
             }
@@ -224,7 +232,13 @@ export const OpportunityCard = ({
               breakdown={{ icp: card.icp_score, velocity: card.velocity }}
             />
           )}
-          <UserAvatar userId={model.ownerId} name={model.ownerName} size="sm" />
+          {show("owner") && onChangeOwner && !isDragOverlay ? (
+            <span onClick={stop} onPointerDown={stop} onKeyDown={stop}>
+              <UserPicker value={card.owner_id} onChange={onChangeOwner} trigger={<button type="button" aria-label="Alterar responsável" title="Alterar responsável">
+                <UserAvatar userId={model.ownerId} name={model.ownerName} size="sm" />
+              </button>} />
+            </span>
+          ) : <UserAvatar userId={model.ownerId} name={model.ownerName} size="sm" />}
         </div>
       </div>
 
@@ -332,15 +346,15 @@ export const OpportunityCard = ({
       {!isDragOverlay && lead?.id && (
         <div
           className={cn(
-            "flex items-center gap-1 border-t border-border/60 pt-1.5 transition-opacity",
+            "flex flex-wrap items-center gap-1 border-t border-border/60 pt-1.5 transition-opacity",
             "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100",
           )}
           onClick={stop}
           onPointerDown={stop}
         >
-          <ChatAction leadId={lead.id} />
-          <TouchpointAction leadId={lead.id} />
-          <FollowupAction opportunityId={card.id} ownerId={model.ownerId ?? null} title={model.title} />
+          {show("chat") && <ChatAction leadId={lead.id} />}
+          {show("touchpoint") && <TouchpointAction leadId={lead.id} />}
+          {show("followup") && <FollowupAction opportunityId={card.id} ownerId={model.ownerId ?? null} title={model.title} />}
           {showWhatsApp && (
             <a
               href={`https://wa.me/${lead.phone!.replace(/\D/g, "").replace(/^(?!55)/, "55$&")}`}
@@ -354,7 +368,7 @@ export const OpportunityCard = ({
             </a>
           )}
           <span className="ml-auto flex items-center gap-1">
-            {onWin && card.status === "open" && (
+            {show("won") && onWin && card.status === "open" && (
               <button
                 type="button"
                 onClick={onWin}
@@ -366,7 +380,7 @@ export const OpportunityCard = ({
                 Ganho
               </button>
             )}
-            {onMoveRequest && (
+            {show("move") && onMoveRequest && (
               <button
                 type="button"
                 onClick={onMoveRequest}
@@ -376,13 +390,13 @@ export const OpportunityCard = ({
                 Mover para…
               </button>
             )}
-            <SyncButton
+            {show("sync") && <SyncButton
               mode="single"
               variant="card"
               leadId={lead.id}
               opportunityId={card.id}
               pipelineId={card.pipeline_id}
-            />
+            />}
           </span>
         </div>
       )}
@@ -406,7 +420,7 @@ function ChatAction({ leadId }: { leadId: string }) {
   );
 }
 
-function TouchpointAction({ leadId }: { leadId: string }) {
+export function TouchpointAction({ leadId }: { leadId: string }) {
   const logTouchpoint = useLogTouchpoint();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<TouchpointType>("whatsapp");

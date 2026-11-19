@@ -64,7 +64,6 @@ type Filter = "all" | "milestones";
 export function DealTimelineSection({ opportunityId, open }: { opportunityId: string; open: boolean }) {
   const { data, isLoading } = useDealTimeline(opportunityId, open);
   const [filter, setFilter] = useState<Filter>("milestones");
-  const [expanded, setExpanded] = useState(false);
 
   const events = useMemo(() => {
     // "Marcos" esconde touchpoints e etapas sem significado de funil.
@@ -73,18 +72,17 @@ export function DealTimelineSection({ opportunityId, open }: { opportunityId: st
     );
     return [...list].reverse();
   }, [data, filter]);
-  const shown = expanded ? events : events.slice(0, 8);
 
   // agrupado por dia
   const groups = useMemo(() => {
-    const out: { day: string; items: typeof shown }[] = [];
-    for (const e of shown) {
+    const out: { day: string; items: typeof events }[] = [];
+    for (const e of events) {
       const d = day(e.at);
       if (out[out.length - 1]?.day === d) out[out.length - 1].items.push(e);
       else out.push({ day: d, items: [e] });
     }
     return out;
-  }, [shown]);
+  }, [events]);
 
   return (
     <section className="space-y-3">
@@ -117,9 +115,9 @@ export function DealTimelineSection({ opportunityId, open }: { opportunityId: st
           ) : (
             <div className="space-y-3">
               {groups.map((g) => (
-                <div key={g.day} className="space-y-1">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{g.day}</p>
-                  <ul className="relative space-y-1.5 border-l border-border/70 pl-4 ml-1">
+                <details key={`${opportunityId}-${g.day}`} className="rounded-md border px-2 py-1">
+                  <summary className="cursor-pointer text-xs text-muted-foreground">{g.day} · {g.items.length} {g.items.length === 1 ? "registro" : "registros"}</summary>
+                  <ul className="relative mt-2 space-y-1.5 border-l border-border/70 pl-4 ml-1">
                     {g.items.map((e, i) => {
                       const st = CATEGORY_STYLE[categoryOf(e.kind)];
                       return (
@@ -130,18 +128,13 @@ export function DealTimelineSection({ opportunityId, open }: { opportunityId: st
                             <span className={cn("rounded px-1.5 py-0.5 font-medium", st.chip)}>{e.label}</span>
                             {e.actor && <span className="text-muted-foreground">por {e.actor}</span>}
                           </div>
-                          {e.detail && <p className="mt-0.5 text-muted-foreground truncate">{e.detail}</p>}
+                          {e.detail && <p className="mt-0.5 text-muted-foreground break-words">{e.detail}</p>}
                         </li>
                       );
                     })}
                   </ul>
-                </div>
+                </details>
               ))}
-              {events.length > 8 && (
-                <button type="button" className="text-xs text-primary hover:underline" onClick={() => setExpanded((v) => !v)}>
-                  {expanded ? "Mostrar menos" : `Ver todos (${events.length})`}
-                </button>
-              )}
             </div>
           )}
         </>

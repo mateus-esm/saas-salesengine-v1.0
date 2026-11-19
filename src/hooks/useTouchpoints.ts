@@ -115,6 +115,7 @@ export const useLogTouchpoint = () => {
     },
     onSuccess: ({ cadenceShifted }, vars) => {
       queryClient.invalidateQueries({ queryKey: ["touchpoints", vars.lead_id] });
+      invalidateTouchpointScores(queryClient);
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       toast.success(
@@ -168,6 +169,7 @@ export const useTouchpoints = (leadId?: string) => {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["touchpoints", leadId] });
+          invalidateTouchpointScores(queryClient);
         }
       )
       .subscribe();
@@ -202,6 +204,7 @@ export const useTouchpoints = (leadId?: string) => {
     },
     onSuccess: ({ cadenceShifted }) => {
       queryClient.invalidateQueries({ queryKey: ["touchpoints", leadId] });
+      invalidateTouchpointScores(queryClient);
       // Refresh card/grid surfaces so the new next_contact paints right away.
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
@@ -223,6 +226,7 @@ export const useTouchpoints = (leadId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["touchpoints", leadId] });
+      invalidateTouchpointScores(queryClient);
       toast.success("Touchpoint removido!");
     },
     onError: (error) => {
@@ -241,6 +245,7 @@ export const useTouchpoints = (leadId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["touchpoints", leadId] });
+      invalidateTouchpointScores(queryClient);
       toast.success("Touchpoint atualizado!");
     },
     onError: (error) => {
@@ -258,3 +263,7 @@ export const useTouchpoints = (leadId?: string) => {
     refetch: touchpointsQuery.refetch,
   };
 };
+
+function invalidateTouchpointScores(queryClient: ReturnType<typeof useQueryClient>) {
+  for (const key of ["lead-scores", "board", "opp_table", "deal_timeline"]) queryClient.invalidateQueries({ queryKey: [key] });
+}

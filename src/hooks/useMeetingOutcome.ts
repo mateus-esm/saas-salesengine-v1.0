@@ -41,7 +41,7 @@ export function useMeetingOutcome() {
     onSuccess: (r) => {
       toast.success(outcomeToast(r));
       // O atalho da agenda e todos os números que leem funnel_events.
-      for (const key of ["agenda_events", "funnel_milestones", "funnel_overview", "funnel_series", "funnel_breakdown"]) {
+      for (const key of ["agenda_events", "deal_timeline", "funnel_milestones", "funnel_overview", "funnel_series", "funnel_breakdown"]) {
         qc.invalidateQueries({ queryKey: [key] });
       }
     },

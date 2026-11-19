@@ -8349,6 +8349,7 @@ export type Database = {
           description: string | null
           due_date: string | null
           id: string
+          opportunity_id: string | null
           lead_id: string
           observations: string | null
           parent_task_id: string | null
@@ -8362,6 +8363,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           id?: string
+          opportunity_id?: string | null
           lead_id: string
           observations?: string | null
           parent_task_id?: string | null
@@ -8375,6 +8377,7 @@ export type Database = {
           description?: string | null
           due_date?: string | null
           id?: string
+          opportunity_id?: string | null
           lead_id?: string
           observations?: string | null
           parent_task_id?: string | null

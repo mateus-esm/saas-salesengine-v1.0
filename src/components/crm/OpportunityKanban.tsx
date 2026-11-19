@@ -24,6 +24,7 @@ import {
 
 import { useBoardRealtime, useBoardSummary, useMoveBoardCard } from "@/hooks/useBoard";
 import { useLead, useOpportunity } from "@/hooks/useLead";
+import { useOpportunityMutations } from "@/hooks/useOpportunities";
 import { useLeadMutations } from "@/hooks/useLeads";
 import { useMoveToStage } from "@/hooks/useMoveToStage";
 import { usePipelines } from "@/hooks/usePipelines";
@@ -74,6 +75,10 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const pipeline = pipelines.find((p) => p.id === pipelineId);
   // One request for the whole board: names for "Usuário" fields on the cards.
   const { nameOf } = useMemberDirectory();
+  const { setOwner } = useOpportunityMutations();
+  const changeOwner = (card: BoardCard, id: string | null) => {
+    setOwner.mutate({ id: card.id, owner_id: id, owner_name: nameOf(id) });
+  };
   const isMobile = useIsMobile();
   const { isCollapsed, toggleStage } = useCollapsedStages(pipelineId);
 
@@ -178,9 +183,11 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
   const nativeFlags = useMemo<NativeCardFlags>(() => {
     const ids = pipeline?.card_field_ids ?? [];
     const hasNativeConfig = ids.some((id) => id.startsWith("native:"));
-    if (!hasNativeConfig) return DEFAULT_NATIVE_CARD_FLAGS;
+    const hiddenActions = ids.filter((id) => id.startsWith("hide:"));
+    if (!hasNativeConfig) return { ...DEFAULT_NATIVE_CARD_FLAGS, hiddenActions };
 
     return {
+      hiddenActions,
       value: ids.includes("native:value"),
       timeInPhase: ids.includes("native:time_in_phase"),
       touchpoints: ids.includes("native:touchpoints"),
@@ -352,6 +359,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                 }}
                 onOpenContact={(leadId) => setContactLeadId(leadId)}
                 nameOf={nameOf}
+                onChangeOwner={changeOwner}
                 onMoveCard={setMoveSheetCard}
                 onWinCard={winCard}
                 fill
@@ -381,6 +389,8 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
                   }}
                   onOpenContact={(leadId) => setContactLeadId(leadId)}
                   nameOf={nameOf}
+                  onChangeOwner={changeOwner}
+                  onMoveCard={setMoveSheetCard}
                   isCollapsed={isCollapsed(stage.id)}
                   onToggleCollapse={() => toggleStage(stage.id)}
                   onWinCard={winCard}
@@ -452,7 +462,7 @@ export const OpportunityKanban = ({ pipelineId }: OpportunityKanbanProps) => {
       />
 
       <Dialog open={showCardConfig} onOpenChange={setShowCardConfig}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Configurar campos do card</DialogTitle>
             <DialogDescription>

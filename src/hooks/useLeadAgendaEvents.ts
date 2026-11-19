@@ -17,18 +17,18 @@ const sb = supabase as any;
  * The key sits under ["agenda_events"], so creating or removing an event in the
  * Agenda refreshes it too.
  */
-export function useLeadAgendaEvents(leadId: string | null, enabled: boolean) {
+export function useLeadAgendaEvents(leadId: string | null, enabled: boolean, opportunityId: string | null) {
   const { profile } = useAuth();
   const equipeId = profile?.equipe_id;
 
   return useQuery({
-    queryKey: ["agenda_events", equipeId, "lead", leadId],
+    queryKey: ["agenda_events", equipeId, "lead", leadId, opportunityId],
     queryFn: async (): Promise<AgendaEvent[]> => {
       const { data, error } = await sb
         .from("agenda_events")
         .select("*")
         .eq("equipe_id", equipeId)
-        .eq("lead_id", leadId)
+        .or(`opportunity_id.eq.${opportunityId},and(opportunity_id.is.null,lead_id.eq.${leadId})`)
         .is("deleted_at", null)
         .order("starts_at", { ascending: true });
       if (error) throw error;

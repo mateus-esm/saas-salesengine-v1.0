@@ -58,6 +58,7 @@ const TasksView = () => {
     status: string;
     assigned_to: string | null;
     lead_id: string;
+    opportunity_id: string | null;
     leadName: string | null;
   } | null>(null);
   const [createLeadId, setCreateLeadId] = useState<string | null>(null);
@@ -73,7 +74,10 @@ const TasksView = () => {
   const isOverdue = (due: string | null, status: string) =>
     !!due && new Date(due) < new Date() && status !== "feito";
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["all_tasks"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["all_tasks"] });
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  };
 
   const handleSave = async (data: TaskFormData) => {
     if (editTask) {
@@ -81,6 +85,7 @@ const TasksView = () => {
       const { error } = await supabase
         .from("tasks")
         .update({
+          opportunity_id: data.opportunity_id,
           title: data.title,
           description: data.description || null,
           due_date: data.due_date,
@@ -97,22 +102,20 @@ const TasksView = () => {
   /** Sprint 5.3 T4 — create a task via the CRM tasks tab. The user must
    *  select a lead via the lead selector in the TaskDialog. */
   const handleCreate = async (data: TaskFormData) => {
-    if (!createLeadId) {
-      toast.error("Selecione um contato para vincular a tarefa");
-      return;
-    }
+    const leadId = data.lead_id || createLeadId;
+    if (!leadId) throw new Error("Selecione uma oportunidade ou contato");
     const { error } = await supabase.from("tasks").insert({
       title: data.title,
       description: data.description || null,
       due_date: data.due_date,
       status: data.status,
       assigned_to: data.assigned_to,
-      lead_id: createLeadId,
+      opportunity_id: data.opportunity_id,
+      lead_id: leadId,
       created_by: profile?.id,
     });
     if (error) {
-      toast.error("Erro ao criar tarefa");
-      return;
+      throw error;
     }
     toast.success("Tarefa criada");
     setCreateLeadId(null);
@@ -212,6 +215,7 @@ const TasksView = () => {
                       {isVisible("lead") && (
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {t.leadName ?? "—"}
+                          {t.opportunity_id && <div className="text-xs">Oportunidade · {t.opportunityTitle || t.leadName} · {t.opportunity_id.slice(-6)}</div>}
                         </td>
                       )}
                       {isVisible("due_date") && (
@@ -283,23 +287,9 @@ const TasksView = () => {
           }
         }}
         onSave={editTask ? handleSave : handleCreate}
-        task={
-          editTask
-            ? {
-                id: editTask.id,
-                lead_id: editTask.lead_id,
-                title: editTask.title,
-                description: editTask.description,
-                due_date: editTask.due_date,
-                status: editTask.status,
-                assigned_to: editTask.assigned_to,
-                parent_task_id: null,
-                created_at: "",
-                created_by: null,
-              }
-            : null
-        }
+        task={editTask}
         mode={editTask ? "edit" : "create"}
+        enableDealLink
         showLeadSelector={!editTask}
         selectedLeadId={createLeadId}
         onLeadChange={setCreateLeadId}

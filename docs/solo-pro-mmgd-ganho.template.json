@@ -1,0 +1,27 @@
+{
+  "data": {
+    "id": "{{payload.data.id}}",
+    "lead": "{{payload.data.lead}}",
+    "name": "{{payload.data.name}}",
+    "canal": "{{payload.data.onboarding.canal}}",
+    "email": "{{payload.data.onboarding.email}}",
+    "itens": "{{payload.data.onboarding.itens}}",
+    "phone": "{{payload.data.telefone}}",
+    "preco": "{{payload.data.onboarding.value}}",
+    "value": "{{payload.data.onboarding.value}}",
+    "campos": "{{payload.data.onboarding.campos}}",
+    "estagio": "Ganho",
+    "produto": "{{payload.data.onboarding.produto}}",
+    "contract": "{{payload.data.onboarding.contract}}",
+    "proposal": "{{payload.data.onboarding.proposal}}",
+    "close_date": "{{payload.data.data_de_fechamento}}",
+    "responsavel": "{{payload.data.responsavel}}",
+    "observations": "{{payload.data.observacoes}}",
+    "nome_oportunidade": "{{payload.data.nome_oportunidade}}"
+  },
+  "event": "deal_won",
+  "button": "won",
+  "source": "rev",
+  "table_id": "{{payload.table_id}}",
+  "record_id": "{{payload.record_id}}"
+}

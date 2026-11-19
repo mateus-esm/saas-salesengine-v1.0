@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 export interface Task {
   id: string;
   lead_id: string;
+  opportunity_id?: string | null;
   assigned_to: string | null;
   title: string;
   description: string | null;
@@ -18,7 +19,7 @@ export interface Task {
 }
 
 type TaskPatch = Partial<
-  Pick<Task, 'title' | 'description' | 'due_date' | 'status' | 'assigned_to'>
+  Pick<Task, 'title' | 'description' | 'due_date' | 'status' | 'assigned_to' | 'opportunity_id'>
 >;
 
 /**
@@ -27,27 +28,32 @@ type TaskPatch = Partial<
  * holdout). Returns only top-level tasks for the lead; subtasks are handled by
  * useSubtasks. Realtime postgres_changes simply invalidate the cached query.
  */
-export function useTasks(leadId: string | null) {
+export function useTasks(leadId: string | null, opportunityId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const key = ['tasks', leadId];
+  const key = ['tasks', leadId, opportunityId ?? null];
 
   const tasksQuery = useQuery({
     queryKey: key,
     enabled: !!leadId,
     queryFn: async (): Promise<Task[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
         .select('*')
         .eq('lead_id', leadId as string)
         .is('parent_task_id', null)
         .order('created_at', { ascending: false });
+      if (opportunityId) query = query.or(`opportunity_id.eq.${opportunityId},opportunity_id.is.null`);
+      const { data, error } = await query;
       if (error) throw error;
       return (data as Task[]) || [];
     },
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['tasks', leadId] });
+    queryClient.invalidateQueries({ queryKey: ['all_tasks'] });
+  };
 
   const createTaskMut = useMutation({
     mutationFn: async ({
@@ -64,6 +70,7 @@ export function useTasks(leadId: string | null) {
         .from('tasks')
         .insert({
           lead_id: leadId,
+          opportunity_id: opportunityId ?? null,
           title: title.trim(),
           description: description ?? null,
           due_date: dueDate ?? null,
@@ -121,7 +128,7 @@ export function useTasks(leadId: string | null) {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadId]);
+  }, [leadId, opportunityId]);
 
   // ── Public API (stable shape; consumers unchanged from the useState era) ──
   const createTask = (title: string, description?: string, dueDate?: string) => {

@@ -21,7 +21,7 @@ describe("CrmSectionNav", () => {
     const link = screen.getByRole("link", { name: "Base de Contatos" });
     expect(link.getAttribute("aria-current")).toBe("page");
     expect(link.getAttribute("href")).toBe("/crm?tab=contacts");
-    expect(screen.getByRole("link", { name: "Empresas" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Empresas" })).toBeNull();
   });
 
   it("sem tab, o Pipeline é a ativa", () => {
@@ -35,6 +35,7 @@ describe("CrmSectionNav", () => {
     expect(trigger.getAttribute("aria-current")).toBe("page");
     fireEvent.keyDown(trigger, { key: "Enter" });
     expect(await screen.findByRole("menuitem", { name: "Todas as tabelas" })).toBeTruthy();
+    expect(await screen.findByRole("menuitem", { name: "Empresas" })).toBeTruthy();
     const item = await screen.findByRole("menuitem", { name: "Propostas" });
     expect(item.getAttribute("href")).toBe("/crm?tab=tabelas&custom_table=propostas");
   });
