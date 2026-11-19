@@ -110,10 +110,13 @@ describe("OutreachSettings", () => {
       </QueryClientProvider>
     );
     // Sai da tela (ex.: foi ao chat) e volta: o componente remonta.
-    render(view).unmount();
+    const firstVisit = render(view);
+    const savedHeading = `Editando: ${SEQUENCE.name}`;
+    await screen.findByText(savedHeading, {}, { timeout: 5000 });
+    firstVisit.unmount();
     render(view);
 
-    expect(await screen.findByText(`Editando: ${SEQUENCE.name}`)).toBeTruthy();
+    expect(await screen.findByText(savedHeading, {}, { timeout: 5000 })).toBeTruthy();
     expect((screen.getByDisplayValue(SEQUENCE.name) as HTMLInputElement).value).toBe(SEQUENCE.name);
 
     fireEvent.change(screen.getByDisplayValue(SEQUENCE.name), { target: { value: "Novo Lead" } });

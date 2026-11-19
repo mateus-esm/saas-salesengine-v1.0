@@ -455,7 +455,11 @@ export const WebhookConfigModal = ({
                     : "Depois de salvar, abra as configurações do pipeline, escolha a etapa e vincule este webhook em Ao entrar na etapa."}</p>
                 )}
                 {watch("trigger_event").startsWith("automation") && (
-                  <p className="text-sm text-muted-foreground">Em Automações, escolha o evento e selecione Chamar webhook como ação.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Em Automações, escolha o evento e selecione Chamar webhook. Para eventos do Outreach,
+                    use <code>{"{{payload.lead_name}}"}</code>, <code>{"{{payload.phone}}"}</code> e{" "}
+                    <code>{"{{payload.status}}"}</code> no JSON de saída.
+                  </p>
                 )}
               </div>
             </>
