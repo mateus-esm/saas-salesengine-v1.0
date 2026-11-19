@@ -87,7 +87,8 @@ if (import.meta.main) {
           .select("instance_name,status").eq("id", instanceId)
           .eq("equipe_id", deliveryLog.equipe_id).maybeSingle();
         if (error || instance?.status !== "connected") return await finishWithError("Instância indisponível");
-        const { number, text } = deliveryLog.payload ?? {};
+        const { number, text: renderedText } = deliveryLog.payload ?? {};
+        const text = typeof renderedText === "number" ? String(renderedText) : renderedText;
         if (!/^\d{10,15}$/.test(String(number)) || typeof text !== "string" || !text.trim()) {
           return await finishWithError("Destinatário ou mensagem inválidos");
         }

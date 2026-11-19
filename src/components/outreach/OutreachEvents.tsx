@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { WhatsAppComposer } from "./WhatsAppComposer";
+import { supabase } from "@/integrations/supabase/client";
+import { useRole } from "@/hooks/useRole";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +11,20 @@ import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import type { WebhookConfig } from "@/types/webhook";
 
 type Instance = { id: string; display_name: string; instance_name: string; status: string };
-const fields = ["name", "telefone", "valor_da_oportunidade", "estagio", "responsavel.name"];
+const fields = [
+  ["name","Cliente","Maria Souza"], ["telefone","Telefone","+55 85 90000-0000"],
+  ["mensagem.preco","Preço da venda","R$ 14.000,00"], ["mensagem.produto","Produto vendido","Gerador Solar"],
+  ["mensagem.canal","Canal de aquisição","Direto / Marca"], ["mensagem.canal_contato","Canal de contato","WhatsApp"],
+  ["responsavel.name","Responsável","Ana Silva"], ["estagio","Etapa","Ganho"],
+  ["mensagem.email_responsavel","E-mail do responsável","ana@example.com"],
+  ["mensagem.telefone_responsavel","WhatsApp do responsável","+55 85 90000-0001"],
+  ["mensagem.sla","SLA da etapa","24 h"], ["mensagem.touchpoints","Total de touchpoints do lead","3"],
+  ["mensagem.ultimo_touchpoint","Data do último touchpoint","18/11/2026"],
+  ["pipeline.name","Pipeline","Vendas"], ["fonte","Fonte","Landing page"],
+  ["valor_da_oportunidade","Valor do negócio","14000"], ["data_de_fechamento","Fechamento","2026-11-19"],
+];
+const variables = fields.map(([key,label]) => ({key:"payload.data."+key,label}));
+const samples = Object.fromEntries(fields.map(([key,,value]) => ["payload.data."+key,value]));
 export function OutreachEvents({ instances }: { instances: Instance[] }) {
   const { configs, createConfig, updateConfig } = useWebhookConfigs();
   const [editing, setEditing] = useState<string | null>(null);
@@ -19,8 +35,17 @@ export function OutreachEvents({ instances }: { instances: Instance[] }) {
   const [phones, setPhones] = useState("");
   const [message, setMessage] = useState("");
   const [active, setActive] = useState(true);
+  const {hasRole} = useRole();
+  const [salePreview,setSalePreview] = useState<{source:string; event:string|null; text:string}|null>(null);
+  const realPreview = salePreview?.source === message && salePreview.event === editing ? salePreview : null;
+  async function previewSale() {
+    const {data,error} = await (supabase as any).rpc("preview_outreach_win",{event_id:editing==="new"?null:editing,message});
+    if (error) return toast.error(error.message);
+    setSalePreview({source:message,event:editing,text:data ?? ""});
+  }
   const events = configs.filter(c => c.trigger_event === "outreach_event:" + c.id);
   function edit(c?: WebhookConfig) {
+    setSalePreview(null);
     setEditing(c?.id ?? "new"); setName(c?.name ?? "");
     setInstance(c?.url.split("/").pop() ?? instances.find(i => i.status === "connected")?.id ?? "");
     setTeam(c?.outreach_recipients?.team ?? false); setLead(c?.outreach_recipients?.lead ?? false);
@@ -51,8 +76,11 @@ export function OutreachEvents({ instances }: { instances: Instance[] }) {
           <label className="block"><input type="checkbox" checked={lead} onChange={e => setLead(e.target.checked)} /> Cliente do negócio</label>
           <label className="block">Outros números com DDI (um por linha)<Textarea value={phones} onChange={e => setPhones(e.target.value)} /></label>
         </fieldset>
-        <label className="block">Mensagem<Textarea value={message} onChange={e => setMessage(e.target.value)} rows={5} /></label>
-        <div className="flex flex-wrap gap-2">{fields.map((field, i) => <Button key={field} size="sm" variant="outline" onClick={() => setMessage(m => m + "{{payload.data." + field + "}}")}>{["Cliente","Telefone","Valor","Etapa","Responsável"][i]}</Button>)}</div>
+        <label htmlFor="outreach-event-message">Mensagem</label>
+        <WhatsAppComposer id="outreach-event-message" value={message} onChange={setMessage} variables={variables}
+          previewLabel={realPreview ? "Prévia no WhatsApp · Venda ganha" : "Prévia no WhatsApp · Dados de exemplo"}
+          preview={realPreview?.text ?? message.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_token,key) => samples[key] ?? "⟨campo do CRM⟩")} />
+        {hasRole("admin") && <Button type="button" variant="outline" disabled={!message.trim()} onClick={previewSale}>Prévia com uma venda ganha</Button>}
         <label className="block"><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /> Evento ativo</label>
         <Button disabled={!name.trim() || !message.trim() || !instance || createConfig.isPending || updateConfig.isPending} onClick={save}>Salvar evento</Button>{" "}
         <Button variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>

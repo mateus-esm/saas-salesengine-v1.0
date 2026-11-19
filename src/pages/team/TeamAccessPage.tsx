@@ -6,6 +6,7 @@
  * `team-access` e o trigger de assentos. Esconder um botão aqui não é controle.
  */
 import { useState } from "react";
+import { MemberProfileDialog } from "@/components/MemberProfileDialog";
 import { Navigate } from "react-router-dom";
 import { Copy, Loader2, ShieldOff, ShieldCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +51,7 @@ export default function TeamAccessPage() {
   const { overview, isLoading, error, run, isMutating } = useTeamAccess(isOwner);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<TeamAccessMember | null>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
@@ -147,8 +149,10 @@ export default function TeamAccessPage() {
                 return (
                   <TableRow key={m.user_id} className={restricted ? "opacity-60" : undefined}>
                     <TableCell>
+                      {m.photo && <img className="mr-2 size-9 float-left rounded-full" alt="" src={m.photo} />}
                       <div className="font-medium">{m.nome_completo}{m.is_me && <span className="ml-2 text-xs text-muted-foreground">(você)</span>}</div>
-                      <div className="text-xs text-muted-foreground">{m.email}</div>
+                      <div className="text-xs text-muted-foreground">{m.contact_email || m.email}</div>
+                      {m.telefone && <div className="text-xs text-muted-foreground">{m.telefone}</div>}
                     </TableCell>
                     <TableCell>
                       {locked ? (
@@ -174,6 +178,7 @@ export default function TeamAccessPage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatLastSeen(m.last_sign_in_at)}</TableCell>
                     <TableCell className="text-right">
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(m)}>Editar perfil</Button>
                       {!locked && (restricted ? (
                         <Button
                           size="sm" variant="outline" disabled={isMutating || atLimit}
@@ -196,6 +201,7 @@ export default function TeamAccessPage() {
         </div>
       )}
 
+      {editing && <MemberProfileDialog userId={editing.user_id} member={{...editing, nome_completo:editing.profile_name}} close={() => setEditing(null)} />}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>

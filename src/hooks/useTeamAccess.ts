@@ -13,6 +13,10 @@ export type MemberRole = "user" | "admin" | "owner" | "super_admin";
 export type AccessStatus = "active" | "restricted";
 
 export interface TeamAccessMember {
+  profile_name: string | null;
+  telefone: string | null;
+  photo: string | null;
+  contact_email: string | null;
   user_id: string;
   email: string | null;
   nome_completo: string;
@@ -68,6 +72,7 @@ export function useTeamAccess(enabled = true) {
     queryKey,
     enabled: enabled && !!equipeId,
     staleTime: 15_000,
+    refetchInterval: 60_000,
     queryFn: async (): Promise<TeamAccessOverview> => {
       // Os tipos gerados ainda não conhecem a RPC.
       const { data, error } = await (supabase as any).rpc("team_access_overview");
