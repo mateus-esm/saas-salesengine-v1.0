@@ -164,12 +164,14 @@ export function planStageMove(
   pipeline: { loss_reasons?: unknown } | null | undefined,
   fromStageId: string,
   toStageId: string,
-): "noop" | "direct" | "ask" | "ask-recycle" {
+): "noop" | "direct" | "ask" | "ask-recycle" | "ask-won" {
   if (fromStageId === toStageId) return "noop";
   const target = stages.find((s) => s.id === toStageId);
   if (!target) return "noop";
   // Sprint 15b · T4 — a Reciclo (ciclo) target asks for the reason and the return rule.
   if (target.stage_type === "ciclo") return "ask-recycle";
+  // A won target asks for the closing checklist (items, proposal, contract, value).
+  if (target.stage_type === "won") return "ask-won";
   return needsLossReason(target, pipeline) ? "ask" : "direct";
 }
 

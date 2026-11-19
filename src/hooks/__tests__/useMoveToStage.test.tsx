@@ -28,6 +28,25 @@ describe("useMoveToStage (Sprint Suporte 1 · #12)", () => {
     expect(result.current.pendingMove).toBeNull();
   });
 
+  it("holds a single-deal move to Ganho for the checklist, then runs it marked as won", () => {
+    const run = vi.fn();
+    const { result } = renderHook(() => useMoveToStage({ stages, pipeline: withReasons }));
+    let plan: string | undefined;
+    act(() => { plan = result.current.requestMove({ fromStageId: "open", toStageId: "won", opportunityIds: ["o1"], run }); });
+    expect(plan).toBe("ask-won");
+    expect(run).not.toHaveBeenCalled();
+    act(() => { result.current.confirmWon(); });
+    expect(run).toHaveBeenCalledWith(null, { won: true });
+    expect(result.current.pendingMove).toBeNull();
+  });
+
+  it("a bulk move to Ganho goes straight (the checklist is per deal)", () => {
+    const run = vi.fn();
+    const { result } = renderHook(() => useMoveToStage({ stages, pipeline: withReasons }));
+    act(() => { result.current.requestMove({ fromStageId: "open", toStageId: "won", opportunityIds: ["o1", "o2"], run }); });
+    expect(run).toHaveBeenCalledWith(null);
+  });
+
   it("holds a move to a lost stage until the reason is confirmed, then saves both together", () => {
     const run = vi.fn();
     const { result } = renderHook(() => useMoveToStage({ stages, pipeline: withReasons }));

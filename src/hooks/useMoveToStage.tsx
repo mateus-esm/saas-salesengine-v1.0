@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { LossReasonDialog } from "@/components/crm/LossReasonDialog";
 import { RecycleDialog } from "@/components/crm/RecycleDialog";
+import { WonDialog } from "@/components/crm/WonDialog";
 import { useScheduleFollowup } from "@/hooks/useFollowups";
 import { lossReasonsOf, planStageMove } from "@/lib/board";
 import { followupErrorMessage, type FollowupFormValue } from "@/lib/followups";
@@ -39,7 +40,7 @@ export interface MoveRequest {
    * Sprint 15b: may return a Promise that settles once the server committed the move; a
    * Reciclo move schedules its follow-up only after that, and a rejection means "not moved".
    */
-  run: (lostReason: string | null) => void | Promise<unknown>;
+  run: (lostReason: string | null, extra?: MoveExtra) => void | Promise<unknown>;
   /** Sprint 15b · T4 — the deals being moved, to schedule their Reciclo follow-up. */
   opportunityIds?: string[];
   /** Sprint 15b · T4 — the deal's owner (default responsible in the Reciclo dialog). */
@@ -48,7 +49,10 @@ export interface MoveRequest {
   onCancel?: () => void;
 }
 
-export type MovePlan = "noop" | "direct" | "ask" | "ask-recycle";
+/** Set by the Ganho dialog: the value was already saved by the closing checklist. */
+export interface MoveExtra { won?: boolean }
+
+export type MovePlan = "noop" | "direct" | "ask" | "ask-recycle" | "ask-won";
 
 interface Options {
   stages: ({ id: string; stage_type?: string; name?: string } & RecycleStageDefaults)[];
@@ -70,9 +74,11 @@ export function useMoveToStage({ stages, pipeline }: Options) {
   /** Returns what happened: nothing to do, saved straight away, or waiting for the dialog. */
   const requestMove = useCallback(
     (req: MoveRequest): MovePlan => {
-      const plan = planStageMove(stages, pipeline, req.fromStageId, req.toStageId);
+      let plan = planStageMove(stages, pipeline, req.fromStageId, req.toStageId);
+      // The closing checklist is per deal: a bulk move to Ganho goes straight.
+      if (plan === "ask-won" && (req.opportunityIds?.length ?? 0) !== 1) plan = "direct";
       if (plan === "direct") runSafely(() => req.run(null));
-      else if (plan === "ask" || plan === "ask-recycle") {
+      else if (plan === "ask" || plan === "ask-recycle" || plan === "ask-won") {
         // Only one dialog at a time: the request it replaces is cancelled,
         // so a caller awaiting it (a grid cell) is never left hanging.
         pendingRef.current?.onCancel?.();
@@ -159,14 +165,23 @@ export function useMoveToStage({ stages, pipeline }: Options) {
     [scheduleAll],
   );
 
+  /** Ganho confirmed: the checklist is saved; now the caller's own move. */
+  const confirmWon = useCallback(() => {
+    const req = pendingRef.current;
+    pendingRef.current = null;
+    setPending(null);
+    if (req) runSafely(() => req.run(null, { won: true }));
+  }, []);
+
   const target = pending ? stages.find((s) => s.id === pending.toStageId) : undefined;
   const asksRecycle = !!pending && target?.stage_type === "ciclo";
+  const asksWon = !!pending && target?.stage_type === "won" && pending.opportunityIds?.length === 1;
 
   // Render once per screen that moves deals.
   const lossDialog: ReactNode = (
     <>
       <LossReasonDialog
-        open={!!pending && !asksRecycle}
+        open={!!pending && !asksRecycle && !asksWon}
         onCancel={cancel}
         reasons={lossReasonsOf(pipeline)}
         leadName={pending?.leadName}
@@ -187,8 +202,17 @@ export function useMoveToStage({ stages, pipeline }: Options) {
           ownerId={pending.ownerId ?? null}
         />
       )}
+      {asksWon && pending && (
+        <WonDialog
+          open
+          opportunityId={pending.opportunityIds![0]}
+          leadName={pending.leadName}
+          onCancel={cancel}
+          onConfirm={confirmWon}
+        />
+      )}
     </>
   );
 
-  return { requestMove, lossDialog, pendingMove: pending, cancelMove: cancel, confirmMove: confirm, confirmRecycle };
+  return { requestMove, lossDialog, pendingMove: pending, cancelMove: cancel, confirmMove: confirm, confirmRecycle, confirmWon };
 }

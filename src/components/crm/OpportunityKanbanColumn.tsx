@@ -29,6 +29,8 @@ interface OpportunityKanbanColumnProps {
   onToggleCollapse?: () => void;
   /** Touch screens: each card offers "Mover para…" (dragging is off). */
   onMoveCard?: (card: BoardCard) => void;
+  /** "Ganho" on each open card (absent when the pipeline has no won stage). */
+  onWinCard?: (card: BoardCard) => void;
   /** The phone's one-stage view: the column takes the screen's width. */
   fill?: boolean;
 }
@@ -62,6 +64,7 @@ export const OpportunityKanbanColumn = ({
   isCollapsed,
   onToggleCollapse,
   onMoveCard,
+  onWinCard,
   fill,
 }: OpportunityKanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
@@ -194,6 +197,7 @@ export const OpportunityKanbanColumn = ({
                     onClick={() => onCardClick(card, cards)}
                     onOpenContact={onOpenContact}
                     onMoveRequest={onMoveCard ? () => onMoveCard(card) : undefined}
+                    onWin={onWinCard && stage.stage_type !== "won" ? () => onWinCard(card) : undefined}
                     nameOf={nameOf}
                   />
                 </div>
