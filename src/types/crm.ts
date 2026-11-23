@@ -15,6 +15,8 @@ export type OriginCategory =
   | 'referral'
   | 'partner_channel'
   | 'offline_event'
+  | 'personal_network'
+  | 'customer_base'
   | 'api_import';
 
 // Sprint 4 EPIC 1 — identity lifecycle flag. Independent from opportunity status.

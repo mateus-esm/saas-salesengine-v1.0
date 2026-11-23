@@ -6,6 +6,7 @@ import {
   HelpCircle,
   MessageCircle,
   MessageSquareText,
+  Plug,
   Star,
   Users,
   Webhook,
@@ -105,6 +106,7 @@ export function buildNav(ctx: NavContext): NavGroup[] {
         { id: "ai-studio", title: "AI Studio", url: "/ai-studio", icon: Cpu, requiredRole: "admin", permissionKey: "ai_studio" },
         { id: "outreach", title: "Outreach", url: "/outreach", icon: MessageSquareText, requiredRole: "admin", permissionKey: "webhooks" },
         { id: "webhooks", title: "Webhooks", url: "/webhooks", icon: Webhook, requiredRole: "admin", permissionKey: "webhooks" },
+        { id: "integracoes", title: "Integrações", url: "/integracoes", icon: Plug, requiredRole: "admin", permissionKey: "webhooks" },
       ],
     },
     {

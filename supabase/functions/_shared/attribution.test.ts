@@ -101,6 +101,15 @@ Deno.test("messageTouchPayload guarda canal, agente e anúncio — nunca o texto
   assertEquals(JSON.stringify(p).includes("cpf"), false);
 });
 
+Deno.test("Sprint 16 — a primeira mensagem vai como _first_text (300 caracteres) só se passada", () => {
+  const long = "Oi! Vi o projeto de engenharia da Solo " + "x".repeat(400);
+  const p = messageTouchPayload({ channel: "whatsapp", raw: {}, firstText: `  ${long}  ` });
+  assertEquals((p._first_text as string).length, 300);
+  assertEquals((p._first_text as string).startsWith("Oi! Vi o projeto"), true);
+  assertEquals("_first_text" in messageTouchPayload({ channel: "whatsapp", raw: {}, firstText: "   " }), false);
+  assertEquals("_first_text" in messageTouchPayload({ channel: "whatsapp", raw: {} }), false);
+});
+
 // Sprint 11 · T55 — a linha do negócio novo de uma entrada (número, agente).
 const oneRow = (row: unknown, error: unknown = null) => {
   const asked: unknown[] = [];

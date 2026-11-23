@@ -10,6 +10,8 @@ export interface OriginOption {
   value: OriginCategory;
   label: string;
   group: OriginGroup;
+  /** Sprint 16 — when to pick it, in the team's words. */
+  hint?: string;
 }
 
 export const ORIGIN_CATEGORY_OPTIONS: OriginOption[] = [
@@ -24,9 +26,11 @@ export const ORIGIN_CATEGORY_OPTIONS: OriginOption[] = [
   { value: "outbound_message", label: "Cold Message", group: "outbound" },
   { value: "outbound_email", label: "Cold Email", group: "outbound" },
   // Network
-  { value: "referral", label: "Indicação", group: "network" },
-  { value: "partner_channel", label: "Parceiro / Canal", group: "network" },
-  { value: "offline_event", label: "Evento Offline", group: "network" },
+  { value: "personal_network", label: "Rede pessoal", group: "network", hint: "Alguém que você (ou a equipe) já conhece e cadastrou" },
+  { value: "referral", label: "Indicação", group: "network", hint: "Um cliente ou contato indicou — escolha o programa e quem indicou" },
+  { value: "customer_base", label: "Base de clientes", group: "network", hint: "Quem já é cliente: recompra, ampliação, novo projeto" },
+  { value: "partner_channel", label: "Parceiro / Canal", group: "network", hint: "Uma empresa parceira trouxe (arquiteto, construtora, revenda)" },
+  { value: "offline_event", label: "Evento Offline", group: "network", hint: "Feira, palestra, evento presencial" },
   // System
   { value: "api_import", label: "Importação / API", group: "system" },
 ];

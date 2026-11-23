@@ -25,8 +25,10 @@ import type { OriginCategory } from "@/types/crm";
 import {
   ORIGIN_GROUPS,
   ORIGIN_GROUP_LABELS,
+  ORIGIN_CATEGORY_OPTIONS,
   originOptionsByGroup,
 } from "@/config/originTaxonomy";
+import { ReferrerPicker } from "@/components/crm/growth/ReferrerPicker";
 import { useLeadDuplicateCheck } from "@/hooks/useLeadDuplicateCheck";
 import { usePipelines } from "@/hooks/usePipelines";
 import { usePipelineStagesV2 } from "@/hooks/usePipelineStagesV2";
@@ -68,7 +70,17 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
   // Sprint 11 · T53 — the campaign this contact came from (optional).
   const [campaignId, setCampaignId] = useState<string>("");
   const { campaigns } = useCampaigns();
-  const openCampaigns = campaigns.filter((c) => c.status === "active" || c.status === "paused");
+  const [referredById, setReferredById] = useState<string | null>(null);
+  // Sprint 16 — o programa/campanha do canal escolhido primeiro (indicação → os programas de indicação).
+  const openCampaigns = campaigns
+    .filter((c) => c.status === "active" || c.status === "paused")
+    .filter((c) => !formData.origin_category || !c.origin_category || c.origin_category === formData.origin_category);
+  const originHint = ORIGIN_CATEGORY_OPTIONS.find((o) => o.value === formData.origin_category)?.hint;
+  const programLabel =
+    formData.origin_category === "referral" ? "Programa de indicação"
+    : formData.origin_category === "offline_event" ? "Evento"
+    : formData.origin_category === "partner_channel" ? "Parceria"
+    : "Campanha";
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [selectedStageId, setSelectedStageId] = useState<string>("");
 
@@ -94,6 +106,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
     setSelectedPipelineId("");
     setSelectedStageId("");
     setCampaignId("");
+    setReferredById(null);
   };
 
   const handleSubmit = () => {
@@ -119,6 +132,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
           ? { pipelineId: selectedPipelineId, stageId: selectedStageId || null }
           : undefined,
         campaignId: campaignId || null,
+        referredById: formData.origin_category === "referral" ? referredById : null,
       },
       {
         onSuccess: (result) => {
@@ -249,7 +263,12 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
                 ))}
               </SelectContent>
             </Select>
+            {originHint && <p className="mt-1 text-[11px] text-muted-foreground">{originHint}</p>}
           </div>
+
+          {formData.origin_category === "referral" && (
+            <ReferrerPicker value={referredById} onChange={setReferredById} />
+          )}
 
           <div>
             <Label htmlFor="add-origin-detail">Detalhe da Origem</Label>
@@ -266,7 +285,7 @@ export const AddContactModal = ({ open, onClose, onCreated }: AddContactModalPro
 
           {openCampaigns.length > 0 && (
             <div>
-              <Label htmlFor="add-campaign">Campanha</Label>
+              <Label htmlFor="add-campaign">{programLabel}</Label>
               <Select value={campaignId || "__none__"} onValueChange={(v) => setCampaignId(v === "__none__" ? "" : v)}>
                 <SelectTrigger id="add-campaign" className="mt-1.5">
                   <SelectValue placeholder="Nenhuma" />

@@ -98,6 +98,8 @@ export interface CreateContactAtomicInput {
   routing?: RoutingPayload;
   /** Sprint 11 · T53 — the campaign chosen in the form (the manual entry's touch). */
   campaignId?: string | null;
+  /** Sprint 16 — who referred this contact (a lead of the team), for referral programs. */
+  referredById?: string | null;
 }
 
 export interface CreateContactAtomicResult {
@@ -114,7 +116,7 @@ export const useCreateContactAtomic = () => {
     mutationFn: async (input: CreateContactAtomicInput): Promise<CreateContactAtomicResult> => {
       if (!equipeId) throw new Error("No equipe_id");
 
-      const { contact, routing, campaignId } = input;
+      const { contact, routing, campaignId, referredById } = input;
 
       // Sprint 11 · T53 — a contact made by hand arrives through the team's
       // "Manual" entry: the touch keeps the category and the campaign chosen here.
@@ -126,6 +128,7 @@ export const useCreateContactAtomic = () => {
           p_payload: {
             ...(contact.origin_category ? { _origin_category: contact.origin_category } : {}),
             ...(campaignId ? { campaign_id: campaignId } : {}),
+            ...(referredById ? { _referred_by: referredById } : {}),
           },
           p_opportunity_id: opportunityId,
         });

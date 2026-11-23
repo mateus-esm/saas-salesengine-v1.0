@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { BarChart3, Link2, Loader2, Megaphone, Plus, Waypoints } from "lucide-react";
+import { BarChart3, Clapperboard, FlaskConical, Link2, Loader2, Megaphone, Plus, Waypoints } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { originLabel } from "@/config/originTaxonomy";
 import { useCampaigns } from "@/hooks/useCampaigns";
+import { useReferrers } from "@/hooks/useGrowth";
 import { useEntries } from "@/hooks/useEntries";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { platformLabel } from "@/lib/attribution";
@@ -22,6 +24,8 @@ import {
 } from "@/lib/campaigns";
 import { cn } from "@/lib/utils";
 
+import { AdsView } from "../growth/AdsView";
+import { ExperimentsSheet } from "../growth/ExperimentsSheet";
 import { CampaignDialog } from "./CampaignDialog";
 import { CampaignResults } from "./CampaignResults";
 import { EntryDialog } from "./EntryDialog";
@@ -37,7 +41,8 @@ const ago = (iso: string | null) => {
   }
 };
 
-type Section = "campanhas" | "resultados" | "entradas";
+type Section = "experimentos" | "campanhas" | "ads" | "resultados" | "entradas";
+const SECTIONS: Section[] = ["experimentos", "campanhas", "ads", "resultados", "entradas"];
 
 /**
  * Sprint 11 · Onda 5 · T52 — where leads come from. Campaigns: what each brought
@@ -46,7 +51,16 @@ type Section = "campanhas" | "resultados" | "entradas";
  * agent, manual, API) with its stamp and who takes its deals.
  */
 export function CampaignsView() {
-  const [section, setSection] = useState<Section>("campanhas");
+  // Sprint 16 — Growth: a seção vive na URL (?tab=campanhas&section=ads) para o link de volta.
+  const [params, setParams] = useSearchParams();
+  const raw = params.get("section") as Section | null;
+  const section: Section = raw && SECTIONS.includes(raw) ? raw : "experimentos";
+  const setSection = (v: Section) => {
+    const next = new URLSearchParams(params);
+    next.set("section", v);
+    setParams(next, { replace: true });
+  };
+  const [channel, setChannel] = useState<string>("all");
   const { campaigns, isLoading, unmatched, save, linkUtm } = useCampaigns();
   const { entries, isLoading: entriesLoading, save: saveEntry } = useEntries();
   const { nameOf } = useMemberDirectory();
@@ -59,9 +73,9 @@ export function CampaignsView() {
       <div className="space-y-3 border-b border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Campanhas e entradas</h1>
+            <h1 className="text-xl font-bold text-foreground">Growth</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              De onde vem cada lead: a porta por onde entrou, a campanha, a plataforma e o que custou.
+              Planeje e teste cada fonte de captação — anúncios, indicação, eventos, parcerias — e veja o que vira venda.
             </p>
           </div>
           {section === "campanhas" && (
@@ -73,7 +87,9 @@ export function CampaignsView() {
         </div>
         <Tabs value={section} onValueChange={(v) => setSection(v as Section)}>
           <TabsList>
-            <TabsTrigger value="campanhas" className="gap-1.5"><Megaphone className="h-4 w-4" />Campanhas</TabsTrigger>
+            <TabsTrigger value="experimentos" className="gap-1.5"><FlaskConical className="h-4 w-4" />Experimentos</TabsTrigger>
+            <TabsTrigger value="campanhas" className="gap-1.5"><Megaphone className="h-4 w-4" />Canais & campanhas</TabsTrigger>
+            <TabsTrigger value="ads" className="gap-1.5"><Clapperboard className="h-4 w-4" />Ads</TabsTrigger>
             <TabsTrigger value="resultados" className="gap-1.5"><BarChart3 className="h-4 w-4" />Resultados</TabsTrigger>
             <TabsTrigger value="entradas" className="gap-1.5"><Waypoints className="h-4 w-4" />Entradas</TabsTrigger>
           </TabsList>
@@ -81,7 +97,11 @@ export function CampaignsView() {
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        {section === "resultados" ? (
+        {section === "experimentos" ? (
+          <ExperimentsSheet />
+        ) : section === "ads" ? (
+          <AdsView />
+        ) : section === "resultados" ? (
           <CampaignResults />
         ) : section === "campanhas" ? (
           isLoading ? (
@@ -96,10 +116,12 @@ export function CampaignsView() {
                   onLink={(campaignId, value) => linkUtm.mutate({ campaignId, value })}
                 />
               )}
+              {campaigns.length > 0 && <ChannelChips campaigns={campaigns} value={channel} onChange={setChannel} />}
+              {channel === "referral" && <ReferrersCard />}
               {campaigns.length === 0 ? (
                 <Empty
                   title="Nenhuma campanha ainda"
-                  text="Crie a campanha com as chaves (utm_campaign) que os anúncios mandam; os leads caem nela sozinhos."
+                  text="Uma campanha por iniciativa de captação: anúncios (com as chaves utm_campaign), um programa de indicação, um evento. Os leads caem nela sozinhos."
                 />
               ) : (
                 <div className="overflow-x-auto rounded-md border border-border">
@@ -107,7 +129,7 @@ export function CampaignsView() {
                     <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 font-medium">Campanha</th>
-                        <th className="px-3 py-2 font-medium">Plataforma</th>
+                        <th className="px-3 py-2 font-medium">Canal</th>
                         <th className="px-3 py-2 font-medium">Status</th>
                         <th className="px-3 py-2 font-medium">Responsável</th>
                         <th className="px-3 py-2 text-right font-medium">Leads</th>
@@ -116,7 +138,7 @@ export function CampaignsView() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {campaigns.map((c) => (
+                      {campaigns.filter((c) => channel === "all" || (c.origin_category ?? "none") === channel).map((c) => (
                         <tr key={c.id} className={cn("cursor-pointer hover:bg-muted/40", c.status === "archived" && "opacity-60")} onClick={() => setEditing(c)}>
                           <td className="px-3 py-2">
                             <p className="font-medium">{c.name}</p>
@@ -124,7 +146,9 @@ export function CampaignsView() {
                               <p className="truncate text-[11px] text-muted-foreground">{c.match_keys.join(", ")}</p>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{platformLabel(c.platform) ?? "—"}</td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {[c.origin_category ? originLabel(c.origin_category) : null, platformLabel(c.platform)].filter(Boolean).join(" · ") || "—"}
+                          </td>
                           <td className="px-3 py-2">
                             <Badge variant={c.status === "active" ? "default" : "secondary"}>{campaignStatusLabel(c.status)}</Badge>
                           </td>
@@ -248,6 +272,62 @@ function UnmatchedCard({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** Sprint 16 — quem mais indica, no canal Indicação. */
+function ReferrersCard() {
+  const { data = [], isLoading } = useReferrers(null);
+  if (isLoading) return null;
+  return (
+    <div className="rounded-md border border-border p-3">
+      <p className="text-sm font-medium">Quem mais indica</p>
+      {data.length === 0 ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Ninguém ainda. Ao cadastrar um contato com origem Indicação, escolha o programa e “Indicado por”.
+        </p>
+      ) : (
+        <ul className="mt-2 divide-y divide-border text-sm">
+          {data.slice(0, 10).map((r) => (
+            <li key={r.lead_id} className="flex items-center justify-between py-1.5">
+              <span className="font-medium">{r.name}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {r.referrals} indicação(ões) · {r.wins} ganho(s){r.revenue ? ` · ${brl(r.revenue)}` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Sprint 16 — os canais (categoria de origem) das campanhas, para filtrar. */
+function ChannelChips({ campaigns, value, onChange }: { campaigns: Campaign[]; value: string; onChange: (v: string) => void }) {
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of campaigns) m.set(c.origin_category ?? "none", (m.get(c.origin_category ?? "none") ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [campaigns]);
+  if (counts.length < 2) return null;
+  const chip = (v: string, label: string, n: number) => (
+    <button
+      key={v}
+      type="button"
+      onClick={() => onChange(v)}
+      className={cn(
+        "rounded-full border px-2.5 py-0.5 text-xs",
+        value === v ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label} <span className="opacity-70">{n}</span>
+    </button>
+  );
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {chip("all", "Todos", campaigns.length)}
+      {counts.map(([k, n]) => chip(k, k === "none" ? "Sem canal" : originLabel(k as Campaign["origin_category"]), n))}
     </div>
   );
 }

@@ -71,17 +71,24 @@ export function whatsappAdReferral(raw: unknown): Record<string, string> {
   return {};
 }
 
-/** What a WhatsApp/agent arrival keeps: the channel, the agent, the ad if any — never the message text. */
+/**
+ * What a WhatsApp/agent arrival keeps: the channel, the agent, the ad if any — never the message text.
+ * Sprint 16: the customer's first text goes as `_first_text` (300 chars) only so the
+ * database can match an ad's default WhatsApp message; `_crm_touch_raw` drops it.
+ */
 export function messageTouchPayload(args: {
   channel: string | null;
   agentName?: string | null;
   instance?: string | null;
   raw: unknown;
+  firstText?: string | null;
 }): Record<string, unknown> {
+  const first = typeof args.firstText === "string" ? args.firstText.trim().slice(0, 300) : "";
   return {
     ...(args.channel ? { channel: args.channel } : {}),
     ...(args.agentName ? { agent_name: args.agentName } : {}),
     ...(args.instance ? { instance: args.instance } : {}),
+    ...(first ? { _first_text: first } : {}),
     ...whatsappAdReferral(args.raw),
   };
 }
