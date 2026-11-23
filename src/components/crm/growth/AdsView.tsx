@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAds, useAdsReport, useCreatives, useIntegrations } from "@/hooks/useGrowth";
-import { REPORT_PERIOD_LABELS, reportRange, type ReportPeriod } from "@/lib/campaigns";
+import type { GrowthRange } from "@/lib/growthPeriod";
 import {
   adMissing,
   adRatios,
@@ -49,7 +49,7 @@ const ago = (iso: string | null) => {
  * (delivery, attention, click, contact) next to Rev's (leads, wins, revenue); a
  * good creative is judged by cost per win, not cost per lead.
  */
-export function AdsView() {
+export function AdsView({ range }: { range: GrowthRange }) {
   const [sub, setSub] = useState<Sub>("desempenho");
   const { ads, isLoading: adsLoading, save: saveAd } = useAds();
   const { creatives, isLoading: crLoading, save: saveCreative } = useCreatives();
@@ -61,6 +61,9 @@ export function AdsView() {
   const [newCr, setNewCr] = useState(false);
 
   const toReview = ads.filter((a) => a.needs_review && a.status !== "archived").length;
+  // Gasto e leads do anúncio no período do filtro (o relatório já traz).
+  const { data: periodReport } = useAdsReport(range.from, range.to);
+  const inPeriod = useMemo(() => new Map((periodReport?.ads ?? []).map((r) => [r.id, r])), [periodReport]);
   const connected = windsor && windsor.status !== "disconnected";
 
   return (
@@ -97,7 +100,7 @@ export function AdsView() {
       </div>
 
       {sub === "desempenho" ? (
-        <Performance />
+        <Performance range={range} />
       ) : sub === "anuncios" ? (
         adsLoading ? <Spinner /> : ads.length === 0 ? (
           <Empty
@@ -120,8 +123,8 @@ export function AdsView() {
                     <th>Criativo</th>
                     <th>Campanha no Rev</th>
                     <th>Destino</th>
-                    <th className="text-right">Gasto 30d</th>
-                    <th className="text-right">Leads</th>
+                    <th className="text-right">Gasto no período</th>
+                    <th className="text-right">Leads no período</th>
                     <th>Visto</th>
                   </tr>
                 </thead>
@@ -146,8 +149,8 @@ export function AdsView() {
                         <td className="px-3 py-2">{a.creative_code ? <code className="text-xs">{a.creative_code}</code> : "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">{a.crm_campaign_name ?? "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">{destinationLabel(a.destination)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{brl(a.spend_30d)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{a.leads}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{brl(inPeriod.get(a.id)?.spend ?? 0)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{inPeriod.get(a.id)?.leads ?? 0}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap items-center gap-1">
                             <Badge variant="secondary" className="text-[10px]">{a.source === "windsor" ? "Windsor" : "Manual"}</Badge>
@@ -242,8 +245,7 @@ function Thumb({ url, size = "h-9 w-9" }: { url?: string | null; size?: string }
   );
 }
 
-function Performance() {
-  const [period, setPeriod] = useState<ReportPeriod>("30d");
+function Performance({ range }: { range: GrowthRange }) {
   const { ads: adList } = useAds();
   const { creatives: crList } = useCreatives();
   const thumbs = useMemo(() => {
@@ -253,7 +255,6 @@ function Performance() {
     return m;
   }, [adList, crList]);
   const [by, setBy] = useState<"creative" | "ad">("creative");
-  const range = useMemo(() => reportRange(period), [period]);
   const { data, isLoading } = useAdsReport(range.from, range.to);
 
   const rows = useMemo(() => {
@@ -272,9 +273,6 @@ function Performance() {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <select className="h-8 rounded-md border border-input bg-background px-2 text-sm" value={period} onChange={(e) => setPeriod(e.target.value as ReportPeriod)}>
-          {(Object.keys(REPORT_PERIOD_LABELS) as ReportPeriod[]).map((p) => <option key={p} value={p}>{REPORT_PERIOD_LABELS[p]}</option>)}
-        </select>
         <div className="flex rounded-md border border-border p-0.5 text-xs">
           {(["creative", "ad"] as const).map((v) => (
             <button key={v} type="button" onClick={() => setBy(v)} className={cn("rounded px-2.5 py-1", by === v ? "bg-muted font-medium text-foreground" : "text-muted-foreground")}>

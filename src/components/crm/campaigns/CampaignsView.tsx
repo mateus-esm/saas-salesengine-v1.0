@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { originLabel } from "@/config/originTaxonomy";
-import { useCampaigns } from "@/hooks/useCampaigns";
-import { useReferrers } from "@/hooks/useGrowth";
+import { useCampaignReport, useCampaigns } from "@/hooks/useCampaigns";
+import { useReferrers, useUnlinkedSources } from "@/hooks/useGrowth";
+import { growthRange, type GrowthPeriod } from "@/lib/growthPeriod";
 import { useEntries } from "@/hooks/useEntries";
 import { useMemberDirectory } from "@/hooks/useMemberDirectory";
 import { platformLabel } from "@/lib/attribution";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 import { AdsView } from "../growth/AdsView";
 import { ExperimentsSheet } from "../growth/ExperimentsSheet";
+import { GrowthPeriodBar } from "../growth/GrowthPeriodBar";
 import { CampaignDialog } from "./CampaignDialog";
 import { CampaignResults } from "./CampaignResults";
 import { EntryDialog } from "./EntryDialog";
@@ -61,6 +63,25 @@ export function CampaignsView() {
     setParams(next, { replace: true });
   };
   const [channel, setChannel] = useState<string>("all");
+  // Sprint 16 · ajuste 3 — um período para todas as abas (?gp=…&gf=…&gt=…).
+  const gp = params.get("gp") ?? "30d";
+  const gf = params.get("gf") ?? "";
+  const gt = params.get("gt") ?? "";
+  const range = useMemo(() => growthRange(gp, gf, gt), [gp, gf, gt]);
+  const setPeriod = (period: GrowthPeriod, from?: string, to?: string) => {
+    const next = new URLSearchParams(params);
+    next.set("gp", period);
+    if (period === "custom") {
+      next.set("gf", from ?? "");
+      next.set("gt", to ?? "");
+    } else {
+      next.delete("gf");
+      next.delete("gt");
+    }
+    setParams(next, { replace: true });
+  };
+  const periodReport = useCampaignReport({ from: range.from, to: range.to });
+  const inPeriod = useMemo(() => new Map((periodReport.data ?? []).map((r) => [r.campaign_id, r])), [periodReport.data]);
   const { campaigns, isLoading, unmatched, save, linkUtm } = useCampaigns();
   const { entries, isLoading: entriesLoading, save: saveEntry } = useEntries();
   const { nameOf } = useMemberDirectory();
@@ -85,6 +106,9 @@ export function CampaignsView() {
             </Button>
           )}
         </div>
+        {section !== "entradas" && (
+          <GrowthPeriodBar range={range} selected={gp} customFrom={gf} customTo={gt} onChange={setPeriod} />
+        )}
         <Tabs value={section} onValueChange={(v) => setSection(v as Section)}>
           <TabsList>
             <TabsTrigger value="experimentos" className="gap-1.5"><FlaskConical className="h-4 w-4" />Experimentos</TabsTrigger>
@@ -98,11 +122,11 @@ export function CampaignsView() {
 
       <div className="flex-1 overflow-auto p-4">
         {section === "experimentos" ? (
-          <ExperimentsSheet />
+          <ExperimentsSheet range={range} />
         ) : section === "ads" ? (
-          <AdsView />
+          <AdsView range={range} />
         ) : section === "resultados" ? (
-          <CampaignResults />
+          <CampaignResults range={range} />
         ) : section === "campanhas" ? (
           isLoading ? (
             <Spinner />
@@ -118,6 +142,7 @@ export function CampaignsView() {
               )}
               {campaigns.length > 0 && <ChannelChips campaigns={campaigns} value={channel} onChange={setChannel} />}
               {channel === "referral" && <ReferrersCard />}
+              <UnlinkedSourcesCard campaigns={campaigns} />
               {campaigns.length === 0 ? (
                 <Empty
                   title="Nenhuma campanha ainda"
@@ -133,7 +158,9 @@ export function CampaignsView() {
                         <th className="px-3 py-2 font-medium">Status</th>
                         <th className="px-3 py-2 font-medium">Responsável</th>
                         <th className="px-3 py-2 text-right font-medium">Leads</th>
+                        <th className="px-3 py-2 text-right font-medium">Ganhos</th>
                         <th className="px-3 py-2 text-right font-medium">Investimento</th>
+                        <th className="px-3 py-2 text-right font-medium">ROAS</th>
                         <th className="px-3 py-2 font-medium">Última chegada</th>
                       </tr>
                     </thead>
@@ -154,10 +181,14 @@ export function CampaignsView() {
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">{c.owner_id ? nameOf(c.owner_id) ?? "—" : "—"}</td>
                           <td className="px-3 py-2 text-right tabular-nums">
-                            {c.leads}
+                            {inPeriod.get(c.id)?.leads ?? 0}
                             {c.goal_leads ? <span className="text-muted-foreground"> / {c.goal_leads}</span> : null}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{brl(c.spend)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{inPeriod.get(c.id)?.wins ?? 0}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{brl(inPeriod.get(c.id)?.spend ?? 0)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {inPeriod.get(c.id)?.roas != null ? `${Number(inPeriod.get(c.id)?.roas).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}×` : "—"}
+                          </td>
                           <td className="px-3 py-2 text-muted-foreground">{ago(c.last_touch_at)}</td>
                         </tr>
                       ))}
@@ -272,6 +303,68 @@ function UnmatchedCard({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Sprint 16 · ajuste 3 — leads sem campanha, agrupados pela origem antiga
+ * ("Tráfego Pago", "Indicação"…). Ligar um grupo a uma campanha põe esses leads no
+ * retorno; "Criar campanha" cria uma com o nome e o canal do grupo.
+ */
+function UnlinkedSourcesCard({ campaigns }: { campaigns: Campaign[] }) {
+  const { groups, link } = useUnlinkedSources();
+  const { save } = useCampaigns();
+  const [target, setTarget] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
+  if (groups.length === 0) return null;
+  const total = groups.reduce((s, g) => s + g.leads, 0);
+  const openCamps = campaigns.filter((c) => c.status !== "archived");
+  const keyOf = (g: { origin_category: string | null; label: string }) => `${g.origin_category ?? ""}|${g.label}`;
+  const create = async (g: { origin_category: string | null; label: string }) => {
+    const camp = (await save.mutateAsync({
+      name: g.label.slice(0, 120),
+      platform: g.origin_category === "paid_social" ? "meta" : g.origin_category === "paid_search" ? "google" : null,
+      origin_category: (g.origin_category as Campaign["origin_category"]) ?? null,
+      owner_id: null, goal_leads: null, goal_deals: null, goal_revenue: null,
+      starts_on: null, ends_on: null, status: "active", match_keys: [],
+    })) as unknown as { id: string };
+    if (camp?.id) link.mutate({ campaignId: camp.id, origin_category: g.origin_category, label: g.label });
+  };
+  return (
+    <div className="rounded-md border border-sky-300/60 bg-sky-50/50 p-3 dark:border-sky-800/60 dark:bg-sky-950/20">
+      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen((o) => !o)}>
+        <span className="text-sm font-medium">Leads sem campanha · {total}</span>
+        <span className="text-xs text-muted-foreground">{open ? "Fechar" : "Ligar a campanhas para entrar no retorno"}</span>
+      </button>
+      {open && (
+        <ul className="mt-2 space-y-1.5">
+          {groups.map((g) => (
+            <li key={keyOf(g)} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium">{g.label}</span>
+              <span className="text-xs text-muted-foreground">
+                {g.origin_category ? originLabel(g.origin_category as Campaign["origin_category"]) : "Sem canal"} · {g.leads} lead(s)
+                {g.wins ? ` · ${g.wins} ganho(s)` : ""}
+              </span>
+              <span className="ml-auto flex items-center gap-1.5">
+                <Select value={target[keyOf(g)] ?? ""} onValueChange={(v) => setTarget((t) => ({ ...t, [keyOf(g)]: v }))}>
+                  <SelectTrigger className="h-7 w-48 text-xs"><SelectValue placeholder="Ligar a…" /></SelectTrigger>
+                  <SelectContent>
+                    {openCamps.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!target[keyOf(g)] || link.isPending}
+                  onClick={() => link.mutate({ campaignId: target[keyOf(g)], origin_category: g.origin_category, label: g.label })}>
+                  <Link2 className="mr-1 h-3 w-3" /> Ligar
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={save.isPending || link.isPending} onClick={() => void create(g)}>
+                  <Plus className="mr-1 h-3 w-3" /> Criar campanha
+                </Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

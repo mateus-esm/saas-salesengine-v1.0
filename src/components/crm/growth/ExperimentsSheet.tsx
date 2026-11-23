@@ -21,6 +21,7 @@ import {
   type Experiment,
   type ExperimentDraft,
 } from "@/lib/growth";
+import { overlaps, type GrowthRange } from "@/lib/growthPeriod";
 import { cn } from "@/lib/utils";
 
 const brl = (v: number) =>
@@ -44,7 +45,7 @@ type Filter = "open" | "done" | "all";
  * saves on change, a text on blur. Linked to a campaign (and/or creative), the
  * result comes live from Rev in the experiment's window; otherwise it is typed.
  */
-export function ExperimentsSheet() {
+export function ExperimentsSheet({ range }: { range: GrowthRange }) {
   const { experiments, isLoading, save, remove } = useExperiments();
   const { campaigns } = useCampaigns();
   const { creatives } = useCreatives();
@@ -53,10 +54,12 @@ export function ExperimentsSheet() {
 
   const rows = useMemo(
     () =>
-      experiments.filter((e) =>
-        filter === "all" ? true : filter === "done" ? e.status === "done" || e.status === "discarded" : e.status !== "done" && e.status !== "discarded",
-      ),
-    [experiments, filter],
+      experiments
+        .filter((e) => overlaps(e.starts_on, e.ends_on, range))
+        .filter((e) =>
+          filter === "all" ? true : filter === "done" ? e.status === "done" || e.status === "discarded" : e.status !== "done" && e.status !== "discarded",
+        ),
+    [experiments, filter, range],
   );
 
   const stats = useMemo(() => {
