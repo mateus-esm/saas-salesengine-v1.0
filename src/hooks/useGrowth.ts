@@ -161,6 +161,45 @@ export function useAdsReport(from: string, to: string) {
   });
 }
 
+export interface UnlinkedSource {
+  origin_category: string | null;
+  label: string;
+  leads: number;
+  wins: number;
+  first_at: string;
+  last_at: string;
+}
+
+/** Sprint 16 · ajuste 3 — the groups of leads without a campaign, and linking a group to one. */
+export function useUnlinkedSources() {
+  const refresh = useRefresh();
+  const list = useQuery({
+    queryKey: ["crm_growth", "unlinked"],
+    queryFn: async (): Promise<UnlinkedSource[]> => {
+      const { data, error } = await sb.rpc("crm_unlinked_sources", { p_limit: 50 });
+      if (error) throw error;
+      return ((data ?? []) as UnlinkedSource[]).map((g) => ({ ...g, leads: num(g.leads), wins: num(g.wins) }));
+    },
+  });
+  const link = useMutation({
+    mutationFn: async (a: { campaignId: string; origin_category: string | null; label: string }) => {
+      const { data, error } = await sb.rpc("crm_link_source", {
+        p_campaign_id: a.campaignId,
+        p_origin_category: a.origin_category ?? "",
+        p_label: a.label,
+      });
+      if (error) throw error;
+      return Number(data) || 0;
+    },
+    onSuccess: (n) => {
+      refresh();
+      toast.success(`${n} lead(s) ligados à campanha`);
+    },
+    onError: (e: Error) => toast.error(growthErrorText(e.message)),
+  });
+  return { groups: list.data ?? [], isLoading: list.isLoading, link };
+}
+
 export interface Referrer {
   lead_id: string;
   name: string;

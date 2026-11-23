@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCampaignReport } from "@/hooks/useCampaigns";
+import { originLabel } from "@/config/originTaxonomy";
+import { useCampaignReport, useCampaigns } from "@/hooks/useCampaigns";
 import { platformLabel } from "@/lib/attribution";
 import {
   REPORT_PERIOD_LABELS,
@@ -22,16 +23,47 @@ const times = (v: number | null) => (v === null ? "—" : `${v.toLocaleString("p
  * Sprint 11 · Onda 5 · T54 — the "Resultados" tab of Campanhas: the report for a
  * period. The dashboard's Canais page shows the same table under its own filters.
  */
-export function CampaignResults() {
+export function CampaignResults({ range }: { range?: { from: string; to: string } }) {
   const [period, setPeriod] = useState<ReportPeriod>("this_month");
-  const report = useCampaignReport(reportRange(period));
+  const report = useCampaignReport(range ?? reportRange(period));
+  const [by, setBy] = useState<"campaign" | "channel">("campaign");
+  const { campaigns } = useCampaigns();
+
+  // Sprint 16 · ajuste 3 — por canal: o gasto de todas as campanhas do canal contra
+  // os leads, ganhos e receita do canal (o histórico sem anúncio entra no canal).
+  const channelRows = useMemo<CampaignReportRow[]>(() => {
+    const cat = new Map(campaigns.map((c) => [c.id, c.origin_category]));
+    const groups = new Map<string, CampaignReportRow[]>();
+    for (const r of report.data ?? []) {
+      const k = r.campaign_id ? cat.get(r.campaign_id) ?? "none" : "nocampaign";
+      groups.set(k, [...(groups.get(k) ?? []), r]);
+    }
+    return [...groups.entries()].map(([k, rs]) => ({
+      ...reportTotals(rs),
+      campaign_id: k === "nocampaign" ? null : k,
+      name: k === "nocampaign" ? "Sem campanha" : k === "none" ? "Sem canal" : originLabel(k as never),
+      platform: null,
+      status: null,
+      goal_leads: null,
+    })).sort((a, b) => b.revenue - a.revenue || b.leads - a.leads);
+  }, [report.data, campaigns]);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          Receita = o que o ganho pôs no livro-razão no período. ROAS = receita ÷ investimento.
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-md border border-border p-0.5 text-xs">
+            {(["campaign", "channel"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => setBy(v)} className={cn("rounded px-2.5 py-1", by === v ? "bg-muted font-medium text-foreground" : "text-muted-foreground")}>
+                {v === "campaign" ? "Por campanha" : "Por canal"}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Receita = o que o ganho pôs no livro-razão no período. ROAS = receita ÷ investimento.
+          </p>
+        </div>
+        {!range && (
         <Select value={period} onValueChange={(v) => setPeriod(v as ReportPeriod)}>
           <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -40,8 +72,9 @@ export function CampaignResults() {
             ))}
           </SelectContent>
         </Select>
+        )}
       </div>
-      <CampaignReportTable rows={report.data ?? []} isLoading={report.isLoading} />
+      <CampaignReportTable rows={by === "channel" ? channelRows : report.data ?? []} isLoading={report.isLoading} label={by === "channel" ? "Canal" : "Campanha"} />
     </div>
   );
 }
@@ -52,7 +85,7 @@ export function CampaignResults() {
  * win rate, ROAS and ROI, with a totals line. "Sem campanha" shows what came
  * without one.
  */
-export function CampaignReportTable({ rows, isLoading }: { rows: CampaignReportRow[]; isLoading: boolean }) {
+export function CampaignReportTable({ rows, isLoading, label = "Campanha" }: { rows: CampaignReportRow[]; isLoading: boolean; label?: string }) {
   const total = reportTotals(rows);
 
   if (isLoading) {
@@ -66,7 +99,7 @@ export function CampaignReportTable({ rows, isLoading }: { rows: CampaignReportR
       <table className="w-full text-sm">
         <thead className="bg-muted/40 text-right text-xs text-muted-foreground">
           <tr>
-            <th className="px-3 py-2 text-left font-medium">Campanha</th>
+            <th className="px-3 py-2 text-left font-medium">{label}</th>
             <th className="px-3 py-2 font-medium">Leads</th>
             <th className="px-3 py-2 font-medium">Negócios</th>
             <th className="px-3 py-2 font-medium">Ganhos</th>

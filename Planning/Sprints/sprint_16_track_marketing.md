@@ -162,3 +162,94 @@ os de WhatsApp ficam sem campanha. Preciso de quatro coisas, nesta ordem:
   poderiamos planejar e fazer testes.
 
 Análise a melhor forma!
+
+---
+
+# Conclusão da Sprint 16 — Growth (23/11/2026)
+
+Status: **concluída e em produção** (PRs #73, #74 e o do filtro de período). Design em
+`docs/superpowers/specs/2026-11-23-sprint16-growth-design.md`.
+
+## O que foi entregue
+
+**Growth (substitui Campanhas no CRM)**, com um **filtro de período único** no topo
+(presets, "Todo o período" e intervalo personalizado) que vale para todas as abas:
+
+- **Experimentos** — planilha editável: status, hipótese, canal, campanha, criativo,
+  ICE (impacto × confiança × facilidade), métrica, base, meta, resultado ao vivo do Rev
+  (verde/vermelho contra a meta), datas, decisão e aprendizado.
+- **Canais & campanhas** — leads, ganhos, investimento e ROAS **no período**; filtro por
+  canal; "Quem mais indica" no canal Indicação; card **Leads sem campanha** para ligar
+  grupos de origem a uma campanha (ou criar uma).
+- **Ads** — Desempenho por criativo e por anúncio (CPM, frequência, gancho, retenção, CTR,
+  custo por contato × leads, CPL, negócios, ganhos, custo por ganho, ROAS), com miniatura;
+  Anúncios ("a completar", formulário da performance, quadro "Do gerenciador");
+  Criativos.
+- **Resultados** — por campanha ou **por canal** (gasto do canal × leads/ganhos/receita do
+  canal: é o retorno que fecha quando o lead não tem anúncio).
+- **Entradas** — inalterado; o carimbo de fonte também está no modal do webhook de
+  entrada de leads.
+
+**Ligação do lead ao anúncio**: ID do anúncio (inclusive o prefixado `ag:` dos
+formulários) → mensagem padrão do WhatsApp → nome do anúncio → código no `utm_content`
+→ regras antigas. Anúncio casado = mídia paga (o formulário do Meta saiu de
+"Importação / API").
+
+**Integrações** (`/integracoes`, galeria): **Windsor.ai** com a chave de cada equipe no
+Vault; sincronização diária 06:10 + manual (até 365 dias). Traz métricas por anúncio/dia
+e o anúncio em si (objetivo, destino, vídeo, miniatura, texto, botão, status, verba,
+prévia). Cria sozinho a campanha do Rev que falta, um criativo por vídeo, o destino e o
+status. Gasto por anúncio → investimento da campanha (meta_api/google_api).
+
+**Fontes**: novas *Rede pessoal* e *Base de clientes*, dica de uso por fonte, *Indicado
+por* + programa de indicação.
+
+## Números da Solo Energia depois da sprint
+
+- 44 anúncios, 21 criativos, 4 campanhas do Meta criadas pela sincronização; 3 anúncios
+  "a completar" (AD01–03, sem destino).
+- Leads com ID de anúncio ligados: **112 de 114** (os 2 restantes chegaram com uma
+  mensagem de erro do Meta no lugar do ID).
+- Leads sem campanha: **1.500 → 7**. O histórico importado foi ligado por rótulo de origem
+  a campanhas/iniciativas do canal certo (Meta histórico, Programa de Indicação, Base
+  Ativa, Prospecção Ativa, Landing Page, Google histórico, Base importada, Agente de IA…).
+  Script e como desfazer: `supabase/scripts/2026-11-23_sprint16_solo_link_legacy_sources.sql`.
+- Gasto Meta puxado (180 dias): R$ 8.275,66.
+
+## Pontos de atenção
+
+- O gasto do Windsor começa em ~maio/2026 (180 dias puxados); os leads vão até 2024.
+  Para ROI, use períodos dentro da janela do gasto (ou puxe 365 dias em Integrações).
+- O histórico pago sem anúncio cai em "Meta Ads · histórico (sem anúncio)": o CPL por
+  campanha do Meta subestima leads; o retorno certo desse período é **Por canal**.
+- Google Ads não conectado no Windsor da Solo (selecionar a conta em onboard.windsor.ai).
+- Deploy de migrations: não usar `supabase db push` (histórico de produção desalinhado);
+  aplicar o arquivo pela Management API + `migration repair`.
+
+## Próximos passos (evolução)
+
+1. **Devolver a qualificação ao Meta e ao Google** (item 4 original): CAPI do Meta
+   (leadgen_id / ctwa_clid / fbclid + dados com hash) e conversões offline do Google
+   (gclid). Antes: **definir MQL, SQL e venda** por etapa do funil.
+2. **Webhook de Lead Ads do Meta** (item 2 original): formulário direto no Rev com
+   leadgen_id e IDs — acaba com o `ag:` e com o "Importação / API".
+3. **Funil por criativo até MQL/SQL**: colunas de MQL e SQL no Desempenho, custo por MQL
+   e por SQL (depende do passo 1 para a definição).
+4. **Alertas de Growth**: frequência > 3 (público cansado), gancho caindo, gasto sem
+   lead em 3 dias, anúncio novo "a completar" — no sino/WhatsApp do time.
+5. **Experimentos com cadência**: revisão semanal (o que rodou, bateu meta, próxima
+   aposta), template de hipótese, histórico de aprendizados por canal e o resultado do
+   experimento entrando no relatório diário.
+6. **Programa de indicação completo**: link/código por indicador, recompensa, status da
+   indicação e ranking no relatório; página pública de indicação.
+7. **Eventos e parcerias como campanhas de primeira classe**: custo do evento/parceria,
+   lista de presença importada, QR code com UTM por evento/parceiro.
+8. **Google Ads**: conectar no Windsor da Solo e validar os campos por anúncio.
+9. **Atribuição multi-toque**: hoje é primeiro toque; mostrar também último toque e o
+   caminho do lead (anúncio → WhatsApp → visita → ganho).
+10. **Mensagem padrão por anúncio no WhatsApp oficial**: com o número na API oficial, o
+    `ctwa_clid` vem sempre e a CAPI de mensagens fica possível.
+11. **Biblioteca de criativos**: vídeo/arte do estúdio ligado ao criativo (link do
+    Drive/Canva), versão, e o ranking de criativos por custo por ganho para orientar o
+    estúdio.
+12. **API direta (Marketing API/Google Ads API)** se o volume justificar sair do Windsor.
