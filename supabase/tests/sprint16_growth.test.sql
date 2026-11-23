@@ -64,7 +64,7 @@ begin
     assert sqlerrm = 'invalid_creative_code', 'erro esperado invalid_creative_code, veio ' || sqlerrm;
   end;
   perform public.crm_save_creative('{"code": "p001-v1", "title": "Institucional"}');
-  assert exists (select 1 from public.crm_creatives where code = 'P001-V1'), 'código normalizado em maiúsculas';
+  assert exists (select 1 from public.crm_creatives where code = 'P001-V1' and equipe_id = '51600000-0000-0000-0000-000000000001'), 'código normalizado em maiúsculas';
   begin
     perform public.crm_save_creative('{"code": "P001-V1"}');
     assert false, 'código repetido devia ser recusado';
@@ -92,10 +92,10 @@ begin
   assert (r->>'metric_rows')::int = 2, 'duas linhas de métrica';
   assert (r->>'linked_touches')::int = 1, 'o toque que chegou antes foi ligado';
 
-  select * into v_ad from public.crm_ads where external_ad_id = '120211';
+  select * into v_ad from public.crm_ads where external_ad_id = '120211' and equipe_id = '51600000-0000-0000-0000-000000000001';
   assert v_ad.source = 'windsor' and v_ad.needs_review, 'nasce a completar';
-  assert v_ad.creative_id = (select id from public.crm_creatives where code = 'P002-V3'), 'criativo pelo código do nome';
-  assert (select title from public.crm_creatives where code = 'P002-V3') = 'Carmona ponta a ponta', 'título do segundo pedaço do nome';
+  assert v_ad.creative_id = (select id from public.crm_creatives where code = 'P002-V3' and equipe_id = '51600000-0000-0000-0000-000000000001'), 'criativo pelo código do nome';
+  assert (select title from public.crm_creatives where code = 'P002-V3' and equipe_id = '51600000-0000-0000-0000-000000000001') = 'Carmona ponta a ponta', 'título do segundo pedaço do nome';
   assert v_ad.campaign_id is null, 'a campanha ainda não tem a chave';
 
   assert (select platform = 'meta' and origin_category = 'paid_social' and creative_id = v_ad.creative_id
@@ -116,14 +116,14 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"5160b000-0000-0000-0000-00000000000a","role":"authenticated"}';
 
 do $$
-declare v_ad uuid := (select id from public.crm_ads where external_ad_id = '120211');
+declare v_ad uuid := (select id from public.crm_ads where external_ad_id = '120211' and equipe_id = '51600000-0000-0000-0000-000000000001');
 begin
   perform public.crm_save_ad(jsonb_build_object(
     'id', v_ad, 'platform', 'meta', 'external_ad_id', '120211',
     'ad_name', 'P002-V3 | Carmona ponta a ponta | reels 52s', 'campaign_external_id', '120210',
     'campaign_id', '5160c000-0000-0000-0000-000000000001', 'destination', 'whatsapp',
     'prefill_message', 'Oi! Vi o projeto de engenharia da Solo',
-    'creative_id', (select id from public.crm_creatives where code = 'P002-V3')));
+    'creative_id', (select id from public.crm_creatives where code = 'P002-V3' and equipe_id = '51600000-0000-0000-0000-000000000001')));
   assert not (select needs_review from public.crm_ads where id = v_ad), 'completo, sai de "a completar"';
   assert exists (select 1 from public.crm_campaigns where id = '5160c000-0000-0000-0000-000000000001' and '120210' = any (match_keys)),
     'o ID da campanha virou chave';
@@ -159,19 +159,19 @@ begin
          public._crm_entry_for('51600000-0000-0000-0000-000000000001', 'agent'),
          '{"ctwa_clid": "c-2", "ad_id": "120211", "ad_name": "Converse conosco"}');
   assert r->>'campaign_id' = '5160c000-0000-0000-0000-000000000001', '4. campanha do anúncio';
-  assert r->>'creative_id' = (select id::text from public.crm_creatives where code = 'P002-V3'), '4. criativo do anúncio';
+  assert r->>'creative_id' = (select id::text from public.crm_creatives where code = 'P002-V3' and equipe_id = '51600000-0000-0000-0000-000000000001'), '4. criativo do anúncio';
   assert r->>'origin_category' = 'paid_social', '4. pago';
 
   r := public.crm_record_touch('5160e000-0000-0000-0000-000000000003',
          public._crm_entry_for('51600000-0000-0000-0000-000000000001', 'agent'),
          '{"channel": "whatsapp", "_first_text": "Oi!   vi o projeto de engenharia da Solo. Quero orçamento"}');
-  assert r->>'ad_ref' = (select id::text from public.crm_ads where external_ad_id = '120211'), '5. mensagem padrão casa';
+  assert r->>'ad_ref' = (select id::text from public.crm_ads where external_ad_id = '120211' and equipe_id = '51600000-0000-0000-0000-000000000001'), '5. mensagem padrão casa';
   select raw into v_raw from public.lead_touches where id = (r->>'touch_id')::uuid;
   assert not (v_raw ? '_first_text'), '5. o texto não fica guardado';
 
   r := public.crm_record_touch('5160e000-0000-0000-0000-000000000004', null,
          '{"_entry_kind": "import", "ad_name": "AGO02", "campaign_name": "NOVO TESTE JANEIRO", "form_name": "FORMULÁRIO SOLON"}');
-  assert r->>'ad_ref' = (select id::text from public.crm_ads where ad_name = 'AGO02'), '6. formulário casa pelo nome';
+  assert r->>'ad_ref' = (select id::text from public.crm_ads where ad_name = 'AGO02' and equipe_id = '51600000-0000-0000-0000-000000000001'), '6. formulário casa pelo nome';
   assert r->>'origin_category' = 'paid_social' and r->>'platform' = 'meta', '6. Social Pago · Meta';
   assert (select origin_category from public.leads where id = '5160e000-0000-0000-0000-000000000004') = 'paid_social',
     '6. o lead não fica em api_import';
@@ -196,7 +196,7 @@ begin
   v := public.crm_save_experiment(jsonb_build_object(
     'title', 'Vídeo do Carmona no Reels', 'hypothesis', 'Prova social técnica baixa o custo por ganho',
     'channel', 'paid_social', 'campaign_id', '5160c000-0000-0000-0000-000000000001',
-    'creative_id', (select id from public.crm_creatives where code = 'P002-V3'),
+    'creative_id', (select id from public.crm_creatives where code = 'P002-V3' and equipe_id = '51600000-0000-0000-0000-000000000001'),
     'metric', 'cpl', 'target', 30, 'starts_on', current_date - 7, 'status', 'running',
     'ice_impact', 8, 'ice_confidence', 6, 'ice_ease', 15));
   assert (v->>'ice_ease')::int = 10, 'ICE limitado a 10';

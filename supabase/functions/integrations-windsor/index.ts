@@ -25,11 +25,15 @@ import { highestRole } from "../_shared/team-access.ts";
 import {
   accountsOf,
   chooseFields,
+  chooseMeta,
   CONNECTORS,
   CORE_FIELDS,
   type Connector,
   type FieldMap,
+  FIELDS_VERSION,
   type IngestRow,
+  type MetaMap,
+  metaByAd,
   mapFromList,
   normalizeRows,
   parseFieldList,
@@ -50,7 +54,13 @@ interface Integration {
   id: string;
   equipe_id: string;
   status: string;
-  settings: { fields?: Partial<Record<Connector, FieldMap>>; select_accounts?: string; connectors?: Connector[] } | null;
+  settings: {
+    fields?: Partial<Record<Connector, FieldMap>>;
+    meta?: Partial<Record<Connector, MetaMap>>;
+    fields_version?: number;
+    select_accounts?: string;
+    connectors?: Connector[];
+  } | null;
   last_sync_at: string | null;
 }
 
@@ -70,13 +80,17 @@ async function windsorGet(url: string): Promise<{ status: number; body: unknown 
 
 /** The fields this account has for a connector; null = discovery unavailable. */
 async function discover(apiKey: string, connector: Connector): Promise<FieldMap | null> {
+  const list = await discoverList(apiKey, connector);
+  return list ? chooseFields(connector, list) : null;
+}
+
+async function discoverList(apiKey: string, connector: Connector): Promise<string[] | null> {
   try {
     const { status, body } = await windsorGet(windsorUrl(connector, apiKey, {}).replace(`/${connector}?`, `/${connector}/fields?`));
     const err = windsorError(status, body);
     if (err?.auth) throw new WindsorAuthError(err.message);
     if (err) return null;
-    const list = parseFieldList(body);
-    return list ? chooseFields(connector, list) : null;
+    return parseFieldList(body);
   } catch (e) {
     if (e instanceof WindsorAuthError) throw e;
     console.warn("[windsor] discover", connector, e instanceof Error ? e.message : e);
@@ -114,15 +128,44 @@ async function pull(
   return { rows: Array.isArray(data) ? normalizeRows(connector, data, m) : [] };
 }
 
+/** The ad itself (objective, destination, video, thumbnail, text, status, budget), on the rows of each ad. Never fails the sync. */
+async function attachMeta(
+  apiKey: string,
+  connector: Connector,
+  adIdField: string,
+  map: MetaMap,
+  win: { from: string; to: string },
+  selectAccounts: string | undefined,
+  rows: IngestRow[],
+) {
+  try {
+    const fields = Array.from(new Set(["date", adIdField, ...Object.values(map).filter((x): x is string => !!x)]));
+    const { status, body } = await windsorGet(windsorUrl(connector, apiKey, {
+      fields: fields.join(","),
+      date_from: win.from,
+      date_to: win.to,
+      select_accounts: selectAccounts || undefined,
+    }));
+    if (windsorError(status, body)) return;
+    const data = (body as { data?: unknown[] } | null)?.data;
+    if (!Array.isArray(data)) return;
+    const byAd = metaByAd(data, adIdField, map);
+    for (const r of rows) {
+      const m = byAd.get(r.external_ad_id);
+      if (m) Object.assign(r, m);
+    }
+  } catch (e) {
+    console.warn("[windsor] meta", connector, e instanceof Error ? e.message : e);
+  }
+}
+
 async function ingest(db: SupabaseClient, equipeId: string, rows: IngestRow[]) {
-  const totals = { new_ads: 0, metric_rows: 0, linked_touches: 0 };
+  const totals: Record<string, number> = { new_ads: 0, metric_rows: 0, linked_touches: 0, new_campaigns: 0, new_creatives: 0 };
   for (let i = 0; i < rows.length; i += 2000) {
     const { data, error } = await db.rpc("_crm_windsor_ingest", { p_equipe_id: equipeId, p_rows: rows.slice(i, i + 2000) });
     if (error) throw new Error("ingest: " + error.message);
     const d = (data ?? {}) as Record<string, number>;
-    totals.new_ads += d.new_ads ?? 0;
-    totals.metric_rows += d.metric_rows ?? 0;
-    totals.linked_touches += d.linked_touches ?? 0;
+    for (const k of Object.keys(totals)) totals[k] += Number(d[k]) || 0;
   }
   return totals;
 }
@@ -135,15 +178,24 @@ async function syncOne(db: SupabaseClient, integ: Integration, days: number) {
   }
   const win = syncWindow(days);
   const settings = integ.settings ?? {};
-  const fields: Partial<Record<Connector, FieldMap>> = { ...(settings.fields ?? {}) };
+  const fresh = settings.fields_version === FIELDS_VERSION;
+  const fields: Partial<Record<Connector, FieldMap>> = fresh ? { ...(settings.fields ?? {}) } : {};
+  const meta: Partial<Record<Connector, MetaMap>> = fresh ? { ...(settings.meta ?? {}) } : {};
   const all: IngestRow[] = [];
   const skipped: string[] = [];
   const accounts: { source: Connector; id: string; name: string | null }[] = [];
   try {
     for (const c of CONNECTORS) {
-      if (!fields[c]) fields[c] = (await discover(key as string, c)) ?? chooseFields(c, null);
+      if (!fields[c]) {
+        const list = await discoverList(key as string, c);
+        fields[c] = list ? chooseFields(c, list) : chooseFields(c, null);
+        meta[c] = chooseMeta(c, list);
+      }
       const r = await pull(key as string, c, fields[c]!, win, settings.select_accounts);
       if (r.skipped) skipped.push(`${c}: ${r.skipped}`);
+      if (r.rows.length && meta[c] && Object.keys(meta[c]!).length && fields[c]!.external_ad_id) {
+        await attachMeta(key as string, c, fields[c]!.external_ad_id!, meta[c]!, win, settings.select_accounts, r.rows);
+      }
       all.push(...r.rows);
       accounts.push(...accountsOf(c, r.rows));
     }
@@ -161,7 +213,7 @@ async function syncOne(db: SupabaseClient, integ: Integration, days: number) {
       p_status: status,
       p_error: skipped.length ? skipped.join(" · ") : null,
       p_rows: all.length,
-      p_settings: { fields },
+      p_settings: { fields, meta, fields_version: FIELDS_VERSION },
     });
     if (accounts.length) {
       await db.from("crm_integrations").update({ accounts }).eq("id", integ.id);
@@ -197,7 +249,8 @@ serve(async (req) => {
     if (error) return json({ error: error.message }, 500);
     const results = [];
     for (const integ of (list ?? []) as Integration[]) {
-      results.push({ equipe_id: integ.equipe_id, ...(await syncOne(db, integ, integ.last_sync_at ? 3 : 30)) });
+      const days = Number(body.days) > 0 ? Math.min(365, Number(body.days)) : integ.last_sync_at ? 3 : 30;
+      results.push({ equipe_id: integ.equipe_id, ...(await syncOne(db, integ, days)) });
     }
     return json({ ok: true, results });
   }
@@ -257,7 +310,8 @@ serve(async (req) => {
         p_user: profile.id,
       });
       if (error) return json({ error: error.message }, 500);
-      const integ = (await current()) ?? { id, equipe_id: equipeId, status: "connected", settings: { fields }, last_sync_at: null };
+      const integ = (await current()) ?? { id, equipe_id: equipeId, status: "connected", settings: {}, last_sync_at: null };
+      integ.settings = { ...(integ.settings ?? {}), fields_version: 0 }; // rediscover fields and the ad's meta on the first pull
       const result = await syncOne(db, integ as Integration, 30);
       return json({ connected: true, sync: result });
     }
@@ -265,7 +319,7 @@ serve(async (req) => {
     if (action === "sync") {
       const integ = await current();
       if (!integ || integ.status === "disconnected") return json({ error: "Windsor não conectado" }, 400);
-      const days = Math.max(1, Math.min(90, Number(body.days) || 7));
+      const days = Math.max(1, Math.min(365, Number(body.days) || 7));
       return json(await syncOne(db, integ, days));
     }
 

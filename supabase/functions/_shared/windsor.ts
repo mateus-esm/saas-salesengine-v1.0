@@ -41,7 +41,9 @@ export const FIELD_CANDIDATES: Record<Connector, Partial<Record<Target, string[]
     reach: ["reach"],
     video_3s: ["actions_video_view", "video_3_sec_watched_actions_video_view"],
     thruplays: ["video_thruplay_watched_actions_video_view", "actions_video_thruplay", "thruplays"],
-    platform_leads: ["actions_leadgen_grouped", "actions_lead"],
+    // Formulário instantâneo: o "Leads" do gerenciador é o onsite lead grouped
+    // (actions_leadgen_grouped volta zerado na conta da Solo).
+    platform_leads: ["actions_onsite_conversion_lead_grouped", "actions_lead", "actions_leadgen_grouped"],
     conversations: [
       "actions_onsite_conversion_messaging_conversation_started_7d",
       "actions_onsite_conversion_total_messaging_connection",
@@ -58,6 +60,96 @@ export const FIELD_CANDIDATES: Record<Connector, Partial<Record<Target, string[]
     platform_leads: ["conversions"],
   },
 };
+
+/** Bump when FIELD_CANDIDATES change: the cached map in settings is rediscovered. */
+export const FIELDS_VERSION = 2;
+
+// ---------------------------------------------------------------------------
+// The ad itself (not metrics): pulled in a separate request so an asset field
+// can never split the metric rows and double the spend.
+// ---------------------------------------------------------------------------
+
+export type MetaTarget =
+  | "objective" | "destination_type" | "video_id" | "image_hash" | "creative_ext_id"
+  | "thumbnail_url" | "body" | "headline" | "cta" | "effective_status"
+  | "adset_budget" | "campaign_budget" | "preview_url";
+
+export const META_CANDIDATES: Record<Connector, Partial<Record<MetaTarget, string[]>>> = {
+  facebook: {
+    objective: ["campaign_objective", "objective"],
+    destination_type: ["adset_destination_type"],
+    video_id: ["video_asset_video_id"],
+    image_hash: ["image_hash", "image_asset_hash"],
+    creative_ext_id: ["creative_id"],
+    thumbnail_url: ["thumbnail_url", "image_url"],
+    body: ["body"],
+    headline: ["title"],
+    cta: ["call_to_action_type"],
+    effective_status: ["effective_status", "status"],
+    adset_budget: ["adset_daily_budget"],
+    campaign_budget: ["campaign_daily_budget"],
+    preview_url: ["ad_preview_shareable_link"],
+  },
+  google_ads: {
+    effective_status: ["ad_group_ad_status", "status"],
+  },
+};
+
+export type MetaMap = Partial<Record<MetaTarget, string>>;
+
+export function chooseMeta(connector: Connector, available: string[] | null): MetaMap {
+  if (!available) return {};
+  const have = new Set(available.map((f) => f.toLowerCase()));
+  const map: MetaMap = {};
+  for (const [t, c] of Object.entries(META_CANDIDATES[connector]) as [MetaTarget, string[]][]) {
+    const hit = c.find((x) => have.has(x.toLowerCase()));
+    if (hit) map[t] = hit;
+  }
+  return map;
+}
+
+export interface AdMeta {
+  objective: string | null;
+  destination_type: string | null;
+  video_id: string | null;
+  image_hash: string | null;
+  creative_ext_id: string | null;
+  thumbnail_url: string | null;
+  body: string | null;
+  headline: string | null;
+  cta: string | null;
+  effective_status: string | null;
+  /** In reais: Meta sends budgets in cents. */
+  daily_budget: number | null;
+  preview_url: string | null;
+}
+
+/** The latest non-empty value of each field, per ad ID. */
+export function metaByAd(rows: unknown[], adIdField: string, map: MetaMap): Map<string, AdMeta> {
+  const out = new Map<string, AdMeta>();
+  const sorted = [...rows].filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+    .sort((a, b) => String(b.date ?? "").localeCompare(String(a.date ?? "")));
+  for (const r of sorted) {
+    const id = toText(r[adIdField]);
+    if (!id) continue;
+    const m: AdMeta = out.get(id) ?? {
+      objective: null, destination_type: null, video_id: null, image_hash: null, creative_ext_id: null,
+      thumbnail_url: null, body: null, headline: null, cta: null, effective_status: null, daily_budget: null, preview_url: null,
+    };
+    const g = (t: MetaTarget) => (map[t] ? toText(r[map[t] as string]) : null);
+    for (const t of ["objective", "destination_type", "video_id", "image_hash", "creative_ext_id", "thumbnail_url", "body", "headline", "cta", "effective_status", "preview_url"] as const) {
+      if (m[t] === null) m[t] = g(t);
+    }
+    if (m.daily_budget === null) {
+      const raw = g("adset_budget") ?? g("campaign_budget");
+      const n = raw === null ? NaN : Number(raw);
+      m.daily_budget = Number.isFinite(n) && n > 0 ? Math.round(n) / 100 : null;
+    }
+    if (m.body) m.body = m.body.slice(0, 2000);
+    out.set(id, m);
+  }
+  return out;
+}
 
 /** The minimum a pull can live with when discovery failed or a field was refused. */
 export const CORE_FIELDS: Record<Connector, string[]> = {
@@ -151,7 +243,7 @@ const toDay = (v: unknown): string | null => {
   return m ? m[1] : null;
 };
 
-export interface IngestRow {
+export interface IngestRow extends Partial<AdMeta> {
   platform: "meta" | "google";
   day: string;
   account_id: string | null;
