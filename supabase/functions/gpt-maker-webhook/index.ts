@@ -541,7 +541,7 @@ serve(async (req) => {
           await recordTouch(supabase, {
             leadId: lead.id,
             entryId: await agentEntryId(),
-            payload: messageTouchPayload({ channel, agentName, raw: payload }),
+            payload: messageTouchPayload({ channel, agentName, raw: payload, firstText: senderType === 'customer' ? messageContent : null }),
             opportunityId: opp?.opportunity_id ?? null,
           }, '[Webhook]')
         }

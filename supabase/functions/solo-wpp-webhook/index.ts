@@ -644,7 +644,7 @@ async function handleMessagesUpsert(
             await recordTouch(supabase, {
               leadId: lead.id,
               entryId: await numberEntryId(),
-              payload: messageTouchPayload({ channel: 'whatsapp', raw: data }),
+              payload: messageTouchPayload({ channel: 'whatsapp', raw: data, firstText: key.fromMe ? null : messageContent }),
               opportunityId: opp?.opportunity_id ?? null,
             }, '[solo-wpp]')
           }

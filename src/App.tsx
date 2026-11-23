@@ -16,6 +16,7 @@ import Chat from "./pages/Chat";
 import CRM from "./pages/CRM";
 import PipelineSettings from "./pages/PipelineSettings";
 import Webhooks from "./pages/Webhooks";
+import Integrations from "./pages/Integrations";
 import OutreachSettings from "./pages/OutreachSettings";
 import Suporte from "./pages/Suporte";
 import DashboardLayout from "./pages/dashboard/DashboardLayout";
@@ -126,6 +127,11 @@ const App = () => (
                   <Route path="/webhooks" element={
                     <PageRouteGuard permissionKey="webhooks">
                       <Webhooks />
+                    </PageRouteGuard>
+                  } />
+                  <Route path="/integracoes" element={
+                    <PageRouteGuard permissionKey="webhooks">
+                      <Integrations />
                     </PageRouteGuard>
                   } />
                   <Route path="/outreach" element={

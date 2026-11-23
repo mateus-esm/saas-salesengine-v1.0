@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/radio-group";
 import { useQuery } from "@tanstack/react-query";
 import { InboundActionEditor } from "@/components/webhooks/InboundActionEditor";
+import { WebhookEntrySource } from "@/components/webhooks/WebhookEntrySource";
 import { useWebhookConfigs } from "@/hooks/useWebhookConfigs";
 import { useTeamStages } from "@/hooks/useAutomations";
 import { useAuth } from "@/contexts/AuthContext";
@@ -487,6 +488,8 @@ export const WebhookConfigModal = ({
                   )}
                 />
               </div>
+
+              <WebhookEntrySource webhookConfigId={config?.id ?? null} />
 
               <div className="space-y-2">
                 <Label>Mapeamento de campos</Label>
