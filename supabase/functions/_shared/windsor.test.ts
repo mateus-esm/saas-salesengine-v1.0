@@ -85,3 +85,25 @@ Deno.test("accountsOf e syncWindow", () => {
   assertEquals(accountsOf("facebook", rows), [{ source: "facebook", id: "act_9", name: "Solo" }]);
   assertEquals(syncWindow(3, new Date("2026-11-23T15:00:00Z")), { from: "2026-11-21", to: "2026-11-23" });
 });
+
+Deno.test("metaByAd: o valor mais recente não vazio por anúncio; verba de centavos para reais", async () => {
+  const { chooseMeta, metaByAd } = await import("./windsor.ts");
+  const map = chooseMeta("facebook", ["campaign_objective", "adset_destination_type", "video_asset_video_id", "thumbnail_url", "body", "effective_status", "campaign_daily_budget", "adset_daily_budget"]);
+  const m = metaByAd([
+    { date: "2026-11-20", ad_id: "1", campaign_objective: "OUTCOME_LEADS", video_asset_video_id: "v-9", body: "antigo", campaign_daily_budget: "2500.0" },
+    { date: "2026-11-22", ad_id: "1", adset_destination_type: "ON_AD", body: "novo", effective_status: "ACTIVE", thumbnail_url: "https://x/t.jpg" },
+    { date: "2026-11-22", ad_id: "2", adset_destination_type: "WHATSAPP", adset_daily_budget: 3000 },
+  ], "ad_id", map);
+  const a = m.get("1")!;
+  assertEquals(a.objective, "OUTCOME_LEADS");
+  assertEquals(a.destination_type, "ON_AD");
+  assertEquals(a.video_id, "v-9");
+  assertEquals(a.body, "novo");
+  assertEquals(a.daily_budget, 25);
+  assertEquals(m.get("2")!.daily_budget, 30);
+  assertEquals(chooseMeta("facebook", null), {});
+});
+
+Deno.test("leads de formulário: o campo do gerenciador vem primeiro", () => {
+  assertEquals(chooseFields("facebook", ["actions_leadgen_grouped", "actions_onsite_conversion_lead_grouped"]).platform_leads, "actions_onsite_conversion_lead_grouped");
+});

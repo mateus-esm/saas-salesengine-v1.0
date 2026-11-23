@@ -48,7 +48,7 @@ export function CreativeDialog({
 
   const submit = async () => {
     const code = normalizeCreativeCode(d.code);
-    if (!code) return setErr("Código no padrão P000-V0 (ex.: P002-V3).");
+    if (!code) return setErr("Dê um código ao criativo (até 60 caracteres; recomendado P000-V0, ex.: P002-V3).");
     try {
       await onSave({ ...d, code });
       onClose();
@@ -60,10 +60,14 @@ export function CreativeDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
+        {creative?.thumbnail_url && (
+          <img src={creative.thumbnail_url} alt="" className="h-32 w-full rounded-md object-cover" referrerPolicy="no-referrer" />
+        )}
         <DialogHeader>
           <DialogTitle>{creative ? `Criativo ${creative.code}` : "Novo criativo"}</DialogTitle>
           <DialogDescription>
-            O código vai no começo do nome do anúncio (e do utm_content). Anúncios e leads com ele passam a somar aqui.
+            Recomendado: código P000-V0 no começo do nome do anúncio (e do utm_content). Sem código, o Windsor junta os
+            anúncios pelo vídeo e usa o nome do anúncio.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">

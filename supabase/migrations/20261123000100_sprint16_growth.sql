@@ -51,6 +51,7 @@ begin
     execute format('alter table public.leads drop constraint %I', r.conname);
   end loop;
 end $$;
+alter table public.leads drop constraint if exists leads_origin_category_check;
 alter table public.leads add constraint leads_origin_category_check
   check (origin_category is null or origin_category = any (public._crm_origin_categories()));
 

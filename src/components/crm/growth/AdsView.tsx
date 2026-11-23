@@ -131,12 +131,17 @@ export function AdsView() {
                     return (
                       <tr key={a.id} className={cn("cursor-pointer hover:bg-muted/40", a.status === "archived" && "opacity-60")} onClick={() => setEditingAd(a)}>
                         <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                          <Thumb url={a.thumbnail_url} />
+                          <div className="min-w-0">
                           <p className="font-medium">{a.ad_name ?? a.external_ad_id ?? "Sem nome"}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {a.platform === "meta" ? "Meta" : a.platform === "google" ? "Google" : a.platform}
                             {a.external_ad_id ? ` · ${a.external_ad_id}` : ""}
                             {a.campaign_name ? ` · ${a.campaign_name}` : ""}
                           </p>
+                          </div>
+                          </div>
                         </td>
                         <td className="px-3 py-2">{a.creative_code ? <code className="text-xs">{a.creative_code}</code> : "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">{a.crm_campaign_name ?? "—"}</td>
@@ -185,7 +190,12 @@ export function AdsView() {
             <tbody className="divide-y divide-border">
               {creatives.map((c) => (
                 <tr key={c.id} className={cn("cursor-pointer hover:bg-muted/40", c.status === "archived" && "opacity-60")} onClick={() => setEditingCr(c)}>
-                  <td className="px-3 py-2"><code className="text-xs font-semibold">{c.code}</code></td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Thumb url={c.thumbnail_url} />
+                      <code className="text-xs font-semibold">{c.code}</code>
+                    </div>
+                  </td>
                   <td className="px-3 py-2">{c.title || "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{c.format ?? "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{c.delivered_on ? c.delivered_on.split("-").reverse().join("/") : "—"}</td>
@@ -224,8 +234,24 @@ export function AdsView() {
   );
 }
 
+function Thumb({ url, size = "h-9 w-9" }: { url?: string | null; size?: string }) {
+  return url ? (
+    <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" className={cn(size, "shrink-0 rounded object-cover")} />
+  ) : (
+    <div className={cn(size, "shrink-0 rounded bg-muted")} />
+  );
+}
+
 function Performance() {
   const [period, setPeriod] = useState<ReportPeriod>("30d");
+  const { ads: adList } = useAds();
+  const { creatives: crList } = useCreatives();
+  const thumbs = useMemo(() => {
+    const m = new Map<string, string | null | undefined>();
+    for (const a of adList) m.set(a.id, a.thumbnail_url);
+    for (const c of crList) m.set(c.id, c.thumbnail_url);
+    return m;
+  }, [adList, crList]);
   const [by, setBy] = useState<"creative" | "ad">("creative");
   const range = useMemo(() => reportRange(period), [period]);
   const { data, isLoading } = useAdsReport(range.from, range.to);
@@ -292,7 +318,7 @@ function Performance() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map(({ key, title, sub, r }) => <ReportLine key={key} title={title} sub={sub} r={r} />)}
+              {rows.map(({ key, title, sub, r }) => <ReportLine key={key} title={title} sub={sub} r={r} thumb={thumbs.get(key)} />)}
               <ReportLine title="Total" r={total} strong />
             </tbody>
           </table>
@@ -302,13 +328,18 @@ function Performance() {
   );
 }
 
-function ReportLine({ title, sub, r, strong }: { title: string; sub?: string; r: AdsReportBase; strong?: boolean }) {
+function ReportLine({ title, sub, r, strong, thumb }: { title: string; sub?: string; r: AdsReportBase; strong?: boolean; thumb?: string | null }) {
   const x = adRatios(r);
   return (
     <tr className={cn("text-right tabular-nums [&>td]:whitespace-nowrap [&>td]:px-3 [&>td]:py-2", strong && "bg-muted/40 font-semibold")}>
       <td className="text-left">
-        <p className="font-medium">{title}</p>
-        {sub && <p className="max-w-[260px] truncate text-[11px] font-normal text-muted-foreground">{sub}</p>}
+        <div className="flex items-center gap-2">
+          {!strong && <Thumb url={thumb} size="h-8 w-8" />}
+          <div className="min-w-0">
+            <p className="font-medium">{title}</p>
+            {sub && <p className="max-w-[260px] truncate text-[11px] font-normal text-muted-foreground">{sub}</p>}
+          </div>
+        </div>
       </td>
       <td className="border-l border-border">{brl(r.spend)}</td>
       <td>{brl(x.cpm, 2)}</td>

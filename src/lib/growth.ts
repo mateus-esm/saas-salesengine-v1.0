@@ -10,11 +10,17 @@ import type { OriginCategory } from "@/types/crm";
 
 export const CREATIVE_CODE_RE = /^[A-Z][0-9]{3}-V[0-9]+$/;
 
-/** "p002-v3" → "P002-V3"; null when it is not a creative code. Twin of crm_save_creative. */
+/**
+ * "p002-v3" → "P002-V3". P000-V0 is recommended (it travels in utm_content), but
+ * any name up to 60 characters is accepted — the Windsor names creatives after
+ * the ad. Null when empty or too long. Twin of crm_save_creative.
+ */
 export function normalizeCreativeCode(raw: string): string | null {
   const code = raw.trim().toUpperCase();
-  return CREATIVE_CODE_RE.test(code) ? code : null;
+  return code.length >= 1 && code.length <= 60 ? code : null;
 }
+
+export const isRecommendedCode = (code: string) => CREATIVE_CODE_RE.test(code);
 
 /** The code at the start of an ad name or utm_content. Twin of _crm_creative_code. */
 export function creativeCodeOf(text: string | null | undefined): string | null {
@@ -33,6 +39,12 @@ export interface Creative {
   status: "active" | "archived";
   ads: number;
   leads: number;
+  external_key?: string | null;
+  thumbnail_url?: string | null;
+  preview_url?: string | null;
+  body?: string | null;
+  headline?: string | null;
+  source?: "manual" | "windsor";
 }
 
 export const CREATIVE_FORMATS = ["Reels", "Feed", "Stories", "Carrossel", "Imagem", "Vídeo", "Busca", "Outro"];
@@ -95,9 +107,36 @@ export interface Ad {
   crm_campaign_name: string | null;
   spend_30d: number;
   leads: number;
+  // Sprint 16 · ajuste 1 — what the ads manager says about the ad (read-only).
+  objective?: string | null;
+  destination_type?: string | null;
+  video_id?: string | null;
+  thumbnail_url?: string | null;
+  body?: string | null;
+  headline?: string | null;
+  cta?: string | null;
+  effective_status?: string | null;
+  platform_daily_budget?: number | null;
+  preview_url?: string | null;
 }
 
-export type AdDraft = Omit<Ad, "id" | "source" | "needs_review" | "last_seen_at" | "creative_code" | "crm_campaign_name" | "spend_30d" | "leads" | "account_id" | "account_name"> & { id?: string };
+const OBJECTIVES: Record<string, string> = {
+  OUTCOME_LEADS: "Cadastro (leads)",
+  OUTCOME_ENGAGEMENT: "Engajamento / mensagens",
+  OUTCOME_TRAFFIC: "Tráfego",
+  OUTCOME_SALES: "Vendas",
+  OUTCOME_AWARENESS: "Reconhecimento",
+  OUTCOME_APP_PROMOTION: "App",
+  MESSAGES: "Mensagens",
+  LEAD_GENERATION: "Cadastro (leads)",
+};
+export const objectiveLabel = (o: string | null | undefined) => (o ? OBJECTIVES[o.toUpperCase()] ?? o : null);
+
+type AdReadOnly =
+  | "id" | "source" | "needs_review" | "last_seen_at" | "creative_code" | "crm_campaign_name" | "spend_30d" | "leads"
+  | "account_id" | "account_name" | "objective" | "destination_type" | "video_id" | "thumbnail_url" | "body" | "headline"
+  | "cta" | "effective_status" | "platform_daily_budget" | "preview_url";
+export type AdDraft = Omit<Ad, AdReadOnly> & { id?: string };
 
 export function emptyAdDraft(): AdDraft {
   return {
@@ -148,7 +187,7 @@ export function growthErrorText(message: string): string {
   const codeTaken = /creative_code_taken:([^\s"]+)/.exec(message);
   if (codeTaken) return `O código ${codeTaken[1]} já existe.`;
   if (message.includes("prefill_taken")) return "Outro anúncio ativo já usa essa mensagem padrão.";
-  if (message.includes("invalid_creative_code")) return "Código no padrão P000-V0 (ex.: P002-V3).";
+  if (message.includes("invalid_creative_code")) return "Dê um código ao criativo (até 60 caracteres; recomendado P000-V0).";
   if (message.includes("ad_needs_identity")) return "Informe o ID do anúncio, o nome ou a mensagem padrão.";
   if (message.includes("owner_not_in_team")) return "O responsável precisa ser da equipe.";
   return message;

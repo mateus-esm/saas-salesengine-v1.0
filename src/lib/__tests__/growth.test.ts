@@ -22,10 +22,11 @@ const base = (p: Partial<AdsReportBase> = {}): AdsReportBase => ({
 });
 
 describe("creative codes", () => {
-  it("normalizes and validates P000-V0", () => {
+  it("normalizes any code up to 60 chars (P000-V0 recommended)", () => {
     expect(normalizeCreativeCode(" p002-v3 ")).toBe("P002-V3");
-    expect(normalizeCreativeCode("carmona")).toBeNull();
-    expect(normalizeCreativeCode("P02-V3")).toBeNull();
+    expect(normalizeCreativeCode("set02")).toBe("SET02");
+    expect(normalizeCreativeCode("   ")).toBeNull();
+    expect(normalizeCreativeCode("x".repeat(61))).toBeNull();
   });
   it("reads the code only at the start (twin of _crm_creative_code)", () => {
     expect(creativeCodeOf("P002-V3 | Carmona")).toBe("P002-V3");

@@ -14,6 +14,7 @@ import {
   adDraftError,
   creativeCodeOf,
   emptyAdDraft,
+  objectiveLabel,
   type Ad,
   type AdDraft,
   type Creative,
@@ -23,8 +24,13 @@ const SELECT = "flex h-9 w-full rounded-md border border-input bg-background px-
 
 const toDraft = (a: Ad | null): AdDraft => {
   if (!a) return emptyAdDraft();
-  const { source: _s, needs_review: _n, last_seen_at: _l, creative_code: _c, crm_campaign_name: _cc, spend_30d: _sp, leads: _le, account_id: _ai, account_name: _an, ...rest } = a;
-  return rest;
+  return {
+    id: a.id, platform: a.platform, external_ad_id: a.external_ad_id, ad_name: a.ad_name,
+    adset_external_id: a.adset_external_id, adset_name: a.adset_name, campaign_external_id: a.campaign_external_id,
+    campaign_name: a.campaign_name, campaign_id: a.campaign_id, creative_id: a.creative_id, destination: a.destination,
+    form_name: a.form_name, prefill_message: a.prefill_message, starts_on: a.starts_on, ends_on: a.ends_on,
+    daily_budget: a.daily_budget, status: a.status,
+  };
 };
 
 /**
@@ -91,6 +97,8 @@ export function AdDialog({
               : "Preencha no dia em que o anúncio sobe. Sem o ID do anúncio, o lead cai em “Sem campanha”."}
           </DialogDescription>
         </DialogHeader>
+
+        {fromWindsor && ad && <ManagerCard ad={ad} />}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Plataforma">
@@ -190,6 +198,36 @@ function Field({ label, hint, wide, children }: { label: string; hint?: string; 
       <Label className="text-xs">{label}</Label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/** Sprint 16 · ajuste 1 — what the ads manager says about this ad (read-only, from the Windsor). */
+function ManagerCard({ ad }: { ad: Ad }) {
+  const rows: [string, string | null | undefined][] = [
+    ["Objetivo", objectiveLabel(ad.objective)],
+    ["Destino no gerenciador", ad.destination_type],
+    ["Botão", ad.cta],
+    ["Status", ad.effective_status],
+    ["Verba/dia", ad.platform_daily_budget ? `R$ ${Number(ad.platform_daily_budget).toLocaleString("pt-BR")}` : null],
+    ["Conjunto", ad.adset_name],
+  ];
+  return (
+    <div className="flex gap-3 rounded-md border border-border bg-muted/30 p-3">
+      {ad.thumbnail_url && <img src={ad.thumbnail_url} alt="" className="h-20 w-20 shrink-0 rounded object-cover" referrerPolicy="no-referrer" />}
+      <div className="min-w-0 flex-1 space-y-1 text-xs">
+        <p className="font-medium text-foreground">Do gerenciador</p>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+          {rows.filter(([, v]) => v).map(([k, v]) => (
+            <p key={k} className="truncate"><span className="text-muted-foreground">{k}: </span>{v}</p>
+          ))}
+        </div>
+        {ad.headline && <p className="truncate"><span className="text-muted-foreground">Título: </span>{ad.headline}</p>}
+        {ad.body && <p className="line-clamp-2 text-muted-foreground">{ad.body}</p>}
+        {ad.preview_url && (
+          <a href={ad.preview_url} target="_blank" rel="noreferrer" className="inline-block underline underline-offset-2">Ver prévia do anúncio</a>
+        )}
+      </div>
     </div>
   );
 }
