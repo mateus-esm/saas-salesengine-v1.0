@@ -44,6 +44,10 @@ verify_jwt = false
 [functions.sync-instance-billing]
 verify_jwt = false
 
+# Sprint 17 — callback público de exclusão de dados do Meta (autenticado pelo signed_request).
+[functions.meta-data-deletion]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 64321           # Mudamos de 54321 para 64321

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckCircle2, ExternalLink, KeyRound, Loader2, Plug, RefreshCw, Search, Unplug, XCircle } from "lucide-react";
@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MetaPanel } from "@/components/integrations/MetaPanel";
 import { useIntegrations, type Integration } from "@/hooks/useGrowth";
+import { useMetaIntegration } from "@/hooks/useMeta";
+import { metaConnectionState } from "@/lib/meta";
 import { useRole } from "@/hooks/useRole";
 import { cn } from "@/lib/utils";
 
@@ -69,12 +72,12 @@ const CATALOG: CatalogItem[] = [
     href: "/crm?tab=campanhas&section=entradas",
   },
   {
-    id: "meta_leads",
-    name: "Meta Lead Ads",
+    id: "meta",
+    name: "Meta · Lead Ads",
     category: "Captação",
-    description: "Formulários instantâneos direto no Rev, com o leadgen_id e os IDs do anúncio.",
+    description: "Conecte seu portfólio do Meta: formulários instantâneos direto no Rev, com o leadgen_id e os IDs do anúncio.",
     logo: <Tile bg="#0866FF">f</Tile>,
-    available: false,
+    available: true,
   },
   {
     id: "meta_capi",
@@ -104,7 +107,9 @@ export default function Integrations() {
   const { windsor } = useIntegrations();
   const [cat, setCat] = useState<(typeof CATEGORIES)[number]>("Todas");
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [open, setOpen] = useState<string | null>(params.get("open"));
+  const metaState = metaConnectionState(useMetaIntegration().status.data);
 
   const items = CATALOG.filter((i) => (cat === "Todas" || i.category === cat) && (!q || `${i.name} ${i.description}`.toLowerCase().includes(q.toLowerCase())));
   const windsorOn = !!windsor && windsor.status !== "disconnected";
@@ -140,7 +145,8 @@ export default function Integrations() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((i) => {
-          const connected = i.id === "windsor" && windsorOn;
+          const connected = (i.id === "windsor" && windsorOn) || (i.id === "meta" && (metaState === "connected" || metaState === "reconnect"));
+          const hasError = i.id === "windsor" ? windsor?.status === "error" : i.id === "meta" && metaState === "reconnect";
           return (
             <div key={i.id} className={cn("flex flex-col rounded-xl border border-border bg-card p-4 transition-shadow hover:shadow-md", !i.available && "opacity-70")}>
               <div className="flex items-start gap-3">
@@ -150,7 +156,7 @@ export default function Integrations() {
                   <p className="text-xs text-muted-foreground">{i.category}</p>
                 </div>
                 {connected ? (
-                  windsor?.status === "error" ? (
+                  hasError ? (
                     <Badge variant="destructive" className="gap-1 text-[10px]"><XCircle className="h-3 w-3" />Erro</Badge>
                   ) : (
                     <Badge className="gap-1 bg-emerald-600 text-[10px] hover:bg-emerald-600"><CheckCircle2 className="h-3 w-3" />Conectado</Badge>
@@ -161,8 +167,8 @@ export default function Integrations() {
               </div>
               <p className="mt-3 flex-1 text-sm text-muted-foreground">{i.description}</p>
               <div className="mt-4">
-                {i.id === "windsor" ? (
-                  <Button size="sm" variant={connected ? "outline" : "default"} onClick={() => setOpen("windsor")}>
+                {i.id === "windsor" || i.id === "meta" ? (
+                  <Button size="sm" variant={connected ? "outline" : "default"} onClick={() => setOpen(i.id)}>
                     {connected ? "Gerenciar" : "Conectar"}
                   </Button>
                 ) : i.href ? (
@@ -188,6 +194,21 @@ export default function Integrations() {
             </DialogDescription>
           </DialogHeader>
           <WindsorPanel />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={open === "meta"} onOpenChange={(o) => setOpen(o ? "meta" : null)}>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              <Tile bg="#0866FF" className="h-8 w-8 text-base">f</Tile> Meta
+            </DialogTitle>
+            <DialogDescription>
+              Um clique para conectar o seu portfólio do Meta ao Rev. Você escolhe as páginas, as contas de anúncio e o pixel;
+              os tokens ficam guardados no cofre do Rev e nunca aparecem na tela.
+            </DialogDescription>
+          </DialogHeader>
+          <MetaPanel />
         </DialogContent>
       </Dialog>
     </div>

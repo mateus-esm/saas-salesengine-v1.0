@@ -17,6 +17,8 @@ import CRM from "./pages/CRM";
 import PipelineSettings from "./pages/PipelineSettings";
 import Webhooks from "./pages/Webhooks";
 import Integrations from "./pages/Integrations";
+import MetaCallback from "./pages/MetaCallback";
+import DataDeletionStatus from "./pages/DataDeletionStatus";
 import OutreachSettings from "./pages/OutreachSettings";
 import Suporte from "./pages/Suporte";
 import DashboardLayout from "./pages/dashboard/DashboardLayout";
@@ -93,6 +95,8 @@ const App = () => (
                     Contrato") from the seller's link. Public: the token is the
                     whole authorisation. */}
                 <Route path="/f/:token" element={<PublicForm />} />
+                {/* Sprint 17 — status público da exclusão de dados pedida pelo Meta. */}
+                <Route path="/exclusao-de-dados" element={<DataDeletionStatus />} />
                 {/* Sprint 8.2 discovery_q&a — o cliente responde o discovery
                     antes da reunião de implantação. Público: o token é toda a
                     autorização, e o link é repassável a quem sabe a resposta. */}
@@ -132,6 +136,11 @@ const App = () => (
                   <Route path="/integracoes" element={
                     <PageRouteGuard permissionKey="webhooks">
                       <Integrations />
+                    </PageRouteGuard>
+                  } />
+                  <Route path="/integracoes/meta/callback" element={
+                    <PageRouteGuard permissionKey="webhooks">
+                      <MetaCallback />
                     </PageRouteGuard>
                   } />
                   <Route path="/outreach" element={
