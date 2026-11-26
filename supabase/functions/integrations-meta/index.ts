@@ -12,6 +12,15 @@
 //   rediscover  {}                 descobre os ativos de novo com o token guardado
 //   probe       {}                 diagnóstico da Fase 1 (o que o token alcança); nunca devolve token
 //   disconnect  {}                 cancela inscrições, apaga do Vault conta e ativos
+//   — Fases 2–4 —
+//   activate_page   { asset_id }        inscreve o app (leadgen) e pré-sincroniza os formulários
+//   deactivate_page { asset_id }        cancela a inscrição
+//   forms           { refresh? }        formulários (entradas meta_form) com contagem de leads
+//   import_recent   { form_id, days }   backfill (≤ 90 dias) pela mesma fila, sem saudação
+//   retry_failed    {}                  devolve à fila o que deu erro/morreu
+//   capi_config     {}                  datasets, etapas, mapeamentos, últimos envios
+//   capi_save       { dataset_id?, capi_enabled?, mappings?[] }
+//   capi_test       { test_event_code } evento sintético em "Testar eventos"
 // ============================================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -19,6 +28,14 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { highestRole } from "../_shared/team-access.ts";
 import { GRAPH_VERSION, metaErrorMessage, oauthDialogUrl, randomToken, sha256Hex } from "../_shared/meta.ts";
 import { createGraph, type Graph, MetaGraphError } from "../_shared/meta-graph.ts";
+import { processInboundBatch } from "../_shared/meta-ingest.ts";
+import { sendCapiTest } from "../_shared/meta-capi.ts";
+
+declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
+const background = (p: Promise<unknown>) => {
+  const w = p.catch((e) => console.error("[integrations-meta] background:", e instanceof Error ? e.message : e));
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(w);
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -235,7 +252,29 @@ serve(async (req) => {
       .eq("provider", "meta")
       .maybeSingle();
     const { data: assets } = await db.rpc("_crm_integration_assets_for", { p_equipe: equipeId });
-    return { configured, graph_version: GRAPH_VERSION, integration: list ?? null, assets: assets ?? [] };
+    const { data: evs } = await db.from("crm_inbound_events")
+      .select("status, received_at, processed_at, last_error, external_id, origin, attempts")
+      .eq("equipe_id", equipeId).order("received_at", { ascending: false }).limit(500);
+    const rows = (evs ?? []) as {
+      status: string;
+      received_at: string;
+      processed_at: string | null;
+      last_error: string | null;
+      external_id: string;
+      origin: string;
+      attempts: number;
+    }[];
+    const count = (st: string) => rows.filter((r) => r.status === st).length;
+    const queue = {
+      queued: count("queued") + count("processing"),
+      done: count("done"),
+      error: count("error"),
+      dead: count("dead"),
+      last_lead_at: rows.find((r) => r.status === "done")?.processed_at ?? null,
+      recent_errors: rows.filter((r) => r.status === "error" || r.status === "dead").slice(0, 5)
+        .map((r) => ({ leadgen_id: r.external_id, status: r.status, error: r.last_error, received_at: r.received_at, attempts: r.attempts })),
+    };
+    return { configured, graph_version: GRAPH_VERSION, integration: list ?? null, assets: assets ?? [], queue };
   };
 
   try {
@@ -381,6 +420,218 @@ serve(async (req) => {
         }
       }
       return json(out);
+    }
+
+    const ownAsset = async (id: unknown, type: "page" | "dataset") => {
+      if (typeof id !== "string" || !id) return null;
+      const { data } = await db.from("crm_integration_assets")
+        .select("id, external_id, name, status, secret_id").eq("id", id).eq("integration_id", integ.id).eq("asset_type", type)
+        .neq("status", "disconnected").maybeSingle();
+      return data as { id: string; external_id: string; name: string | null; status: string; secret_id: string | null } | null;
+    };
+    const pageToken = async (assetId: string) => {
+      const { data } = await db.rpc("_crm_asset_secret", { p_asset: assetId });
+      return (data as string | null) ?? (await tokenOf(integ));
+    };
+    const syncForms = async (page: { id: string; external_id: string }, token: string) => {
+      try {
+        const forms = await graph.paginate<{ id: string; name?: string }>(`/${page.external_id}/leadgen_forms`, token, {
+          fields: "id,name,status",
+          limit: "100",
+        }, 5);
+        for (const f of forms) {
+          await db.rpc("_crm_entry_for_meta_form", { p_equipe: equipeId, p_page: page.external_id, p_form: f.id, p_form_name: f.name ?? null });
+        }
+        return { forms: forms.length, warning: null as string | null };
+      } catch (e) {
+        return { forms: 0, warning: warn("formulários da página", e) };
+      }
+    };
+
+    if (action === "activate_page") {
+      const page = await ownAsset(body.asset_id, "page");
+      if (!page) return json({ error: "Página não encontrada nesta conexão." }, 404);
+      const { error: stErr } = await db.rpc("_crm_asset_set_status", { p_asset: page.id, p_status: "active" });
+      if (stErr) {
+        return json({
+          error: /asset_active_elsewhere/.test(stErr.message)
+            ? "Esta página já recebe leads em outra equipe do Rev. Desative lá antes de ativar aqui."
+            : stErr.message,
+        }, 409);
+      }
+      const token = await pageToken(page.id);
+      if (!token) return json({ error: "Token não encontrado. Reconecte.", reconnect: true }, 400);
+      try {
+        await graph.post(`/${page.external_id}/subscribed_apps`, token, { subscribed_fields: "leadgen" });
+      } catch (e) {
+        const m = e instanceof MetaGraphError ? metaErrorMessage({ code: e.code, message: e.message }) : null;
+        await db.rpc("_crm_asset_set_status", { p_asset: page.id, p_status: "available", p_error: m?.message ?? "Falha ao inscrever a página" });
+        if (m?.code === "token_invalid") await markError(db, integ.id, e);
+        throw e;
+      }
+      const forms = await syncForms(page, token);
+      return json({ ok: true, forms_found: forms.forms, forms_warning: forms.warning, ...(await statusPayload()) });
+    }
+
+    if (action === "deactivate_page") {
+      const page = await ownAsset(body.asset_id, "page");
+      if (!page) return json({ error: "Página não encontrada nesta conexão." }, 404);
+      try {
+        await graph.del(`/${page.external_id}/subscribed_apps`, graph.appToken());
+      } catch (e) {
+        console.warn("[integrations-meta] unsubscribe", page.external_id, e instanceof MetaGraphError ? e.code : "");
+      }
+      await db.rpc("_crm_asset_set_status", { p_asset: page.id, p_status: "available" });
+      return json({ ok: true, ...(await statusPayload()) });
+    }
+
+    if (action === "forms") {
+      if (body.refresh === true) {
+        const { data: actives } = await db.from("crm_integration_assets")
+          .select("id, external_id").eq("integration_id", integ.id).eq("asset_type", "page").eq("status", "active");
+        for (const p of (actives ?? []) as { id: string; external_id: string }[]) {
+          const t = await pageToken(p.id);
+          if (t) await syncForms(p, t);
+        }
+      }
+      const { data: entries } = await db.from("crm_entries")
+        .select("id, name, meta_form_id, meta_page_id, pipeline_id, active")
+        .eq("equipe_id", equipeId).eq("kind", "meta_form").order("name");
+      const { data: touches } = await db.from("lead_touches")
+        .select("form_id, occurred_at").eq("equipe_id", equipeId).not("leadgen_id", "is", null)
+        .order("occurred_at", { ascending: false }).limit(2000);
+      const stats = new Map<string, { leads: number; last: string | null }>();
+      for (const t of (touches ?? []) as { form_id: string | null; occurred_at: string }[]) {
+        if (!t.form_id) continue;
+        const s0 = stats.get(t.form_id) ?? { leads: 0, last: null };
+        s0.leads++;
+        s0.last = s0.last ?? t.occurred_at;
+        stats.set(t.form_id, s0);
+      }
+      type FormEntry = { id: string; name: string; meta_form_id: string; meta_page_id: string | null; pipeline_id: string | null; active: boolean };
+      return json({
+        forms: ((entries ?? []) as FormEntry[]).map((e) => ({
+          ...e,
+          leads: stats.get(e.meta_form_id)?.leads ?? 0,
+          last_lead_at: stats.get(e.meta_form_id)?.last ?? null,
+        })),
+      });
+    }
+
+    if (action === "import_recent") {
+      const formId = typeof body.form_id === "string" ? body.form_id : "";
+      const days = Math.max(1, Math.min(90, Number(body.days) || 30));
+      const { data: entry } = await db.from("crm_entries").select("meta_page_id")
+        .eq("equipe_id", equipeId).eq("kind", "meta_form").eq("meta_form_id", formId).maybeSingle();
+      if (!entry?.meta_page_id) return json({ error: "Formulário não encontrado." }, 404);
+      const { data: page } = await db.from("crm_integration_assets").select("id, external_id")
+        .eq("integration_id", integ.id).eq("asset_type", "page").eq("external_id", entry.meta_page_id).eq("status", "active")
+        .maybeSingle();
+      if (!page) return json({ error: "Ative a página deste formulário antes de importar." }, 400);
+      const token = await pageToken(page.id);
+      if (!token) return json({ error: "Token não encontrado. Reconecte.", reconnect: true }, 400);
+      const since = Math.floor(Date.now() / 1000) - days * 86400;
+      const leads = await graph.paginate<{ id: string; created_time?: string; ad_id?: string; form_id?: string }>(`/${formId}/leads`, token, {
+        fields: "id,created_time,ad_id,form_id",
+        limit: "100",
+        filtering: JSON.stringify([{ field: "time_created", operator: "GREATER_THAN", value: since }]),
+      }, 50);
+      let queued = 0;
+      for (const l of leads) {
+        const { data } = await db.rpc("_crm_meta_enqueue_leadgen", {
+          p_page_id: page.external_id,
+          p_value: { leadgen_id: String(l.id), form_id: l.form_id ?? formId, ad_id: l.ad_id ?? null },
+          p_origin: "backfill",
+        });
+        if (data) queued++;
+      }
+      if (queued) background(processInboundBatch(db, graph, { limit: 25 }));
+      return json({ found: leads.length, queued, already: leads.length - queued, days });
+    }
+
+    if (action === "retry_failed") {
+      const { data: n, error } = await db.rpc("_crm_inbound_retry", { p_equipe: equipeId });
+      if (error) return json({ error: error.message }, 500);
+      if (n) background(processInboundBatch(db, graph, { limit: 25 }));
+      return json({ retried: n ?? 0, ...(await statusPayload()) });
+    }
+
+    if (action === "capi_config") {
+      const { data: pipes } = await db.from("pipelines").select("id, name").eq("equipe_id", equipeId).order("name");
+      const { data: stages } = await db.from("pipeline_stages_v2").select("id, name, pipeline_id, position")
+        .eq("equipe_id", equipeId).is("deleted_at", null).order("position");
+      const { data: maps } = await db.from("crm_conversion_mappings").select("stage_id, event_name, active")
+        .eq("equipe_id", equipeId).eq("provider", "meta");
+      const { data: recent } = await db.from("crm_conversion_events")
+        .select("id, event_name, status, skip_reason, match_key, last_error, created_at, sent_at, test_event_code, response")
+        .eq("equipe_id", equipeId).order("created_at", { ascending: false }).limit(15);
+      const st = integ.settings ?? {};
+      return json({
+        dataset_id: st.dataset_id ?? null,
+        capi_enabled: st.capi_enabled === true,
+        lead_event_source: st.lead_event_source ?? "Rev",
+        pipelines: pipes ?? [],
+        stages: stages ?? [],
+        mappings: maps ?? [],
+        recent: ((recent ?? []) as Record<string, unknown>[]).map((r) => {
+          const res = r.response as Record<string, unknown> | null;
+          return { ...r, response: res ? { events_received: res.events_received ?? null, fbtrace_id: res.fbtrace_id ?? null } : null };
+        }),
+      });
+    }
+
+    if (action === "capi_save") {
+      const patch: Record<string, unknown> = {};
+      if ("dataset_id" in body) {
+        if (body.dataset_id === null || body.dataset_id === "") patch.dataset_id = null;
+        else {
+          const { data: ds } = await db.from("crm_integration_assets").select("external_id")
+            .eq("integration_id", integ.id).eq("asset_type", "dataset").eq("external_id", String(body.dataset_id))
+            .neq("status", "disconnected").maybeSingle();
+          if (!ds) return json({ error: "Pixel/Dataset não compartilhado nesta conexão." }, 400);
+          patch.dataset_id = ds.external_id;
+        }
+      }
+      if (typeof body.capi_enabled === "boolean") patch.capi_enabled = body.capi_enabled;
+      const next = { ...(integ.settings ?? {}), ...patch };
+      if (next.capi_enabled === true && !next.dataset_id) return json({ error: "Escolha o Pixel/Dataset antes de ligar a CAPI." }, 400);
+      if (Object.keys(patch).length) {
+        await db.from("crm_integrations").update({ settings: next, updated_at: new Date().toISOString() }).eq("id", integ.id);
+      }
+      const maps = Array.isArray(body.mappings) ? body.mappings as { stage_id?: unknown; event_name?: unknown; active?: unknown }[] : [];
+      for (const m of maps) {
+        const { error } = await db.rpc("_crm_capi_save_mapping", {
+          p_equipe: equipeId,
+          p_stage: String(m.stage_id ?? ""),
+          p_event_name: String(m.event_name ?? ""),
+          p_active: typeof m.active === "boolean" ? m.active : null,
+        });
+        if (error) {
+          return json({
+            error: /invalid_event_name/.test(error.message) ? "Nome de evento inválido: use letras, números e _ (até 50)." : error.message,
+          }, 400);
+        }
+      }
+      return json({ ok: true });
+    }
+
+    if (action === "capi_test") {
+      const code = typeof body.test_event_code === "string" ? body.test_event_code.trim() : "";
+      if (!/^[A-Za-z0-9_-]{3,60}$/.test(code)) {
+        return json({ error: "Cole o código de teste do Gerenciador de Eventos (ex.: TEST12345)." }, 400);
+      }
+      const st = integ.settings ?? {};
+      if (!st.dataset_id) return json({ error: "Escolha o Pixel/Dataset primeiro." }, 400);
+      const token = await tokenOf(integ);
+      if (!token) return json({ error: "Token não encontrado. Reconecte.", reconnect: true }, 400);
+      const r = await sendCapiTest(db, graph, {
+        equipeId,
+        dataset: String(st.dataset_id),
+        token,
+        testCode: code,
+        leadEventSource: String(st.lead_event_source ?? "Rev"),
+      });
+      return json(r, r.ok ? 200 : 400);
     }
 
     if (action === "disconnect") {
