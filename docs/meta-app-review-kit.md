@@ -11,7 +11,7 @@ precisa de **Advanced Access** (App Review) e de **Verificação do Negócio**.
 | Campo no painel | Valor |
 |---|---|
 | Valid OAuth Redirect URI | `<APP_URL>/integracoes/meta/callback` |
-| Webhook (Page › leadgen) — callback | `https://egxzsivzqlqadoqpgfby.supabase.co/functions/v1/meta-webhook` (Fase 2) |
+| Webhook (Page › leadgen) — callback | `https://egxzsivzqlqadoqpgfby.supabase.co/functions/v1/meta-webhook` — no painel: Webhooks › objeto **Page** › assinar o campo **leadgen** |
 | Webhook — verify token | valor de `META_WEBHOOK_VERIFY_TOKEN` (gerado pelo Rev) |
 | Data Deletion Request URL | `https://egxzsivzqlqadoqpgfby.supabase.co/functions/v1/meta-data-deletion` |
 | Deauthorize Callback URL | o mesmo da exclusão |
@@ -52,11 +52,13 @@ permissão extra para `POST /{pixel-id}/events`.
 1. Login no Rev como admin de uma equipe de teste → **Integrações** → card **Meta · Lead Ads**.
 2. **Conectar com Meta** → diálogo do Facebook Login for Business → escolher o portfólio, a Página,
    a conta de anúncio e o pixel → confirmar. Mostrar as permissões pedidas.
-3. De volta no Rev: Página, conta e pixel listados → **ativar** a Página para receber leads.
+3. De volta no Rev: Página, conta e pixel listados → ligar **receber leads** na Página (o Rev faz
+   `POST /{page-id}/subscribed_apps` e lista os formulários da Página).
 4. Abrir a **Lead Ads Testing Tool** (developers.facebook.com/tools/lead-ads-testing) → criar um lead
    de teste na Página.
 5. No Rev, o lead aparece no CRM com o nome do formulário, anúncio e campanha (mostra o uso de
-   leads_retrieval, pages_read_engagement e ads_read).
+   leads_retrieval, pages_read_engagement e ads_read). Mostrar também **Importar leads recentes**
+   no formulário (o import de 90 dias citado em leads_retrieval).
 6. Integrações › Meta › API de Conversões → escolher o pixel → **Enviar evento de teste** → mostrar o
    evento no Gerenciador de Eventos › Testar eventos.
 7. **Desconectar** → mostrar que a Página deixa de estar inscrita.
