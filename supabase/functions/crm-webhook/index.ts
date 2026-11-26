@@ -5,6 +5,7 @@ import { resolveCustomDataKeys, type SchemaField } from "../_shared/custom-field
 import { inboundEventKey, publicRunResult, resolveInboundAction } from "../_shared/automation-actions.ts";
 import { entryForWebhook, entryOfKind, inboundTouchPayload, recordTouch } from "../_shared/attribution.ts";
 import { dispatchConversationOpen } from "../_shared/start-conversation.ts";
+import { findLeadByPhone, INBOUND_WEBHOOK_ORIGIN, upsertInboundLead } from "../_shared/ingest-lead.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -174,44 +175,6 @@ function splitLeadAndOpportunityFields(updates: Partial<LeadPayload>) {
   }
 
   return { leadUpdates, oppValue, oppMeetingScheduled, oppNextContact, oppCustomData };
-}
-
-interface ExistingLead {
-  id: string;
-  custom_fields: Record<string, unknown> | null;
-  tags: string[] | null;
-}
-
-/**
- * Sprint 11: find a live lead of the team by phone, compared the way the
- * UNIQUE (equipe_id, phone_normalized) index compares — not by raw digits.
- *
- * The old lookup was `phone = <digits only>`, but `phone` keeps what was typed:
- * 897 of Solo Energia's 1,175 phones carry a mask. The lookup missed, the insert
- * hit the UNIQUE index, and the webhook answered 500 — a returning lead from the
- * Meta form or the landing page was simply lost.
- *
- * If the RPC fails (e.g. not deployed yet) this returns null and the caller
- * behaves as before, instead of turning every webhook into an error.
- */
-// deno-lint-ignore no-explicit-any
-async function findLeadByPhone(supabase: any, equipeId: string, phone: string): Promise<ExistingLead | null> {
-  const { data: leadId, error } = await supabase.rpc('crm_find_lead_by_phone', {
-    p_equipe_id: equipeId,
-    p_phone: phone,
-  });
-  if (error) {
-    console.error('[crm-webhook] crm_find_lead_by_phone falhou; seguindo sem deduplicar:', error);
-    return null;
-  }
-  if (!leadId) return null;
-
-  const { data } = await supabase
-    .from('leads')
-    .select('id, custom_fields, tags')
-    .eq('id', leadId)
-    .maybeSingle();
-  return (data as ExistingLead | null) ?? null;
 }
 
 /**
@@ -465,66 +428,28 @@ if (import.meta.main) {
         );
       }
 
-      // 4. Create or update lead (dedup by the NORMALIZED phone — Sprint 11)
-      const checkPhone = leadData.phone ? String(leadData.phone).replace(/\D/g, '') : null;
-      let leadId = '';
-      let isNewLead = true;
-
-      if (checkPhone) {
-        const existingLead = await findLeadByPhone(supabase, config.equipe_id, String(leadData.phone));
-
-        if (existingLead) {
-          leadId = existingLead.id;
-          isNewLead = false;
-          const leadUpdate: Record<string, unknown> = {};
-          if (leadData.email) leadUpdate.email = leadData.email;
-          if (leadData.observations) leadUpdate.observations = leadData.observations;
-          if (leadData.tags) leadUpdate.tags = leadData.tags;
-          leadUpdate.custom_fields = {
-            ...(existingLead.custom_fields as Record<string, unknown> || {}),
-            ...(leadData.custom_fields as Record<string, unknown> || {}),
-          };
-
-          const { error: updateErr } = await supabase
-            .from('leads')
-            .update(leadUpdate)
-            .eq('id', leadId);
-          if (updateErr) console.error('[crm-webhook] Error updating existing lead:', updateErr);
-        }
+      // 4. Create or update lead (dedup by the NORMALIZED phone — Sprint 11).
+      // Sprint 17: o núcleo vive em _shared/ingest-lead.ts (o formulário do Meta usa o mesmo).
+      const upserted = await upsertInboundLead(supabase, {
+        equipeId: config.equipe_id,
+        name: String(leadData.name),
+        email: (leadData.email as string | undefined) ?? null,
+        phone: leadData.phone ? String(leadData.phone) : null,
+        tags: (leadData.tags as string[] | undefined) ?? null,
+        observations: (leadData.observations as string | undefined) ?? null,
+        custom_fields: (leadData.custom_fields as Record<string, unknown> | undefined) ?? null,
+        source: (leadData.source as string | undefined) ?? null,
+        origin: INBOUND_WEBHOOK_ORIGIN,
+        logPrefix: '[crm-webhook]',
+      });
+      if (!upserted.ok) {
+        return new Response(
+          JSON.stringify({ error: 'Failed to create lead', details: upserted.error }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-
-      if (!leadId) {
-        const leadRow = {
-          equipe_id: config.equipe_id,
-          name: leadData.name,
-          email: leadData.email || null,
-          phone: checkPhone || leadData.phone || null,
-          source: leadData.source || 'webhook_inbound',
-          origem: 'webhook',
-          // Sprint 11 · T50 — it was left to the default ('manual').
-          creation_source: 'webhook',
-          created_by_type: 'webhook',
-          atendido_por_agente: false,
-          tags: leadData.tags || [],
-          observations: leadData.observations || null,
-          custom_fields: (leadData.custom_fields as Record<string, unknown>) || {},
-        };
-
-        const { data: newLead, error: leadError } = await supabase
-          .from('leads')
-          .insert(leadRow)
-          .select()
-          .single();
-
-        if (leadError) {
-          console.error('[crm-webhook] Error creating lead via inbound:', leadError);
-          return new Response(
-            JSON.stringify({ error: 'Failed to create lead', details: leadError.message }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        leadId = newLead.id;
-      }
+      const leadId = upserted.leadId;
+      const isNewLead = upserted.isNew;
 
       // 5. Resolve pipeline: config.pipeline_id or equipe.default_pipeline_id
       let pipelineId = config.pipeline_id;

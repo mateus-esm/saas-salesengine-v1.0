@@ -149,7 +149,14 @@ export async function entryForWebhook(db: Db, webhookConfigId: string): Promise<
  */
 export async function recordTouch(
   db: Db,
-  args: { leadId: string; entryId: string | null; payload: Record<string, unknown>; opportunityId?: string | null },
+  args: {
+    leadId: string;
+    entryId: string | null;
+    payload: Record<string, unknown>;
+    opportunityId?: string | null;
+    /** Sprint 17: quando o lead chegou de fato (o formulário importado é de dias atrás). */
+    occurredAt?: string | null;
+  },
   tag = "[attribution]",
 ): Promise<RecordedTouch | null> {
   if (!args.entryId) {
@@ -162,6 +169,7 @@ export async function recordTouch(
       p_entry_id: args.entryId,
       p_payload: args.payload,
       p_opportunity_id: args.opportunityId ?? null,
+      ...(args.occurredAt ? { p_occurred_at: args.occurredAt } : {}),
     });
     if (error) {
       console.error(tag, "crm_record_touch:", error.message);
