@@ -86,7 +86,7 @@ export function campaignErrorText(message: string): string {
 // Entries
 // ---------------------------------------------------------------------------
 
-export type EntryKind = "webhook" | "whatsapp" | "agent" | "manual" | "import";
+export type EntryKind = "webhook" | "whatsapp" | "agent" | "manual" | "import" | "meta_form";
 
 export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
   webhook: "Webhook",
@@ -94,6 +94,7 @@ export const ENTRY_KIND_LABEL: Record<EntryKind, string> = {
   agent: "Agente de IA",
   manual: "Manual",
   import: "Importação / API",
+  meta_form: "Formulário Meta",
 };
 
 export type OwnerRuleMode = "none" | "fixed" | "round_robin";

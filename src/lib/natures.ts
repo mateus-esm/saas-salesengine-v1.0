@@ -113,7 +113,7 @@ export function durationLabel(d: PipelineNatures["duration"]): string {
 }
 
 /** The kinds of entry that route a new deal to a line (manual and import pick one on the spot). */
-const ROUTING_KINDS: EntryKind[] = ["webhook", "whatsapp", "agent"];
+const ROUTING_KINDS: EntryKind[] = ["webhook", "whatsapp", "agent", "meta_form"];
 
 /**
  * The entries that feed a line: those whose new deals land in it — their own line,

@@ -75,3 +75,29 @@ export async function recordImportTouch(leadId: string): Promise<void> {
     console.error("[crm] crm_record_touch:", e);
   }
 }
+
+// Sprint 17 · Fase 4 — o que foi enviado ao Meta (API de Conversões) sobre o lead (LGPD).
+export interface LeadConversionEvent {
+  id: string;
+  event_name: string;
+  event_time: string;
+  status: "queued" | "processing" | "sent" | "error" | "skipped" | "dead";
+  skip_reason: string | null;
+  match_key: string | null;
+  sent_at: string | null;
+  stage_name: string | null;
+  payload: unknown;
+  last_error: string | null;
+}
+
+export function useLeadConversionEvents(leadId: string | null | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["lead_conversion_events", leadId ?? null],
+    enabled: enabled && !!leadId,
+    queryFn: async (): Promise<LeadConversionEvent[]> => {
+      const { data, error } = await sb.rpc("crm_lead_conversion_events", { p_lead: leadId });
+      if (error) return [];
+      return (data ?? []) as LeadConversionEvent[];
+    },
+  });
+}

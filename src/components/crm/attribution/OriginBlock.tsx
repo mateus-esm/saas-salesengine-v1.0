@@ -2,7 +2,8 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ChevronDown, ChevronUp, Compass } from "lucide-react";
 
-import { useLeadAttribution, type AttributionTouch } from "@/hooks/useLeadAttribution";
+import { useLeadAttribution, useLeadConversionEvents, type AttributionTouch } from "@/hooks/useLeadAttribution";
+import { capiSkipLabel } from "@/lib/meta";
 import { touchSummary } from "@/lib/attribution";
 
 const when = (iso: string) => {
@@ -48,6 +49,7 @@ interface OriginBlockProps {
  */
 export function OriginBlock({ leadId, open }: OriginBlockProps) {
   const { data } = useLeadAttribution(leadId, open);
+  const { data: conversions } = useLeadConversionEvents(leadId, open);
   const [showAll, setShowAll] = useState(false);
 
   if (!data || data.total === 0) return null;
@@ -90,6 +92,21 @@ export function OriginBlock({ leadId, open }: OriginBlockProps) {
             </li>
           ))}
         </ul>
+      )}
+      {conversions && conversions.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Enviado ao Meta (API de Conversões)</p>
+          <ul className="space-y-0.5 text-xs">
+            {conversions.map((c) => (
+              <li key={c.id}>
+                <span className="tabular-nums text-muted-foreground">{when(c.event_time)}</span> · {c.event_name}
+                {c.stage_name ? <span className="text-muted-foreground"> ({c.stage_name})</span> : null}
+                {" · "}
+                {c.status === "sent" ? `enviado${c.match_key ? ` por ${c.match_key}` : ""}` : c.status === "skipped" ? `não enviado: ${capiSkipLabel(c.skip_reason)}` : c.status}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
