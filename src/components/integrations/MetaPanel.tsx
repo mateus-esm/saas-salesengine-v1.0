@@ -1,12 +1,20 @@
-// Sprint 17 — painel "Meta" em Integrações: conectar, estado, ativos, erros.
-// Fase 1: conexão e ativos. A inscrição de páginas (leads) e a CAPI entram nas fases 2 e 4.
+// Sprint 17 — painel "Meta" em Integrações: conectar, estado, ativos, erros,
+// páginas que recebem leads (Fase 2), formulários e importação (Fase 3) e a
+// API de Conversões (Fase 4).
 
-import { AlertTriangle, CheckCircle2, Loader2, Plug, RefreshCw, Stethoscope, Unplug } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Plug, RefreshCw, RotateCcw, Stethoscope, Unplug } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useMetaIntegration } from "@/hooks/useMeta";
-import { metaAssetSummary, metaConnectionState, type MetaAsset } from "@/lib/meta";
+import { metaAssetSummary, metaConnectionState, metaQueueHealth, type MetaAsset } from "@/lib/meta";
+
+import { MetaCapiSection } from "./MetaCapiSection";
+import { MetaFormsSection } from "./MetaFormsSection";
+
+const when = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : null;
 
 const TYPE_LABEL: Record<MetaAsset["asset_type"], string> = {
   page: "Páginas",
@@ -15,7 +23,7 @@ const TYPE_LABEL: Record<MetaAsset["asset_type"], string> = {
 };
 
 export function MetaPanel() {
-  const { status, start, rediscover, probe, disconnect } = useMetaIntegration();
+  const { status, start, rediscover, probe, disconnect, pageToggle, retryFailed } = useMetaIntegration();
   const state = metaConnectionState(status.data);
   const integ = status.data?.integration;
   const assets = status.data?.assets ?? [];
@@ -52,6 +60,8 @@ export function MetaPanel() {
   }
 
   const warnings = integ?.settings?.discovery_warnings ?? [];
+  const queue = status.data?.queue;
+  const health = metaQueueHealth(queue);
   const byType = (t: MetaAsset["asset_type"]) => assets.filter((a) => a.asset_type === t);
 
   return (
@@ -77,6 +87,34 @@ export function MetaPanel() {
         <Stat label="Pixels" value={sum.datasets} />
       </div>
 
+      {queue && (queue.done || queue.queued || queue.error || queue.dead) ? (
+        <div className={`rounded-lg border p-3 text-xs ${health === "attention" ? "border-destructive/40 bg-destructive/5" : ""}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              <strong>{queue.done}</strong> lead(s) recebidos
+              {queue.last_lead_at ? <> · último {when(queue.last_lead_at)}</> : null}
+              {queue.queued ? <> · {queue.queued} na fila</> : null}
+              {queue.error + queue.dead ? <span className="text-destructive"> · {queue.error + queue.dead} com erro</span> : null}
+            </span>
+            {queue.error + queue.dead ? (
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => retryFailed.mutate()} disabled={retryFailed.isPending}>
+                {retryFailed.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
+                Tentar de novo
+              </Button>
+            ) : null}
+          </div>
+          {queue.recent_errors.length ? (
+            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-muted-foreground">
+              {queue.recent_errors.map((e) => (
+                <li key={e.leadgen_id}>
+                  Lead {e.leadgen_id} · {e.error ?? "erro"} {e.status === "dead" ? "(desistiu após várias tentativas)" : `(tentativa ${e.attempts})`}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
       {(["page", "ad_account", "dataset"] as const).map((t) =>
         byType(t).length ? (
           <div key={t} className="space-y-1">
@@ -84,16 +122,40 @@ export function MetaPanel() {
             <ul className="divide-y rounded-lg border">
               {byType(t).map((a) => (
                 <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                  <span className="truncate">{a.name ?? a.external_id}</span>
-                  <Badge variant={a.status === "active" ? "default" : a.status === "error" ? "destructive" : "secondary"} className="text-[10px]">
-                    {a.status === "active" ? "recebendo leads" : a.status === "error" ? "erro" : "disponível"}
-                  </Badge>
+                  <div className="min-w-0">
+                    <p className="truncate">{a.name ?? a.external_id}</p>
+                    {t === "page" && (a.last_event_at || a.last_error) ? (
+                      <p className={`text-[11px] ${a.last_error && a.status !== "active" ? "text-destructive" : "text-muted-foreground"}`}>
+                        {a.last_event_at ? `Último lead ${when(a.last_event_at)}` : null}
+                        {a.last_error ? `${a.last_event_at ? " · " : ""}${a.last_error}` : null}
+                      </p>
+                    ) : null}
+                  </div>
+                  {t === "page" ? (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">{a.status === "active" ? "recebendo leads" : "receber leads"}</span>
+                      <Switch
+                        checked={a.status === "active"}
+                        disabled={pageToggle.isPending}
+                        onCheckedChange={(on) => pageToggle.mutate({ assetId: a.id, on })}
+                        aria-label={`Receber leads de ${a.name ?? a.external_id}`}
+                      />
+                    </div>
+                  ) : (
+                    <Badge variant={a.status === "error" ? "destructive" : "secondary"} className="text-[10px]">
+                      {a.status === "error" ? "erro" : "disponível"}
+                    </Badge>
+                  )}
                 </li>
               ))}
             </ul>
           </div>
         ) : null,
       )}
+
+      <MetaFormsSection hasActivePage={sum.activePages > 0} />
+
+      <MetaCapiSection datasets={byType("dataset")} />
 
       {warnings.length ? (
         <details className="rounded-lg border p-3 text-xs text-muted-foreground">

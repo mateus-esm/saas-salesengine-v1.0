@@ -58,7 +58,8 @@ export function EntryDialog({ entry, campaigns, saving, onClose, onSave }: Entry
   const isWebhook = entry.kind === "webhook";
   // Sprint 11 · T55 — the number and the agent send a new deal to their line;
   // manual and import pick the line on the spot; a webhook's is the webhook's.
-  const routesToLine = entry.kind === "whatsapp" || entry.kind === "agent";
+  // Sprint 17: um formulário do Meta também tem a linha dele.
+  const routesToLine = entry.kind === "whatsapp" || entry.kind === "agent" || entry.kind === "meta_form";
   const toggleUser = (id: string, on: boolean) =>
     setUsers((u) => (on ? (u.includes(id) ? u : [...u, id]) : u.filter((x) => x !== id)));
   const ownerMissing = mode !== "none" && users.length === 0;

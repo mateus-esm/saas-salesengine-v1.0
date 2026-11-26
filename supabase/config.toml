@@ -173,3 +173,9 @@ verify_jwt = false
 
 [functions.integrations-windsor]
 verify_jwt = false
+
+[functions.meta-webhook]
+verify_jwt = false
+
+[functions.meta-worker]
+verify_jwt = false

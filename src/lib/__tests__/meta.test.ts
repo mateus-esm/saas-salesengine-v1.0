@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { metaAssetSummary, metaConnectionState, metaCallbackParams, type MetaAsset, type MetaStatus } from "../meta";
+import {
+  capiSkipLabel,
+  isValidEventName,
+  metaAssetSummary,
+  metaCallbackParams,
+  metaConnectionState,
+  metaQueueHealth,
+  suggestEventName,
+  type MetaAsset,
+  type MetaStatus,
+} from "../meta";
 
 const asset = (asset_type: MetaAsset["asset_type"], status: MetaAsset["status"] = "available"): MetaAsset => ({
   id: Math.random().toString(),
@@ -50,4 +60,33 @@ describe("metaCallbackParams", () => {
       message: "A conexão foi cancelada no Meta.",
     }));
   it("faltando state", () => expect(metaCallbackParams("?code=abc").kind).toBe("error"));
+});
+
+describe("Sprint 17 · Fases 2–4 — helpers da tela", () => {
+  it("suggestEventName: etapa → snake_case sem acento", () => {
+    expect(suggestEventName("Qualificação SQL")).toBe("qualificacao_sql");
+    expect(suggestEventName("  Proposta enviada! ")).toBe("proposta_enviada");
+    expect(suggestEventName("")).toBe("etapa");
+    expect(suggestEventName("a".repeat(80)).length).toBe(50);
+  });
+
+  it("isValidEventName segue a regra do banco", () => {
+    expect(isValidEventName("qualified_lead")).toBe(true);
+    expect(isValidEventName("com espaço")).toBe(false);
+    expect(isValidEventName("")).toBe(false);
+  });
+
+  it("metaQueueHealth: dead/erro pede atenção, fila vazia está ok", () => {
+    expect(metaQueueHealth(undefined)).toBe("idle");
+    expect(metaQueueHealth({ queued: 0, done: 3, error: 0, dead: 0, last_lead_at: null, recent_errors: [] })).toBe("ok");
+    expect(metaQueueHealth({ queued: 2, done: 3, error: 0, dead: 0, last_lead_at: null, recent_errors: [] })).toBe("working");
+    expect(metaQueueHealth({ queued: 0, done: 3, error: 1, dead: 0, last_lead_at: null, recent_errors: [] })).toBe("attention");
+    expect(metaQueueHealth({ queued: 0, done: 0, error: 0, dead: 1, last_lead_at: null, recent_errors: [] })).toBe("attention");
+  });
+
+  it("capiSkipLabel traduz o motivo", () => {
+    expect(capiSkipLabel("whatsapp_requires_waba")).toMatch(/WhatsApp/);
+    expect(capiSkipLabel("too_old")).toMatch(/7 dias/);
+    expect(capiSkipLabel(null)).toBe("");
+  });
 });

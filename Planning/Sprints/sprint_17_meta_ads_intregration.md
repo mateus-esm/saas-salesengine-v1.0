@@ -217,3 +217,53 @@ qualificação depois (MQL, SQL, venda), para o algoritmo buscar lead que compra
 - Erros do Meta (token expirado, permissão faltando, página sem acesso a leads) precisam
   virar mensagem clara na tela, não só log.
 - Ao terminar cada fase: testes, `tsc`, build. Só declare pronto com evidência.
+
+## Conclusão (25/11/2026)
+
+### Entregue
+- **Fase 1** (PR #76, em produção desde 24/11): Login for Business (token system-user), ativos
+  (páginas, contas de anúncio, pixels) no Vault, state do OAuth de uso único, exclusão de dados
+  (`meta-data-deletion` + página `/exclusao-de-dados`), card "Conectar com Meta", kit da App Review.
+- **Fases 2–5** (branch `feat/sprint17-meta-leads`, 6 commits):
+  - `meta-webhook` (público): verificação GET, assinatura `X-Hub-Signature-256` sobre o corpo cru,
+    limite de 1 MB, equipe só pela página **ativa**, fila idempotente por equipe + `leadgen_id`,
+    processamento na hora (`waitUntil`). `leadgen_id` de 17 dígitos preservado (nunca `Number`).
+  - Fila `crm_inbound_events` com backoff 2^n min até 6 h, 8 tentativas → `dead`, erro de token
+    não queima tentativa e para a fila da equipe até reconectar. Botão "Tentar de novo".
+  - Lead pelo **mesmo caminho** do webhook de entrada: núcleo extraído para
+    `_shared/ingest-lead.ts` (caracterizado em teste) e usado pela rota `/inbound` do `crm-webhook`
+    e pelo Meta. E-mail como 2ª chave só na porta Meta; perguntas extras → observações +
+    `custom_fields.meta_form`. Anúncio criado/completado (`crm_ads.source 'meta'`, campanha ligada)
+    **antes** do toque, para o toque herdar campanha e criativo. `leadgen_id` em `lead_touches`.
+  - Uma entrada `meta_form` por formulário (Growth › Entradas: linha, responsável, campanha,
+    canal Social Pago · Meta). Importar leads recentes (7/30/90 dias), sem saudação automática.
+  - CAPI: `crm_conversion_mappings` (tudo desligado), fila `crm_conversion_events` com `event_id` =
+    sha256(equipe:negócio:etapa:evento), gatilho em `opportunity_stage_history` (nunca derruba a
+    mudança de etapa), envio em lote por dataset, chave formulário → `lead_id`; site → `fbc` +
+    hash; WhatsApp (`ctwa_clid`) → pulado `whatsapp_requires_waba` (exige WABA oficial). Evento de
+    teste com `test_event_code`. Registro por lead (LGPD) no bloco Origem do lead.
+  - `meta-worker` (cron 5 min via `_crm_meta_tick`, segredo no Vault) para a fila de entrada e a CAPI.
+  - Tela: páginas com "receber leads", fila/erros, formulários + importar, CAPI (pixel, interruptor,
+    etapa → evento, teste, últimos envios).
+
+### Números
+- Testes Deno: 41 (meta, meta-graph, meta-leads, meta-ingest, meta-capi) + 5 ingest-lead + 7 crm-webhook.
+- Testes SQL: `sprint17_meta_leads` e `sprint17_meta_capi` PASS (contra produção, rollback).
+- Front: vitest 34/34 nos arquivos tocados; suíte completa 832/833 (1 flaky antigo); `tsc`, eslint e build OK.
+
+### Pendências
+- **Deploy das Fases 2–5**: migrations `20261124000200`/`000300` (Management API + `migration repair`),
+  segredo `META_WORKER_SECRET` + Vault `meta_worker_url`/`meta_worker_secret`, deploy de
+  `meta-webhook meta-worker integrations-meta crm-webhook`, PR → checks → merge.
+- **Credenciais do app** (Mateus): `META_APP_ID`, `META_APP_SECRET`, `META_LOGIN_CONFIG_ID`,
+  `META_REDIRECT_URI` ainda não estão nos segredos. Sem elas o card mostra "app não configurado".
+- **Teste real com a Solo** (depois das credenciais): conectar, ligar a página, Lead Ads Testing Tool
+  → lead no Rev com anúncio/campanha; "Enviar evento de teste" → Gerenciador de Eventos. Rodar o
+  "Diagnóstico" e atualizar §3 da spec (token de página, campos do lead, `leadgen_forms`).
+- **App Review / Verificação do Negócio**: ver `docs/meta-app-review-kit.md` (URLs, texto por
+  permissão, roteiro do vídeo, checklist).
+
+### Próximos passos
+- Definir MQL/SQL da Solo e ligar os eventos reais na tela da CAPI.
+- Tela de mapeamento de campos por formulário (hoje: padrão do Meta + observações).
+- Expurgo automático das filas (90 dias); WhatsApp oficial (WABA) e Instagram no mesmo app.
