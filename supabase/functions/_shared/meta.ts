@@ -8,6 +8,8 @@
 // Doc: docs/superpowers/specs/2026-11-24-sprint17-meta-integration-design.md
 // ============================================================================
 
+import { normalizePhone } from "./phone.ts";
+
 export const GRAPH_VERSION = "v27.0";
 export const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
@@ -126,4 +128,231 @@ export function metaErrorMessage(err: { code?: number; error_subcode?: number; m
 /** Atraso da próxima tentativa: 2^n minutos, no máximo 6 horas. */
 export function backoffDelayMs(attempts: number): number {
   return Math.min(2 ** Math.max(0, attempts) * 60_000, 6 * 3600_000);
+}
+
+// ============================================================================
+// Fases 2–4 — webhook leadgen, lead do formulário, evento da CAPI.
+// ============================================================================
+
+export interface LeadgenChange {
+  page_id: string;
+  leadgen_id: string;
+  form_id: string | null;
+  ad_id: string | null;
+  adgroup_id: string | null;
+  created_time: number | null;
+}
+
+const idStr = (v: unknown): string | null => {
+  if (typeof v === "string" && /^\d{1,40}$/.test(v.trim())) return v.trim();
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return BigInt(Math.trunc(v)).toString();
+  return null;
+};
+
+/**
+ * O `leadgen_id` tem 15–17 dígitos: acima de Number.MAX_SAFE_INTEGER o JSON.parse
+ * arredonda. Com o corpo cru em mãos, os IDs numéricos viram texto antes do parse.
+ */
+export function parseLeadgenWebhook(body: unknown, raw?: string): LeadgenChange[] {
+  let b = body;
+  if (raw) {
+    try {
+      b = JSON.parse(raw.replace(/"(leadgen_id|page_id|form_id|ad_id|adgroup_id)"\s*:\s*(\d+)/g, '"$1":"$2"'));
+    } catch {
+      b = body;
+    }
+  }
+  const o = b as { object?: unknown; entry?: unknown } | null;
+  if (!o || o.object !== "page" || !Array.isArray(o.entry)) return [];
+  const out: LeadgenChange[] = [];
+  for (const e of o.entry as { id?: unknown; changes?: unknown }[]) {
+    if (!e || !Array.isArray(e.changes)) continue;
+    for (const c of e.changes as { field?: unknown; value?: Record<string, unknown> }[]) {
+      if (c?.field !== "leadgen" || !c.value) continue;
+      const v = c.value;
+      const leadgen = idStr(v.leadgen_id);
+      const page = idStr(v.page_id) ?? idStr(e.id);
+      if (!leadgen || !page) continue;
+      const ct = Number(v.created_time);
+      out.push({
+        page_id: page,
+        leadgen_id: leadgen,
+        form_id: idStr(v.form_id),
+        ad_id: idStr(v.ad_id),
+        adgroup_id: idStr(v.adgroup_id),
+        created_time: Number.isFinite(ct) && ct > 0 ? ct : null,
+      });
+    }
+  }
+  return out;
+}
+
+export interface FormLead {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  observations: string | null;
+  answers: Record<string, string>;
+}
+
+const NAME_KEYS = ["full_name", "name", "nome", "nome_completo"];
+const EMAIL_KEYS = ["email", "work_email", "e-mail"];
+const PHONE_KEYS = ["phone_number", "phone", "work_phone_number", "mobile_phone_number", "telefone", "whatsapp", "celular"];
+const SKIP_KEYS = new Set([...NAME_KEYS, ...EMAIL_KEYS, ...PHONE_KEYS, "first_name", "last_name"]);
+
+const questionLabel = (k: string) => {
+  const s = k.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+/** `field_data` do Meta → nome/e-mail/telefone pelos nomes padrão; o resto vira observação. */
+export function fieldDataToLead(fieldData: unknown): FormLead {
+  const vals = new Map<string, string>();
+  const order: string[] = [];
+  for (const f of Array.isArray(fieldData) ? fieldData as { name?: unknown; values?: unknown }[] : []) {
+    if (!f || typeof f.name !== "string") continue;
+    const v = (Array.isArray(f.values) ? f.values : []).map((x) => String(x ?? "").trim()).filter(Boolean).join(", ");
+    if (!v) continue;
+    const k = f.name.trim();
+    if (!vals.has(k)) order.push(k);
+    vals.set(k, v);
+  }
+  const pick = (keys: string[]) => {
+    for (const k of keys) {
+      const v = vals.get(k);
+      if (v) return v;
+    }
+    return null;
+  };
+  const first = vals.get("first_name");
+  const last = vals.get("last_name");
+  const name = pick(NAME_KEYS) ?? ([first, last].filter(Boolean).join(" ") || null);
+  const answers: Record<string, string> = {};
+  for (const k of order) if (!SKIP_KEYS.has(k.toLowerCase())) answers[k] = vals.get(k)!;
+  const obs = Object.entries(answers).map(([k, v]) => `${questionLabel(k)}: ${v}`).join("\n");
+  return {
+    name,
+    email: normalizeEmail(pick(EMAIL_KEYS)),
+    phone: pick(PHONE_KEYS),
+    observations: obs || null,
+    answers,
+  };
+}
+
+/** O lead da Graph API → as chaves que `_crm_touch_fields` lê (+ `leadgen_id`). */
+export function metaTouchPayload(lead: Record<string, unknown>, formName: string | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  const put = (k: string, v: unknown) => {
+    const s = typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "";
+    if (s) out[k] = s;
+  };
+  put("leadgen_id", lead.id);
+  put("ad_id", lead.ad_id);
+  put("ad_name", lead.ad_name);
+  put("adset_id", lead.adset_id);
+  put("adset_name", lead.adset_name);
+  put("campaign_id", lead.campaign_id);
+  put("campaign_name", lead.campaign_name);
+  put("form_id", lead.form_id);
+  put("form_name", formName);
+  put("meta_platform", lead.platform);
+  out.utm_source = "facebook";
+  out.utm_medium = lead.is_organic === true ? "organic_social" : "paid_social";
+  return out;
+}
+
+export function normalizeEmail(raw: string | null | undefined): string | null {
+  const s = String(raw ?? "").trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
+}
+
+/** Só dígitos, com DDI, sem zeros à esquerda (regra de hash do Meta). */
+export function normalizePhoneE164(raw: string | null | undefined): string | null {
+  return normalizePhone(raw);
+}
+
+export function buildFbc(fbclid: string | null | undefined, clickMs: number): string | null {
+  const f = String(fbclid ?? "").trim();
+  return f ? `fb.1.${Math.trunc(clickMs)}.${f}` : null;
+}
+
+/** Mesma etapa do mesmo negócio = mesmo `event_id` → o Meta deduplica. */
+export function capiEventId(equipeId: string, opportunityId: string, stageId: string, eventName: string): Promise<string> {
+  return sha256Hex(`${equipeId}:${opportunityId}:${stageId}:${eventName}`);
+}
+
+export type CapiSkipReason = "no_match_key" | "too_old" | "capi_off" | "whatsapp_requires_waba";
+export type CapiMatchKey = "lead_id" | "fbc" | "hashed_pii";
+
+export interface CapiEvent {
+  event_name: string;
+  event_time: number;
+  event_id: string;
+  action_source: "system_generated";
+  user_data: { lead_id?: string; fbc?: string; em?: string[]; ph?: string[] };
+  custom_data: { event_source: "crm"; lead_event_source: string };
+}
+
+export interface CapiInput {
+  eventName: string;
+  eventId: string;
+  eventTimeMs: number;
+  leadCreatedMs: number | null;
+  nowMs: number;
+  leadEventSource: string;
+  leadgenId?: string | null;
+  fbclid?: string | null;
+  touchAtMs?: number | null;
+  ctwaClid?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}
+
+const CAPI_MAX_AGE_MS = 7 * 86400_000;
+
+/**
+ * Evento "Conversion Leads" (CAPI para CRM). `lead_id` sempre texto, nunca Number.
+ * O JSON enviado leva `lead_id` como string; o Meta aceita o inteiro em texto, e
+ * Number() perderia os últimos dígitos.
+ */
+export async function buildCapiEvent(
+  i: CapiInput,
+): Promise<{ ok: true; match_key: CapiMatchKey; event: CapiEvent } | { ok: false; skip_reason: CapiSkipReason }> {
+  if (i.nowMs - i.eventTimeMs > CAPI_MAX_AGE_MS) return { ok: false, skip_reason: "too_old" };
+  if (i.leadCreatedMs != null && i.eventTimeMs < i.leadCreatedMs) return { ok: false, skip_reason: "too_old" };
+
+  const user: CapiEvent["user_data"] = {};
+  const em = normalizeEmail(i.email);
+  const ph = normalizePhoneE164(i.phone);
+  if (em) user.em = [await sha256Hex(em)];
+  if (ph) user.ph = [await sha256Hex(ph)];
+
+  let key: CapiMatchKey | null = null;
+  const leadgen = String(i.leadgenId ?? "").trim();
+  if (/^\d{1,40}$/.test(leadgen)) {
+    user.lead_id = leadgen;
+    key = "lead_id";
+  } else if (i.fbclid) {
+    const fbc = buildFbc(i.fbclid, i.touchAtMs ?? i.eventTimeMs);
+    if (fbc) {
+      user.fbc = fbc;
+      key = "fbc";
+    }
+  }
+  if (!key && i.ctwaClid) return { ok: false, skip_reason: "whatsapp_requires_waba" };
+  if (!key && (user.em || user.ph)) key = "hashed_pii";
+  if (!key) return { ok: false, skip_reason: "no_match_key" };
+
+  return {
+    ok: true,
+    match_key: key,
+    event: {
+      event_name: i.eventName,
+      event_time: Math.floor(i.eventTimeMs / 1000),
+      event_id: i.eventId,
+      action_source: "system_generated",
+      user_data: user,
+      custom_data: { event_source: "crm", lead_event_source: i.leadEventSource || "Rev" },
+    },
+  };
 }
