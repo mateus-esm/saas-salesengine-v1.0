@@ -41,7 +41,8 @@ export function useMetaIntegration() {
 
   /** Vai para o diálogo do Meta; ele volta em /integracoes/meta/callback. */
   const start = useMutation({
-    mutationFn: async () => (await callMeta<{ url: string }>({ action: "start" })).url,
+    // `origin`: o Meta volta para o domínio do nicho onde o admin está (sessão é por domínio).
+    mutationFn: async () => (await callMeta<{ url: string }>({ action: "start", origin: window.location.origin })).url,
     onSuccess: (url) => window.location.assign(url),
     onError: (e: Error) => toast.error(e.message),
   });

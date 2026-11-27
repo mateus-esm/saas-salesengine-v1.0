@@ -28,7 +28,7 @@ export default function MetaCallback() {
     }
     // Tira o código da barra de endereço antes de qualquer outra coisa.
     window.history.replaceState(null, "", "/integracoes/meta/callback");
-    callMeta({ action: "connect", code: p.code, state: p.state })
+    callMeta({ action: "connect", code: p.code, state: p.state, origin: window.location.origin })
       .then(() => {
         qc.invalidateQueries({ queryKey: metaKeys.status });
         toast.success("Meta conectado");

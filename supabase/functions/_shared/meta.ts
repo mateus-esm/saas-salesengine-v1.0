@@ -79,6 +79,37 @@ export async function parseSignedRequest(
   }
 }
 
+export const META_CALLBACK_PATH = "/integracoes/meta/callback";
+
+/**
+ * Cada nicho tem o próprio domínio e a sessão do Supabase vive por domínio, então o Meta
+ * precisa voltar para o domínio onde o admin clicou em "Conectar". Aceita só https em
+ * `*.soloventures.com.br` (ou o domínio raiz) e os domínios extras de `META_REDIRECT_ORIGINS`
+ * (lista separada por vírgula); fora disso usa o `META_REDIRECT_URI` padrão.
+ * Cada URI devolvida precisa estar em "URIs de redirecionamento do OAuth válidos" no app.
+ */
+export function pickRedirectUri(origin: unknown, fallback: string, extraOrigins = ""): string {
+  if (typeof origin !== "string" || !origin) return fallback;
+  let u: URL;
+  try {
+    u = new URL(origin);
+  } catch {
+    return fallback;
+  }
+  if (u.protocol !== "https:" || u.port || u.username || u.password) return fallback;
+  const host = u.hostname.toLowerCase();
+  const extras = extraOrigins.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+    .map((s) => {
+      try {
+        return new URL(s.includes("://") ? s : `https://${s}`).hostname;
+      } catch {
+        return "";
+      }
+    });
+  const ok = host === "soloventures.com.br" || host.endsWith(".soloventures.com.br") || extras.includes(host);
+  return ok ? `https://${host}${META_CALLBACK_PATH}` : fallback;
+}
+
 /** Diálogo OAuth por redirecionamento (Login for Business, token system-user). `config_id` substitui `scope`. */
 export function oauthDialogUrl(o: { appId: string; configId: string; redirectUri: string; state: string }): string {
   const u = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
