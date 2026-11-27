@@ -1,15 +1,13 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { pickRedirectUri } from "./meta.ts";
+import { allowedReturnHost, buildOAuthState, randomToken } from "./meta.ts";
 
-const FB = "https://rev.soloventures.com.br/integracoes/meta/callback";
-
-Deno.test("pickRedirectUri - volta para o domínio do nicho", () => {
-  assertEquals(pickRedirectUri("https://solon.soloventures.com.br", FB), "https://solon.soloventures.com.br/integracoes/meta/callback");
-  assertEquals(pickRedirectUri("https://SOLON.soloventures.com.br/", FB), "https://solon.soloventures.com.br/integracoes/meta/callback");
-  assertEquals(pickRedirectUri("https://soloventures.com.br", FB), "https://soloventures.com.br/integracoes/meta/callback");
+Deno.test("allowedReturnHost - aceita domínios de nicho", () => {
+  assertEquals(allowedReturnHost("https://solon.soloventures.com.br"), "solon.soloventures.com.br");
+  assertEquals(allowedReturnHost("https://SOLON.soloventures.com.br/"), "solon.soloventures.com.br");
+  assertEquals(allowedReturnHost("https://soloventures.com.br"), "soloventures.com.br");
 });
 
-Deno.test("pickRedirectUri - recusa domínio estranho, http, porta e lixo", () => {
+Deno.test("allowedReturnHost - recusa domínio estranho, http, porta e lixo", () => {
   for (const o of [
     "https://evil.com",
     "https://soloventures.com.br.evil.com",
@@ -21,11 +19,19 @@ Deno.test("pickRedirectUri - recusa domínio estranho, http, porta e lixo", () =
     "",
     null,
     42,
-  ]) assertEquals(pickRedirectUri(o, FB), FB);
+  ]) assertEquals(allowedReturnHost(o), null);
 });
 
-Deno.test("pickRedirectUri - domínios extras do env", () => {
-  assertEquals(pickRedirectUri("https://crm.cliente.com", FB, "crm.cliente.com, https://outro.com.br"), "https://crm.cliente.com/integracoes/meta/callback");
-  assertEquals(pickRedirectUri("https://outro.com.br", FB, "crm.cliente.com, https://outro.com.br"), "https://outro.com.br/integracoes/meta/callback");
-  assertEquals(pickRedirectUri("https://x.cliente.com", FB, "crm.cliente.com"), FB);
+Deno.test("allowedReturnHost - domínios extras do env", () => {
+  const extra = "crm.cliente.com, https://outro.com.br";
+  assertEquals(allowedReturnHost("https://crm.cliente.com", extra), "crm.cliente.com");
+  assertEquals(allowedReturnHost("https://outro.com.br", extra), "outro.com.br");
+  assertEquals(allowedReturnHost("https://x.cliente.com", "crm.cliente.com"), null);
+});
+
+Deno.test("buildOAuthState - nonce sem ponto, host depois do 1º ponto", () => {
+  const n = randomToken();
+  assertEquals(n.includes("."), false);
+  assertEquals(buildOAuthState(n, "solon.soloventures.com.br"), `${n}.solon.soloventures.com.br`);
+  assertEquals(buildOAuthState(n, null), n);
 });

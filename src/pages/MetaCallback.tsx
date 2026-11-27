@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { callMeta, metaKeys } from "@/hooks/useMeta";
-import { metaCallbackParams } from "@/lib/meta";
+import { metaCallbackParams, metaForwardUrl } from "@/lib/meta";
 
 export default function MetaCallback() {
   const { search } = useLocation();
@@ -21,6 +21,12 @@ export default function MetaCallback() {
   useEffect(() => {
     if (once.current) return; // o código do Meta vale uma vez só
     once.current = true;
+    // Volta única do Meta (rev.): se a conexão começou em outro nicho, repassa para lá.
+    const forward = metaForwardUrl(search, window.location.hostname);
+    if (forward) {
+      window.location.replace(forward);
+      return;
+    }
     const p = metaCallbackParams(search);
     if (p.kind === "error") {
       setError(p.message);
@@ -28,7 +34,7 @@ export default function MetaCallback() {
     }
     // Tira o código da barra de endereço antes de qualquer outra coisa.
     window.history.replaceState(null, "", "/integracoes/meta/callback");
-    callMeta({ action: "connect", code: p.code, state: p.state, origin: window.location.origin })
+    callMeta({ action: "connect", code: p.code, state: p.state })
       .then(() => {
         qc.invalidateQueries({ queryKey: metaKeys.status });
         toast.success("Meta conectado");

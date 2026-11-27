@@ -90,3 +90,28 @@ describe("Sprint 17 · Fases 2–4 — helpers da tela", () => {
     expect(capiSkipLabel(null)).toBe("");
   });
 });
+
+import { metaForwardUrl } from "../meta";
+
+describe("metaForwardUrl", () => {
+  const q = "?code=ABC&state=nonce_-x.solon.soloventures.com.br";
+  it("repassa para o nicho que veio no state", () => {
+    expect(metaForwardUrl(q, "rev.soloventures.com.br")).toBe(
+      "https://solon.soloventures.com.br/integracoes/meta/callback?code=ABC&state=nonce_-x.solon.soloventures.com.br",
+    );
+  });
+  it("não repassa quando já está no domínio certo", () => {
+    expect(metaForwardUrl(q, "solon.soloventures.com.br")).toBeNull();
+  });
+  it("não repassa state sem domínio ou com domínio estranho", () => {
+    expect(metaForwardUrl("?code=A&state=nonce", "rev.soloventures.com.br")).toBeNull();
+    expect(metaForwardUrl("?code=A&state=n.evil.com", "rev.soloventures.com.br")).toBeNull();
+    expect(metaForwardUrl("?code=A&state=n.soloventures.com.br.evil.com", "rev.soloventures.com.br")).toBeNull();
+    expect(metaForwardUrl("?code=A&state=n.evil.com/x.soloventures.com.br", "rev.soloventures.com.br")).toBeNull();
+  });
+  it("repassa também o erro do Meta para o nicho mostrar", () => {
+    expect(metaForwardUrl("?error=access_denied&state=n.solon.soloventures.com.br", "rev.soloventures.com.br")).toContain(
+      "https://solon.soloventures.com.br/integracoes/meta/callback?error=access_denied",
+    );
+  });
+});

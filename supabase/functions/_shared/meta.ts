@@ -82,21 +82,19 @@ export async function parseSignedRequest(
 export const META_CALLBACK_PATH = "/integracoes/meta/callback";
 
 /**
- * Cada nicho tem o próprio domínio e a sessão do Supabase vive por domínio, então o Meta
- * precisa voltar para o domínio onde o admin clicou em "Conectar". Aceita só https em
- * `*.soloventures.com.br` (ou o domínio raiz) e os domínios extras de `META_REDIRECT_ORIGINS`
- * (lista separada por vírgula); fora disso usa o `META_REDIRECT_URI` padrão.
- * Cada URI devolvida precisa estar em "URIs de redirecionamento do OAuth válidos" no app.
+ * Domínio de nicho aceito para receber a volta do OAuth: https em `*.soloventures.com.br`
+ * (ou o raiz) e os domínios extras de `META_REDIRECT_ORIGINS` (lista por vírgula).
+ * Devolve o hostname em minúsculas, ou null.
  */
-export function pickRedirectUri(origin: unknown, fallback: string, extraOrigins = ""): string {
-  if (typeof origin !== "string" || !origin) return fallback;
+export function allowedReturnHost(origin: unknown, extraOrigins = ""): string | null {
+  if (typeof origin !== "string" || !origin) return null;
   let u: URL;
   try {
     u = new URL(origin);
   } catch {
-    return fallback;
+    return null;
   }
-  if (u.protocol !== "https:" || u.port || u.username || u.password) return fallback;
+  if (u.protocol !== "https:" || u.port || u.username || u.password) return null;
   const host = u.hostname.toLowerCase();
   const extras = extraOrigins.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
     .map((s) => {
@@ -106,8 +104,17 @@ export function pickRedirectUri(origin: unknown, fallback: string, extraOrigins 
         return "";
       }
     });
-  const ok = host === "soloventures.com.br" || host.endsWith(".soloventures.com.br") || extras.includes(host);
-  return ok ? `https://${host}${META_CALLBACK_PATH}` : fallback;
+  return host === "soloventures.com.br" || host.endsWith(".soloventures.com.br") || extras.includes(host) ? host : null;
+}
+
+/**
+ * O Meta sempre volta para um único endereço (`META_REDIRECT_URI`, o único cadastrado no app).
+ * O state leva o domínio do nicho onde o admin clicou — `<nonce>.<host>` — e a página de volta
+ * repassa o navegador para lá, onde está a sessão certa (a sessão do Supabase é por domínio).
+ * O nonce (base64url) não tem ponto, então o 1º ponto separa os dois.
+ */
+export function buildOAuthState(nonce: string, host: string | null): string {
+  return host ? `${nonce}.${host}` : nonce;
 }
 
 /** Diálogo OAuth por redirecionamento (Login for Business, token system-user). `config_id` substitui `scope`. */

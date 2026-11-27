@@ -26,7 +26,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { highestRole } from "../_shared/team-access.ts";
-import { GRAPH_VERSION, metaErrorMessage, oauthDialogUrl, pickRedirectUri, randomToken, sha256Hex } from "../_shared/meta.ts";
+import { GRAPH_VERSION, metaErrorMessage, allowedReturnHost, buildOAuthState, oauthDialogUrl, randomToken, sha256Hex } from "../_shared/meta.ts";
 import { createGraph, type Graph, MetaGraphError } from "../_shared/meta-graph.ts";
 import { processInboundBatch } from "../_shared/meta-ingest.ts";
 import { sendCapiTest } from "../_shared/meta-capi.ts";
@@ -227,10 +227,10 @@ serve(async (req) => {
   const appId = env("META_APP_ID");
   const appSecret = env("META_APP_SECRET");
   const configId = env("META_LOGIN_CONFIG_ID");
-  const defaultRedirectUri = env("META_REDIRECT_URI");
-  const configured = !!(appId && appSecret && configId && defaultRedirectUri);
-  // Volta para o domínio do nicho onde o admin está (a sessão é por domínio).
-  const redirectUri = pickRedirectUri(body.origin, defaultRedirectUri, env("META_REDIRECT_ORIGINS"));
+  // Endereço único de volta do OAuth (o único cadastrado no app do Meta); a página repassa
+  // para o domínio do nicho que veio no state.
+  const redirectUri = env("META_REDIRECT_URI");
+  const configured = !!(appId && appSecret && configId && redirectUri);
   const graph = createGraph({ appId, appSecret });
 
   const current = async () => {
@@ -289,7 +289,7 @@ serve(async (req) => {
     if (!configured) return json({ error: "O app do Meta ainda não foi configurado no Rev." }, 503);
 
     if (action === "start") {
-      const nonce = randomToken();
+      const nonce = buildOAuthState(randomToken(), allowedReturnHost(body.origin, env("META_REDIRECT_ORIGINS")));
       const { error } = await db.rpc("_crm_oauth_create", {
         p_provider: "meta",
         p_equipe: equipeId,
