@@ -155,3 +155,19 @@ export function metaCallbackParams(search: string): { kind: "code"; code: string
   if (!code || !state) return { kind: "error", message: "O retorno do Meta veio incompleto. Tente conectar de novo." };
   return { kind: "code", code, state };
 }
+
+/**
+ * O Meta volta sempre para o endereço único (rev.). Se o state traz outro domínio de nicho
+ * (`<nonce>.<host>`), devolve a URL para repassar o navegador para lá — onde está a sessão
+ * certa. Só repassa para https em `*.soloventures.com.br`; senão null (conecta aqui mesmo).
+ */
+export function metaForwardUrl(search: string, currentHost: string): string | null {
+  const p = new URLSearchParams(search);
+  const state = p.get("state") ?? "";
+  const dot = state.indexOf(".");
+  if (dot < 0) return null;
+  const host = state.slice(dot + 1).toLowerCase();
+  if (!/^([a-z0-9-]+\.)*soloventures\.com\.br$/.test(host)) return null;
+  if (host === currentHost.toLowerCase()) return null;
+  return `https://${host}/integracoes/meta/callback?${p.toString()}`;
+}
