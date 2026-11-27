@@ -19,6 +19,7 @@ import Webhooks from "./pages/Webhooks";
 import Integrations from "./pages/Integrations";
 import MetaCallback from "./pages/MetaCallback";
 import DataDeletionStatus from "./pages/DataDeletionStatus";
+import { PrivacyPolicy, TermsOfService } from "./pages/LegalPages";
 import OutreachSettings from "./pages/OutreachSettings";
 import Suporte from "./pages/Suporte";
 import DashboardLayout from "./pages/dashboard/DashboardLayout";
@@ -97,6 +98,9 @@ const App = () => (
                 <Route path="/f/:token" element={<PublicForm />} />
                 {/* Sprint 17 — status público da exclusão de dados pedida pelo Meta. */}
                 <Route path="/exclusao-de-dados" element={<DataDeletionStatus />} />
+                {/* Sprint 17 — URLs públicas exigidas pelo Meta para publicar o app. */}
+                <Route path="/privacidade" element={<PrivacyPolicy />} />
+                <Route path="/termos" element={<TermsOfService />} />
                 {/* Sprint 8.2 discovery_q&a — o cliente responde o discovery
                     antes da reunião de implantação. Público: o token é toda a
                     autorização, e o link é repassável a quem sabe a resposta. */}
